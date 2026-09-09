@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
 import { registerIpc } from './ipc.js';
+import { getSettings } from './services/settings.js';
+import { pruneSnapshots } from './services/board-store.js';
 
 const isDev = !app.isPackaged;
 
@@ -128,6 +130,71 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     await wait(400);
     await shoot('04-zoom-2x.png');
 
+    // Tab to the first node and open the inspector on it, so the capture proves selection,
+    // target resolution and the edit interface actually render — not just the substrate.
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '3' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '3' });
+    await wait(200);
+    for (let i = 0; i < 4; i++) {
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+      await wait(150);
+    }
+    await wait(500);
+    await shoot('05-selected-inspector.png');
+
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'e' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'e' });
+    await wait(1200);
+    await shoot('06-node-editor.png');
+
+    // --- prove the edit path end to end, through the real IPC bridge and the real command bus.
+    // Screenshots show that the form renders; this shows that saving it changes the file on
+    // disk, that the change validates, that a snapshot was taken, and that Ctrl+Z reverses it.
+    const { readFileSync } = await import('node:fs');
+    const boardFile = join(app.getAppPath(), 'board', 'root.board.json');
+    const MARKER = 'SMOKE TEST MARKER ' + Date.now();
+    const before = readFileSync(boardFile, 'utf8');
+
+    const applied = await win.webContents.executeJavaScript(`
+      window.skynet['command:apply']({
+        command: { type: 'node.update', boardId: 'root', nodeId: 'u2_agent_skynet', patch: { notes: ${JSON.stringify(MARKER)} } },
+        actor: 'user',
+        label: 'smoke edit'
+      })
+    `) as { ok: boolean; error?: string; snapshot?: string | null; changed?: unknown[] };
+
+    const afterWrite = readFileSync(boardFile, 'utf8');
+    console.log(`[smoke] edit applied: ok=${applied.ok} changed=${applied.changed?.length ?? 0} snapshot=${applied.snapshot ? 'yes' : 'NO'}`);
+    console.log(`[smoke] marker written to disk: ${afterWrite.includes(MARKER)}`);
+    if (applied.error) console.log(`[smoke] edit error: ${applied.error}`);
+
+    const undone = await win.webContents.executeJavaScript(`window.skynet['command:undo']()`) as { ok: boolean; error?: string };
+    const afterUndo = readFileSync(boardFile, 'utf8');
+    console.log(`[smoke] undo: ok=${undone.ok} marker gone: ${!afterUndo.includes(MARKER)}`);
+    console.log(`[smoke] file byte-identical to before the edit: ${afterUndo === before}`);
+    if (undone.error) console.log(`[smoke] undo error: ${undone.error}`);
+
+    // Prove a bad edit is refused rather than written.
+    const rejected = await win.webContents.executeJavaScript(`
+      window.skynet['command:apply']({
+        command: { type: 'node.update', boardId: 'root', nodeId: 'u2_agent_skynet', patch: { pos: { x: 9999, y: 9999 } } },
+        actor: 'user', label: 'smoke invalid'
+      })
+    `) as { ok: boolean; error?: string };
+    console.log(`[smoke] off-board move refused: ${!rejected.ok}`);
+    console.log(`[smoke] board unchanged by refusal: ${readFileSync(boardFile, 'utf8') === afterUndo}`);
+
+    // Prove deletion cannot happen without explicit approval, even if the caller lies by omission.
+    const unapproved = await win.webContents.executeJavaScript(`
+      window.skynet['command:apply']({
+        command: { type: 'node.delete', boardId: 'root', nodeId: 'j1_github' },
+        actor: 'jarvis', label: 'smoke delete without approval'
+      })
+    `) as { ok: boolean; needsApproval?: boolean };
+    console.log(`[smoke] unapproved delete blocked: ${!unapproved.ok} needsApproval=${String(unapproved.needsApproval)}`);
+    console.log(`[smoke] board unchanged by blocked delete: ${readFileSync(boardFile, 'utf8') === afterUndo}`);
+
     console.log('[smoke] done');
   } catch (err) {
     console.error('[smoke] FAILED', err);
@@ -138,7 +205,10 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
 }
 
 app.whenReady().then(() => {
-  // Chromium's own scaling must not compound with ours.
+  const settings = getSettings();
+  console.log(`[settings] devRoots=${settings.devRoots.join(', ')} reducedMotion=${settings.reducedMotion} streamMode=${settings.streamMode}`);
+  pruneSnapshots(settings.snapshotRetentionDays);
+
   registerIpc();
   const win = createWindow();
 

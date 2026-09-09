@@ -1,6 +1,7 @@
 /*
  * Chrome around the canvas. Everything here obeys the same anti-mush rules as the board:
- * no blur, no bloom, no drop shadows, no sub-pixel antialiasing, no fractional sizes.
+ * no blur, no bloom, no drop shadows, no sub-pixel antialiasing, no fractional sizes,
+ * no border-radius. Flat fills and 1px borders — a real board has no gradients on it.
  * docs/02-VISUAL-LANGUAGE.md §Anti-mush.
  */
 
@@ -12,8 +13,11 @@
   --copper: #c08a3e;
   --copper-dark: #7a5423;
   --silk: #e9e4d6;
+  --ok: #57c25a;
   --warn: #e0a22e;
   --fault: #d2453b;
+
+  --inspector-width: 380px;
 }
 
 * {
@@ -21,6 +25,7 @@
   /* Anti-mush rule 8: no sub-pixel antialiasing anywhere in the stack. */
   -webkit-font-smoothing: none;
   font-smooth: never;
+  border-radius: 0;
 }
 
 html,
@@ -60,11 +65,12 @@ canvas {
   overflow: hidden;
 }
 
-.board-host:focus-visible {
-  outline: none;
-}
+/* The inspector overlays the canvas rather than shrinking it. Resizing the viewport mid-edit
+   re-clamps the camera and slides the board under the component you are editing, which is a
+   worse problem than the panel covering the right-hand third. Pan with WASD instead. */
 
-/* Silkscreen chrome. Flat fills and 1px borders — a real board has no gradients on it. */
+/* ---------- silkscreen chrome ---------- */
+
 .breadcrumb,
 .hud,
 .help {
@@ -78,29 +84,15 @@ canvas {
   pointer-events: none;
 }
 
-.breadcrumb {
-  top: 8px;
-  left: 8px;
-  border-color: var(--copper);
-  color: var(--signal);
-}
+.breadcrumb { top: 8px; left: 8px; border-color: var(--copper); color: var(--signal); }
+.hud { top: 8px; right: calc(var(--inspector-width) + 8px); display: flex; gap: 12px; flex-wrap: wrap; max-width: 60vw; }
+.help { bottom: 8px; left: 8px; color: var(--copper); }
 
-.hud {
-  top: 8px;
-  right: 8px;
-  display: flex;
-  gap: 12px;
-}
+.hud .warn, .warntext { color: var(--warn); }
+.hud .fault-text { color: var(--fault); }
+.hud .ok-text { color: var(--ok); }
 
-.hud .warn {
-  color: var(--warn);
-}
-
-.help {
-  bottom: 8px;
-  left: 8px;
-  color: var(--copper);
-}
+/* ---------- boot / fault screens ---------- */
 
 .boot,
 .fault {
@@ -115,12 +107,188 @@ canvas {
   text-transform: uppercase;
 }
 
-.fault {
-  color: var(--fault);
-  border: 1px solid var(--fault);
-}
+.fault { color: var(--fault); }
+.fault .dim { color: var(--copper-dark); text-transform: none; }
 
-.fault .dim {
-  color: var(--copper-dark);
+.problem-list {
+  margin: 0;
+  padding: 8px 12px;
+  max-width: 900px;
+  max-height: 40vh;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--fault);
+  color: var(--warn);
+  text-align: left;
   text-transform: none;
 }
+.problem-list li { padding: 2px 0; }
+
+/* ---------- buttons ---------- */
+
+.btn {
+  font: inherit;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  background: var(--mask-light);
+  color: var(--silk);
+  border: 1px solid var(--copper-dark);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--copper); color: var(--signal); }
+.btn:focus-visible { outline: 1px solid var(--signal); outline-offset: 1px; }
+.btn:disabled { color: var(--copper-dark); cursor: not-allowed; }
+.btn.primary { border-color: var(--copper); }
+.btn.primary:hover:not(:disabled) { background: var(--copper-dark); color: var(--silk); }
+.btn.danger { border-color: var(--fault); color: var(--fault); }
+.btn.danger:hover:not(:disabled) { background: var(--fault); color: var(--mask-dark); }
+
+/* ---------- inspector ---------- */
+
+.inspector {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--inspector-width);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--mask-dark);
+  border-left: 1px solid var(--copper);
+}
+
+.inspector-empty {
+  margin-top: 40px;
+  text-align: center;
+  color: var(--copper-dark);
+  text-transform: uppercase;
+}
+.inspector-empty .dim { color: var(--copper-dark); }
+
+.inspector-head { border-bottom: 1px solid var(--copper-dark); padding-bottom: 6px; }
+.inspector-title { display: flex; gap: 8px; align-items: baseline; }
+.desig {
+  padding: 1px 4px;
+  border: 1px solid var(--copper);
+  color: var(--copper);
+}
+.nodename { font-size: 22px; line-height: 22px; color: var(--silk); text-transform: uppercase; }
+.inspector-kind { color: var(--copper-dark); text-transform: uppercase; margin-top: 4px; }
+
+/* target state block */
+.state { padding: 6px 8px; border: 1px solid var(--copper-dark); }
+.state.ok { border-color: var(--ok); color: var(--ok); }
+.state.warn { border-color: var(--warn); color: var(--warn); }
+.state.fault { border-color: var(--fault); color: var(--fault); }
+.state.dim { border-color: var(--copper-dark); color: var(--copper-dark); }
+.state-line { text-transform: uppercase; }
+.state-path,
+.state-detail { color: var(--silk); margin-top: 4px; overflow-wrap: anywhere; }
+.state-detail { color: inherit; }
+.state-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; color: var(--copper); text-transform: uppercase; }
+
+.inspector-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.facts { display: grid; grid-template-columns: 112px 1fr; gap: 3px 8px; margin: 0; }
+.facts dt { color: var(--copper-dark); text-transform: uppercase; }
+.facts dd { margin: 0; color: var(--silk); }
+.facts dd.wrap { overflow-wrap: anywhere; }
+
+.notes {
+  padding: 6px 8px;
+  border: 1px solid var(--copper-dark);
+  color: var(--copper);
+  white-space: pre-wrap;
+}
+
+.section-head { color: var(--copper-dark); text-transform: uppercase; border-bottom: 1px solid var(--copper-dark); padding-bottom: 2px; margin-bottom: 4px; }
+.traces-list .dim { color: var(--copper-dark); }
+.trace-row { display: flex; gap: 8px; align-items: baseline; }
+.trace-row .tk { color: var(--copper); text-transform: uppercase; min-width: 84px; }
+.trace-row .rel { color: var(--signal); text-transform: uppercase; }
+
+/* ---------- editor form ---------- */
+
+.editor { display: flex; flex-direction: column; gap: 10px; }
+.editor-head { display: flex; justify-content: space-between; color: var(--copper-dark); text-transform: uppercase; }
+
+.field { display: flex; flex-direction: column; gap: 3px; }
+.field-label { color: var(--copper); text-transform: uppercase; }
+.field-label .req { color: var(--fault); }
+.field-row { display: flex; gap: 4px; align-items: stretch; flex-wrap: wrap; }
+.field-row .input { flex: 1 1 160px; min-width: 0; }
+
+.input {
+  font: inherit;
+  padding: 4px 6px;
+  background: var(--mask-light);
+  color: var(--silk);
+  border: 1px solid var(--copper-dark);
+  min-width: 0;
+}
+.input:focus { outline: none; border-color: var(--signal); }
+.input.bad { border-color: var(--fault); }
+.input.area { resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+
+.checkline { display: flex; gap: 6px; align-items: center; color: var(--silk); text-transform: uppercase; }
+.checkline input { accent-color: var(--signal); }
+
+.field-help { color: var(--copper-dark); }
+.field-note { color: var(--warn); }
+
+.verdict { display: flex; flex-direction: column; gap: 2px; }
+.verdict-tag { text-transform: uppercase; }
+.verdict-detail { color: var(--silk); overflow-wrap: anywhere; }
+.verdict.ok .verdict-tag { color: var(--ok); }
+.verdict.warn .verdict-tag { color: var(--warn); }
+.verdict.fault .verdict-tag { color: var(--fault); }
+.verdict.fault .verdict-detail { color: var(--fault); }
+.verdict.dim .verdict-tag { color: var(--copper-dark); }
+.verdict .dim { color: var(--copper-dark); }
+
+.editor-problems {
+  padding: 6px 8px;
+  border: 1px solid var(--fault);
+  color: var(--fault);
+  text-transform: uppercase;
+}
+
+.editor-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.editor-diff { border: 1px solid var(--copper-dark); padding: 6px 8px; }
+.editor-diff-head { color: var(--copper-dark); text-transform: uppercase; margin-bottom: 4px; }
+.editor-diff-row { display: grid; grid-template-columns: 90px 1fr 12px 1fr; gap: 6px; align-items: baseline; }
+.editor-diff-row .k { color: var(--copper); }
+.editor-diff-row .before { color: var(--copper-dark); overflow-wrap: anywhere; }
+.editor-diff-row .arrow { color: var(--copper); }
+.editor-diff-row .after { color: var(--signal); overflow-wrap: anywhere; }
+
+/* ---------- toasts ---------- */
+
+.toasts {
+  position: absolute;
+  bottom: 8px;
+  right: calc(var(--inspector-width) + 8px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  max-width: 50vw;
+  pointer-events: none;
+}
+.toast {
+  padding: 4px 8px;
+  background: var(--mask-dark);
+  border: 1px solid var(--copper-dark);
+  color: var(--silk);
+  overflow-wrap: anywhere;
+}
+.toast.ok { border-color: var(--ok); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+.toast.fault { border-color: var(--fault); color: var(--fault); white-space: pre-wrap; }

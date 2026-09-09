@@ -63,14 +63,26 @@ if (existsSync(VENDOR)) {
 
 /* ---- 6b. quarantined source files ---- */
 /*
- * Files whose license block could not be traced. They are not deleted — that is William's call
- * on his own download — but nothing in the manifest may reference them, so they can never reach
- * the atlas or the stream. See assets/vendor/OpenGameArt-cc0oga/SOURCE.md.
+ * These two files had no traceable license block and were DELETED on 2026-09-09 with William's
+ * authorisation. The list stays as a tripwire: if either name reappears in assets/vendor/ or gets
+ * referenced from the manifest, the build fails rather than quietly shipping unlicensed art.
+ * See assets/vendor/OpenGameArt-cc0oga/SOURCE.md.
  */
 const QUARANTINE = [
   'vendor/OpenGameArt-cc0oga/Tilesheet/2015-02-24 (retro platformer)[tilesheet]1.png',
   'vendor/OpenGameArt-cc0oga/Tilesheet/2015-02-24 (retro platformer)[tilesheet]2.png'
 ];
+
+// On disk: they were deleted; if a re-download puts them back, say so loudly.
+for (const q of QUARANTINE) {
+  if (existsSync(join(ASSETS, q))) {
+    fail(`assets/${q}`, [
+      'this file was deleted on 2026-09-09 because its license could not be traced to a block',
+      'in the pack\'s LICENSE.TXT. If a re-download restored it, delete it again or trace it.'
+    ]);
+  }
+}
+
 const manifestFile = join(ASSETS, 'sprites', 'manifest.json');
 if (existsSync(manifestFile)) {
   const raw = readFileSync(manifestFile, 'utf8');

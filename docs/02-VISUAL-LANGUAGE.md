@@ -19,10 +19,31 @@ Per-room, exactly two values — a dark mask and a light mask (the mask is shade
 | Room | mask-dark | mask-light | signal |
 |---|---|---|---|
 | **SKYNET** (root) | `#0E1A14` | `#16261D` | `#7FE0B0` |
-| **MinecraftOS** | `#14261A` | `#1D3524` | `#57C25A` |
-| **DeductionOS** | `#201A12` | `#2E2619` | `#E0A22E` |
+| **MinecraftOS** | `#14261A` | `#1D3524` | `#A8E85C` |
+| **DeductionOS** | `#201A12` | `#2E2619` | `#FFD866` |
 | **StoryOS** | `#1B1420` | `#271C2E` | `#A87BD6` |
 | **GameOS** | `#101C26` | `#182734` | `#4FA8D8` |
+
+### Relation colour
+
+*(Added 2026-09-09.)* Connected rooms and clusters share colour, so a relationship is visible
+rather than remembered.
+
+An **edge** or a **`group.zone`** may name another board in a `relation` field. That trace's inner
+strand, or that zone's outline, is then drawn in the **named room's signal colour** instead of the
+current room's. A wire leaving JARVIS toward the GameOS drive carries GameOS blue; descend into
+GameOS and the room is that colour. A zone in one room whose work belongs to another is outlined
+in that other room's colour.
+
+A board may also declare `relatedBoards: ["gameos"]`. That is purely declarative — it records the
+affinity for the renderer and for JARVIS's cross-project view, and drives no drawing on its own.
+
+Two properties make this cheap:
+
+- **It costs the sprite colour budget nothing.** Traces and zone outlines are drawn as geometry
+  from the palette, not as atlas sprites, so the six-colours-per-frame cap is untouched.
+- **It degrades safely.** A relation naming a room that was renamed or deleted falls back to the
+  current room's signal. A dangling relation is a dull wire, never a crash.
 
 Plus three global status colors, used only on LEDs and never on large areas:
 
@@ -37,12 +58,12 @@ So any one sprite uses at most: 2 mask + 2 copper + 1 silk + 1 signal = **6 colo
 >    `ok`/`warn`/`fault` LED is a seventh colour and `npm run validate:assets` will fail it. The way
 >    out is to spend one of the two mask tones or the copper shadow on that frame — decide it per
 >    sprite, deliberately, rather than discovering it when the bake breaks.
-> 2. **In two rooms the signal colour IS a status colour.** MinecraftOS signal `#57C25A` is
->    identical to `ok`, and DeductionOS signal `#E0A22E` is identical to `warn`. In those two rooms
->    a "live activity" pixel and a "healthy"/"warning" pixel are the same colour and cannot be told
->    apart. That is a legibility bug in the palette, not a rendering bug, and fixing it means
->    changing one of the five room signals — William's call, it is his colour scheme.
->    `test/palette.test.ts` pins the collision so nobody silently "fixes" it without reading this.
+> 2. **No room signal may equal a status colour.** *(Fixed 2026-09-09.)* MinecraftOS signal was
+>    `#57C25A`, identical to `ok`; DeductionOS signal was `#E0A22E`, identical to `warn`. In those
+>    rooms a live-activity pixel and a status pixel were indistinguishable. They are now `#A8E85C`
+>    and `#FFD866`, both a wide Manhattan distance clear of `ok`, `warn` and `fault`.
+>    `test/palette.test.ts` enforces a minimum separation of 100, so a future palette edit that
+>    reintroduces a collision fails `npm run verify` instead of shipping.
 
 ## Where the pixels come from
 

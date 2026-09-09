@@ -104,6 +104,12 @@ export interface BoardNode {
   text?: string;
   size?: 11 | 22;
   members?: string[];
+
+  /**
+   * A board id. On a group.zone, draws the outline in that room's signal colour to mark the
+   * cluster as related to it. Colour only — no behaviour. See palette.signalOf.
+   */
+  relation?: string;
 }
 
 export interface BoardEdge {
@@ -115,6 +121,11 @@ export interface BoardEdge {
   width?: 2 | 3;
   waypoints?: [number, number][];
   label?: string;
+  /**
+   * A board id. Draws this trace's inner strand in that room's signal colour, so a wire that
+   * leads somewhere else carries that place's identity. Colour only — no routing effect.
+   */
+  relation?: string;
 }
 
 export interface Board {
@@ -126,6 +137,8 @@ export interface Board {
   theme: BoardTheme;
   grid: BoardGrid;
   agentEditPolicy?: 'require-approval' | 'auto';
+  /** Board ids this room is related to. Declarative; drives shared colour, nothing else. */
+  relatedBoards?: string[];
   nodes: BoardNode[];
   edges: BoardEdge[];
 }

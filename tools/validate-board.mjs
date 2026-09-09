@@ -37,6 +37,27 @@ for (const file of files) {
     for (const e of validate.errors) problems.push(`schema ${e.instancePath || '/'} ${e.message}`);
   }
 
+  /*
+   * Canonical form: 2-space JSON, LF, trailing newline — exactly what the app's writer emits
+   * (canonicalBoardJson in src/main/services/board-store.ts). Enforced so that an edit made in
+   * the app produces a ONE LINE diff instead of reformatting the whole file and burying the
+   * change. If this fails, the fix is to run the file through the same serialisation, not to
+   * relax the check.
+   */
+  const raw = readFileSync(file, 'utf8');
+  const canonical = JSON.stringify(board, null, 2).replace(/\r\n/g, '\n') + '\n';
+  if (raw !== canonical) {
+    const reason = raw.includes('\r\n')
+      ? 'it has CRLF line endings'
+      : raw.length === canonical.length
+        ? 'whitespace differs'
+        : `it is ${raw.length} bytes, canonical is ${canonical.length}`;
+    problems.push(
+      `not in canonical form (${reason}) — the app would reformat the whole file on the first edit. ` +
+      `Fix: node -e "const f='${rel.replace(/\\/g, '/')}',fs=require('fs');fs.writeFileSync(f,JSON.stringify(JSON.parse(fs.readFileSync(f,'utf8')),null,2)+'\\n')"`
+    );
+  }
+
   if (byId.has(board.id)) problems.push(`duplicate board id "${board.id}" (also in ${byId.get(board.id)})`);
   byId.set(board.id, rel);
 

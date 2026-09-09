@@ -1,2 +1,27 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Working-tree line endings are LF, on every platform, deliberately.
+#
+# This used to be `* text=auto`, which normalises to LF in the repo but hands Windows a CRLF
+# working tree. That breaks two things here:
+#
+#   1. board/*.board.json has an ENFORCED canonical form (2-space, LF, trailing newline) so that
+#      an edit made in the app is a one-line diff instead of a whole-file reformat.
+#      `npm run validate:board` fails on CRLF, so a fresh clone on Windows would fail the build.
+#   2. Every board file would show as modified the moment the app wrote one, for no real change.
+#
+# eol=lf makes the checked-out bytes match the checked-in bytes.
+* text=auto eol=lf
+
+# Binary: never touch these, never diff them as text.
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.ico   binary
+*.otf   binary
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.zip   binary
+*.jar   binary
+*.exe   binary
+*.node  binary
+*.aseprite binary

@@ -2,6 +2,11 @@ GIMP Palette
 Name: SkynetOS
 Columns: 6
 # Locked palette. Every sprite pixel must match one of these entries.
+#
+# 2026-09-09: mc-signal was 87 194 90 (identical to `ok`) and ded-signal was 224 162 46
+# (identical to `warn`). In those two rooms a live-activity pixel and a status pixel were the
+# same colour and could not be told apart. Both were moved clear of every status colour by a
+# wide margin; test/palette.test.ts enforces the separation from now on.
 # Shared tri-tone (never changes between rooms)
 192 138  62	copper
 122  84  35	copper-dark
@@ -17,11 +22,11 @@ Columns: 6
 # Room: MinecraftOS
  20  38  26	mc-mask-dark
  29  53  36	mc-mask-light
- 87 194  90	mc-signal
+168 232  92	mc-signal
 # Room: DeductionOS
  32  26  18	ded-mask-dark
  46  38  25	ded-mask-light
-224 162  46	ded-signal
+255 216 102	ded-signal
 # Room: StoryOS
  27  20  32	story-mask-dark
  39  28  46	story-mask-light

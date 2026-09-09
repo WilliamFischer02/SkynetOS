@@ -6,12 +6,15 @@ import {
   COPPER_DARK,
   FAULT,
   MAX_COLORS_PER_FRAME,
+  MIN_SIGNAL_STATUS_DISTANCE,
   OK,
   ROOM_THEMES,
   SILK,
   THEME_KEYS,
   WARN,
-  hexToRgb
+  hexToRgb,
+  manhattan,
+  signalOf
 } from '../packages/shared/palette.js';
 
 const ROOT = process.cwd();
@@ -105,14 +108,38 @@ describe('colour budget', () => {
     expect(MAX_COLORS_PER_FRAME).toBe(6);
   });
 
-  it('documents the collision between two room signals and two status colours', () => {
-    // MinecraftOS signal == ok, DeductionOS signal == warn. This is a real legibility problem
-    // recorded in docs/DECISIONS.md, not an accident — the test pins it so that if someone
-    // "fixes" one of the five room palettes, they are made to read the decision first.
-    expect(ROOM_THEMES.minecraftos.signal).toBe(OK);
-    expect(ROOM_THEMES.deductionos.signal).toBe(WARN);
-    expect(ROOM_THEMES.root.signal).not.toBe(OK);
-    expect(ROOM_THEMES.storyos.signal).not.toBe(OK);
-    expect(ROOM_THEMES.gameos.signal).not.toBe(OK);
+  it('keeps every room signal well clear of every status colour', () => {
+    // Until 2026-09-09 MinecraftOS signal WAS ok and DeductionOS signal WAS warn, which made a
+    // live-activity pixel and a status pixel identical in those rooms. This is the check that
+    // stops a future palette edit reintroducing it.
+    for (const [room, theme] of Object.entries(ROOM_THEMES)) {
+      for (const [name, status] of Object.entries({ OK, WARN, FAULT })) {
+        const distance = manhattan(theme.signal, status);
+        expect(distance, `${room} signal ${theme.signal} is too close to ${name} ${status}`)
+          .toBeGreaterThanOrEqual(MIN_SIGNAL_STATUS_DISTANCE);
+      }
+    }
+  });
+
+  it('gives every room a distinct signal', () => {
+    const signals = Object.values(ROOM_THEMES).map((t) => t.signal);
+    expect(new Set(signals).size).toBe(signals.length);
+  });
+});
+
+describe('relation colour', () => {
+  it('resolves a board id to that room signal', () => {
+    expect(signalOf('gameos', ROOM_THEMES.root.signal)).toBe(ROOM_THEMES.gameos.signal);
+    expect(signalOf('minecraftos', ROOM_THEMES.root.signal)).toBe(ROOM_THEMES.minecraftos.signal);
+  });
+
+  it('falls back to the current room when there is no relation', () => {
+    expect(signalOf(undefined, ROOM_THEMES.storyos.signal)).toBe(ROOM_THEMES.storyos.signal);
+  });
+
+  it('falls back rather than throwing when the relation names an unknown board', () => {
+    // A relation pointing at a room that was renamed or deleted must degrade to the local
+    // colour, not crash the trace layer.
+    expect(signalOf('deleted-room', ROOM_THEMES.gameos.signal)).toBe(ROOM_THEMES.gameos.signal);
   });
 });

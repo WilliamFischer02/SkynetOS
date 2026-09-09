@@ -4,45 +4,293 @@
   "name": "DeductionOS",
   "engraving": "DEDUCTIONOS",
   "parent": "root",
-  "theme": { "maskDark": "#201A12", "maskLight": "#2E2619", "signal": "#E0A22E", "substrateSeed": 18540522 },
-  "grid": { "tile": 16, "width": 48, "height": 32 },
+  "theme": {
+    "maskDark": "#201A12",
+    "maskLight": "#2E2619",
+    "signal": "#FFD866",
+    "substrateSeed": 18540522
+  },
+  "grid": {
+    "tile": 16,
+    "width": 48,
+    "height": 32
+  },
   "agentEditPolicy": "require-approval",
   "nodes": [
-    { "id": "n0", "kind": "note.silk", "name": "header", "pos": { "x": 2, "y": 1 }, "text": "DEDUCTIONOS  //  OBSERVATION · INFERENCE · MEMORY", "size": 11 },
-
-    { "id": "u1_observer", "designator": "U1", "kind": "agent.chat", "name": "THE OBSERVER", "pos": { "x": 6, "y": 5 }, "footprint": { "w": 4, "h": 4 },
-      "url": "https://claude.ai/project/REPLACE_WITH_OBSERVER_PROJECT_ID", "partition": "persist:observer",
-      "persona": "codex/personas/observer.md", "codexRef": "codex/projects/deduction-training.md",
-      "notes": "Runs the 16-week curriculum. Evidence-based methods only. Tracks lessons and rubric progress across sessions." },
-
-    { "id": "n1", "kind": "note.silk", "name": "phase", "pos": { "x": 6, "y": 10 }, "text": "PHASE 1 — FOUNDATIONS & ATTENTION", "size": 11 },
-
-    { "id": "f1_curriculum", "designator": "F1", "kind": "file.document", "name": "The Observer's Curriculum", "pos": { "x": 18, "y": 5 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md" },
-    { "id": "f2_rubric", "designator": "F2", "kind": "file.document", "name": "Mastery rubric", "pos": { "x": 22, "y": 5 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Users/REPLACE_ME/Documents/Deduction/rubric.md" },
-    { "id": "f3_predlog", "designator": "F3", "kind": "file.document", "name": "Prediction log", "pos": { "x": 26, "y": 5 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Users/REPLACE_ME/Documents/Deduction/prediction-log.md" },
-
-    { "id": "s1_notes", "designator": "S1", "kind": "store.folder", "name": "Course notes", "pos": { "x": 18, "y": 10 }, "footprint": { "w": 4, "h": 3 }, "path": "C:/Users/REPLACE_ME/Documents/Deduction", "openWith": "explorer" },
-    { "id": "s2_drive", "designator": "S2", "kind": "store.cloud", "name": "Deduction (Drive)", "pos": { "x": 26, "y": 10 }, "footprint": { "w": 4, "h": 3 }, "url": "https://drive.google.com/drive/folders/REPLACE_ME" },
-
-    { "id": "j1_anki", "designator": "J1", "kind": "link.url", "name": "AnkiWeb", "pos": { "x": 36, "y": 5 }, "footprint": { "w": 2, "h": 2 }, "url": "https://ankiweb.net/decks" },
-    { "id": "j2_memoryos", "designator": "J2", "kind": "link.url", "name": "memoryOS", "pos": { "x": 40, "y": 5 }, "footprint": { "w": 2, "h": 2 }, "url": "https://memoryos.com/" },
-    { "id": "j3_gjopen", "designator": "J3", "kind": "link.url", "name": "Good Judgment Open", "pos": { "x": 36, "y": 9 }, "footprint": { "w": 2, "h": 2 }, "url": "https://www.gjopen.com/" },
-
-    { "id": "e1_anki", "designator": "E1", "kind": "file.exe", "name": "Anki", "pos": { "x": 40, "y": 9 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Program Files/Anki/anki.exe", "confirmBeforeLaunch": false },
-
-    { "id": "t1_daily", "designator": "T1", "kind": "task.scheduled", "name": "Daily drill reminder", "pos": { "x": 6, "y": 16 }, "footprint": { "w": 2, "h": 1 }, "schedule": "0 19 * * *", "enabled": true,
-      "action": { "type": "notify", "level": "info", "message": "Deduction drill window — 20-45 min, one pass only." } },
-
-    { "id": "d1_palace", "designator": "D1", "kind": "drive.room", "name": "Mind Palace", "engraving": "PALACEOS", "boardFile": "deductionos/palace/room.board.json", "pos": { "x": 18, "y": 18 }, "footprint": { "w": 6, "h": 4 }, "provisional": true, "notes": "Loci wings 0-8 mapped to the Anki subdecks. Build after M6." }
+    {
+      "id": "n0",
+      "kind": "note.silk",
+      "name": "header",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "text": "DEDUCTIONOS  //  OBSERVATION · INFERENCE · MEMORY",
+      "size": 11
+    },
+    {
+      "id": "u1_observer",
+      "designator": "U1",
+      "kind": "agent.chat",
+      "name": "THE OBSERVER",
+      "pos": {
+        "x": 6,
+        "y": 5
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://claude.ai/project/REPLACE_WITH_OBSERVER_PROJECT_ID",
+      "partition": "persist:observer",
+      "persona": "codex/personas/observer.md",
+      "codexRef": "codex/projects/deduction-training.md",
+      "notes": "Runs the 16-week curriculum. Evidence-based methods only. Tracks lessons and rubric progress across sessions."
+    },
+    {
+      "id": "n1",
+      "kind": "note.silk",
+      "name": "phase",
+      "pos": {
+        "x": 6,
+        "y": 10
+      },
+      "text": "PHASE 1 — FOUNDATIONS & ATTENTION",
+      "size": 11
+    },
+    {
+      "id": "f1_curriculum",
+      "designator": "F1",
+      "kind": "file.document",
+      "name": "The Observer's Curriculum",
+      "pos": {
+        "x": 18,
+        "y": 5
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md"
+    },
+    {
+      "id": "f2_rubric",
+      "designator": "F2",
+      "kind": "file.document",
+      "name": "Mastery rubric",
+      "pos": {
+        "x": 22,
+        "y": 5
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction/rubric.md"
+    },
+    {
+      "id": "f3_predlog",
+      "designator": "F3",
+      "kind": "file.document",
+      "name": "Prediction log",
+      "pos": {
+        "x": 26,
+        "y": 5
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction/prediction-log.md"
+    },
+    {
+      "id": "s1_notes",
+      "designator": "S1",
+      "kind": "store.folder",
+      "name": "Course notes",
+      "pos": {
+        "x": 18,
+        "y": 10
+      },
+      "footprint": {
+        "w": 4,
+        "h": 3
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction",
+      "openWith": "explorer"
+    },
+    {
+      "id": "s2_drive",
+      "designator": "S2",
+      "kind": "store.cloud",
+      "name": "Deduction (Drive)",
+      "pos": {
+        "x": 26,
+        "y": 10
+      },
+      "footprint": {
+        "w": 4,
+        "h": 3
+      },
+      "url": "https://drive.google.com/drive/folders/REPLACE_ME"
+    },
+    {
+      "id": "j1_anki",
+      "designator": "J1",
+      "kind": "link.url",
+      "name": "AnkiWeb",
+      "pos": {
+        "x": 36,
+        "y": 5
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "url": "https://ankiweb.net/decks"
+    },
+    {
+      "id": "j2_memoryos",
+      "designator": "J2",
+      "kind": "link.url",
+      "name": "memoryOS",
+      "pos": {
+        "x": 40,
+        "y": 5
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "url": "https://memoryos.com/"
+    },
+    {
+      "id": "j3_gjopen",
+      "designator": "J3",
+      "kind": "link.url",
+      "name": "Good Judgment Open",
+      "pos": {
+        "x": 36,
+        "y": 9
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "url": "https://www.gjopen.com/"
+    },
+    {
+      "id": "e1_anki",
+      "designator": "E1",
+      "kind": "file.exe",
+      "name": "Anki",
+      "pos": {
+        "x": 40,
+        "y": 9
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Program Files/Anki/anki.exe",
+      "confirmBeforeLaunch": false
+    },
+    {
+      "id": "t1_daily",
+      "designator": "T1",
+      "kind": "task.scheduled",
+      "name": "Daily drill reminder",
+      "pos": {
+        "x": 6,
+        "y": 16
+      },
+      "footprint": {
+        "w": 2,
+        "h": 1
+      },
+      "schedule": "0 19 * * *",
+      "enabled": true,
+      "action": {
+        "type": "notify",
+        "level": "info",
+        "message": "Deduction drill window — 20-45 min, one pass only."
+      }
+    },
+    {
+      "id": "d1_palace",
+      "designator": "D1",
+      "kind": "drive.room",
+      "name": "Mind Palace",
+      "engraving": "PALACEOS",
+      "boardFile": "deductionos/palace/room.board.json",
+      "pos": {
+        "x": 18,
+        "y": 18
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "provisional": true,
+      "notes": "Loci wings 0-8 mapped to the Anki subdecks. Build after M6."
+    }
   ],
   "edges": [
-    { "id": "d1", "from": "u1_observer", "to": "f1_curriculum", "kind": "produces", "width": 3 },
-    { "id": "d2", "from": "u1_observer", "to": "f2_rubric", "kind": "produces", "width": 2 },
-    { "id": "d3", "from": "u1_observer", "to": "f3_predlog", "kind": "reads", "width": 2 },
-    { "id": "d4", "from": "f1_curriculum", "to": "s1_notes", "kind": "depends", "width": 2 },
-    { "id": "d5", "from": "s1_notes", "to": "s2_drive", "kind": "syncs", "width": 2 },
-    { "id": "d6", "from": "u1_observer", "to": "j1_anki", "kind": "deploys", "width": 2 },
-    { "id": "d7", "from": "j1_anki", "to": "e1_anki", "kind": "syncs", "width": 2 },
-    { "id": "d8", "from": "t1_daily", "to": "e1_anki", "kind": "depends", "width": 2 }
+    {
+      "id": "d1",
+      "from": "u1_observer",
+      "to": "f1_curriculum",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "d2",
+      "from": "u1_observer",
+      "to": "f2_rubric",
+      "kind": "produces",
+      "width": 2
+    },
+    {
+      "id": "d3",
+      "from": "u1_observer",
+      "to": "f3_predlog",
+      "kind": "reads",
+      "width": 2
+    },
+    {
+      "id": "d4",
+      "from": "f1_curriculum",
+      "to": "s1_notes",
+      "kind": "depends",
+      "width": 2
+    },
+    {
+      "id": "d5",
+      "from": "s1_notes",
+      "to": "s2_drive",
+      "kind": "syncs",
+      "width": 2
+    },
+    {
+      "id": "d6",
+      "from": "u1_observer",
+      "to": "j1_anki",
+      "kind": "deploys",
+      "width": 2
+    },
+    {
+      "id": "d7",
+      "from": "j1_anki",
+      "to": "e1_anki",
+      "kind": "syncs",
+      "width": 2
+    },
+    {
+      "id": "d8",
+      "from": "t1_daily",
+      "to": "e1_anki",
+      "kind": "depends",
+      "width": 2
+    }
   ]
 }

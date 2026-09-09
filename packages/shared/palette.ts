@@ -31,14 +31,51 @@ export const THEME_KEY_SIGNAL = '#FF00FF' as const;
 
 export const THEME_KEYS = [THEME_KEY_MASK_DARK, THEME_KEY_MASK_LIGHT, THEME_KEY_SIGNAL] as const;
 
-/** Per-room mask + signal, matching docs/02-VISUAL-LANGUAGE.md and every board/*.json theme. */
+/**
+ * Per-room mask + signal, matching docs/02-VISUAL-LANGUAGE.md and every board/*.json theme.
+ *
+ * 2026-09-09: minecraftos was '#57C25A' (identical to OK) and deductionos was '#E0A22E'
+ * (identical to WARN). In those rooms a live-activity pixel and a status pixel were the same
+ * colour. Both moved clear; MIN_SIGNAL_STATUS_DISTANCE below is now enforced by a test.
+ */
 export const ROOM_THEMES = {
   root: { maskDark: '#0E1A14', maskLight: '#16261D', signal: '#7FE0B0' },
-  minecraftos: { maskDark: '#14261A', maskLight: '#1D3524', signal: '#57C25A' },
-  deductionos: { maskDark: '#201A12', maskLight: '#2E2619', signal: '#E0A22E' },
+  minecraftos: { maskDark: '#14261A', maskLight: '#1D3524', signal: '#A8E85C' },
+  deductionos: { maskDark: '#201A12', maskLight: '#2E2619', signal: '#FFD866' },
   storyos: { maskDark: '#1B1420', maskLight: '#271C2E', signal: '#A87BD6' },
   gameos: { maskDark: '#101C26', maskLight: '#182734', signal: '#4FA8D8' }
 } as const satisfies Record<string, { maskDark: Hex; maskLight: Hex; signal: Hex }>;
+
+export type RoomId = keyof typeof ROOM_THEMES;
+
+/**
+ * Minimum Manhattan RGB distance between any room signal and any status colour. A signal that
+ * sits close to ok/warn/fault makes "this is busy" and "this is broken" the same pixel.
+ */
+export const MIN_SIGNAL_STATUS_DISTANCE = 100;
+
+export function manhattan(a: string, b: string): number {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  return Math.abs(ar - br) + Math.abs(ag - bg) + Math.abs(ab - bb);
+}
+
+/**
+ * Relation colour — the mechanism behind "connected rooms share colour and wire elements".
+ *
+ * An edge or a group.zone may name another board in its `relation` field. The trace's inner
+ * strand, or the zone's outline, is then drawn in THAT room's signal colour, so a wire leading
+ * to another room visibly carries the colour you will be looking at when you arrive there.
+ *
+ * This costs the sprite colour budget nothing: traces and zone outlines are drawn as geometry,
+ * not as atlas sprites, so the six-colour-per-frame cap is untouched. Colour only — a relation
+ * changes no routing and no behaviour. See docs/DECISIONS.md 2026-09-09.
+ */
+export function signalOf(boardId: string | undefined, fallback: string): string {
+  if (!boardId) return fallback;
+  const theme = (ROOM_THEMES as Record<string, { signal: string } | undefined>)[boardId];
+  return theme?.signal ?? fallback;
+}
 
 /**
  * Colour budget: 2 mask + 2 copper + 1 silk + 1 signal. tools/validate-assets.mjs enforces it

@@ -4,39 +4,229 @@
   "name": "StoryOS",
   "engraving": "STORYOS",
   "parent": "root",
-  "theme": { "maskDark": "#1B1420", "maskLight": "#271C2E", "signal": "#A87BD6", "substrateSeed": 19940217 },
-  "grid": { "tile": 16, "width": 48, "height": 32 },
+  "theme": {
+    "maskDark": "#1B1420",
+    "maskLight": "#271C2E",
+    "signal": "#A87BD6",
+    "substrateSeed": 19940217
+  },
+  "grid": {
+    "tile": 16,
+    "width": 48,
+    "height": 32
+  },
   "agentEditPolicy": "require-approval",
   "nodes": [
-    { "id": "n0", "kind": "note.silk", "name": "header", "pos": { "x": 2, "y": 1 }, "text": "STORYOS  //  MANUSCRIPTS · SCRIPTS · DEVELOPMENT", "size": 11 },
-
-    { "id": "u1_witw", "designator": "U1", "kind": "agent.chat", "name": "SITW EDITOR", "pos": { "x": 5, "y": 5 }, "footprint": { "w": 4, "h": 4 },
-      "url": "https://claude.ai/project/REPLACE_WITH_SITW_PROJECT_ID", "partition": "persist:sitw",
+    {
+      "id": "n0",
+      "kind": "note.silk",
+      "name": "header",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "text": "STORYOS  //  MANUSCRIPTS · SCRIPTS · DEVELOPMENT",
+      "size": 11
+    },
+    {
+      "id": "u1_witw",
+      "designator": "U1",
+      "kind": "agent.chat",
+      "name": "SITW EDITOR",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://claude.ai/project/REPLACE_WITH_SITW_PROJECT_ID",
+      "partition": "persist:sitw",
       "codexRef": "codex/projects/something-in-the-woods.md",
-      "notes": "Copy editing + developmental feedback. First-person present-tense horror-thriller, Leavenworth WA." },
-    { "id": "f1_witw_doc", "designator": "F1", "kind": "file.document", "name": "Something In The Woods.docx", "pos": { "x": 14, "y": 6 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods.docx" },
-    { "id": "s1_witw_folder", "designator": "S1", "kind": "store.folder", "name": "SITW working files", "pos": { "x": 20, "y": 5 }, "footprint": { "w": 4, "h": 3 }, "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods", "openWith": "explorer" },
-
-    { "id": "u2_plush", "designator": "U2", "kind": "agent.chat", "name": "DIRTY PLUSH", "pos": { "x": 5, "y": 14 }, "footprint": { "w": 4, "h": 4 },
-      "url": "https://claude.ai/project/REPLACE_WITH_PLUSH_PROJECT_ID", "partition": "persist:plush",
+      "notes": "Copy editing + developmental feedback. First-person present-tense horror-thriller, Leavenworth WA."
+    },
+    {
+      "id": "f1_witw_doc",
+      "designator": "F1",
+      "kind": "file.document",
+      "name": "Something In The Woods.docx",
+      "pos": {
+        "x": 14,
+        "y": 6
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods.docx"
+    },
+    {
+      "id": "s1_witw_folder",
+      "designator": "S1",
+      "kind": "store.folder",
+      "name": "SITW working files",
+      "pos": {
+        "x": 20,
+        "y": 5
+      },
+      "footprint": {
+        "w": 4,
+        "h": 3
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods",
+      "openWith": "explorer"
+    },
+    {
+      "id": "u2_plush",
+      "designator": "U2",
+      "kind": "agent.chat",
+      "name": "DIRTY PLUSH",
+      "pos": {
+        "x": 5,
+        "y": 14
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://claude.ai/project/REPLACE_WITH_PLUSH_PROJECT_ID",
+      "partition": "persist:plush",
       "codexRef": "codex/projects/dirty-plush.md",
-      "notes": "8-chapter literary mystery + 8-episode limited series. Ray Vega, 1994 North County San Diego cold case." },
-    { "id": "f2_plush_doc", "designator": "F2", "kind": "file.document", "name": "Dirty Plush — manuscript", "pos": { "x": 14, "y": 15 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush.docx" },
-    { "id": "s2_plush_cloud", "designator": "S2", "kind": "store.cloud", "name": "Dirty Plush (shared)", "pos": { "x": 20, "y": 14 }, "footprint": { "w": 4, "h": 3 }, "url": "https://drive.google.com/drive/folders/REPLACE_ME", "notes": "Shared with co-writer." },
-
-    { "id": "e1_word", "designator": "E1", "kind": "file.exe", "name": "Word", "pos": { "x": 32, "y": 6 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE", "confirmBeforeLaunch": false },
-    { "id": "f3_bible", "designator": "F3", "kind": "file.document", "name": "Series bible", "pos": { "x": 32, "y": 15 }, "footprint": { "w": 2, "h": 2 }, "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md" },
-
-    { "id": "t1_wordcount", "designator": "T1", "kind": "task.scheduled", "name": "Weekly wordcount", "pos": { "x": 5, "y": 23 }, "footprint": { "w": 2, "h": 1 }, "schedule": "0 20 * * 0", "enabled": true,
-      "action": { "type": "jarvis.headless", "prompt": "Report this week's word delta for each manuscript node in StoryOS and append it to codex/journal/." } }
+      "notes": "8-chapter literary mystery + 8-episode limited series. Ray Vega, 1994 North County San Diego cold case."
+    },
+    {
+      "id": "f2_plush_doc",
+      "designator": "F2",
+      "kind": "file.document",
+      "name": "Dirty Plush — manuscript",
+      "pos": {
+        "x": 14,
+        "y": 15
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush.docx"
+    },
+    {
+      "id": "s2_plush_cloud",
+      "designator": "S2",
+      "kind": "store.cloud",
+      "name": "Dirty Plush (shared)",
+      "pos": {
+        "x": 20,
+        "y": 14
+      },
+      "footprint": {
+        "w": 4,
+        "h": 3
+      },
+      "url": "https://drive.google.com/drive/folders/REPLACE_ME",
+      "notes": "Shared with co-writer."
+    },
+    {
+      "id": "e1_word",
+      "designator": "E1",
+      "kind": "file.exe",
+      "name": "Word",
+      "pos": {
+        "x": 32,
+        "y": 6
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE",
+      "confirmBeforeLaunch": false
+    },
+    {
+      "id": "f3_bible",
+      "designator": "F3",
+      "kind": "file.document",
+      "name": "Series bible",
+      "pos": {
+        "x": 32,
+        "y": 15
+      },
+      "footprint": {
+        "w": 2,
+        "h": 2
+      },
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md"
+    },
+    {
+      "id": "t1_wordcount",
+      "designator": "T1",
+      "kind": "task.scheduled",
+      "name": "Weekly wordcount",
+      "pos": {
+        "x": 5,
+        "y": 23
+      },
+      "footprint": {
+        "w": 2,
+        "h": 1
+      },
+      "schedule": "0 20 * * 0",
+      "enabled": true,
+      "action": {
+        "type": "jarvis.headless",
+        "prompt": "Report this week's word delta for each manuscript node in StoryOS and append it to codex/journal/."
+      }
+    }
   ],
   "edges": [
-    { "id": "s1", "from": "u1_witw", "to": "f1_witw_doc", "kind": "reads", "width": 3 },
-    { "id": "s2", "from": "f1_witw_doc", "to": "s1_witw_folder", "kind": "depends", "width": 2 },
-    { "id": "s3", "from": "u2_plush", "to": "f2_plush_doc", "kind": "reads", "width": 3 },
-    { "id": "s4", "from": "f2_plush_doc", "to": "s2_plush_cloud", "kind": "syncs", "width": 2 },
-    { "id": "s5", "from": "f2_plush_doc", "to": "f3_bible", "kind": "depends", "width": 2 },
-    { "id": "s6", "from": "f1_witw_doc", "to": "e1_word", "kind": "reads", "width": 2 },
-    { "id": "s7", "from": "f2_plush_doc", "to": "e1_word", "kind": "reads", "width": 2 }
+    {
+      "id": "s1",
+      "from": "u1_witw",
+      "to": "f1_witw_doc",
+      "kind": "reads",
+      "width": 3
+    },
+    {
+      "id": "s2",
+      "from": "f1_witw_doc",
+      "to": "s1_witw_folder",
+      "kind": "depends",
+      "width": 2
+    },
+    {
+      "id": "s3",
+      "from": "u2_plush",
+      "to": "f2_plush_doc",
+      "kind": "reads",
+      "width": 3
+    },
+    {
+      "id": "s4",
+      "from": "f2_plush_doc",
+      "to": "s2_plush_cloud",
+      "kind": "syncs",
+      "width": 2
+    },
+    {
+      "id": "s5",
+      "from": "f2_plush_doc",
+      "to": "f3_bible",
+      "kind": "depends",
+      "width": 2
+    },
+    {
+      "id": "s6",
+      "from": "f1_witw_doc",
+      "to": "e1_word",
+      "kind": "reads",
+      "width": 2
+    },
+    {
+      "id": "s7",
+      "from": "f2_plush_doc",
+      "to": "e1_word",
+      "kind": "reads",
+      "width": 2
+    }
   ]
 }

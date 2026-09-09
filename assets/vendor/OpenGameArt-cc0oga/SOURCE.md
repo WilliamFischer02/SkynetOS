@@ -24,22 +24,21 @@
 | `roblocks.png` | surt | CC0 | [RoBlocks](https://opengameart.org/content/roblocks) |
 | `spacermale.png` | zwonky | CC0 | [Spacers](https://opengameart.org/content/spacers) |
 | `cyclop.png` | zwonky | CC0 | [Cyclobot](https://opengameart.org/content/cyclobot) |
-| `2015-02-24 (retro platformer)[tilesheet]1.png` | **UNTRACED** | **UNKNOWN** | — |
-| `2015-02-24 (retro platformer)[tilesheet]2.png` | **UNTRACED** | **UNKNOWN** | — |
+### Two untraceable files were DELETED, 2026-09-09
 
-### Two files cannot be cleared, and are quarantined
+`2015-02-24 (retro platformer)[tilesheet]1.png` and `...2.png` had **no matching entry in
+`LICENSE.TXT`**. Their filenames were browser download timestamps, so the link back to the
+original work was gone. Every other file in the folder matches a license block by its original
+filename.
 
-The two `2015-02-24 (retro platformer)[tilesheet]*.png` files have **no matching entry in
-`LICENSE.TXT`**. The filename is a browser download timestamp, so the link back to the original
-work is gone. Every other file in the folder matches a license block by its original filename.
+The collection as a whole contains **5 OGA-BY entries** among its 168 works. OGA-BY requires
+attribution — a meaningfully different obligation from CC0. None of the eight traced files fall
+under those five, but an untraceable file could not be shown to be outside them either, and this
+project is going on stream.
 
-The collection as a whole also contains **5 OGA-BY entries** among its 168 works. OGA-BY requires
-attribution — a meaningfully different obligation from CC0. None of the eight *traced* files fall
-under those five, but an untraceable file cannot be shown to be outside them either.
-
-**Therefore:** those two files are not to be referenced from `assets/sprites/manifest.json`, and
-`npm run validate:assets` fails the build if they are. Either trace them on OpenGameArt and record
-the block here, or delete them — William's call, it is his download. Until then they are inert.
+**William authorised deletion on 2026-09-09 and both files were removed.** The quarantine list in
+`tools/validate-assets.mjs` is kept as a tripwire: if either filename ever reappears in this
+folder, the build fails rather than silently shipping it.
 
 ## Sheet layout — VERIFIED against the PNGs on 2026-09-09
 
