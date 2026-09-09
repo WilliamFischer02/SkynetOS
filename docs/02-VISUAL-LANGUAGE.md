@@ -1,0 +1,113 @@
+# 02 — Visual language
+
+## The concept in one line
+
+A real PCB has exactly three visual layers: **solder mask** (the board), **exposed copper** (the traces and pads), and **silkscreen** (the printed white labels). That is the tri-tone. Every room recolors only the solder mask and adds one **signal** accent for live activity. Copper and silkscreen never change, which is what makes the whole app read as one board.
+
+## Palette
+
+Fixed across the entire app:
+
+| Token | Hex | Use |
+|---|---|---|
+| `copper` | `#C08A3E` | traces, pads, pin legs, connector fingers |
+| `copper-dark` | `#7A5423` | trace shadow, 1px bevel under components, via holes |
+| `silk` | `#E9E4D6` | engraved labels, component outlines, reference designators |
+
+Per-room, exactly two values — a dark mask and a light mask (the mask is shaded, not flat) — plus one signal:
+
+| Room | mask-dark | mask-light | signal |
+|---|---|---|---|
+| **SKYNET** (root) | `#0E1A14` | `#16261D` | `#7FE0B0` |
+| **MinecraftOS** | `#14261A` | `#1D3524` | `#57C25A` |
+| **DeductionOS** | `#201A12` | `#2E2619` | `#E0A22E` |
+| **StoryOS** | `#1B1420` | `#271C2E` | `#A87BD6` |
+| **GameOS** | `#101C26` | `#182734` | `#4FA8D8` |
+
+Plus three global status colors, used only on LEDs and never on large areas:
+
+`ok #57C25A` · `warn #E0A22E` · `fault #D2453B`
+
+So any one sprite uses at most: 2 mask + 2 copper + 1 silk + 1 signal = **6 colors, hard cap**. The validator enforces it. That cap is the single biggest reason the art will read as authored pixel art rather than generated mush.
+
+## Where the pixels come from
+
+Sprites are **baked**, not hand-placed into the repo: downloaded packs in `assets/vendor/` are sliced, recolored to the palette above, composited, and packed into `assets/atlas/` by `npm run assets:bake`. The app loads only the atlas. Full pipeline in `docs/05-ASSETS.md`.
+
+Two things that follow directly from this and affect how you build the renderer:
+
+- **Theme keys.** Sprites bake three reserved key colors — `#FF00CC` (mask-dark), `#FF0099` (mask-light), `#FF00FF` (signal) — which a 3-entry exact-match palette shader swaps for the current room's theme at draw time. One atlas serves every room. The swap is exact-match only: no blending, no tinting math, no interpolation.
+- **Placeholders.** Any sprite key with no manifest entry draws as a flat `@mask-light` rectangle at the node's footprint with its reference designator in silkscreen. M0–M4 are built and usable with zero finished art. Never a broken-image icon, never a crash.
+
+## Grid & sizes
+
+- Base tile: **16×16 px** at 1x. All art authored at 1x.
+- Node footprints, in tiles: `1×1` (passive component), `2×2` (small chip / file), `3×3` (agent chip), `4×3` (drive), `6×4` (room drive / big agent), `8×6` (JARVIS).
+- Traces run on the 8px half-grid so they can pass between adjacent components.
+- Silkscreen text: **Departure Mono** at 11px or 22px only (SIL OFL, <https://departuremono.com/>). Never in between — the font is pixel-perfect only at multiples of 11.
+
+## Component vocabulary
+
+| Thing | Looks like | Notes |
+|---|---|---|
+| Claude Code agent | **DIP/QFP microchip** with pin legs, silkscreen part number = agent name, one status LED | Package size scales with how much it's used |
+| Claude web agent (JARVIS-class) | **QFP chip with a heat spreader lid** and an antenna trace | Visually senior to a DIP |
+| JARVIS | **Large socketed CPU** on the root board, gold pad array, own decoupling caps and VRM cluster | Only one exists |
+| Repo / folder | **Open HDD** — platter, actuator arm, silkscreen label plate | Arm parks over a different platter angle depending on git dirty state |
+| Room (`NameOS`) | **SSD / M.2 module** with engraved `NAMEOS` on the shield can | Click descends into the room |
+| Document file | **EPROM chip with a paper label** | `.docx`, `.md`, `.pdf` |
+| Executable | **Push-button switch** with a translucent cap | Click = launch, cap lights while the process lives |
+| Build artifact (`.jar`, `.exe` output) | **Removable cartridge in a socket** | The drag-out handle is the cartridge itself |
+| URL / cloud folder | **RJ45 jack / antenna** | Opens in browser |
+| Service / dev server | **Voltage regulator** with a running-lights strip | Shows port, up/down |
+| Scheduler | **Crystal oscillator** with a tick animation | Cron-style jobs |
+| Health monitor | **PSU block** with 3 gauges | Real CPU/RAM/disk, unlike the cosmetic chip temps |
+| Note / label | **Silkscreen text only** | No component, just print on the board |
+| Trace | Copper run, 2px or 3px wide | Width = importance, not throughput |
+| Bundle | Several traces routed in parallel with a ribbon clamp | Collapses visual noise |
+| Via | Copper ring with a dark centre | Where a trace leaves the room to a parent board |
+
+## Animation
+
+Everything is frame-based sprite animation on a **6fps or 12fps** timeline. No tweening, no easing curves, no interpolated positions. Pixel art moves in whole pixels.
+
+**Agent chips** — 4 states, 4 frames each unless noted:
+- `idle` — a slow 2-frame LED breathe, 1 frame every 500ms
+- `thinking` — a 4-frame cycle of light chasing around the chip's pin legs
+- `working` — 6-frame, faster chase + 2px of dithered heat shimmer above the package (dither, never blur)
+- `fault` — 2-frame red LED blink at 2Hz, plus a hairline crack overlay on the package
+
+**Little character animations** (your ask): each agent chip has an optional **8×8 sprite "occupant"** that pops up from the package during `working` — a tiny hard-hat figure that hammers, a figure that drags a file to the socket when an artifact is produced, a figure asleep with a `z` during long idle. 4-frame loops, 3 characters shipped at M5, more can be added as pure asset drops with no code change (they're declared in `assets/sprites/manifest.json`).
+
+**Traces** — a `packet` is a 3×3 signal-colored blob that travels the trace path at 1 tile per 100ms when its source node emits an event. Direction indicates data flow. Packets are pooled and capped at 40 on screen; excess events increment heat without spawning a sprite.
+
+**Heat** — 4 discrete glow steps, implemented as **palette swap plus a Bayer 4×4 dithered halo mask**, never a blur filter. A temp readout (`36.2°C SIM`) appears in silkscreen beside a node only above glow step 2, and only in the inspector otherwise.
+
+**Room transition** — a hard-edged 8-step iris wipe in mask-dark, 400ms total.
+
+**Reduced motion** — a settings toggle drops all idle animation, packets, and shimmer; state is then conveyed by LED color alone.
+
+## Anti-mush rules (hard requirements)
+
+These exist because the number one failure mode of a project like this is art that looks smeared and generated. All of it is machine-checkable, and `npm run validate:assets` fails the build on violation.
+
+1. **Alpha is binary.** Every pixel is `alpha == 0` or `alpha == 255`. No feathered edges.
+2. **Palette lock.** Every pixel must exactly match a hex in `assets/palettes/skynet.gpl`. Max 6 unique colors per sprite.
+3. **Authored at 1x.** Source sprite dimensions must be multiples of 8. Never upscale source art and re-save.
+4. **Integer scaling only.** Zoom ∈ {2,3,4}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+5. **Nearest-neighbour everywhere.** Pixi `scaleMode: 'nearest'`, CSS `image-rendering: pixelated` on any DOM that shows sprites, mipmaps off.
+6. **No blur/bloom/drop-shadow filters.** Not in Pixi, not in CSS. Glow is achieved with palette ramps and dither masks.
+7. **No rotation off 90°.** Sprites rotate only in 90° steps. Diagonals are pre-drawn, never rotated.
+8. **Text is bitmap.** Departure Mono at 11/22px, or a Pixi BitmapFont. No sub-pixel antialiasing (`-webkit-font-smoothing: none`).
+9. **The window is not fractionally scaled.** On launch, read `screen.getPrimaryDisplay().scaleFactor` and set the app zoom so 1 art pixel maps to a whole number of device pixels; if the OS is at 125% or 150%, snap to the nearest workable integer and log it.
+10. **Screenshot diff test.** A Playwright test renders a fixture board and pixel-diffs it against a golden PNG at 0% tolerance. Any accidental filter or resample breaks it loudly.
+
+## Writing on the board
+
+Copy on the board is engraved industrial labelling, not UI marketing copy.
+
+- Room shields: `MINECRAFTOS`, `DEDUCTIONOS` — engraved, uppercase, that is the one place uppercase is correct.
+- Chip part numbers: `CC-STALKER`, `CC-PACEKEEPER`, `JARVIS-01`.
+- Reference designators next to components, like a real board: `U4`, `J2`, `D7`. They're assigned automatically per room and are a genuinely useful way to refer to a node in conversation with an agent ("what's U4 doing").
+- Buttons in the DOM chrome say what happens: `Launch session`, `Open in Explorer`, `Reveal newest jar`. Not `Submit`, not `Go`.
+- Empty room: `NO COMPONENTS PLACED — PRESS E TO EDIT BOARD`. Failure on a node: `TARGET NOT FOUND — C:/dev/TheStalker/build/libs/*.jar`. State what's wrong and where, in the board's voice.

@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "id": "root",
+  "name": "SkynetOS Mainboard",
+  "engraving": "SKYNETOS",
+  "parent": null,
+  "theme": { "maskDark": "#0E1A14", "maskLight": "#16261D", "signal": "#7FE0B0", "substrateSeed": 19910412 },
+  "grid": { "tile": 16, "width": 64, "height": 40 },
+  "agentEditPolicy": "require-approval",
+  "nodes": [
+    {
+      "id": "u1_jarvis",
+      "designator": "U1",
+      "kind": "agent.jarvis",
+      "name": "JARVIS",
+      "pos": { "x": 28, "y": 17 },
+      "footprint": { "w": 8, "h": 6 },
+      "url": "https://claude.ai/project/REPLACE_WITH_JARVIS_PROJECT_ID",
+      "partition": "persist:jarvis",
+      "persona": "codex/persona.md",
+      "codexRef": "codex/index.md",
+      "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp."
+    },
+    {
+      "id": "d1_minecraftos",
+      "designator": "D1",
+      "kind": "drive.room",
+      "name": "MinecraftOS",
+      "engraving": "MINECRAFTOS",
+      "boardFile": "minecraftos/room.board.json",
+      "pos": { "x": 8, "y": 8 },
+      "footprint": { "w": 6, "h": 4 },
+      "tags": ["minecraft", "mods", "streaming"]
+    },
+    {
+      "id": "d2_deductionos",
+      "designator": "D2",
+      "kind": "drive.room",
+      "name": "DeductionOS",
+      "engraving": "DEDUCTIONOS",
+      "boardFile": "deductionos/room.board.json",
+      "pos": { "x": 48, "y": 8 },
+      "footprint": { "w": 6, "h": 4 },
+      "tags": ["learning", "observation", "memory"]
+    },
+    {
+      "id": "d3_storyos",
+      "designator": "D3",
+      "kind": "drive.room",
+      "name": "StoryOS",
+      "engraving": "STORYOS",
+      "boardFile": "storyos/room.board.json",
+      "pos": { "x": 8, "y": 30 },
+      "footprint": { "w": 6, "h": 4 },
+      "tags": ["writing", "novel", "screenplay"]
+    },
+    {
+      "id": "d4_gameos",
+      "designator": "D4",
+      "kind": "drive.room",
+      "name": "GameOS",
+      "engraving": "GAMEOS",
+      "boardFile": "gameos/room.board.json",
+      "pos": { "x": 48, "y": 30 },
+      "footprint": { "w": 6, "h": 4 },
+      "tags": ["truthquestretro", "engine", "handheld"]
+    },
+    {
+      "id": "u2_agent_skynet",
+      "designator": "U2",
+      "kind": "agent.code",
+      "name": "CC-SKYNET",
+      "pos": { "x": 35, "y": 5 },
+      "footprint": { "w": 3, "h": 3 },
+      "cwd": "C:/dev/SkynetOS",
+      "launch": "popout",
+      "resume": true,
+      "notes": "The agent that builds and maintains this program.",
+      "codexRef": "codex/projects/skynetos.md"
+    },
+    {
+      "id": "s1_repo_skynet",
+      "designator": "S1",
+      "kind": "store.repo",
+      "name": "SkynetOS",
+      "pos": { "x": 26, "y": 5 },
+      "footprint": { "w": 4, "h": 3 },
+      "path": "C:/dev/SkynetOS",
+      "remote": "https://github.com/REPLACE_ME/SkynetOS",
+      "openWith": "vscode"
+    },
+    {
+      "id": "m1_psu",
+      "designator": "M1",
+      "kind": "monitor.system",
+      "name": "PSU",
+      "pos": { "x": 2, "y": 2 },
+      "footprint": { "w": 4, "h": 4 }
+    },
+    {
+      "id": "n1_title",
+      "kind": "note.silk",
+      "name": "title",
+      "pos": { "x": 24, "y": 1 },
+      "text": "SKYNETOS  REV A  //  GOOB ENTERTAINMENT CO.",
+      "size": 11
+    },
+    {
+      "id": "n2_jarvis_label",
+      "kind": "note.silk",
+      "name": "jarvis label",
+      "pos": { "x": 28, "y": 24 },
+      "text": "U1  PRIMARY  JURISDICTION: ALL",
+      "size": 11
+    },
+    {
+      "id": "j1_github",
+      "designator": "J1",
+      "kind": "link.url",
+      "name": "GitHub",
+      "pos": { "x": 60, "y": 2 },
+      "footprint": { "w": 2, "h": 2 },
+      "url": "https://github.com/REPLACE_ME"
+    },
+    {
+      "id": "t1_nightly",
+      "designator": "T1",
+      "kind": "task.scheduled",
+      "name": "Nightly journal",
+      "pos": { "x": 40, "y": 20 },
+      "footprint": { "w": 2, "h": 1 },
+      "schedule": "0 22 * * *",
+      "enabled": true,
+      "action": {
+        "type": "jarvis.headless",
+        "prompt": "Review today's session events across all rooms. Append a five-line summary to codex/journal/. Update each active project's handoff file. Flag anything blocked on William."
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "from": "u1_jarvis", "to": "d1_minecraftos", "kind": "supervises", "width": 3 },
+    { "id": "e2", "from": "u1_jarvis", "to": "d2_deductionos", "kind": "supervises", "width": 3 },
+    { "id": "e3", "from": "u1_jarvis", "to": "d3_storyos", "kind": "supervises", "width": 3 },
+    { "id": "e4", "from": "u1_jarvis", "to": "d4_gameos", "kind": "supervises", "width": 3 },
+    { "id": "e5", "from": "u2_agent_skynet", "to": "s1_repo_skynet", "kind": "produces", "width": 3 },
+    { "id": "e6", "from": "s1_repo_skynet", "to": "j1_github", "kind": "syncs", "width": 2 },
+    { "id": "e7", "from": "u1_jarvis", "to": "t1_nightly", "kind": "depends", "width": 2 }
+  ]
+}

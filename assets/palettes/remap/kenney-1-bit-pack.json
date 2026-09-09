@@ -1,0 +1,12 @@
+{
+  "$comment": "Kenney's 1-Bit sheets are effectively two-tone. Most cells are best handled with a layer-level 'tint' in the manifest, which forces every opaque pixel to one palette token. Use this table only for sheets with more than one meaningful source color.",
+  "sheet": "kenney-1-bit-pack/Tilesheet/monochrome_transparent.png",
+  "mode": "table",
+  "table": {
+    "255,255,255": "silk",
+    "204,204,204": "copper",
+    "153,153,153": "copper-dark",
+    "0,0,0": "@mask-dark"
+  },
+  "$note": "Tokens beginning with @ are THEME KEYS — they bake as reserved key colors and get swapped per room at draw time. See docs/05-ASSETS.md."
+}

@@ -1,0 +1,45 @@
+{
+  "name": "skynetos",
+  "productName": "SkynetOS",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An overhead pixel-art motherboard that is a real control surface for every project run with Claude.",
+  "author": "Goob Entertainment Co.",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run verify && electron-vite build && electron-builder --win nsis",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "validate:board": "node tools/validate-board.mjs",
+    "validate:assets": "node tools/validate-assets.mjs",
+    "verify": "npm run typecheck && npm run validate:board && npm run assets:bake && npm run validate:assets && npm run test",
+    "assets:bake": "node tools/bake-assets.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-vite": "^2.3.0",
+    "pngjs": "^7.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0",
+    "@playwright/test": "^1.48.0"
+  },
+  "dependencies": {
+    "pixi.js": "^8.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.0",
+    "better-sqlite3": "^11.3.0",
+    "chokidar": "^4.0.0",
+    "simple-git": "^3.27.0",
+    "node-pty": "^1.0.0",
+    "@xterm/xterm": "^5.5.0",
+    "keytar": "^7.9.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,0 +1,21 @@
+node_modules/
+dist/
+out/
+release/
+*.log
+.DS_Store
+
+# Machine-local runtime state — never commit
+skynet.db
+skynet.db-*
+codex.db
+codex.db-*
+board/.snapshots/
+.env
+.env.*
+
+# Asset working files (keep the exported PNGs, not the sources, unless you want history)
+assets/sprites/**/*.aseprite
+
+# Baked atlas — regenerated from assets/vendor + manifest.json by `npm run assets:bake`
+assets/atlas/

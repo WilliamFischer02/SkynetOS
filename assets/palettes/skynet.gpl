@@ -1,0 +1,38 @@
+GIMP Palette
+Name: SkynetOS
+Columns: 6
+# Locked palette. Every sprite pixel must match one of these entries.
+# Shared tri-tone (never changes between rooms)
+192 138  62	copper
+122  84  35	copper-dark
+233 228 214	silk
+# Status LEDs only — never large areas
+ 87 194  90	ok
+224 162  46	warn
+210  69  59	fault
+# Room: SKYNET (root)
+ 14  26  20	skynet-mask-dark
+ 22  38  29	skynet-mask-light
+127 224 176	skynet-signal
+# Room: MinecraftOS
+ 20  38  26	mc-mask-dark
+ 29  53  36	mc-mask-light
+ 87 194  90	mc-signal
+# Room: DeductionOS
+ 32  26  18	ded-mask-dark
+ 46  38  25	ded-mask-light
+224 162  46	ded-signal
+# Room: StoryOS
+ 27  20  32	story-mask-dark
+ 39  28  46	story-mask-light
+168 123 214	story-signal
+# Room: GameOS
+ 16  28  38	game-mask-dark
+ 24  39  52	game-mask-light
+ 79 168 216	game-signal
+# --- RESERVED THEME KEYS — do not use as literal art colors ---
+# These are baked into sprites by tools/bake-assets.mjs and swapped per room at draw time
+# by an exact-match palette shader. They are legal in the atlas and illegal everywhere else.
+# 255   0 204  @mask-dark
+# 255   0 153  @mask-light
+# 255   0 255  @signal

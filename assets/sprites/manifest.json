@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "$schema": "../../schema/manifest.schema.json",
+
+  "$howToUse": [
+    "Every sprite the app can draw is declared here by a stable key. The renderer only ever asks for keys.",
+    "A sprite gets its pixels from one of three source kinds, and can switch between them at any time without touching app code:",
+    "  sheet     - one cell lifted straight out of a vendor sheet",
+    "  composite - a kitbash: several cells stacked with offsets, flips, and tints",
+    "  file      - a hand-authored PNG in assets/sprites/authored/",
+    "Start everything as composite. When a component can't be kitbashed convincingly, draw it and flip that",
+    "one entry to 'file'. Nothing else changes. That is the whole migration path.",
+    "",
+    "THEME KEYS: tokens starting with @ bake as reserved key colors and are swapped per room at draw time.",
+    "  @mask-dark  @mask-light  @signal",
+    "Use them for anything that should take on the room's color. Use literal tokens (copper, silk, ok, warn,",
+    "fault) for anything that must look identical in every room.",
+    "",
+    "Run `npm run assets:bake` after editing. It writes assets/atlas/ and then the purity validator checks it."
+  ],
+
+  "sheets": {
+    "k1bit": {
+      "file": "vendor/kenney-1-bit-pack/Tilesheet/monochrome_transparent.png",
+      "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 1, "spacingY": 1 },
+      "$verify": "Open the sheet, confirm cell/margin/spacing against SOURCE.md before trusting any coordinates below."
+    },
+    "k1bit_color": {
+      "file": "vendor/kenney-1-bit-pack/Tilesheet/colored_transparent.png",
+      "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 1, "spacingY": 1 },
+      "remap": "palettes/remap/kenney-1-bit-pack.json"
+    },
+    "ui_scifi": {
+      "file": "vendor/kenney-ui-pack-sci-fi/PNG/Default/Double/button_rectangle_depth_flat.png",
+      "cell": { "w": 0, "h": 0 },
+      "$note": "Whole-file source, no grid. Use cell [0,0] with an explicit rect."
+    }
+  },
+
+  "sprites": {
+
+    "$exampleA_singleCell": {
+      "size": [16, 16],
+      "source": { "type": "sheet", "sheet": "k1bit", "cell": [12, 8], "tint": "copper" },
+      "$note": "One cell, every opaque pixel forced to copper. This is how most trace and substrate tiles will work."
+    },
+
+    "$exampleB_kitbash": {
+      "size": [48, 48],
+      "fps": 6,
+      "frames": [
+        {
+          "layers": [
+            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 0], "tint": "@mask-light", "$what": "package body, top-left quadrant" },
+            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 0], "flipX": true, "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 32], "flipY": true, "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 32], "flipX": true, "flipY": true, "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [7, 14], "at": [0, 16], "tint": "copper", "$what": "pin legs, left" },
+            { "sheet": "k1bit", "cell": [7, 14], "at": [32, 16], "flipX": true, "tint": "copper" },
+            { "sheet": "k1bit", "cell": [2, 2], "at": [36, 6], "tint": "ok", "$what": "status LED, lit" }
+          ]
+        },
+        {
+          "layers": [
+            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 0], "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 0], "flipX": true, "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 32], "flipY": true, "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 32], "flipX": true, "flipY": true, "tint": "@mask-light" },
+            { "sheet": "k1bit", "cell": [7, 14], "at": [0, 16], "tint": "copper" },
+            { "sheet": "k1bit", "cell": [7, 14], "at": [32, 16], "flipX": true, "tint": "copper" },
+            { "sheet": "k1bit", "cell": [2, 2], "at": [36, 6], "tint": "copper-dark", "$what": "LED dark — 2-frame breathe" }
+          ]
+        }
+      ],
+      "$note": "Four mirrored copies of one cell make a 48x48 package from a 16x16 source. Mirroring is the single highest-leverage kitbash move in this whole manifest."
+    },
+
+    "$exampleC_authored": {
+      "size": [96, 64],
+      "source": { "type": "file", "path": "authored/ssd_room_6x4.png" },
+      "$note": "The escape hatch. When a component can't be kitbashed, draw it, drop it in authored/, point here."
+    }
+  },
+
+  "$required": {
+    "$note": "The build agent must produce a real entry for every key below before M5 ships. Placeholder policy: any key with no entry renders as a flat @mask-light rectangle with its designator in silkscreen — legible, obviously unfinished, never a crash.",
+    "substrate": [
+      "substrate.mask_plain", "substrate.mask_speckle_a", "substrate.mask_speckle_b",
+      "substrate.ground_pour", "substrate.mounting_hole", "substrate.via_field", "substrate.silk_border"
+    ],
+    "traces": [
+      "trace.straight_h", "trace.straight_v", "trace.elbow_ne", "trace.elbow_se", "trace.elbow_sw",
+      "trace.elbow_nw", "trace.tee", "trace.cross", "trace.via", "trace.pad", "trace.ribbon_clamp",
+      "trace.packet"
+    ],
+    "components": [
+      "component.chip_dip.idle", "component.chip_dip.thinking", "component.chip_dip.working", "component.chip_dip.fault",
+      "component.chip_qfp.idle", "component.chip_qfp.thinking", "component.chip_qfp.working", "component.chip_qfp.fault",
+      "component.cpu_jarvis.idle", "component.cpu_jarvis.thinking", "component.cpu_jarvis.working", "component.cpu_jarvis.fault",
+      "component.hdd.parked", "component.hdd.seeking", "component.hdd.dirty",
+      "component.ssd_room.idle", "component.ssd_room.active",
+      "component.eprom_doc.idle", "component.eprom_doc.modified",
+      "component.switch_exe.idle", "component.switch_exe.pressed", "component.switch_exe.running",
+      "component.cartridge.seated", "component.cartridge.stale", "component.cartridge.missing",
+      "component.jack_link.idle", "component.jack_link.active",
+      "component.vreg_service.down", "component.vreg_service.up", "component.vreg_service.fault",
+      "component.xtal_task.tick", "component.psu_monitor.base", "component.buzzer.idle", "component.buzzer.alert"
+    ],
+    "overlays": [
+      "overlay.heat_1", "overlay.heat_2", "overlay.heat_3", "overlay.heat_4",
+      "overlay.led_ok", "overlay.led_warn", "overlay.led_fault",
+      "overlay.crack_fault", "overlay.selection_corners", "overlay.iris_1..8"
+    ],
+    "characters": [
+      "character.occupant_hammer", "character.occupant_carry", "character.occupant_sleep"
+    ],
+    "cursors": ["cursor.default", "cursor.grab", "cursor.place"]
+  }
+}
