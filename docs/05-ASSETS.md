@@ -28,7 +28,7 @@ Three consequences worth internalizing:
 
 | Directory | What | Git | Purity-checked |
 |---|---|---|---|
-| `assets/vendor/<author>-<pack>/` | Downloaded packs, exactly as unzipped, plus `LICENSE.txt` + `SOURCE.md` | committed | no — license trail only |
+| `assets/vendor/<pack>/` | Downloaded packs, exactly as unzipped and **never renamed**, plus a license file + `SOURCE.md` | committed | no — license trail only |
 | `assets/sprites/manifest.json` | Every sprite key and where its pixels come from | committed | n/a |
 | `assets/sprites/authored/` | Your own hand-drawn PNGs, added over time | committed | yes |
 | `assets/palettes/skynet.gpl` | The locked palette | committed | n/a |

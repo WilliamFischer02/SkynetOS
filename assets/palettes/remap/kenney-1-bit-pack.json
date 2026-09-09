@@ -1,12 +1,17 @@
 {
-  "$comment": "Kenney's 1-Bit sheets are effectively two-tone. Most cells are best handled with a layer-level 'tint' in the manifest, which forces every opaque pixel to one palette token. Use this table only for sheets with more than one meaningful source color.",
-  "sheet": "kenney-1-bit-pack/Tilesheet/monochrome_transparent.png",
+  "$comment": "Kenney's monochrome 1-Bit sheet is literally two-tone: fully transparent, and one single opaque value. Almost every use should be a layer-level 'tint' in the manifest, which forces every opaque pixel to one palette token and is palette-clean by construction. This table exists for the rare layer that wants the default treatment with no tint.",
+  "sheet": "kenney_1-bit-pack/Tilesheet/monochrome-transparent.png",
   "mode": "table",
+  "$verified": "2026-09-09 — decoded the PNG and took a colour census. The sheet contains exactly 2 values: transparent (227000 px) and rgb(249,250,251) (83336 px).",
   "table": {
-    "255,255,255": "silk",
-    "204,204,204": "copper",
-    "153,153,153": "copper-dark",
-    "0,0,0": "@mask-dark"
+    "249,250,251": "silk"
   },
+  "$previousValueWasWrong": [
+    "This table used to map 255,255,255 / 204,204,204 / 153,153,153 / 0,0,0.",
+    "None of those four colours occur anywhere in the sheet. The real opaque value is",
+    "rgb(249,250,251) — near-white, not white. Any layer that had relied on the old table",
+    "would have thrown 'Source color rgb(249,250,251) has no entry in the remap table' at",
+    "bake time. Verify a census before writing a remap table; do not eyeball the colour."
+  ],
   "$note": "Tokens beginning with @ are THEME KEYS — they bake as reserved key colors and get swapped per room at draw time. See docs/05-ASSETS.md."
 }

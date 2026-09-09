@@ -1,0 +1,39 @@
+appId: co.goobentertainment.skynetos
+productName: SkynetOS
+copyright: Copyright © 2026 Goob Entertainment Co.
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# The board and the codex are data the app reads at runtime and William edits by hand, so they
+# ship unpacked next to the executable rather than sealed inside app.asar.
+extraResources:
+  - from: board
+    to: board
+  - from: schema
+    to: schema
+  - from: assets/atlas
+    to: assets/atlas
+  - from: assets/fonts
+    to: assets/fonts
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SkynetOS

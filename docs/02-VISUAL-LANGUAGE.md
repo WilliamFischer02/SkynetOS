@@ -30,6 +30,20 @@ Plus three global status colors, used only on LEDs and never on large areas:
 
 So any one sprite uses at most: 2 mask + 2 copper + 1 silk + 1 signal = **6 colors, hard cap**. The validator enforces it. That cap is the single biggest reason the art will read as authored pixel art rather than generated mush.
 
+> **Two consequences of the cap, added 2026-09-09 (M0). Both bite at M5, not before.**
+>
+> 1. **The budget has zero slack, so a sprite gets signal OR a status LED, never both.** The sum
+>    above already spends all six. An agent chip that shows a signal-coloured active glow *and* an
+>    `ok`/`warn`/`fault` LED is a seventh colour and `npm run validate:assets` will fail it. The way
+>    out is to spend one of the two mask tones or the copper shadow on that frame — decide it per
+>    sprite, deliberately, rather than discovering it when the bake breaks.
+> 2. **In two rooms the signal colour IS a status colour.** MinecraftOS signal `#57C25A` is
+>    identical to `ok`, and DeductionOS signal `#E0A22E` is identical to `warn`. In those two rooms
+>    a "live activity" pixel and a "healthy"/"warning" pixel are the same colour and cannot be told
+>    apart. That is a legibility bug in the palette, not a rendering bug, and fixing it means
+>    changing one of the five room signals — William's call, it is his colour scheme.
+>    `test/palette.test.ts` pins the collision so nobody silently "fixes" it without reading this.
+
 ## Where the pixels come from
 
 Sprites are **baked**, not hand-placed into the repo: downloaded packs in `assets/vendor/` are sliced, recolored to the palette above, composited, and packed into `assets/atlas/` by `npm run assets:bake`. The app loads only the atlas. Full pipeline in `docs/05-ASSETS.md`.
@@ -99,7 +113,9 @@ These exist because the number one failure mode of a project like this is art th
 6. **No blur/bloom/drop-shadow filters.** Not in Pixi, not in CSS. Glow is achieved with palette ramps and dither masks.
 7. **No rotation off 90°.** Sprites rotate only in 90° steps. Diagonals are pre-drawn, never rotated.
 8. **Text is bitmap.** Departure Mono at 11/22px, or a Pixi BitmapFont. No sub-pixel antialiasing (`-webkit-font-smoothing: none`).
-9. **The window is not fractionally scaled.** On launch, read `screen.getPrimaryDisplay().scaleFactor` and set the app zoom so 1 art pixel maps to a whole number of device pixels; if the OS is at 125% or 150%, snap to the nearest workable integer and log it.
+9. **The window is not fractionally scaled.** On launch, read `screen.getPrimaryDisplay().scaleFactor` and call `webContents.setZoomFactor(1 / scaleFactor)`. Electron computes the renderer's `devicePixelRatio` as `osScaleFactor × zoomFactor`, so this drives it to exactly **1**: one CSS pixel becomes one device pixel and every integer camera zoom is exact at any OS scaling. Re-apply on the window's `moved` event, because a second monitor can have a different scale factor. Log the values.
+
+   > **Corrected 2026-09-09 (M0).** This rule used to say "snap to the nearest workable integer" zoom. That is not always possible: at Windows' 125%, `1.25 × N` is a whole number only for N ∈ {4, 8, 12}, so zoom 2 and zoom 3 — two of the three documented zoom levels — have no workable snap at all. Cancelling the OS scale instead of constraining the zoom fixes every scale factor with one line. Confirmed in the M0 smoke capture: on this machine, at OS scaling **200%**, `devicePixelRatio` reads 1 and the rendered board contains exactly four colours, all exact palette entries, at zoom 2x, 3x and 4x.
 10. **Screenshot diff test.** A Playwright test renders a fixture board and pixel-diffs it against a golden PNG at 0% tolerance. Any accidental filter or resample breaks it loudly.
 
 ## Writing on the board

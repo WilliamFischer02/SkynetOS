@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "$schema": "../../schema/manifest.schema.json",
 
   "$howToUse": [
     "Every sprite the app can draw is declared here by a stable key. The renderer only ever asks for keys.",
@@ -16,25 +15,40 @@
     "Use them for anything that should take on the room's color. Use literal tokens (copper, silk, ok, warn,",
     "fault) for anything that must look identical in every room.",
     "",
-    "Run `npm run assets:bake` after editing. It writes assets/atlas/ and then the purity validator checks it."
+    "Run `npm run assets:bake` after editing. It writes assets/atlas/ and then the purity validator checks it.",
+    "To pick cell coordinates, render a ruled contact sheet first — never guess:",
+    "  node tools/sheet-contact.mjs k1bit out.png --zoom 6 --range 0,6,22,16"
   ],
 
   "sheets": {
     "k1bit": {
-      "file": "vendor/kenney-1-bit-pack/Tilesheet/monochrome_transparent.png",
+      "file": "vendor/kenney_1-bit-pack/Tilesheet/monochrome-transparent.png",
       "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 1, "spacingY": 1 },
-      "$verify": "Open the sheet, confirm cell/margin/spacing against SOURCE.md before trusting any coordinates below."
+      "$verified": [
+        "2026-09-09 — measured, not assumed. 832x373 px. Empty seam rows land at y=16,33,50,67,... = 16+17k,",
+        "which is exactly what cell 16 + spacing 1 predicts, and 16/1/0 is the only exact tiling of 832x373.",
+        "Grid is 49 x 22 cells. Agrees with Tilesheet.txt shipped in the pack.",
+        "The sheet holds exactly 2 colours: transparent and rgb(249,250,251). Tint every layer and it is",
+        "palette-clean by construction. See assets/vendor/kenney_1-bit-pack/SOURCE.md."
+      ]
     },
     "k1bit_color": {
-      "file": "vendor/kenney-1-bit-pack/Tilesheet/colored_transparent.png",
+      "file": "vendor/kenney_1-bit-pack/Tilesheet/colored-transparent.png",
       "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 1, "spacingY": 1 },
-      "remap": "palettes/remap/kenney-1-bit-pack.json"
+      "$verified": "2026-09-09 — 832x373, same 49 x 22 grid and same cell order as k1bit. 8 colours.",
+      "$note": "Unused. Everything gets recoloured anyway, so the 2-colour monochrome sheet is strictly less work. Needs an 8-entry remap table before any layer can reference it without an explicit tint."
     },
-    "ui_scifi": {
-      "file": "vendor/kenney-ui-pack-sci-fi/PNG/Default/Double/button_rectangle_depth_flat.png",
-      "cell": { "w": 0, "h": 0 },
-      "$note": "Whole-file source, no grid. Use cell [0,0] with an explicit rect."
+    "rgs_gray": {
+      "file": "vendor/FreeTopDownTilesetPixelArt-CC0/Tilesheet/tileset_gray.png",
+      "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 0, "spacingY": 0 },
+      "$verified": "2026-09-09 — 256x80, no gutters, exact 16 x 5 grid. 19 colours, 8-bit RGBA.",
+      "$note": "Substrate speckle only, and not before M2. Needs a remap table — a flat tint would erase the speckle that is the only reason to reach for this pack."
     }
+  },
+
+  "$sheetsDeliberatelyAbsent": {
+    "kenney_ui-pack-space-expansion": "740 loose PNGs, no grid, 33 colours with semi-transparent edges, rounded/glossy grammar. DOM chrome only, never the atlas. See its SOURCE.md.",
+    "OpenGameArt-cc0oga": "Wrong silhouette grammar at 30 colours; three of its sheets have no alpha at all. Two files in it are license-untraceable and are blocked by validate-assets.mjs. See its SOURCE.md."
   },
 
   "sprites": {
@@ -72,7 +86,8 @@
           ]
         }
       ],
-      "$note": "Four mirrored copies of one cell make a 48x48 package from a 16x16 source. Mirroring is the single highest-leverage kitbash move in this whole manifest."
+      "$note": "Four mirrored copies of one cell make a 48x48 package from a 16x16 source. Mirroring is the single highest-leverage kitbash move in this whole manifest.",
+      "$cellsUnverified": "The [3,21] / [7,14] / [2,2] coordinates here are illustrative. They have NOT been checked against a contact sheet and are not claimed to produce a chip. Run tools/sheet-contact.mjs before trusting them. This entry is disabled by its $ prefix and bakes nothing."
     },
 
     "$exampleC_authored": {
@@ -114,6 +129,11 @@
     "characters": [
       "character.occupant_hammer", "character.occupant_carry", "character.occupant_sleep"
     ],
-    "cursors": ["cursor.default", "cursor.grab", "cursor.place"]
+    "cursors": ["cursor.default", "cursor.grab", "cursor.place"],
+    "$drawByHand": [
+      "component.hdd.*, component.ssd_room.*, and component.cpu_jarvis.* are NOT kitbashable from the",
+      "packs currently in assets/vendor/. There are no circuit components in any of them. Those three stay",
+      "as labelled placeholder rectangles until they are drawn. See docs/DECISIONS.md 2026-09-09."
+    ]
   }
 }

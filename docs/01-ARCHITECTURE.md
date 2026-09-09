@@ -2,7 +2,14 @@
 
 ## TL;DR
 
-**Electron 33+ · Vite · React 18 · TypeScript · PixiJS v8 (WebGL, nearest-neighbour) · Zustand · better-sqlite3 · node-pty + xterm.js · chokidar · simple-git · a local MCP server**
+**Electron 44 · Vite · React 18 · TypeScript · PixiJS v8 (WebGL, nearest-neighbour) · Zustand · `node:sqlite` · node-pty + xterm.js · chokidar · simple-git · a local MCP server**
+
+> **Corrected 2026-09-09 (M0).** This line used to read "Electron 33+ … better-sqlite3". Electron 33
+> is end-of-life — Electron supports only the latest three majors — so `^33` installs an unpatched
+> Chromium. Electron 44.3.0 is the pinned version. That change also deletes the `better-sqlite3`
+> problem: Electron 44 bundles Node 24.20 with SQLite 3.53.4 **and FTS5** compiled in, so
+> `node:sqlite` covers both `skynet.db` and the Codex FTS index with no native build step at all.
+> Verified by running both against the actual Electron binary, not assumed. See `docs/DECISIONS.md`.
 
 Electron is chosen over Tauri for four specific reasons, all of which are requirements here:
 
@@ -26,7 +33,7 @@ Cost: ~150MB installer and ~200MB RSS. Acceptable for a single-user dashboard on
 │  FileResolver    resolves node targets, globs, newest-artifact │
 │  WatcherService  chokidar → file change events                 │
 │  GitService      simple-git → branch/dirty/ahead-behind        │
-│  CodexDB         better-sqlite3: memory, telemetry, sessions   │
+│  CodexDB         node:sqlite: memory, telemetry, sessions      │
 │  TelemetryBus    events → heat model → renderer stream         │
 │  ShellOpener     explorer.exe / start / cloud URL mapping      │
 │  McpServer       stdio + local HTTP; exposes board tools       │
@@ -150,7 +157,9 @@ Traces are re-routed only on graph change, cached as a baked texture per room, w
 ## Navigation
 
 - **Pan:** WASD / arrows (accelerating, 4px→16px per frame), middle-drag, or left-drag on empty substrate
-- **Zoom:** `1`/`2`/`3` keys, Ctrl+scroll, snapping to integers
+- **Zoom:** `2`/`3`/`4` keys, Ctrl+scroll, snapping to integers. The key is named for the zoom it
+  selects. (Corrected 2026-09-09: this said `1`/`2`/`3`, which contradicted `docs/02` §Grid & sizes
+  where zoom is defined as {2,3,4} and there is no 1x.)
 - **Enter a room:** click a `drive.room` node, or `Enter` with it selected → iris-wipe transition (hard-edged pixel iris, not a fade)
 - **Leave a room:** `Esc` / `Backspace`, or the ejector on the room's edge
 - **Breadcrumb:** `SKYNET / MINECRAFTOS / THE STALKER` rendered as silkscreen along the top edge

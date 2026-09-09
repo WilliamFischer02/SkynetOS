@@ -9,6 +9,9 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "build:app": "electron-vite build",
+    "smoke": "npm run build:app && node tools/smoke-shot.mjs",
+    "sheet": "node tools/sheet-contact.mjs",
     "build": "npm run verify && electron-vite build && electron-builder --win nsis",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
@@ -18,28 +21,45 @@
     "assets:bake": "node tools/bake-assets.mjs"
   },
   "devDependencies": {
-    "ajv": "^8.17.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.2",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
     "pngjs": "^7.0.0",
-    "typescript": "^5.6.0",
-    "vite": "^5.4.0",
-    "vitest": "^2.1.0",
-    "@playwright/test": "^1.48.0"
+    "typescript": "~5.9.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
-    "pixi.js": "^8.5.0",
+    "pixi.js": "^8.20.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "zustand": "^5.0.0",
-    "better-sqlite3": "^11.3.0",
-    "chokidar": "^4.0.0",
-    "simple-git": "^3.27.0",
-    "node-pty": "^1.0.0",
+    "zustand": "^5.0.15"
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@xterm/xterm": "^5.5.0",
+    "better-sqlite3": "^11.10.0",
+    "chokidar": "^4.0.3",
     "keytar": "^7.9.0",
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "node-pty": "^1.0.0",
+    "simple-git": "^3.36.0"
+  },
+  "$deps": [
+    "Native modules (better-sqlite3, node-pty, keytar) are in optionalDependencies ON PURPOSE.",
+    "They need a node-gyp toolchain this machine does not have, and nothing before M3 imports them.",
+    "npm install therefore succeeds with them omitted instead of rolling the whole tree back.",
+    "M3 must resolve the toolchain properly (@electron/rebuild against Electron's ABI, or a",
+    "WASM/built-in sqlite swap) and promote them back to dependencies. See docs/DECISIONS.md."
+  ],
+  "allowScripts": {
+    "electron": true,
+    "esbuild": true
   }
 }

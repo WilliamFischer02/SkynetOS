@@ -1,0 +1,188 @@
+/**
+ * Board types. These mirror schema/board.schema.json exactly.
+ *
+ * The schema is the authority — it is what `npm run validate:board` enforces and what an agent
+ * writing board JSON is held to. This file exists so TypeScript agrees with it. When one changes,
+ * the other changes in the same commit, or the "data before pixels" rule is already broken.
+ */
+
+export type Hex = `#${string}`;
+
+export const NODE_KINDS = [
+  'agent.code', 'agent.chat', 'agent.jarvis',
+  'drive.room',
+  'store.repo', 'store.folder', 'store.cloud',
+  'file.document', 'file.exe', 'file.artifact',
+  'link.url', 'service.process', 'task.scheduled',
+  'monitor.system', 'note.silk', 'group.zone'
+] as const;
+export type NodeKind = (typeof NODE_KINDS)[number];
+
+export const EDGE_KINDS = ['produces', 'reads', 'depends', 'deploys', 'syncs', 'supervises'] as const;
+export type EdgeKind = (typeof EDGE_KINDS)[number];
+
+export type LaunchMode = 'popout' | 'popout-elevated' | 'embedded' | 'headless';
+export type OpenWith = 'explorer' | 'default' | 'browser' | 'terminal' | 'vscode';
+
+/** Grid position, in tiles from the board origin. Never pixels. */
+export interface GridPos { x: number; y: number }
+/** Footprint, in tiles. */
+export interface Footprint { w: number; h: number }
+
+export interface BoardTheme {
+  maskDark: Hex;
+  maskLight: Hex;
+  signal: Hex;
+  substrateSeed?: number;
+}
+
+export interface BoardGrid {
+  /** Always 16. The whole visual language is built on it. */
+  tile: 16;
+  /** In tiles. */
+  width: number;
+  height: number;
+}
+
+export interface BoardNode {
+  id: string;
+  /** U4, J2, D7 — a real board's reference designator. Auto-assigned per room. */
+  designator?: string;
+  kind: NodeKind;
+  name: string;
+  pos: GridPos;
+  footprint?: Footprint;
+  tags?: string[];
+  notes?: string;
+  /** An unpopulated footprint: a TODO printed on the board, a real PCB convention. */
+  provisional?: boolean;
+  codexRef?: string;
+
+  // agent.code
+  cwd?: string;
+  launch?: LaunchMode;
+  model?: string;
+  resume?: boolean;
+  initialPrompt?: string;
+  mcpServers?: string[];
+
+  // agent.chat / agent.jarvis / link.url / store.cloud
+  url?: string;
+  partition?: string;
+  persona?: string;
+
+  // drive.room
+  boardFile?: string;
+  engraving?: string;
+
+  // store.* / file.*
+  path?: string;
+  localPath?: string;
+  remote?: string;
+  openWith?: OpenWith;
+
+  // file.artifact
+  glob?: string;
+  exclude?: string[];
+  versionPattern?: string;
+
+  // file.exe
+  args?: string[];
+  confirmBeforeLaunch?: boolean;
+
+  // service.process
+  startCommand?: string;
+  port?: number;
+  healthUrl?: string;
+
+  // task.scheduled
+  schedule?: string;
+  action?: Record<string, unknown>;
+  enabled?: boolean;
+
+  // note.silk / group.zone
+  text?: string;
+  size?: 11 | 22;
+  members?: string[];
+}
+
+export interface BoardEdge {
+  id: string;
+  from: string;
+  to: string;
+  kind: EdgeKind;
+  /** 2 = normal, 3 = primary. Width means importance, not throughput. */
+  width?: 2 | 3;
+  waypoints?: [number, number][];
+  label?: string;
+}
+
+export interface Board {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  engraving?: string;
+  parent?: string | null;
+  theme: BoardTheme;
+  grid: BoardGrid;
+  agentEditPolicy?: 'require-approval' | 'auto';
+  nodes: BoardNode[];
+  edges: BoardEdge[];
+}
+
+/**
+ * Default footprints per kind, in tiles. Kept in sync with tools/validate-board.mjs — the
+ * validator uses them for its overlap check, the renderer uses them to size a node that
+ * declares no explicit footprint, and a placeholder sprite is drawn at exactly this size.
+ *
+ * note.silk and group.zone are 0x0 because they are printed on the board rather than mounted
+ * to it: they occupy no space and never collide with anything.
+ */
+export const DEFAULT_FOOTPRINT: Record<NodeKind, Footprint> = {
+  'agent.jarvis': { w: 8, h: 6 },
+  'agent.code': { w: 3, h: 3 },
+  'agent.chat': { w: 4, h: 4 },
+  'drive.room': { w: 6, h: 4 },
+  'store.repo': { w: 4, h: 3 },
+  'store.folder': { w: 4, h: 3 },
+  'store.cloud': { w: 4, h: 3 },
+  'file.document': { w: 2, h: 2 },
+  'file.exe': { w: 2, h: 2 },
+  'file.artifact': { w: 3, h: 2 },
+  'link.url': { w: 2, h: 2 },
+  'service.process': { w: 3, h: 2 },
+  'task.scheduled': { w: 2, h: 1 },
+  'monitor.system': { w: 4, h: 4 },
+  'note.silk': { w: 0, h: 0 },
+  'group.zone': { w: 0, h: 0 }
+};
+
+export function footprintOf(node: Pick<BoardNode, 'kind' | 'footprint'>): Footprint {
+  return node.footprint ?? DEFAULT_FOOTPRINT[node.kind] ?? { w: 2, h: 2 };
+}
+
+/**
+ * The sprite key a node asks the atlas for. The renderer only ever deals in keys — never a file
+ * path — so that swapping a kitbash for hand-drawn art is a manifest edit and nothing more.
+ * A key with no atlas entry draws as a labelled placeholder rectangle. See docs/05-ASSETS.md.
+ */
+export function spriteKeyOf(node: Pick<BoardNode, 'kind'>, state = 'idle'): string {
+  const byKind: Partial<Record<NodeKind, string>> = {
+    'agent.code': 'component.chip_dip',
+    'agent.chat': 'component.chip_qfp',
+    'agent.jarvis': 'component.cpu_jarvis',
+    'drive.room': 'component.ssd_room',
+    'store.repo': 'component.hdd',
+    'store.folder': 'component.hdd',
+    'store.cloud': 'component.jack_link',
+    'file.document': 'component.eprom_doc',
+    'file.exe': 'component.switch_exe',
+    'file.artifact': 'component.cartridge',
+    'link.url': 'component.jack_link',
+    'service.process': 'component.vreg_service',
+    'task.scheduled': 'component.xtal_task',
+    'monitor.system': 'component.psu_monitor'
+  };
+  const base = byKind[node.kind];
+  return base ? `${base}.${state}` : `component.unknown.${state}`;
+}

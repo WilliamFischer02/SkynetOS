@@ -25,8 +25,13 @@ assets/vendor/
 1. **Every pack folder needs `LICENSE.txt` and `SOURCE.md`.** `npm run validate:assets` fails the
    build if either is missing. You are putting this program on stream — the license trail is not
    optional and it costs 30 seconds per pack.
-2. **Folder name = `<author>-<pack-name>`, lowercase, hyphens.** That name becomes the sheet id
-   prefix in the manifest.
+2. **Folder name: whatever the zip produced. Do not rename it.** *(Rule rewritten 2026-09-09.)*
+   This used to demand `<author>-<pack-name>`, lowercase, hyphens. No pack on disk complies —
+   they are `kenney_1-bit-pack`, `FreeTopDownTilesetPixelArt-CC0`, `OpenGameArt-cc0oga` — and
+   renaming them would mean editing `assets/vendor/`, which rule 1 forbids and which breaks the
+   paper trail back to the download. The real path is recorded in `assets/sprites/manifest.json`
+   under `sheets.<id>.file`, and the short sheet id (`k1bit`, `rgs_gray`) is chosen there. The
+   folder name is evidence; the sheet id is the handle.
 3. **Nothing in here is ever rendered directly.** The bake step slices cells out of these sheets,
    recolors them to the SkynetOS palette, composites them, and writes `assets/atlas/`. That baked
    output is what the app loads and what the purity validator checks.

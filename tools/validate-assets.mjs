@@ -44,13 +44,45 @@ let failures = 0;
 const fail = (where, msgs) => { failures++; console.error(`\nFAIL  ${where}`); for (const m of msgs) console.error(`      - ${m}`); };
 
 /* ---- 6. license trail ---- */
+/*
+ * Matched case-insensitively on purpose. Packs ship the file as LICENSE.txt, License.txt and
+ * LICENSE.TXT depending on who zipped them, and renaming a file inside assets/vendor/ is
+ * forbidden. An exact-case check passes on NTFS and then fails on a case-sensitive checkout,
+ * which is the worst of both worlds.
+ */
 const VENDOR = join(ASSETS, 'vendor');
 if (existsSync(VENDOR)) {
   for (const pack of readdirSync(VENDOR)) {
     const dir = join(VENDOR, pack);
     if (!statSync(dir).isDirectory()) continue;
-    const missing = ['LICENSE.txt', 'SOURCE.md'].filter(f => !existsSync(join(dir, f)));
+    const present = new Set(readdirSync(dir).map(f => f.toLowerCase()));
+    const missing = ['LICENSE.txt', 'SOURCE.md'].filter(f => !present.has(f.toLowerCase()));
     if (missing.length) fail(`assets/vendor/${pack}`, [`missing ${missing.join(' and ')} — see assets/vendor/README.md`]);
+  }
+}
+
+/* ---- 6b. quarantined source files ---- */
+/*
+ * Files whose license block could not be traced. They are not deleted — that is William's call
+ * on his own download — but nothing in the manifest may reference them, so they can never reach
+ * the atlas or the stream. See assets/vendor/OpenGameArt-cc0oga/SOURCE.md.
+ */
+const QUARANTINE = [
+  'vendor/OpenGameArt-cc0oga/Tilesheet/2015-02-24 (retro platformer)[tilesheet]1.png',
+  'vendor/OpenGameArt-cc0oga/Tilesheet/2015-02-24 (retro platformer)[tilesheet]2.png'
+];
+const manifestFile = join(ASSETS, 'sprites', 'manifest.json');
+if (existsSync(manifestFile)) {
+  const raw = readFileSync(manifestFile, 'utf8');
+  const manifest = JSON.parse(raw);
+  const referenced = Object.values(manifest.sheets ?? {}).map(s => (s.file ?? '').replace(/\\/g, '/'));
+  for (const q of QUARANTINE) {
+    if (referenced.includes(q)) {
+      fail('assets/sprites/manifest.json', [
+        `references ${q}, whose license cannot be traced to a block in LICENSE.TXT.`,
+        'Trace it on OpenGameArt and record it in that pack\'s SOURCE.md, or stop referencing it.'
+      ]);
+    }
   }
 }
 

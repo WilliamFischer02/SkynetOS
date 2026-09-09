@@ -50,6 +50,8 @@
     "node": {
       "type": "object",
       "required": ["id", "kind", "name", "pos"],
+      "additionalProperties": false,
+      "$strictness": "additionalProperties:false is deliberate and matches $defs/edge. Without it a typo like \"cdw\" instead of \"cwd\" validates clean and the node silently fails to resolve at runtime — the exact class of bug this schema exists to catch. Every field a node may carry is declared below; the allOf branches only add `required`, never new properties, so they do not interact with this.",
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
         "designator": { "type": "string", "pattern": "^[A-Z]{1,2}[0-9]{1,3}$", "description": "U4, J2, D7 — auto-assigned per room" },

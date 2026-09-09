@@ -1,0 +1,126 @@
+/*
+ * Chrome around the canvas. Everything here obeys the same anti-mush rules as the board:
+ * no blur, no bloom, no drop shadows, no sub-pixel antialiasing, no fractional sizes.
+ * docs/02-VISUAL-LANGUAGE.md §Anti-mush.
+ */
+
+:root {
+  /* SKYNET root theme. M2 swaps these per room alongside the palette shader. */
+  --mask-dark: #0e1a14;
+  --mask-light: #16261d;
+  --signal: #7fe0b0;
+  --copper: #c08a3e;
+  --copper-dark: #7a5423;
+  --silk: #e9e4d6;
+  --warn: #e0a22e;
+  --fault: #d2453b;
+}
+
+* {
+  box-sizing: border-box;
+  /* Anti-mush rule 8: no sub-pixel antialiasing anywhere in the stack. */
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--mask-dark);
+  color: var(--silk);
+}
+
+body {
+  /* 11px only. Departure Mono is pixel-perfect at multiples of 11 and nowhere else. */
+  font: 11px "Departure Mono", ui-monospace, monospace;
+  letter-spacing: 0;
+  user-select: none;
+  cursor: default;
+}
+
+/* Any DOM that shows sprites: nearest-neighbour, always. Anti-mush rule 5. */
+img,
+canvas {
+  image-rendering: pixelated;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.board-host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.board-host:focus-visible {
+  outline: none;
+}
+
+/* Silkscreen chrome. Flat fills and 1px borders — a real board has no gradients on it. */
+.breadcrumb,
+.hud,
+.help {
+  position: absolute;
+  z-index: 10;
+  padding: 4px 8px;
+  background: var(--mask-dark);
+  border: 1px solid var(--copper-dark);
+  color: var(--silk);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.breadcrumb {
+  top: 8px;
+  left: 8px;
+  border-color: var(--copper);
+  color: var(--signal);
+}
+
+.hud {
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 12px;
+}
+
+.hud .warn {
+  color: var(--warn);
+}
+
+.help {
+  bottom: 8px;
+  left: 8px;
+  color: var(--copper);
+}
+
+.boot,
+.fault {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.fault {
+  color: var(--fault);
+  border: 1px solid var(--fault);
+}
+
+.fault .dim {
+  color: var(--copper-dark);
+  text-transform: none;
+}
