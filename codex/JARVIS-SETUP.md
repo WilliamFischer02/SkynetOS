@@ -1,199 +1,143 @@
----
-updated: 2026-09-09
-status: active
-purpose: How to bring JARVIS up, and what to paste where. Read this once, then follow it.
----
+# JARVIS: what it is, and how you actually talk to it
 
-# Starting JARVIS
-
-## The decision you have to make first
-
-You asked for one agent that can **rewrite SkynetOS's code**, **operate the program**, look like a
-**chat, not a terminal**, take **file and image uploads**, and give you a **link to embed**.
-
-No single Claude surface does all five today. Here is what each one actually is, verified against
-this machine (`claude 2.1.267`) rather than assumed:
-
-| | claude.ai **Project** | `claude --cloud` | **Agent SDK** in-app | Claude Code CLI |
-|---|---|---|---|---|
-| Chat UI, not a terminal | yes | yes | yes (we build it) | no |
-| File / image upload | yes | yes | yes | paths only |
-| Gives a URL to embed | **yes** | **yes** (`claude.ai/code/...`) | n/a — it lives in-process | no |
-| Can rewrite SkynetOS's code | no | yes, in a cloud clone → PR | **yes, locally** | **yes, locally** |
-| Can operate *this machine* (board files, launch agents) | no | no | **yes** | **yes** |
-| Billing | your Claude subscription | your Claude subscription | **API key, billed separately** | your Claude subscription |
-
-Two facts do most of the work here:
-
-1. **The Agent SDK needs an API key.** Its docs say plainly: *"Unless previously approved,
-   Anthropic does not allow third party developers to offer claude.ai login or rate limits for
-   their products, including agents built on the Claude Agent SDK. Use the API key authentication
-   methods instead."* So an in-app JARVIS would bill to an API account, **not** your Max/Pro
-   subscription. That is a real running cost, and it is the reason it is not the default here.
-2. **A cloud session cannot touch this machine.** `claude --cloud` gets you a genuine
-   `claude.ai/code` URL and a chat UI, and it can genuinely rewrite the program — but it works on
-   a cloud clone of the repo. It cannot read `board/root.board.json` on your disk, cannot launch a
-   session, and cannot see whether `C:/dev/TheStalker` exists.
-
-## What to do — the two-body setup
-
-This is `docs/04-JARVIS.md`'s design, and **half of it already exists**: M3 shipped real Claude
-Code sessions, so the Hands are a chip you click.
-
-- **The Face** — a claude.ai Project. Where you think with JARVIS. Chat UI, uploads, a URL you
-  embed in the `u1_jarvis` node. Costs nothing beyond your subscription.
-- **The Hands** — an `agent.code` chip on the root board pointed at `C:/dev/SkynetOS`. Full local
-  power: reads the board, edits the code, runs `npm run verify`. Also your subscription.
-
-They are one identity because both read `codex/` and both follow `codex/persona.md`. The Face
-decides; the Hands do. When the Face needs something real done, it writes you a block to hand to
-the Hands — or, once `skynet-mcp` lands at M7, the Hands do it directly.
-
-**Upgrade path:** if you later want one seamless chat that can also touch the disk, that is the
-Agent SDK panel, and it is an M7 decision — with an API bill attached. Nothing below is wasted if
-you take it: the codex, the persona and the board wiring are identical.
+Written for William. Read the first section; the rest is reference.
 
 ---
 
-## Step 1 — Fill in the codex (do this first, it is the context)
+## The short version
 
-`codex/index.md` is the only file JARVIS loads every session. It currently names **14 project
-files that do not exist yet** — `codex/projects/` holds nothing but a `.gitkeep`. A JARVIS that
-reads the index and finds nothing behind it is a JARVIS with an impressive-looking empty head.
+You do not have one JARVIS. You have two things wearing the same name, and they cannot talk to
+each other. That is the whole confusion, and it is my fault — I designed it that way and did not
+say plainly what it costs you.
 
-Create one file per active project. Keep each under ~40 lines. The template:
+| | **U1 — the Face** | **U3 — the Hands** |
+|---|---|---|
+| What it is | A claude.ai conversation | A Claude Code session in a terminal |
+| Lives | In a window SkynetOS opens | In `C:/dev/SkynetOS` |
+| Can it see your disk? | **No. Never.** | Yes — reads, writes, runs, commits |
+| Can it change SkynetOS? | No | Yes, that is its job |
+| Images / file uploads | Yes, drag them in | Yes — drag a file onto the terminal, or Ctrl+V a screenshot |
+| Chat-app look | Yes | No, it is a terminal |
+| Remembers between launches | Yes | Yes — the chip resumes its own conversation |
 
-```md
+There is no wire between them. Anything the Face decides reaches your disk only if **you** carry
+it to the Hands. That is the copy-paste you said you do not want, and you are right not to want it.
+
+## So: talk to the Hands
+
+**The Hands are a conversation.** That is the part that has not landed. A Claude Code session is
+not a build script you fire and watch — it is exactly what you have been doing with me all
+project. You type in English, it answers, you argue with it, it edits files and shows you diffs.
+It reads `CLAUDE.md`, then `codex/persona.md`, then `codex/index.md` on launch, so it wakes up
+knowing who it is and what SkynetOS is.
+
+It takes images too. Drag a PNG onto the terminal window and the path lands in your prompt; a
+screenshot on the clipboard pastes with Ctrl+V. The only thing you genuinely lose versus the Face
+is that it looks like a terminal instead of a messaging app.
+
+**Do this now:**
+
+1. Click **U3 JARVIS-HANDS** on the board.
+2. First time: **New session (fresh context)**. Every time after: **Resume conversation**.
+3. A terminal opens in `C:/dev/SkynetOS`, already told who it is.
+4. Talk to it. Ask it to change the program. It will ask permission before doing anything real.
+
+That is JARVIS working "from within". No link to embed, no key to buy, no copy-paste.
+
+## Then what is the Face for?
+
+Keep it for the things a terminal is bad at, and stop expecting it to act:
+
+- Long creative conversation where you are thinking out loud, not building.
+- Looking at reference images, screenshots, PDFs together.
+- Continuing the same conversation on your phone, away from the PC.
+
+It now opens in its own window with its own title and its own taskbar entry — not a tab shoved
+into your Firefox. Its `partition` (`persist:jarvis`) keeps it logged in and keeps its cookies
+out of everything else.
+
+If you want the Face to *do* something, tell the Hands. One sentence — "the Face wants X" — is
+not the copy-paste treadmill; pasting a whole plan back and forth is.
+
+## What would actually remove the split later
+
+Both of these are real work, listed so the option is on the table rather than implied.
+
+**`skynet-mcp` (M7).** An MCP server exposing SkynetOS operations, so an agent can drive the
+board through tools instead of prose. It does **not** solve the Face problem: a claude.ai
+conversation in a browser can only reach MCP servers published over HTTPS, and putting a server
+that edits your disk on the public internet is a bad trade. What it does solve is the Hands
+becoming much better at operating SkynetOS itself.
+
+**An in-app chat panel (Agent SDK).** One surface that both chats like the Face and acts like the
+Hands, living inside SkynetOS. This is the thing you originally pictured. The blocker is money,
+not code: the Claude Agent SDK requires an Anthropic **API key** billed per token. Anthropic does
+not permit third-party apps to sign in with a claude.ai subscription. Your Claude Code subscription
+does not cover it.
+
+**Recommendation:** use the Hands now. Revisit the in-app panel after M5 if the terminal still
+bothers you, and decide then whether an API key is worth it.
+
 ---
-updated: 2026-09-09
-status: active          # active | paused | done
-owner-node: U1          # the board designator, so JARVIS can point at it
----
 
-# The Stalker
+## Reference
 
-One paragraph: what it is, who it is for, what "done" looks like.
-
-## State
-Where it actually is right now. Be blunt about what is broken.
-
-## Decisions that still bind
-- Fabric 26.2, not Forge — <why>
-- <the next one>
-
-## Open threads
-- The thing you will pick up next.
-
-## Paths
-- repo: C:/dev/TheStalker
-- artifact: C:/dev/TheStalker/build/libs/*.jar
-```
-
-You do not have to write all 14 now. Write the three you are actually working on and delete the
-index lines for the rest — **an index line with no file behind it is worse than no line**, because
-JARVIS will cite it at you as though it read something.
-
-## Step 2 — Create the Project (the Face)
-
-1. Go to **claude.ai** → **Projects** → **Create project**.
-2. Name it exactly: `JARVIS — SkynetOS`
-3. **Project instructions**: paste the entire contents of `codex/persona.md`, then append the
-   block from *Step 3* below. Project instructions load on every conversation in the project —
-   this is what "always launches with sufficient context" means for the Face.
-4. **Project knowledge** — add these files. This is the part people skip and then wonder why the
-   agent is vague:
-   - `codex/index.md`
-   - every `codex/projects/*.md` you wrote in Step 1
-   - `board/root.board.json` and each `board/*/room.board.json`
-   - `docs/01-ARCHITECTURE.md` … `docs/07-SECURITY.md`
-   - `docs/DECISIONS.md` and `handoff.md`
-   - `CLAUDE.md`
-5. Start a conversation with the opening message in `STARTUP_PROMPT.md` § 2.
-6. **Copy that conversation's URL from the address bar.** It looks like
-   `https://claude.ai/chat/<uuid>` (a specific conversation) or `https://claude.ai/project/<uuid>`
-   (the project). **Prefer the project URL** — a conversation fills up and gets replaced; the
-   project outlives it.
-
-## Step 3 — The bootstrap block (append to Project instructions)
+### The U1 node
 
 ```
-STANDING CONTEXT
-Load codex/index.md at the start of every conversation. Nothing else loads automatically —
-ask William for a file, or ask the Hands to fetch it. Never ask him to paste the whole codex.
-
-YOUR TWO BODIES
-You are the Face: the conversation. The Hands are headless Claude Code runs on William's machine,
-launched from the U2/U3 chips on the SkynetOS root board. You think; they act. You cannot read
-his disk. When you need something real done — a file read, a board edit, a command run — write a
-HANDS block: the exact prompt to paste into a Hands session, self-contained, assuming no memory
-of this conversation.
-
-WHAT YOU CANNOT DO, AND MUST NOT PRETEND TO
-- You cannot see C:/dev. If you need a file, ask for it or write a HANDS block.
-- You cannot run commands or verify a build.
-- Never claim something is built, tested, or working that you have not been shown. "I wrote it,
-  I have not run it" is always an acceptable sentence.
-
-SESSION RITUAL
-End every session — even a two-message one, even if William forgets to ask — with:
-  CODEX PATCH  — the durable facts learned, as file path + exact content to write
-  HANDOFF      — current state, the single next action, and the landmines
+kind        agent.jarvis
+url         the claude.ai conversation to open
+partition   persist:jarvis    (its own cookie jar; keeps you logged in)
+persona     C:/dev/SkynetOS/codex/personas/persona.md
 ```
 
-## Step 4 — Wire the link into the board
+Clicking it opens or focuses its window. One node, one window, always.
 
-Open SkynetOS, select the **U1 JARVIS** chip, press **F2**, and paste the URL into
-**Conversation URL**. Save. The node stops rendering as broken hardware the moment the URL is a
-real one — that red stipple you see on U1 today is the placeholder `REPLACE_WITH_JARVIS_PROJECT_ID`
-being correctly reported as unresolved.
-
-Or edit `board/root.board.json` directly and set `u1_jarvis.url`. Either way it is one line, and
-the app will re-read it when you press `R`.
-
-> The embedded webview that renders that URL inside SkynetOS is **M7**. Until then the node opens
-> the conversation in your browser, which is the same conversation — nothing is lost by starting
-> now, and the codex you build is the whole point.
-
-## Step 5 — Launch the Hands
-
-The root board has a **U3 JARVIS-HANDS** chip pointed at `C:/dev/SkynetOS`. Click it. A Windows
-Terminal tab opens running Claude Code in this repo, on **its own conversation**, and every later
-click resumes that same conversation rather than starting a fresh one.
-
-Its `initialPrompt` (sent once, on the first launch only) is in the node and reads:
+### The U3 node
 
 ```
-You are the Hands of JARVIS for SkynetOS. Read CLAUDE.md, then codex/persona.md, then
-codex/index.md before anything else. You act on William's machine: you read and write files, run
-commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and
-plans but cannot see this disk; you are how its decisions become real. Follow docs/07-SECURITY.md
-as a hard boundary: never delete files, force-push, or remove a board node without explicit
-approval in that exact exchange. End every session with a CODEX PATCH and a HANDOFF block.
+kind           agent.code
+cwd            C:/dev/SkynetOS
+launch         popout
+resume         true
+initialPrompt  who it is and what to read first
 ```
 
-If you would rather it live in a different repo, change the chip's **Working directory** in the
-same F2 form.
+`resume: true` is why the chip reopens *its own* conversation rather than a new one. SkynetOS
+assigns the conversation id (`--session-id` on the first launch, `--resume <id>` after), so it
+never has to scrape it out of anything.
 
----
+**The initial prompt is only sent on a conversation that does not exist yet.** Editing it later
+does nothing to a session that has already started — use **New session (fresh context)** to make
+a changed prompt take effect.
 
-## Which link do I actually paste?
+### Giving the Hands more context on launch
 
-- **A `claude.ai/project/<uuid>` URL** — recommended. Survives conversation compaction.
-- A `claude.ai/chat/<uuid>` URL — pins one specific conversation. Use it only if you want JARVIS
-  to always land in the same thread, and accept that you will re-point it when that thread fills.
-- A `claude.ai/code/<uuid>` URL from `claude --cloud` — valid too, and that agent *can* change the
-  code via PRs. It still cannot see this machine. If you want this as well as the Face, add it as
-  a second `agent.chat` node rather than replacing U1.
+Everything the Hands reads at startup is a file you can edit:
 
-## If you want the in-app chat panel instead
+- `CLAUDE.md` — the build contract. Read on every launch, automatically.
+- `codex/persona.md` — who JARVIS is.
+- `codex/index.md` — what exists and where.
+- `handoff.md` — what the last session did, what is mid-flight, what will bite you.
 
-Say so and I will build it at M7. What it takes, honestly:
+Add to those rather than lengthening `initialPrompt`. Files are versioned, reviewable, and shared
+by every session; a prompt is a one-shot that only the next fresh conversation ever sees.
 
-- `npm i @anthropic-ai/claude-agent-sdk` (currently `0.3.267`) running in SkynetOS's **main**
-  process, with a React chat panel in the renderer talking to it over the existing typed IPC.
-- An `ANTHROPIC_API_KEY` in Windows Credential Manager. **This bills separately from your Claude
-  subscription** — that is the trade, and it is the whole reason this is not the default.
-- Roughly: uploads become content blocks, the SDK's session id replaces the one the command bus
-  already tracks, and `skynet-mcp` gives it the board tools it needs to restructure rooms.
+### Handing a session over to the Hands
 
-It is the better end state. It is not the cheaper one.
+When one Claude Code session ends and you want another to pick up:
+
+1. Ask the session you are in to update `handoff.md`.
+2. Click **U3 JARVIS-HANDS**.
+3. The new session reads `CLAUDE.md` → `codex/persona.md` → `codex/index.md` → `handoff.md`.
+
+The new session has **none** of the previous conversation's memory. `handoff.md` is the whole
+bridge, which is why `CLAUDE.md` requires rewriting it at the end of every session.
+
+### Security, unchanged
+
+The Face's window has **no preload and no bridge** — it cannot call a single SkynetOS API. It is
+a browser tab in a nicer frame, which is what `docs/07-SECURITY.md` requires.
+
+The Hands run as you, non-elevated, and ask Claude Code's own permission prompts before acting.
+Nobody but you ever approves one of those.
