@@ -10,6 +10,7 @@ import { lastClaudeSessionId } from './services/db.js';
 import { resumeCommandLine } from './services/launch-args.js';
 import { mosaicForNode } from './services/mosaic.js';
 import { readUsage, usageRoutes } from './services/usage.js';
+import { archiveMail, listMail, sendMail } from './services/mailbox.js';
 import {
   listSessions,
   startSession,
@@ -109,6 +110,10 @@ const handlers: Handlers = {
   'usage:summary': () => readUsage(),
 
   'usage:routes': (boardId) => usageRoutes(boardId),
+
+  'mailbox:list': (side) => listMail(side),
+  'mailbox:send': (side, message) => sendMail(side, message),
+  'mailbox:archive': (side, file) => archiveMail(side, file),
 
   'session:start': (boardId, nodeId, options) =>
     startSession(boardId, nodeOrThrow(boardId, nodeId), { fresh: options?.fresh ?? false }),

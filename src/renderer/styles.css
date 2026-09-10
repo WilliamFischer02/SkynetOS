@@ -865,3 +865,68 @@ canvas {
 .palette-label { text-transform: uppercase; }
 .palette-kind { color: var(--copper-dark); }
 .palette-foot { color: var(--copper-dark); border-top: var(--p) solid var(--copper-dark); padding-top: var(--gap); }
+
+/* ---------- JARVIS mailbox (M) ---------- */
+
+.mailbox {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: calc(760 * var(--p));
+  max-width: 92vw;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+}
+
+.mailbox-head {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  color: var(--copper);
+  text-transform: uppercase;
+  padding-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+.mailbox-head .btn.tiny { margin-left: auto; }
+
+.mailbox-body {
+  display: grid;
+  grid-template-columns: 1fr calc(280 * var(--p));
+  gap: calc(2 * var(--gap));
+  padding: calc(2 * var(--gap)) 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.mailbox-list { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+
+.mail {
+  border-left: calc(2 * var(--p)) solid var(--copper);
+  background: var(--mask-light);
+  padding: var(--gap);
+}
+
+.mail-head { display: flex; gap: var(--gap); align-items: baseline; flex-wrap: wrap; }
+.mail-subject { color: var(--signal); text-transform: uppercase; }
+.mail-from { color: var(--copper-dark); }
+
+.mail-body {
+  margin: var(--gap) 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--silk);
+}
+
+.mail-actions { display: flex; gap: var(--gap); align-items: center; flex-wrap: wrap; }
+.mail-file { color: var(--copper-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mailbox-compose { display: flex; flex-direction: column; gap: var(--gap); }
+.mailbox-foot { color: var(--copper-dark); border-top: var(--p) solid var(--copper-dark); padding-top: var(--gap); }

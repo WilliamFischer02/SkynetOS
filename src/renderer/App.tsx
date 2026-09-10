@@ -4,6 +4,7 @@ import { Inspector } from './ui/Inspector.js';
 import { Iris } from './ui/Iris.js';
 import { UsageMeter } from './ui/UsageMeter.js';
 import { AddPalette } from './ui/AddPalette.js';
+import { Mailbox } from './ui/Mailbox.js';
 import { Minimap } from './ui/Minimap.js';
 import { SessionDock } from './ui/SessionDock.js';
 import { DragBadges } from './ui/DragBadges.js';
@@ -52,6 +53,8 @@ export function App(): React.JSX.Element {
   const usageRoutes = useBoardStore((s) => s.usageRoutes);
   const paletteOpen = useBoardStore((s) => s.paletteOpen);
   const setPaletteOpen = useBoardStore((s) => s.setPaletteOpen);
+  const mailboxOpen = useBoardStore((s) => s.mailboxOpen);
+  const setMailboxOpen = useBoardStore((s) => s.setMailboxOpen);
   const refreshUsageRoutes = useBoardStore((s) => s.refreshUsageRoutes);
   const undo = useBoardStore((s) => s.undo);
   const redo = useBoardStore((s) => s.redo);
@@ -128,6 +131,9 @@ export function App(): React.JSX.Element {
       if (event.code === 'KeyE') { event.preventDefault(); setMode(editMode ? 'view' : 'edit'); return; }
       // N adds a component. Edit Board mode only — placing a node is an edit, and the mode is
       // what separates browsing a board from rearranging one.
+      // M opens the JARVIS mailbox. Not gated on Edit Board mode: leaving a message for the
+      // Hands is something you do while looking at the board, not while rearranging it.
+      if (event.code === 'KeyM') { event.preventDefault(); setMailboxOpen(!mailboxOpen); return; }
       if (event.code === 'KeyN' && editMode) {
         event.preventDefault();
         setPaletteOpen(!paletteOpen);
@@ -143,7 +149,7 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selectedId, beginEdit, setMode, editMode, toggleFocus, loadBoard, boardId, paletteOpen, setPaletteOpen]);
+  }, [undo, redo, selectedId, beginEdit, setMode, editMode, toggleFocus, loadBoard, boardId, paletteOpen, setPaletteOpen, mailboxOpen, setMailboxOpen]);
 
   if (!load) return <div className="boot">READING BOARD…</div>;
 
@@ -236,6 +242,7 @@ export function App(): React.JSX.Element {
       <UsageMeter />
 
       <AddPalette />
+      <Mailbox />
 
       <div className="hud">
         {status ? (

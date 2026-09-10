@@ -16,6 +16,7 @@ import type { FieldControl } from './node-fields.js';
 import type { TargetInfo } from './targets.js';
 import type { Board, BoardNode, Footprint, LaunchMode, NodeKind } from './types.js';
 import type { UsageRoute, UsageSummary } from './usage.js';
+import type { MailSide, MailboxMessage } from './mailbox.js';
 
 /** What a board file's load attempt produced. A failure is data, not an exception. */
 export type BoardLoad =
@@ -203,6 +204,19 @@ export interface SkynetApi {
    */
   'usage:routes': (boardId: string) => UsageRoute[];
 
+  /**
+   * The JARVIS mailbox — how the Face and the Hands talk to each other.
+   *
+   * The Face cannot see this disk, so SkynetOS is the wire: it writes what the Face said into
+   * `codex/mailbox/to-hands/`, and hands back what the Hands wrote for the clipboard. Unread
+   * to-hands mail is folded into the next session briefing, so nobody has to remember to look.
+   * See src/main/services/mailbox.ts.
+   */
+  'mailbox:list': (side: MailSide) => MailboxMessage[];
+  'mailbox:send': (side: MailSide, message: { from: string; subject: string; body: string }) =>
+    { ok: boolean; file?: string; error?: string };
+  'mailbox:archive': (side: MailSide, file: string) => { ok: boolean; error?: string };
+
   // --- artifacts ---
   'artifact:resolve': (boardId: string, nodeId: string) => ArtifactInfo;
   'artifact:resolveBoard': (boardId: string) => ArtifactInfo[];
@@ -288,6 +302,9 @@ export const CHANNELS = [
   'mosaic:forNode',
   'usage:summary',
   'usage:routes',
+  'mailbox:list',
+  'mailbox:send',
+  'mailbox:archive',
   'artifact:resolve',
   'artifact:resolveBoard',
   'drag:startFile',

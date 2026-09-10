@@ -17,6 +17,7 @@ import {
   setSessionPid
 } from './db.js';
 import { conversationExists } from './conversations.js';
+import { mailForBriefing } from './mailbox.js';
 import { openTerminal, readLivePid, stagePrompt } from './terminal.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { getSettings, trustedRoots, normaliseRoot } from './settings.js';
@@ -258,8 +259,18 @@ export async function startSession(
     fresh: !invocation.resumed
   });
 
+  /*
+   * The last mile of the mailbox.
+   *
+   * Unread post for the Hands is appended to the briefing, so a session opens already holding it
+   * rather than being asked to remember to check a directory. A mailbox nobody checks is a drawer.
+   * Only for agents that get a briefing at all — a chip with `briefing: 'none'` asked for silence.
+   */
+  const mail = briefing ? mailForBriefing() : null;
+  const fullBriefing = mail ? `${briefing ?? ''}\n\n---\n\n${mail}` : briefing;
+
   const key = `${boardId}.${node.id}`;
-  const promptFile = briefing ? stagePrompt(key, briefing) : undefined;
+  const promptFile = fullBriefing ? stagePrompt(key, fullBriefing) : undefined;
 
   const rowId = randomUUID();
   const startedAt = new Date().toISOString();

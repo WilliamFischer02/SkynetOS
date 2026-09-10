@@ -580,3 +580,70 @@ process. An app started before the schema gained a field rejected every board us
 and nothing said restarting would fix it. The cache is now keyed on the schema file's mtime and
 size. This project's premise is that agents edit files while the app is running; a validator that
 assumes its own schema is immutable does not belong in it.
+
+## 2026-09-10 — The JARVIS mailbox, with SkynetOS as the wire
+
+**The problem.** JARVIS is two things wearing one name. The Face is a claude.ai conversation and
+cannot see this disk, ever. The Hands are a Claude Code session that can do anything on it. There
+is no wire between them, so everything the Face decided reached the disk only because William
+retyped it — the copy-paste he has said repeatedly he does not want.
+
+**Decision.** `codex/mailbox/` with `to-hands/`, `to-face/` and `archive/`. Markdown files with
+YAML-ish frontmatter, chosen because a human and an LLM can both write one correctly from memory,
+and because the Hands read and write files natively — no protocol, no server, no credentials, and
+it survives a crash, a restart and a `git clone`.
+
+The Face cannot reach it at all, which is exactly why SkynetOS has to be the wire. The `M` panel
+writes what the Face said into `to-hands/`, and puts what the Hands wrote on the clipboard for the
+Face in one click. One click each way instead of a transcription.
+
+**The last mile.** Unread `to-hands` mail is folded into the session BRIEFING on launch, so the
+Hands open already holding their post. A mailbox nobody checks is a drawer.
+
+**Nothing is deleted.** Handling a message means moving it to `archive/`, which is git-tracked:
+"what did the Face actually ask for" is a question asked weeks later. And a message that fails to
+parse is surfaced with its raw text as the body rather than skipped — a mailbox that silently drops
+mail is the worst possible mailbox, because the sender believes it was delivered.
+
+**What it is not.** Not a live channel. Nobody is notified, nothing is pushed, a message sits until
+a session opens. Two agents that run at different times, in different places, with different powers
+exchange post. Pretending otherwise would mean claiming a wire that does not exist, which is the
+thing this design exists to stop doing.
+
+## 2026-09-10 — docs/08-AGENT-INTAKE.md: the brief you hand to another agent
+
+William: "so that I can more easily populate the index / repo info files I want you to create an
+instruction set I can provide to an agent I have been working with a project on and the agent will
+return every file you need."
+
+**Decision.** A copy-pasteable brief that produces two artefacts, deliberately separate:
+`codex/projects/<slug>/` (prose — what each thing IS, and a `landmines.md`) and
+`board/<slug>/fragment.json` (data — nodes and edges, schema-valid). Prose makes an agent
+understand a project; the fragment makes the board point at it.
+
+The brief forbids `pos` and `footprint` (placement is SkynetOS's job), demands globs for artifacts,
+demands zones for natural groupings, and tells the agent to omit a field it is not certain about
+rather than guess — a missing field renders as an honest unbound node, a wrong path renders as a
+broken one and costs an afternoon to find.
+
+**On trust.** An intake package is data from an agent SkynetOS has never met, describing paths on
+this machine. There is no import path that skips the JSON Schema or the command bus, board JSON
+carries no executable strings, and every path is resolved at render time. The worst a bad package
+can do is produce a room full of visibly broken nodes.
+
+## 2026-09-10 — docs/09-ASSET-CATALOGUE.md is generated, not written
+
+`npm run assets:catalogue` measures every PNG under `assets/vendor/`: dimensions, grid, cell count,
+how many cells contain any non-transparent pixel, colour count, ink coverage, and the licence line
+from each pack's SOURCE.md. 764 files, 21,981 non-empty cells.
+
+**Measured, not transcribed.** A vendor README describes the pack that was published, not the file
+on this disk. A grid the tool inferred from the image dimensions is marked INFERRED and must be
+verified into the manifest before anything is cut from it — a guessed grid that looks right is
+exactly how a kitbash ends up half a pixel off.
+
+**Sheets and loose sprites are separated.** The UI pack is ~740 individual sprite files; one table
+row each produced a 764-row table nobody would read, which is the same as having no catalogue.
+Anything with a real grid gets a row; the rest is a per-directory summary.
+
+`--check` fails when the catalogue is stale, so it can be a CI gate.

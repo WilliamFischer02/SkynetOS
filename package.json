@@ -21,7 +21,8 @@
     "validate:board": "node tools/validate-board.mjs",
     "validate:assets": "node tools/validate-assets.mjs",
     "verify": "npm run typecheck && npm run validate:board && npm run assets:bake && npm run validate:assets && npm run test",
-    "assets:bake": "node tools/bake-assets.mjs"
+    "assets:bake": "node tools/bake-assets.mjs",
+    "assets:catalogue": "node tools/catalogue-assets.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

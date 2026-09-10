@@ -125,6 +125,9 @@ interface BoardState {
   /** The add-component palette, open only in Edit Board mode. */
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
+  /** The JARVIS mailbox panel — SkynetOS as the wire between the Face and the Hands. */
+  mailboxOpen: boolean;
+  setMailboxOpen: (open: boolean) => void;
 
   toast: (level: Toast['level'], text: string) => void;
   dismissToast: (id: number) => void;
@@ -158,6 +161,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   usageRoutes: [],
   pendingIngest: null,
   paletteOpen: false,
+  mailboxOpen: false,
 
   loadBoard: async (boardId) => {
     set({ busy: true });
@@ -515,6 +519,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   setPaletteOpen: (open) => set({ paletteOpen: open }),
+
+  setMailboxOpen: (open) => set({ mailboxOpen: open }),
 
   addNode: async (kind, pos) => {
     const { boardId } = get();
