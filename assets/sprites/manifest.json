@@ -1,6 +1,5 @@
 {
   "version": 1,
-
   "$howToUse": [
     "Every sprite the app can draw is declared here by a stable key. The renderer only ever asks for keys.",
     "A sprite gets its pixels from one of three source kinds, and can switch between them at any time without touching app code:",
@@ -19,11 +18,17 @@
     "To pick cell coordinates, render a ruled contact sheet first — never guess:",
     "  node tools/sheet-contact.mjs k1bit out.png --zoom 6 --range 0,6,22,16"
   ],
-
   "sheets": {
     "k1bit": {
       "file": "vendor/kenney_1-bit-pack/Tilesheet/monochrome-transparent.png",
-      "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 1, "spacingY": 1 },
+      "cell": {
+        "w": 16,
+        "h": 16,
+        "marginX": 0,
+        "marginY": 0,
+        "spacingX": 1,
+        "spacingY": 1
+      },
       "$verified": [
         "2026-09-09 — measured, not assumed. 832x373 px. Empty seam rows land at y=16,33,50,67,... = 16+17k,",
         "which is exactly what cell 16 + spacing 1 predicts, and 16/1/0 is the only exact tiling of 832x373.",
@@ -34,106 +39,1014 @@
     },
     "k1bit_color": {
       "file": "vendor/kenney_1-bit-pack/Tilesheet/colored-transparent.png",
-      "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 1, "spacingY": 1 },
+      "cell": {
+        "w": 16,
+        "h": 16,
+        "marginX": 0,
+        "marginY": 0,
+        "spacingX": 1,
+        "spacingY": 1
+      },
       "$verified": "2026-09-09 — 832x373, same 49 x 22 grid and same cell order as k1bit. 8 colours.",
       "$note": "Unused. Everything gets recoloured anyway, so the 2-colour monochrome sheet is strictly less work. Needs an 8-entry remap table before any layer can reference it without an explicit tint."
     },
     "rgs_gray": {
       "file": "vendor/FreeTopDownTilesetPixelArt-CC0/Tilesheet/tileset_gray.png",
-      "cell": { "w": 16, "h": 16, "marginX": 0, "marginY": 0, "spacingX": 0, "spacingY": 0 },
+      "cell": {
+        "w": 16,
+        "h": 16,
+        "marginX": 0,
+        "marginY": 0,
+        "spacingX": 0,
+        "spacingY": 0
+      },
       "$verified": "2026-09-09 — 256x80, no gutters, exact 16 x 5 grid. 19 colours, 8-bit RGBA.",
       "$note": "Substrate speckle only, and not before M2. Needs a remap table — a flat tint would erase the speckle that is the only reason to reach for this pack."
     }
   },
-
   "$sheetsDeliberatelyAbsent": {
     "kenney_ui-pack-space-expansion": "740 loose PNGs, no grid, 33 colours with semi-transparent edges, rounded/glossy grammar. DOM chrome only, never the atlas. See its SOURCE.md.",
     "OpenGameArt-cc0oga": "Wrong silhouette grammar at 30 colours; three of its sheets have no alpha at all. Two files in it are license-untraceable and are blocked by validate-assets.mjs. See its SOURCE.md."
   },
-
   "sprites": {
-
     "$exampleA_singleCell": {
-      "size": [16, 16],
-      "source": { "type": "sheet", "sheet": "k1bit", "cell": [12, 8], "tint": "copper" },
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          12,
+          8
+        ],
+        "tint": "copper"
+      },
       "$note": "One cell, every opaque pixel forced to copper. This is how most trace and substrate tiles will work."
     },
-
     "$exampleB_kitbash": {
-      "size": [48, 48],
+      "size": [
+        48,
+        48
+      ],
       "fps": 6,
       "frames": [
         {
           "layers": [
-            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 0], "tint": "@mask-light", "$what": "package body, top-left quadrant" },
-            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 0], "flipX": true, "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 32], "flipY": true, "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 32], "flipX": true, "flipY": true, "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [7, 14], "at": [0, 16], "tint": "copper", "$what": "pin legs, left" },
-            { "sheet": "k1bit", "cell": [7, 14], "at": [32, 16], "flipX": true, "tint": "copper" },
-            { "sheet": "k1bit", "cell": [2, 2], "at": [36, 6], "tint": "ok", "$what": "status LED, lit" }
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "@mask-light",
+              "$what": "package body, top-left quadrant"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                32,
+                0
+              ],
+              "flipX": true,
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                0,
+                32
+              ],
+              "flipY": true,
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                32,
+                32
+              ],
+              "flipX": true,
+              "flipY": true,
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                7,
+                14
+              ],
+              "at": [
+                0,
+                16
+              ],
+              "tint": "copper",
+              "$what": "pin legs, left"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                7,
+                14
+              ],
+              "at": [
+                32,
+                16
+              ],
+              "flipX": true,
+              "tint": "copper"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                2,
+                2
+              ],
+              "at": [
+                36,
+                6
+              ],
+              "tint": "ok",
+              "$what": "status LED, lit"
+            }
           ]
         },
         {
           "layers": [
-            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 0], "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 0], "flipX": true, "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [3, 21], "at": [0, 32], "flipY": true, "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [3, 21], "at": [32, 32], "flipX": true, "flipY": true, "tint": "@mask-light" },
-            { "sheet": "k1bit", "cell": [7, 14], "at": [0, 16], "tint": "copper" },
-            { "sheet": "k1bit", "cell": [7, 14], "at": [32, 16], "flipX": true, "tint": "copper" },
-            { "sheet": "k1bit", "cell": [2, 2], "at": [36, 6], "tint": "copper-dark", "$what": "LED dark — 2-frame breathe" }
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                32,
+                0
+              ],
+              "flipX": true,
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                0,
+                32
+              ],
+              "flipY": true,
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                3,
+                21
+              ],
+              "at": [
+                32,
+                32
+              ],
+              "flipX": true,
+              "flipY": true,
+              "tint": "@mask-light"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                7,
+                14
+              ],
+              "at": [
+                0,
+                16
+              ],
+              "tint": "copper"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                7,
+                14
+              ],
+              "at": [
+                32,
+                16
+              ],
+              "flipX": true,
+              "tint": "copper"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                2,
+                2
+              ],
+              "at": [
+                36,
+                6
+              ],
+              "tint": "copper-dark",
+              "$what": "LED dark — 2-frame breathe"
+            }
           ]
         }
       ],
       "$note": "Four mirrored copies of one cell make a 48x48 package from a 16x16 source. Mirroring is the single highest-leverage kitbash move in this whole manifest.",
       "$cellsUnverified": "The [3,21] / [7,14] / [2,2] coordinates here are illustrative. They have NOT been checked against a contact sheet and are not claimed to produce a chip. Run tools/sheet-contact.mjs before trusting them. This entry is disabled by its $ prefix and bakes nothing."
     },
-
     "$exampleC_authored": {
-      "size": [96, 64],
-      "source": { "type": "file", "path": "authored/ssd_room_6x4.png" },
+      "size": [
+        96,
+        64
+      ],
+      "source": {
+        "type": "file",
+        "path": "authored/ssd_room_6x4.png"
+      },
       "$note": "The escape hatch. When a component can't be kitbashed, draw it, drop it in authored/, point here."
+    },
+    "decor.via": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          16,
+          2
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Plated through-hole with four trace stubs. [16,2]"
+    },
+    "decor.screw": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          14,
+          2
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "silk"
+      },
+      "$what": "Mounting screw, two tabs. [14,2]"
+    },
+    "decor.testpoint": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          15,
+          2
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Test point with one stub. [15,2]"
+    },
+    "decor.junction": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          16,
+          3
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Fat four-way trace junction. [16,3]"
+    },
+    "decor.elbow": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          15,
+          3
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Fat trace elbow. [15,3]"
+    },
+    "decor.tee": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          17,
+          3
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Fat trace tee. [17,3]"
+    },
+    "decor.junction_thin": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          16,
+          4
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper-dark"
+      },
+      "$what": "Thin four-way junction. [16,4]"
+    },
+    "decor.elbow_thin": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          15,
+          4
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper-dark"
+      },
+      "$what": "Thin elbow. [15,4]"
+    },
+    "decor.grille": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          16,
+          0
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper-dark"
+      },
+      "$what": "Lattice — reads as a heatsink grille. [16,0]"
+    },
+    "decor.pads": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          17,
+          0
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Scattered pad array, BGA-ish. [17,0]"
+    },
+    "decor.fins": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          16,
+          5
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "silk"
+      },
+      "$what": "Fins — a heatsink seen from above. [16,5]"
+    },
+    "decor.cap": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          14,
+          5
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Filled disc — an electrolytic cap seen from above. [14,5]"
+    },
+    "decor.fiducial": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          26,
+          14
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "silk"
+      },
+      "$what": "Corner registration mark. [26,14]"
+    },
+    "decor.panel": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          26,
+          15
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper-dark"
+      },
+      "$what": "Small framed panel — a blank display. [26,15]"
+    },
+    "decor.padgrid": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          32,
+          15
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper-dark"
+      },
+      "$what": "Dense dotted pad grid. [32,15]"
+    },
+    "decor.ribbon": {
+      "size": [
+        16,
+        16
+      ],
+      "source": {
+        "type": "sheet",
+        "sheet": "k1bit",
+        "cell": [
+          33,
+          15
+        ],
+        "at": [
+          0,
+          0
+        ],
+        "tint": "copper"
+      },
+      "$what": "Stacked bars — a ribbon cable end. [33,15]"
+    },
+    "decor.led_ok": {
+      "size": [
+        16,
+        16
+      ],
+      "fps": 2,
+      "frames": [
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "ok"
+            }
+          ]
+        },
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            }
+          ]
+        }
+      ],
+      "$what": "Indicator LED, ok. Lens [39,13] over body [41,13], two-frame pulse."
+    },
+    "decor.led_warn": {
+      "size": [
+        16,
+        16
+      ],
+      "fps": 2,
+      "frames": [
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "warn"
+            }
+          ]
+        },
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            }
+          ]
+        }
+      ],
+      "$what": "Indicator LED, warn. Lens [39,13] over body [41,13], two-frame pulse."
+    },
+    "decor.led_fault": {
+      "size": [
+        16,
+        16
+      ],
+      "fps": 2,
+      "frames": [
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "fault"
+            }
+          ]
+        },
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            }
+          ]
+        }
+      ],
+      "$what": "Indicator LED, fault. Lens [39,13] over body [41,13], two-frame pulse."
+    },
+    "decor.led_idle": {
+      "size": [
+        16,
+        16
+      ],
+      "fps": 2,
+      "frames": [
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper"
+            }
+          ]
+        },
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            }
+          ]
+        }
+      ],
+      "$what": "Indicator LED, idle. Lens [39,13] over body [41,13], two-frame pulse."
+    },
+    "decor.led_white": {
+      "size": [
+        16,
+        16
+      ],
+      "fps": 2,
+      "frames": [
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "silk"
+            }
+          ]
+        },
+        {
+          "layers": [
+            {
+              "sheet": "k1bit",
+              "cell": [
+                41,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            },
+            {
+              "sheet": "k1bit",
+              "cell": [
+                39,
+                13
+              ],
+              "at": [
+                0,
+                0
+              ],
+              "tint": "copper-dark"
+            }
+          ]
+        }
+      ],
+      "$what": "Indicator LED, white. Lens [39,13] over body [41,13], two-frame pulse."
     }
   },
-
   "$required": {
     "$note": "The build agent must produce a real entry for every key below before M5 ships. Placeholder policy: any key with no entry renders as a flat @mask-light rectangle with its designator in silkscreen — legible, obviously unfinished, never a crash.",
     "substrate": [
-      "substrate.mask_plain", "substrate.mask_speckle_a", "substrate.mask_speckle_b",
-      "substrate.ground_pour", "substrate.mounting_hole", "substrate.via_field", "substrate.silk_border"
+      "substrate.mask_plain",
+      "substrate.mask_speckle_a",
+      "substrate.mask_speckle_b",
+      "substrate.ground_pour",
+      "substrate.mounting_hole",
+      "substrate.via_field",
+      "substrate.silk_border"
     ],
     "traces": [
-      "trace.straight_h", "trace.straight_v", "trace.elbow_ne", "trace.elbow_se", "trace.elbow_sw",
-      "trace.elbow_nw", "trace.tee", "trace.cross", "trace.via", "trace.pad", "trace.ribbon_clamp",
+      "trace.straight_h",
+      "trace.straight_v",
+      "trace.elbow_ne",
+      "trace.elbow_se",
+      "trace.elbow_sw",
+      "trace.elbow_nw",
+      "trace.tee",
+      "trace.cross",
+      "trace.via",
+      "trace.pad",
+      "trace.ribbon_clamp",
       "trace.packet"
     ],
     "components": [
-      "component.chip_dip.idle", "component.chip_dip.thinking", "component.chip_dip.working", "component.chip_dip.fault",
-      "component.chip_qfp.idle", "component.chip_qfp.thinking", "component.chip_qfp.working", "component.chip_qfp.fault",
-      "component.cpu_jarvis.idle", "component.cpu_jarvis.thinking", "component.cpu_jarvis.working", "component.cpu_jarvis.fault",
-      "component.hdd.parked", "component.hdd.seeking", "component.hdd.dirty",
-      "component.ssd_room.idle", "component.ssd_room.active",
-      "component.eprom_doc.idle", "component.eprom_doc.modified",
-      "component.switch_exe.idle", "component.switch_exe.pressed", "component.switch_exe.running",
-      "component.cartridge.seated", "component.cartridge.stale", "component.cartridge.missing",
-      "component.jack_link.idle", "component.jack_link.active",
-      "component.vreg_service.down", "component.vreg_service.up", "component.vreg_service.fault",
-      "component.xtal_task.tick", "component.psu_monitor.base", "component.buzzer.idle", "component.buzzer.alert"
+      "component.chip_dip.idle",
+      "component.chip_dip.thinking",
+      "component.chip_dip.working",
+      "component.chip_dip.fault",
+      "component.chip_qfp.idle",
+      "component.chip_qfp.thinking",
+      "component.chip_qfp.working",
+      "component.chip_qfp.fault",
+      "component.cpu_jarvis.idle",
+      "component.cpu_jarvis.thinking",
+      "component.cpu_jarvis.working",
+      "component.cpu_jarvis.fault",
+      "component.hdd.parked",
+      "component.hdd.seeking",
+      "component.hdd.dirty",
+      "component.ssd_room.idle",
+      "component.ssd_room.active",
+      "component.eprom_doc.idle",
+      "component.eprom_doc.modified",
+      "component.switch_exe.idle",
+      "component.switch_exe.pressed",
+      "component.switch_exe.running",
+      "component.cartridge.seated",
+      "component.cartridge.stale",
+      "component.cartridge.missing",
+      "component.jack_link.idle",
+      "component.jack_link.active",
+      "component.vreg_service.down",
+      "component.vreg_service.up",
+      "component.vreg_service.fault",
+      "component.xtal_task.tick",
+      "component.psu_monitor.base",
+      "component.buzzer.idle",
+      "component.buzzer.alert"
     ],
     "overlays": [
-      "overlay.heat_1", "overlay.heat_2", "overlay.heat_3", "overlay.heat_4",
-      "overlay.led_ok", "overlay.led_warn", "overlay.led_fault",
-      "overlay.crack_fault", "overlay.selection_corners", "overlay.iris_1..8"
+      "overlay.heat_1",
+      "overlay.heat_2",
+      "overlay.heat_3",
+      "overlay.heat_4",
+      "overlay.led_ok",
+      "overlay.led_warn",
+      "overlay.led_fault",
+      "overlay.crack_fault",
+      "overlay.selection_corners",
+      "overlay.iris_1..8"
     ],
     "characters": [
-      "character.occupant_hammer", "character.occupant_carry", "character.occupant_sleep"
+      "character.occupant_hammer",
+      "character.occupant_carry",
+      "character.occupant_sleep"
     ],
-    "cursors": ["cursor.default", "cursor.grab", "cursor.place"],
+    "cursors": [
+      "cursor.default",
+      "cursor.grab",
+      "cursor.place"
+    ],
     "$drawByHand": [
       "component.hdd.*, component.ssd_room.*, and component.cpu_jarvis.* are NOT kitbashable from the",
       "packs currently in assets/vendor/. There are no circuit components in any of them. Those three stay",
       "as labelled placeholder rectangles until they are drawn. See docs/DECISIONS.md 2026-09-09."
     ]
-  }
+  },
+  "$decorNote": [
+    "decor.* keys are the aesthetic furniture of the board: vias, screws, junctions, grilles,",
+    "pad arrays, fiducials and indicator LEDs. Cut from the Kenney 1-bit sheet, which is 2 colours",
+    "(transparent + white), so tinting a layer makes it palette-clean by construction.",
+    "",
+    "Cell coordinates were read off a ruled contact sheet, never guessed:",
+    "  node tools/sheet-contact.mjs k1bit out.png --zoom 10 --range 14,0,22,7",
+    "",
+    "Every tint here is a LITERAL token, never an @theme key. The theme-key swap is not implemented",
+    "in the renderer yet and an @token would bake as reserved magenta. It is also simply correct:",
+    "these are the shared tri-tone and the status colours, which do not change between rooms."
+  ]
 }

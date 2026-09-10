@@ -152,23 +152,27 @@ describe('missingRequired', () => {
 /*
  * Per-node display toggles.
  *
- * "some I only want to be thumbnail, some only designator, some only title." Three independent
- * booleans, all defaulting to ON, so a board written before they existed prints exactly what it
- * printed before.
+ * "some I only want to be thumbnail, some only designator, some only title." Four independent
+ * booleans, all defaulting to ON, so a board written before any of them existed prints exactly
+ * what it printed before.
+ *
+ * `showThumbnail` and `showLogo` are separate because the two images do separate jobs: a
+ * recognisable badge on a drawn package reads well, and so does a photograph with nothing over it.
  */
 describe('display toggles', () => {
-  it('offers all three on every kind', () => {
+  const TOGGLES = ['showDesignator', 'showName', 'showThumbnail', 'showLogo'] as const;
+  const ALL_ON = { designator: true, name: true, thumbnail: true, logo: true };
+
+  it('offers all four on every kind', () => {
     for (const kind of NODE_KINDS) {
       const keys = fieldsFor(kind).map((f) => f.key);
-      expect(keys, kind).toContain('showDesignator');
-      expect(keys, kind).toContain('showName');
-      expect(keys, kind).toContain('showThumbnail');
+      for (const toggle of TOGGLES) expect(keys, `${kind} is missing ${toggle}`).toContain(toggle);
     }
   });
 
   it('offers them as tickers, not text boxes', () => {
     const fields = fieldsFor('agent.code');
-    for (const key of ['showDesignator', 'showName', 'showThumbnail']) {
+    for (const key of TOGGLES) {
       expect(fields.find((f) => f.key === key)?.control).toBe('boolean');
     }
   });
@@ -177,31 +181,41 @@ describe('display toggles', () => {
     // targetFieldsFor drives the Browse/Verify UI. A checkbox is not a path.
     for (const kind of NODE_KINDS) {
       const targets = targetFieldsFor(kind).map((f) => f.key);
-      expect(targets).not.toContain('showDesignator');
-      expect(targets).not.toContain('showName');
-      expect(targets).not.toContain('showThumbnail');
+      for (const toggle of TOGGLES) expect(targets).not.toContain(toggle);
     }
   });
 
   it('defaults every toggle to ON when the node says nothing', () => {
-    const d = displayOf({});
-    expect(d).toEqual({ designator: true, name: true, thumbnail: true });
+    expect(displayOf({})).toEqual(ALL_ON);
   });
 
   it('honours each toggle independently', () => {
-    expect(displayOf({ showDesignator: false })).toEqual({ designator: false, name: true, thumbnail: true });
-    expect(displayOf({ showName: false })).toEqual({ designator: true, name: false, thumbnail: true });
-    expect(displayOf({ showThumbnail: false })).toEqual({ designator: true, name: true, thumbnail: false });
+    expect(displayOf({ showDesignator: false })).toEqual({ ...ALL_ON, designator: false });
+    expect(displayOf({ showName: false })).toEqual({ ...ALL_ON, name: false });
+    expect(displayOf({ showThumbnail: false })).toEqual({ ...ALL_ON, thumbnail: false });
+    expect(displayOf({ showLogo: false })).toEqual({ ...ALL_ON, logo: false });
+  });
+
+  it('separates the wallpaper from the badge', () => {
+    /*
+     * The point of splitting them. A logo on a drawn package silhouette — no photograph — is a
+     * combination the old single toggle could not express at all, and it is the one that makes a
+     * dense room readable: every node the same shape, each wearing its own mark.
+     */
+    expect(displayOf({ showThumbnail: false, showLogo: true }))
+      .toEqual({ ...ALL_ON, thumbnail: false });
+    expect(displayOf({ showThumbnail: true, showLogo: false }))
+      .toEqual({ ...ALL_ON, logo: false });
   });
 
   it('allows a node to print nothing at all', () => {
     // A pure silhouette. Legal, and the only way to get a board that reads as a picture.
-    expect(displayOf({ showDesignator: false, showName: false, showThumbnail: false }))
-      .toEqual({ designator: false, name: false, thumbnail: false });
+    expect(displayOf({ showDesignator: false, showName: false, showThumbnail: false, showLogo: false }))
+      .toEqual({ designator: false, name: false, thumbnail: false, logo: false });
   });
 
   it('treats an explicit true as ON, not as "unset"', () => {
-    expect(displayOf({ showDesignator: true, showName: true, showThumbnail: true }))
-      .toEqual({ designator: true, name: true, thumbnail: true });
+    expect(displayOf({ showDesignator: true, showName: true, showThumbnail: true, showLogo: true }))
+      .toEqual(ALL_ON);
   });
 });

@@ -197,6 +197,19 @@ for (const [key, spec] of Object.entries(manifest.sprites ?? {})) {
       continue;
     }
     const frames = spec.frames ?? [];
+    /*
+     * A sprite that declares neither a recognised `source.type` nor any `frames` used to bake
+     * nothing and say nothing — the atlas simply came out short and you had to diff the manifest
+     * against the frame list to find out which entries had evaporated. A `source` missing its
+     * `type` is the easy way to write one, and it cost a debugging round to find.
+     */
+    if (!frames.length) {
+      throw new Error(
+        spec.source
+          ? `source.type is "${String(spec.source.type)}" — expected "sheet" or "file"`
+          : 'no "frames" and no "source"'
+      );
+    }
     frames.forEach((f, i) => {
       baked.push({ key, frame: i, img: bakeFrame(key, spec.size, f.layers), fps: spec.fps ?? 6 });
     });
@@ -207,9 +220,25 @@ for (const [key, spec] of Object.entries(manifest.sprites ?? {})) {
 }
 
 if (!baked.length) {
-  // Create the directory even with nothing in it. electron-builder lists assets/atlas under
-  // extraResources and warns "file source doesn't exist" otherwise, which means a packaged
-  // build has no atlas path at all for the loader to look at.
+  /*
+   * Write an EMPTY atlas rather than nothing.
+   *
+   * Two callers need the file to exist regardless of whether anything baked. electron-builder
+   * lists assets/atlas under extraResources and warns "file source doesn't exist" otherwise, so a
+   * packaged build would have no atlas path at all. And the renderer imports skynet.json through
+   * Vite's `?url`, which resolves at BUILD time — a missing file is a build failure, not a
+   * graceful degrade, and assets/atlas is git-ignored so a fresh clone has none.
+   *
+   * An empty atlas is a perfectly good atlas: every key misses, every node draws a labelled
+   * placeholder, which is exactly the documented pre-M5 state.
+   */
+  mkdirSync(OUT_DIR, { recursive: true });
+  writeFileSync(
+    join(OUT_DIR, 'skynet.json'),
+    JSON.stringify({ meta: { image: 'skynet.png', size: { w: 1, h: 1 } }, frames: {}, animations: {} }, null, 2)
+  );
+  const blank = new PNG({ width: 1, height: 1 });
+  writeFileSync(join(OUT_DIR, 'skynet.png'), PNG.sync.write(blank));
   mkdirSync(OUT_DIR, { recursive: true });
   console.warn('\nNothing baked. Drop packs into assets/vendor/, fill in assets/sprites/manifest.json,');
   console.warn('and re-run. Until then the app renders placeholder rectangles — that is expected before M5.\n');

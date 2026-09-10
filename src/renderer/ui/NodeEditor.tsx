@@ -56,7 +56,8 @@ function defaultBoolean(field: FieldSpec): boolean {
   if (field.key === 'enabled') return true;
   // The display toggles default to ON: a node that has never been touched prints everything,
   // which is what every board did before the toggles existed.
-  if (field.key === 'showDesignator' || field.key === 'showName' || field.key === 'showThumbnail') return true;
+  if (field.key === 'showDesignator' || field.key === 'showName') return true;
+  if (field.key === 'showThumbnail' || field.key === 'showLogo') return true;
   return false;
 }
 

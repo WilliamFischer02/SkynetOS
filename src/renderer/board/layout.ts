@@ -3,6 +3,7 @@
  * click target matches what is drawn, which is the kind of bug that is miserable to chase by eye.
  */
 
+import { PRINTED_KINDS as SHARED_PRINTED_KINDS } from '@shared/types.js';
 import type { Board, BoardNode } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
 import { TILE } from './camera.js';
@@ -25,7 +26,14 @@ export interface NodeRect {
  * Board mode they are, because "addable, removable, and fully editable" has to include the
  * furniture: a note you cannot select is a note you can only change by hand-editing JSON.
  */
-const PRINTED_ONLY = new Set<BoardNode['kind']>(['note.silk', 'decor.image']);
+const PRINTED_ONLY = new Set<BoardNode['kind']>(['note.silk', 'decor.image', 'decor.part']);
+
+/**
+ * Kinds that occupy no grid at all, in either direction: they obstruct nothing and nothing
+ * obstructs them. A superset of PRINTED_ONLY — a `group.zone` IS a click target while browsing
+ * (you select it by its empty margin) but is still never an obstacle.
+ */
+const PRINTED_KINDS = new Set<BoardNode['kind']>(SHARED_PRINTED_KINDS);
 
 /**
  * A grab box for a printed note, derived from its text.
@@ -164,7 +172,7 @@ export function findFreeSpace(
 ): { x: number; y: number } | null {
   const occupied = new Set<string>();
   for (const node of board.nodes) {
-    if (node.kind === 'note.silk' || node.kind === 'group.zone' || node.kind === 'decor.image') continue;
+    if (PRINTED_KINDS.has(node.kind)) continue;
     const fp = footprintOf(node);
     for (let y = node.pos.y; y < node.pos.y + fp.h; y++) {
       for (let x = node.pos.x; x < node.pos.x + fp.w; x++) occupied.add(`${x},${y}`);

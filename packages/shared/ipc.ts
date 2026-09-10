@@ -241,8 +241,16 @@ export interface SkynetApi {
    * file to drag, so without this the sorting furniture on a board could only be added by
    * hand-editing JSON. Created unbound and provisional — see services/node-factory.ts.
    */
-  'node:add': (boardId: string, kind: NodeKind, pos: { x: number; y: number }) =>
-    { ok: boolean; nodeId?: string; error?: string };
+  'node:add': (
+    boardId: string,
+    kind: NodeKind,
+    pos: { x: number; y: number },
+    /**
+     * Fields to set on the new node. Only a small allowlist is honoured — see the handler — so
+     * this cannot become a way to write arbitrary board JSON from the renderer.
+     */
+    fields?: Partial<BoardNode>
+  ) => { ok: boolean; nodeId?: string; error?: string };
 
   // --- act ---
   'node:open': (boardId: string, nodeId: string) => OpenTargetResult;

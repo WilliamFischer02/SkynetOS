@@ -22,12 +22,36 @@ export const NODE_KINDS = [
   'store.repo', 'store.folder', 'store.cloud',
   'file.document', 'file.exe', 'file.artifact',
   'link.url', 'service.process', 'task.scheduled',
-  'monitor.system', 'note.silk', 'group.zone', 'decor.image'
+  'monitor.system', 'note.silk', 'group.zone', 'decor.image', 'decor.part'
 ] as const;
 export type NodeKind = (typeof NODE_KINDS)[number];
 
 export const EDGE_KINDS = ['produces', 'reads', 'depends', 'deploys', 'syncs', 'supervises'] as const;
 export type EdgeKind = (typeof EDGE_KINDS)[number];
+
+/**
+ * The aesthetic furniture of the board: the parts that make it look like a board.
+ *
+ * Every one is a real sprite cut from the Kenney 1-bit sheet and baked into assets/atlas — see
+ * the `decor.*` entries in assets/sprites/manifest.json for the exact cell each came from. They
+ * are decoration and nothing else: no target, no click, no state. What they buy is that a room
+ * with three components in it still reads as hardware rather than as three boxes on a grid.
+ *
+ * The `led_*` parts carry a two-frame pulse, which is the only thing on the board that moves for
+ * its own sake. They stop under reducedMotion like everything else.
+ */
+export const DECOR_PARTS = [
+  'via', 'screw', 'testpoint',
+  'junction', 'elbow', 'tee', 'junction_thin', 'elbow_thin',
+  'grille', 'pads', 'padgrid', 'fins', 'cap', 'ribbon',
+  'fiducial', 'panel',
+  'led_ok', 'led_warn', 'led_fault', 'led_idle', 'led_white'
+] as const;
+export type DecorPart = (typeof DECOR_PARTS)[number];
+
+export function isDecorPart(value: string): value is DecorPart {
+  return (DECOR_PARTS as readonly string[]).includes(value);
+}
 
 export type LaunchMode = 'popout' | 'popout-elevated' | 'embedded' | 'headless';
 export type OpenWith = 'explorer' | 'default' | 'browser' | 'terminal' | 'vscode';
@@ -160,6 +184,11 @@ export interface BoardNode {
   image?: string;
 
   /**
+   * Which piece of board furniture a `decor.part` is. See DECOR_PARTS.
+   */
+  part?: DecorPart;
+
+  /**
    * The node's LOGO: a smaller image centred on top of the wallpaper, aspect preserved.
    *
    * Two images per component, because they do different jobs. The wallpaper says what this thing
@@ -170,31 +199,52 @@ export interface BoardNode {
   logo?: string;
 
   /**
-   * What this node prints on the board. All three default to ON and are independent, so a node
-   * can be a thumbnail alone, a designator alone, a title alone, or any combination — which is
-   * how you keep a dense room readable without renaming anything.
+   * What this node prints on the board. All four default to ON and are independent, so a node can
+   * be a wallpaper alone, a badge alone, a designator alone, a title alone, or any combination —
+   * which is how you keep a dense room readable without renaming anything.
+   *
+   * `showThumbnail` governs the WALLPAPER and `showLogo` the BADGE, separately, because they are
+   * separately useful: a node can carry a recognisable logo on a drawn package with no photograph
+   * behind it, or a photograph with no badge over it.
    */
   showDesignator?: boolean;
   showName?: boolean;
   showThumbnail?: boolean;
+  showLogo?: boolean;
+
+  /**
+   * Animate the wallpaper as a wave of energy travelling outward from the node's centre.
+   *
+   * Not a glow in the CSS sense — a gradient at low opacity would violate four of docs/02's
+   * anti-mush rules at once. It is a palette shift: the room's six colours are already a
+   * brightness ramp, and an expanding ring pushes the pixels it crosses one or two rungs up it.
+   * Every frame holds exactly the six colours the image already had. See board/glow.ts.
+   */
+  pulseGlow?: boolean;
 }
 
 /** What a node prints on the board, with the defaults applied. */
 export interface NodeDisplay {
   designator: boolean;
   name: boolean;
+  /** The wallpaper that fills the footprint. */
   thumbnail: boolean;
+  /** The badge centred on it. */
+  logo: boolean;
 }
 
 /**
  * Resolve a node's display toggles. Absent means ON — a node that has never been touched prints
  * everything, which is the behaviour every board had before the toggles existed.
  */
-export function displayOf(node: Pick<BoardNode, 'showDesignator' | 'showName' | 'showThumbnail'>): NodeDisplay {
+export function displayOf(
+  node: Pick<BoardNode, 'showDesignator' | 'showName' | 'showThumbnail' | 'showLogo'>
+): NodeDisplay {
   return {
     designator: node.showDesignator !== false,
     name: node.showName !== false,
-    thumbnail: node.showThumbnail !== false
+    thumbnail: node.showThumbnail !== false,
+    logo: node.showLogo !== false
   };
 }
 
@@ -258,8 +308,29 @@ export const DEFAULT_FOOTPRINT: Record<NodeKind, Footprint> = {
    * A backdrop wants to be big by default — small enough to place, big enough to see. Like the
    * other printed kinds it never collides, so this is a starting size rather than a reservation.
    */
-  'decor.image': { w: 12, h: 8 }
+  'decor.image': { w: 12, h: 8 },
+  // One tile. A via is one tile on a real board too.
+  'decor.part': { w: 1, h: 1 }
 };
+
+/**
+ * Kinds that are PRINTED on the board rather than MOUNTED to it.
+ *
+ * They occupy no grid at all: they obstruct nothing, nothing obstructs them, the router does not
+ * route around them, the validators do not count them in an overlap, and a drag of one is bounded
+ * only by the board edge.
+ *
+ * This exists because that rule was previously written out five separate times — in
+ * `tools/validate-board.mjs`, `board-store.graphProblems`, `layout.findFreeSpace`, `drag.canDrop`
+ * and the A* obstacle filter — and adding a kind meant finding all five. Adding `decor.image`
+ * missed one and the app refused to load a valid board; adding `decor.part` missed a different one
+ * and every trace on the root board started cutting through components. One list.
+ */
+export const PRINTED_KINDS: readonly NodeKind[] = ['note.silk', 'group.zone', 'decor.image', 'decor.part'];
+
+export function isPrinted(kind: NodeKind): boolean {
+  return PRINTED_KINDS.includes(kind);
+}
 
 export function footprintOf(node: Pick<BoardNode, 'kind' | 'footprint'>): Footprint {
   return node.footprint ?? DEFAULT_FOOTPRINT[node.kind] ?? { w: 2, h: 2 };
@@ -281,7 +352,10 @@ export function maxFootprintFor(kind: NodeKind): number {
   // A zone is a bracket meant to span a room and a decor image is a backdrop meant to fill one.
   // Both are printed rather than mounted, so neither is bounded by "an object you pick out at a
   // glance" the way a component is.
-  return kind === 'group.zone' || kind === 'decor.image' ? MAX_ZONE_FOOTPRINT : MAX_FOOTPRINT;
+  if (kind === 'group.zone' || kind === 'decor.image') return MAX_ZONE_FOOTPRINT;
+  // A part is drawn at an integer scale of a 16px cell, so it stays crisp but should not be huge.
+  if (kind === 'decor.part') return 8;
+  return MAX_FOOTPRINT;
 }
 
 /**
@@ -311,7 +385,15 @@ export function logoBoxTiles(fp: Footprint): number {
  * path — so that swapping a kitbash for hand-drawn art is a manifest edit and nothing more.
  * A key with no atlas entry draws as a labelled placeholder rectangle. See docs/05-ASSETS.md.
  */
-export function spriteKeyOf(node: Pick<BoardNode, 'kind'>, state = 'idle'): string {
+export function spriteKeyOf(node: Pick<BoardNode, 'kind' | 'part'>, state = 'idle'): string {
+  /*
+   * A decor part names its own sprite directly and has no states. It is the first kind whose art
+   * comes from the atlas rather than from a drawn placeholder, which is the whole point of it:
+   * `decor.via` is one cell of a real tilesheet, recoloured to copper by the baker.
+   */
+  if (node.kind === 'decor.part') {
+    return node.part ? `decor.${node.part}` : 'decor.via';
+  }
   const byKind: Partial<Record<NodeKind, string>> = {
     'agent.code': 'component.chip_dip',
     'agent.chat': 'component.chip_qfp',

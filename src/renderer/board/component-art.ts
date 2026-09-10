@@ -57,7 +57,9 @@ export const COMPONENT_STYLE: Record<NodeKind, ComponentStyle> = {
   'note.silk': { silhouette: 'plain', inset: 0 },
   'group.zone': { silhouette: 'plain', inset: 0 },
   // Nothing to draw: a decor.image with no picture is an empty frame, which is exactly right.
-  'decor.image': { silhouette: 'plain', inset: 0 }
+  'decor.image': { silhouette: 'plain', inset: 0 },
+  // Never drawn: a decor.part's art comes from the atlas, not from this file.
+  'decor.part': { silhouette: 'plain', inset: 0 }
 };
 
 export interface DrawContext {

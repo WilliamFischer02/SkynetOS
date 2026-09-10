@@ -1,3 +1,4 @@
+import { isPrinted } from '@shared/types.js';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, cpSync, rmSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute, dirname } from 'node:path';
 import { app } from 'electron';
@@ -110,7 +111,7 @@ export function graphProblems(board: Board): string[] {
      * would make every board that uses one fail its own overlap check. Kept in step with the same
      * list in tools/validate-board.mjs and src/renderer/board/layout.ts.
      */
-    if (node.kind === 'note.silk' || node.kind === 'group.zone' || node.kind === 'decor.image') continue;
+    if (isPrinted(node.kind)) continue;
     const { w, h } = footprintOf(node);
     if (node.pos.x + w > board.grid.width || node.pos.y + h > board.grid.height) {
       problems.push(`node "${node.id}" extends past the board edge`);

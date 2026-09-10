@@ -172,7 +172,8 @@
             "monitor.system",
             "note.silk",
             "group.zone",
-            "decor.image"
+            "decor.image",
+            "decor.part"
           ]
         },
         "name": {
@@ -402,7 +403,43 @@
         "showThumbnail": {
           "type": "boolean",
           "default": true,
-          "description": "Draw the `image` as the component's face. Turn it off to keep the drawn package silhouette while leaving the image bound to the node."
+          "description": "Draw the wallpaper (`image`). Off keeps the drawn package silhouette and leaves the image bound to the node. Independent of showLogo."
+        },
+        "showLogo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Draw the logo badge (`logo`) centred on the face. Independent of showThumbnail, because the two are separately useful: a recognisable badge on a drawn package with no photograph behind it, or a photograph with no badge over it."
+        },
+        "part": {
+          "enum": [
+            "via",
+            "screw",
+            "testpoint",
+            "junction",
+            "elbow",
+            "tee",
+            "junction_thin",
+            "elbow_thin",
+            "grille",
+            "pads",
+            "padgrid",
+            "fins",
+            "cap",
+            "ribbon",
+            "fiducial",
+            "panel",
+            "led_ok",
+            "led_warn",
+            "led_fault",
+            "led_idle",
+            "led_white"
+          ],
+          "description": "Which piece of board furniture this decor.part is. Each maps to a decor.* sprite in assets/sprites/manifest.json, cut from a real tilesheet cell."
+        },
+        "pulseGlow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Animate the wallpaper as a wave of energy travelling outward from the node's centre. A palette shift along the room's own six-colour brightness ramp, not a translucent glow — see src/renderer/board/glow.ts. Costs one set of precomputed frames per image; off under reducedMotion."
         }
       },
       "allOf": [
@@ -543,6 +580,20 @@
           "then": {
             "required": [
               "image"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "decor.part"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "part"
             ]
           }
         }

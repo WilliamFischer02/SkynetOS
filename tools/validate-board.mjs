@@ -63,7 +63,7 @@ for (const file of files) {
 
   const ids = new Set();
   const occupied = new Map();
-  const DEFAULT_FOOTPRINT = { 'agent.jarvis': [8, 6], 'agent.code': [3, 3], 'agent.chat': [4, 4], 'drive.room': [6, 4], 'store.repo': [4, 3], 'store.folder': [4, 3], 'store.cloud': [4, 3], 'file.document': [2, 2], 'file.exe': [2, 2], 'file.artifact': [3, 2], 'link.url': [2, 2], 'service.process': [3, 2], 'task.scheduled': [2, 1], 'monitor.system': [4, 4], 'note.silk': [0, 0], 'group.zone': [0, 0], 'decor.image': [12, 8] };
+  const DEFAULT_FOOTPRINT = { 'agent.jarvis': [8, 6], 'agent.code': [3, 3], 'agent.chat': [4, 4], 'drive.room': [6, 4], 'store.repo': [4, 3], 'store.folder': [4, 3], 'store.cloud': [4, 3], 'file.document': [2, 2], 'file.exe': [2, 2], 'file.artifact': [3, 2], 'link.url': [2, 2], 'service.process': [3, 2], 'task.scheduled': [2, 1], 'monitor.system': [4, 4], 'note.silk': [0, 0], 'group.zone': [0, 0], 'decor.image': [12, 8], 'decor.part': [1, 1] };
 
   for (const n of board.nodes ?? []) {
     if (ids.has(n.id)) problems.push(`duplicate node id "${n.id}"`);
@@ -73,7 +73,8 @@ for (const file of files) {
     const w = n.footprint?.w ?? dw, h = n.footprint?.h ?? dh;
     // decor.image joins the printed kinds: a backdrop is meant to sit UNDER the components,
     // so counting it as an obstacle would make every board it is on fail the overlap check.
-    if (n.kind !== 'note.silk' && n.kind !== 'group.zone' && n.kind !== 'decor.image') {
+    // Printed kinds occupy no grid — kept in step with PRINTED_KINDS in packages/shared/types.ts.
+    if (!['note.silk', 'group.zone', 'decor.image', 'decor.part'].includes(n.kind)) {
       if (n.pos.x + w > board.grid.width || n.pos.y + h > board.grid.height) {
         problems.push(`node "${n.id}" extends past the board edge`);
       }

@@ -12,6 +12,7 @@ import {
   type UsageRoute,
   type UsageSummary
 } from '@shared/usage.js';
+import { resolveBudget } from '@shared/plans.js';
 import { loadBoard, loadBoardByFile } from './board-store.js';
 import { claudeProjectsDir } from './conversations.js';
 import { getSettings } from './settings.js';
@@ -42,6 +43,8 @@ interface CacheEntry {
   fileCount: number;
   windowStart: number;
   usage: ProjectUsage;
+  /** [timestampMs, weightedTokens] for every assistant message, for the peak calculation. */
+  events: [number, number][];
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -68,7 +71,32 @@ function tokensFrom(usage: Record<string, unknown>): TokenCounts {
   };
 }
 
-function scanProject(dir: string, projectDir: string, windowStart: number): ProjectUsage {
+/**
+ * The busiest five-hour span in a stream of timestamped costs.
+ *
+ * A sliding window maximum over the whole history, not just the reporting window. This is the
+ * calibration number: if the account has ever hit its plan's ceiling, the peak IS approximately
+ * the ceiling, and it is the only defensible figure available locally. See packages/shared/plans.ts.
+ */
+export function peakWindow(events: [number, number][], hours: number): number {
+  if (!events.length) return 0;
+  const sorted = [...events].sort((a, b) => a[0] - b[0]);
+  const span = hours * 3600_000;
+  let best = 0;
+  let sum = 0;
+  let left = 0;
+  for (let right = 0; right < sorted.length; right++) {
+    sum += sorted[right]![1];
+    while (sorted[right]![0] - sorted[left]![0] > span) {
+      sum -= sorted[left]![1];
+      left++;
+    }
+    if (sum > best) best = sum;
+  }
+  return best;
+}
+
+function scanProject(dir: string, projectDir: string, windowStart: number, events: [number, number][]): ProjectUsage {
   let allTime: TokenCounts = ZERO_TOKENS;
   let windowTokens: TokenCounts = ZERO_TOKENS;
   let messagesInWindow = 0;
@@ -128,6 +156,7 @@ function scanProject(dir: string, projectDir: string, windowStart: number): Proj
       const at = record.timestamp ? Date.parse(record.timestamp) : NaN;
       if (Number.isFinite(at)) {
         if (lastActivity === null || at > lastActivity) lastActivity = at;
+        events.push([at, weightedTokens(tokens)]);
         if (at >= windowStart) {
           windowTokens = addTokens(windowTokens, tokens);
           messagesInWindow++;
@@ -190,12 +219,16 @@ export function readUsage(windowHours?: number): UsageSummary {
       projects: [],
       window: ZERO_TOKENS,
       allTime: ZERO_TOKENS,
-      budgetTokens: settings.tokenBudget,
+      budgetTokens: null,
+      budgetSource: 'none',
+      plan: settings.plan,
+      peakWindowTokens: 0,
       error: `CANNOT READ ${root} — ${(err as Error).message}`
     };
   }
 
   const projects: ProjectUsage[] = [];
+  const allEvents: [number, number][] = [];
   for (const projectDir of dirs) {
     const dir = join(root, projectDir);
     const signature = directorySignature(dir);
@@ -208,15 +241,20 @@ export function readUsage(windowHours?: number): UsageSummary {
     const sameWindow = cached && Math.abs(cached.windowStart - windowStart) < 60_000;
     if (cached && sameWindow && cached.newestMtime === signature.newestMtime && cached.fileCount === signature.fileCount) {
       projects.push(cached.usage);
+      allEvents.push(...cached.events);
       continue;
     }
 
-    const usage = scanProject(dir, projectDir, windowStart);
-    cache.set(projectDir, { ...signature, windowStart, usage });
+    const events: [number, number][] = [];
+    const usage = scanProject(dir, projectDir, windowStart, events);
+    cache.set(projectDir, { ...signature, windowStart, usage, events });
     projects.push(usage);
+    allEvents.push(...events);
   }
 
   projects.sort((a, b) => weightedTokens(b.window) - weightedTokens(a.window));
+
+  const budget = resolveBudget(settings.plan, settings.tokenBudget);
 
   return {
     windowHours: hours,
@@ -224,7 +262,10 @@ export function readUsage(windowHours?: number): UsageSummary {
     projects,
     window: projects.reduce<TokenCounts>((sum, p) => addTokens(sum, p.window), ZERO_TOKENS),
     allTime: projects.reduce<TokenCounts>((sum, p) => addTokens(sum, p.allTime), ZERO_TOKENS),
-    budgetTokens: settings.tokenBudget
+    budgetTokens: budget.tokens,
+    budgetSource: budget.source,
+    plan: settings.plan,
+    peakWindowTokens: peakWindow(allEvents, hours)
   };
 }
 

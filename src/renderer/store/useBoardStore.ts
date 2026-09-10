@@ -121,7 +121,7 @@ interface BoardState {
   redo: () => Promise<void>;
   openNode: (nodeId: string) => Promise<void>;
   /** Put a new node on the board and select it, ready to be bound to something. */
-  addNode: (kind: NodeKind, pos: { x: number; y: number }) => Promise<void>;
+  addNode: (kind: NodeKind, pos: { x: number; y: number }, fields?: Partial<BoardNode>) => Promise<void>;
   /** The add-component palette, open only in Edit Board mode. */
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
@@ -522,15 +522,25 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   setMailboxOpen: (open) => set({ mailboxOpen: open }),
 
-  addNode: async (kind, pos) => {
+  addNode: async (kind, pos, fields) => {
     const { boardId } = get();
-    const result = await window.skynet['node:add'](boardId, kind, pos);
+    const result = await window.skynet['node:add'](boardId, kind, pos, fields);
     if (!result.ok) { get().toast('fault', result.error ?? 'COULD NOT ADD THAT'); return; }
     await get().loadBoard(boardId);
     // Select AND open the editor: a node created unbound is useless until it is pointed at
     // something, so the form it needs is the next thing you want.
-    set({ selectedId: result.nodeId ?? null, editingId: result.nodeId ?? null, paletteOpen: false });
-    get().toast('ok', `added ${kind} — bind it to something`);
+    /*
+     * Decoration is finished the moment it is placed — there is nothing to bind it to — so the
+     * palette stays open and the editor does not. Everything else arrives unbound and useless
+     * until it is pointed at something, so the form it needs is the next thing you want.
+     */
+    const decorative = kind === 'decor.part';
+    set({
+      selectedId: result.nodeId ?? null,
+      editingId: decorative ? null : result.nodeId ?? null,
+      paletteOpen: decorative
+    });
+    get().toast('ok', decorative ? `placed ${fields?.part ?? kind}` : `added ${kind} — bind it to something`);
   },
 
   toast: (level, text) => {

@@ -31,6 +31,7 @@ function prefixFor(kind: NodeKind): string {
   if (kind === 'note.silk') return 'n';
   if (kind === 'group.zone') return 'g';
   if (kind === 'decor.image') return 'bg';
+  if (kind === 'decor.part') return 'p';
   return 'f';
 }
 
@@ -109,6 +110,7 @@ function defaultName(kind: NodeKind): string {
     case 'task.scheduled': return 'NEW TASK';
     case 'monitor.system': return 'MONITOR';
     case 'decor.image': return 'BACKDROP';
+    case 'decor.part': return 'PART';
     default: return 'NEW NODE';
   }
 }
@@ -146,6 +148,12 @@ export function makeNode(board: Board, kind: NodeKind, pos: GridPos): BoardNode 
   if (kind === 'note.silk') {
     node.text = 'NEW NOTE';
     node.size = 11;
+  }
+  if (kind === 'decor.part') {
+    // Furniture prints nothing: a via with a nameplate over it is not a via.
+    node.part = 'via';
+    node.showName = false;
+    node.showDesignator = false;
   }
   if (kind === 'decor.image') {
     // A backdrop with no name printed over it: the picture is the point, and a nameplate floating

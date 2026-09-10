@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Sprite, TextureSource } from 'pixi.js';
 import type { Board, BoardNode, Footprint } from '@shared/types.js';
-import { displayOf, footprintOf, maxFootprintFor, spriteKeyOf } from '@shared/types.js';
+import { displayOf, footprintOf, isPrinted, maxFootprintFor, spriteKeyOf } from '@shared/types.js';
 import { FAULT, SILK, WARN, hexToNumber } from '@shared/palette.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import {
@@ -26,12 +26,14 @@ import {
   isZoom,
   screenToWorld,
   stagePosition,
+  setZoom,
   stepCamera,
   stepZoom,
   TILE
 } from './camera.js';
 import { buildSubstrate } from './substrate.js';
 import { CourierLayer, courierColor, courierSource, type CourierRoute } from './couriers.js';
+import { GLOW_FPS, GLOW_FRAMES, buildGlowFrames } from './glow.js';
 import type { Point } from './traces.js';
 import { SpriteStore, nameplateOffset } from './sprites.js';
 import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
@@ -51,10 +53,19 @@ import {
   type DragState
 } from './drag.js';
 import fontUrl from '../../../assets/fonts/DepartureMono-1.500/DepartureMono-Regular.woff2?url';
+import atlasUrl from '../../../assets/atlas/skynet.json?url';
+import atlasImageUrl from '../../../assets/atlas/skynet.png?url';
 import { ensureSilkFont } from './silkscreen.js';
 
-/** Atlas URL, or null when there is none. M2 points this at assets/atlas/skynet.json. */
-const ATLAS_URL: string | null = null;
+/**
+ * The baked atlas. `npm run assets:bake` writes it from assets/sprites/manifest.json.
+ *
+ * Resolved at BUILD time by Vite, which is why `assets:bake` always writes a file even when it
+ * bakes nothing: assets/atlas is git-ignored, and a missing import is a build failure rather than
+ * a graceful degrade. An empty atlas is a perfectly good atlas — every key misses and every node
+ * draws a labelled placeholder, which is the documented pre-art state.
+ */
+const ATLAS_URL: string | null = atlasUrl;
 
 /** Side of the corner resize handle, in world px. Two tiles: findable at 2x, not fat at 4x. */
 const HANDLE_PX = 8;
@@ -179,6 +190,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let couriers: CourierLayer | null = null;
 
     const spriteById = new Map<string, Sprite>();
+    /** Decor parts whose atlas key has more than one frame — the LEDs. */
+    const animated: { nodeId: string; key: string; frames: number }[] = [];
+    /**
+     * Precomputed pulse-glow cycles, per node. Built once from the decoded wallpaper and cycled;
+     * recomputing a 320x224 backdrop's palette shift every frame would be millions of pixel
+     * operations a second for decoration.
+     */
+    const glows = new Map<string, HTMLCanvasElement[]>();
     const faces = new Map<string, ImageCacheEntry>();
     const logos = new Map<string, ImageCacheEntry>();
     let sprites: SpriteStore | null = null;
@@ -303,13 +322,26 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       if (app) app.canvas.style.cursor = '';
     };
 
+    /**
+     * The wheel zooms, anchored on the cursor.
+     *
+     * It used to require Ctrl, on the reasoning that a board is a document and a document scrolls.
+     * It is not: this board pans with WASD and with a drag, so the wheel had no job at all and did
+     * nothing when you turned it — which reads as broken, not as reserved. Ctrl still works, so
+     * nothing that was in anyone's fingers has changed.
+     *
+     * Anchored rather than centred: zooming toward what you are pointing at is the difference
+     * between magnifying a map and being thrown across one. `setZoom` keeps the world point under
+     * the cursor fixed, and `clampCamera` then pulls it back over the board if that pushed it off.
+     */
     const onWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey) return;
+      if (event.deltaY === 0 || !app) return;
       event.preventDefault();
-      cameraStore.current = {
-        ...cameraStore.current,
-        zoom: stepZoom(cameraStore.current.zoom, event.deltaY < 0 ? 1 : -1)
-      };
+      const camera = cameraStore.current;
+      const next = stepZoom(camera.zoom, event.deltaY < 0 ? 1 : -1);
+      if (next === camera.zoom) return;
+      const anchor = canvasPoint(event);
+      cameraStore.current = clampCamera(setZoom(camera, next, viewport(), anchor), boardPx, viewport());
     };
 
     /* ---------------- pointer: pan, move, resize ---------------- */
@@ -391,14 +423,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         drag = {
           ...drag,
           currentFootprint: next,
-          valid: canDrop(node.id, { x: node.pos.x, y: node.pos.y }, next, rects, board.grid)
+          valid: canDrop(node.id, { x: node.pos.x, y: node.pos.y }, next, rects, board.grid, node.kind)
         };
         return;
       }
 
       const tile = moveTo(drag, screen, camera.zoom);
       const fp = footprintOf(node);
-      drag = { ...drag, currentTile: tile, valid: canDrop(node.id, tile, fp, rects, board.grid) };
+      drag = { ...drag, currentTile: tile, valid: canDrop(node.id, tile, fp, rects, board.grid, node.kind) };
 
       /*
        * Move the SPRITE, not just the ghost outline.
@@ -468,6 +500,27 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       if (!node || !sprite || !sprites) return;
       const fp = footprintOf(node);
       const show = displayOf(node);
+
+      /*
+       * A decor part IS its atlas sprite — the first thing on this board whose pixels come from a
+       * real tilesheet rather than from component-art.ts. No nameplate, no designator, no face:
+       * a via with a label over it is not a via.
+       *
+       * Scaled by a whole number only. The cells are 16px and the tile is 16px, so a 1x1 part is
+       * 1:1 and a 3x3 part is exactly 3x — anything fractional would be the one blurred thing on
+       * the board, which docs/02 treats as a crash-severity bug.
+       */
+      if (node.kind === 'decor.part') {
+        const key = spriteKeyOf(node);
+        const texture = sprites.get(key, 0);
+        if (texture) {
+          sprite.texture = texture;
+          sprite.scale.set(Math.max(1, Math.min(fp.w, fp.h)));
+        }
+        sprite.x = node.pos.x * TILE;
+        sprite.y = node.pos.y * TILE;
+        return;
+      }
       sprite.texture = sprites.placeholder({
         w: fp.w,
         h: fp.h,
@@ -477,7 +530,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         maskLight: board.theme.maskLight,
         signal: board.theme.signal,
         face: show.thumbnail ? faces.get(nodeId)?.image ?? null : null,
-        logo: show.thumbnail ? logos.get(nodeId)?.image ?? null : null
+        logo: show.logo ? logos.get(nodeId)?.image ?? null : null
       });
       placeSprite(nodeId);
     };
@@ -497,8 +550,12 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         { slot: 'logo', source: node.logo, store: logos }
       ];
 
+      const show = displayOf(node);
       for (const { slot, source, store } of wants) {
-        if (!source || !displayOf(node).thumbnail) { store.delete(node.id); continue; }
+        // A slot that is switched off asks main for nothing. The image stays BOUND to the node —
+        // only the drawing of it is off — so turning it back on costs a cached mosaic read.
+        const wanted = slot === 'face' ? show.thumbnail : show.logo;
+        if (!source || !wanted) { store.delete(node.id); continue; }
         const key = `${source}@${fp.w}x${fp.h}`;
         if (store.get(node.id)?.key === key) continue;
         store.set(node.id, { key, image: null });
@@ -511,7 +568,19 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           await img.decode();
           if (disposed || store.get(node.id)?.key !== key) return;
           store.set(node.id, { key, image: img });
-          if (slot === 'face') faceCount++;
+          if (slot === 'face') {
+            faceCount++;
+            glows.delete(node.id);
+            /*
+             * The glow is built from the DITHERED mosaic, not the source file — it is a shift
+             * along the ramp the mosaic was already quantised onto, so it has to start from the
+             * quantised pixels. Built here, once, the moment those pixels exist.
+             */
+            if (node.pulseGlow && !live.current.reducedMotion) {
+              const frames = buildGlowFrames(img, board.theme);
+              if (frames.length) glows.set(node.id, frames);
+            }
+          }
           drawNode(node.id);
         }).catch((err: unknown) => console.warn(`[mosaic] ${node.id} ${slot} failed`, err));
       }
@@ -533,7 +602,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const routed: RoutedEdge[] = [];
       const rectById = new Map(board.nodes.map((n) => [n.id, nodeRect(n)] as const));
       const obstacles: RouteObstacle[] = board.nodes
-        .filter((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone')
+        .filter((n) => !isPrinted(n.kind))
         .map((n) => ({ ...nodeRect(n), nodeId: n.id }));
       const routeGrid = buildRouteGrid(obstacles, boardPx);
 
@@ -572,6 +641,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       spriteById.clear();
 
       placeholderCount = 0;
+      animated.length = 0;
       for (const node of board.nodes) {
         if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
         const key = spriteKeyOf(node);
@@ -585,6 +655,11 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         spriteById.set(node.id, sprite);
         drawNode(node.id);
         loadImages(node);
+
+        if (node.kind === 'decor.part') {
+          const frames = sprites.frameCountFor(key);
+          if (frames > 1) animated.push({ nodeId: node.id, key, frames });
+        }
       }
 
       // Drop cached images for nodes that no longer exist, so a long editing session does not
@@ -592,6 +667,12 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const alive = new Set(board.nodes.map((n) => n.id));
       for (const store of [faces, logos]) {
         for (const id of [...store.keys()]) if (!alive.has(id)) store.delete(id);
+      }
+      for (const id of [...glows.keys()]) {
+        const node = nodeById(id);
+        // Dropped when the node is gone, and also when its glow was switched off — otherwise the
+        // ticker would keep animating a node the board no longer says should move.
+        if (!alive.has(id) || !node?.pulseGlow) glows.delete(id);
       }
     };
 
@@ -833,7 +914,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         overlayLayer = new Container(); world.addChild(overlayLayer);
 
         sprites = new SpriteStore();
-        const atlas = await sprites.load(ATLAS_URL);
+        const atlas = await sprites.load(ATLAS_URL, atlasImageUrl);
         if (disposed) { app.destroy(true, { children: true }); return; }
         if (!atlas.loaded) console.info(`[atlas] ${atlas.reason} — every node renders as a placeholder`);
 
@@ -850,6 +931,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         let lastDragKey = '';
         let lastJumpSeq = live.current.jumpTo?.seq ?? 0;
         let lastRouteKey = '';
+        let pulse = 0;
+        let lastPulseStep = -1;
+        let lastGlowStep = -1;
 
         app.ticker.add((ticker) => {
           const view = viewport();
@@ -917,6 +1001,56 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             buildCourierRoutes();
           }
           couriers?.tick(live.current.reducedMotion || live.current.editMode ? 0 : 1);
+
+          /*
+           * The LED pulse. Two frames at 2fps — the only thing on this board that moves purely
+           * for its own sake, which is exactly what an indicator lamp is for. Off under reduced
+           * motion, where docs/02 requires state to survive without animation; it does, because
+           * an unlit LED is still a drawn component rather than a hole.
+           */
+          /*
+           * The pulse glow. One texture swap per glowing node per glow frame — the frames are
+           * already built, so this costs a texture assignment and nothing else.
+           */
+          if (glows.size && !live.current.reducedMotion) {
+            const step = Math.floor(pulse / Math.max(1, Math.round(60 / GLOW_FPS))) % GLOW_FRAMES;
+            if (step !== lastGlowStep) {
+              lastGlowStep = step;
+              for (const [nodeId, frames] of glows) {
+                const sprite = spriteById.get(nodeId);
+                const frame = frames[step % frames.length];
+                if (!sprite || !frame || !sprites) continue;
+                const node = nodeById(nodeId);
+                if (!node) continue;
+                const fp = footprintOf(node);
+                const show = displayOf(node);
+                sprite.texture = sprites.placeholder({
+                  w: fp.w,
+                  h: fp.h,
+                  designator: show.designator ? node.designator ?? '' : '',
+                  name: show.name ? node.name : undefined,
+                  kind: node.kind,
+                  maskLight: board.theme.maskLight,
+                  signal: board.theme.signal,
+                  face: frame,
+                  logo: show.logo ? logos.get(nodeId)?.image ?? null : null
+                });
+              }
+            }
+          }
+
+          if (animated.length && !live.current.reducedMotion) {
+            const step = Math.floor(pulse / 30) % 2;
+            if (step !== lastPulseStep) {
+              lastPulseStep = step;
+              for (const entry of animated) {
+                const sprite = spriteById.get(entry.nodeId);
+                const texture = sprites?.get(entry.key, step % entry.frames);
+                if (sprite && texture) sprite.texture = texture;
+              }
+            }
+          }
+          pulse++;
 
           if (live.current.editMode !== lastEditMode) {
             lastEditMode = live.current.editMode;

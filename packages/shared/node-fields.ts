@@ -12,6 +12,7 @@
  */
 
 import { PRIME_STEP_IDS } from './prime-steps.js';
+import { DECOR_PARTS } from './types.js';
 import type { BoardNode, NodeKind } from './types.js';
 
 /**
@@ -86,8 +87,16 @@ const TRAILING: FieldSpec[] = [
     help: 'A smaller badge centred on the wallpaper, aspect ratio preserved, with its own bevel. Scales with the footprint. Use a logo with a transparent background and the wallpaper shows around it.'
   },
   {
-    key: 'showThumbnail', label: 'Show images', control: 'boolean',
-    help: 'Draw the wallpaper and logo. Off keeps the drawn package silhouette and leaves both images bound to the node.'
+    key: 'showThumbnail', label: 'Show wallpaper', control: 'boolean',
+    help: 'Draw the wallpaper across the whole footprint. Off keeps the drawn package silhouette and leaves the image bound to the node.'
+  },
+  {
+    key: 'showLogo', label: 'Show logo', control: 'boolean',
+    help: 'Draw the logo badge centred on the face. Independent of the wallpaper — a badge on a drawn package reads well, and so does a photograph with nothing over it.'
+  },
+  {
+    key: 'pulseGlow', label: 'Pulse glow', control: 'boolean',
+    help: "Energy flowing outward from the centre of the wallpaper. A shift along the room's own brightness ramp rather than a translucent glow, so it stays exactly six colours and perfectly crisp. Needs a wallpaper; stops under reduced motion."
   },
   {
     key: 'showDesignator', label: 'Show designator', control: 'boolean',
@@ -220,7 +229,14 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
    * second copy would be two controls bound to the same key, which is a form that can disagree
    * with itself. `fieldsFor` promotes the shared field to required for this kind instead.
    */
-  'decor.image': []
+  'decor.image': [],
+  'decor.part': [
+    {
+      key: 'part', label: 'Part', control: 'select', required: true,
+      options: DECOR_PARTS,
+      help: 'Which piece of board furniture. Each is one cell of a real tilesheet, recoloured to the locked palette by the bake pipeline. The led_* parts pulse.'
+    }
+  ]
 };
 
 /** The full, ordered field list for a kind: identity, kind-specific, then the common trailers. */

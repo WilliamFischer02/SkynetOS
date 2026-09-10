@@ -107,9 +107,20 @@ describe('spriteKeyOf', () => {
   });
 
   it('is stable for every kind in the seeded boards', () => {
+    /*
+     * Two shapes, and the difference is where the pixels come from.
+     *
+     *   component.<package>.<state>   a DRAWN silhouette from component-art.ts, which has states
+     *   decor.<part>                  one baked atlas frame, cut from a real tilesheet cell
+     *
+     * A decor part has no states because it has no behaviour — it is furniture. Requiring one
+     * would mean baking `decor.via.idle`, which is a suffix that means nothing.
+     */
     for (const board of boards) {
       for (const node of board.nodes) {
-        expect(spriteKeyOf(node)).toMatch(/^component\.[a-z_]+\.[a-z]+$/);
+        const key = spriteKeyOf(node);
+        if (node.kind === 'decor.part') expect(key).toMatch(/^decor\.[a-z_]+$/);
+        else expect(key, `${node.id} (${node.kind})`).toMatch(/^component\.[a-z_]+\.[a-z]+$/);
       }
     }
   });

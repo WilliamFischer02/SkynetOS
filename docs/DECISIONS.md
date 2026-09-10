@@ -668,3 +668,97 @@ with 59 overlap errors — because the fourth, the app's own copy, still counted
 obstacle. That failure was loud, legible and named the exact nodes, which is the failure mode this
 project wants; it is still four copies of one rule, and the next kind added to that list will hit
 it again. Noted here so the next person greps for it rather than rediscovering it.
+
+## 2026-09-10 — The plan question: a published multiplier over a calibrated baseline
+
+William: "How can I set it so that it knows I have the Claude Max plan 20x usage over Pro."
+
+**SkynetOS cannot ask.** Nothing local reports which plan an account is on or how much allowance is
+left, and Anthropic publishes no TOKEN figure per plan — the documented shape is "Max 20x is twenty
+times Pro" plus ranges of prompts per five hours, which is not a unit this meter can add up.
+
+**Decision.** `plan` in settings.json supplies the published MULTIPLIER. The baseline it multiplies
+is CALIBRATED from this machine's own history, which is the part SkynetOS genuinely knows.
+
+Measured 2026-09-10 over 10,715 assistant messages spanning three weeks:
+
+    5-hour window distribution:  p50 13.2M   p90 52.0M   p99 94.6M   max 96.1M
+
+The top of that distribution is flat — p99 94.6M against a maximum of 96.1M, a 1.6% gap across the
+last percentile. Demand that tapers does not do that; a ceiling being hit does. So ~96M weighted
+tokens is this account's real five-hour ceiling on Max 20x, and `PRO_BASELINE_TOKENS` is that over
+twenty.
+
+These are estimates and are labelled as estimates everywhere they appear — the plan chip carries a
+`~`. `tokenBudget` overrides all of it, because a measurement should never argue with an
+instruction. The drawer shows the account's own peak so the table can be checked against evidence
+rather than trusted.
+
+## 2026-09-10 — Every measured value gets a bar
+
+William: "don't just show values show a visual representation of token usage."
+
+Three bars, each graded against something different and each stated in its tooltip: POOL against
+the budget, RATE against the pace that would spend exactly one window's budget in exactly one
+window, TIME against the window length. With no budget, RATE is graded against the account's own
+measured peak — the only real ceiling available — and the other two say so rather than drawing an
+arbitrary scale.
+
+Sixteen whole cells. A percentage-width bar would be the one blurred thing on an otherwise exact
+screen; docs/02 anti-mush applies to the chrome as much as to the canvas.
+
+## 2026-09-10 — The board is dressed from a real tilesheet
+
+`decor.part`: 21 pieces of board furniture — vias, screws, test points, junctions, elbows, tees,
+grilles, pad arrays, heatsink fins, capacitors, ribbon ends, fiducials, panels, and five indicator
+LEDs that pulse. Every one is a cell of the Kenney 1-bit sheet, recoloured to the locked palette by
+`npm run assets:bake`. Coordinates were read off a ruled contact sheet, never guessed.
+
+`ATLAS_URL` is finally wired, so the atlas loads for the first time. Two things had to change for
+that: the baker now always writes an atlas (an empty one is a valid one) because Vite's `?url` is a
+build-time resolve and `assets/atlas` is git-ignored; and the atlas PNG is now imported too, since
+an emitted asset lives at a hashed path and deriving its URL from `meta.image` produced
+"The source image cannot be decoded" in the built app while dev worked fine.
+
+The baker also stopped skipping sprites in silence. A `source` missing its `type` baked nothing and
+said nothing — the atlas just came out short, and finding out which entries had evaporated meant
+diffing the manifest against the frame list. It throws now.
+
+Tints are all LITERAL tokens, never `@theme` keys: the theme-key swap is not implemented in the
+renderer and an `@token` would bake as reserved magenta. It is also simply correct — a via is
+copper in every room because a via IS copper.
+
+## 2026-09-10 — Printed kinds are one list now, not five predicates
+
+Adding `decor.image` needed four edits to "which kinds occupy no grid"; missing one made the app
+refuse to load a valid board. Adding `decor.part` needed six, and the sixth — the A* obstacle
+filter — was found by a router test failing rather than by anyone remembering, after every trace on
+the root board started cutting through components.
+
+`PRINTED_KINDS` and `isPrinted()` now live in `packages/shared/types.ts` and every copy defers to
+them: the validator, `board-store.graphProblems`, `layout`, `drag.canDrop` and the router.
+
+## 2026-09-10 — The pulse glow is a palette shift, not a glow
+
+William: "an animated pulsing glow as if energy is flowing in them from their center outwards."
+
+The obvious implementation is an animated radial gradient at low opacity. That is four violations
+of docs/02 in one line — a gradient, partial alpha, off-palette colours and a soft edge — and on
+this board it would read as a smear of light sitting on top of pixel art.
+
+So `pulseGlow` shifts the PALETTE instead. The room's six colours are already a brightness ramp and
+the mosaic has already quantised the image onto exactly them; an expanding ring pushes the pixels
+it crosses one or two rungs up that ramp and lets them fall back behind it. Every frame holds the
+same six colours the image already had, the wave is made of whole pixels, and it reads as charge
+moving through the material rather than as light shining on it.
+
+Sixteen frames precomputed once per image and cycled at 12fps — doing it live for a 320x224
+backdrop is millions of pixel operations a second for decoration. Off under reducedMotion.
+
+## 2026-09-10 — The scroll wheel zooms
+
+It required Ctrl, on the reasoning that a document scrolls. This board is not a document: it pans
+with WASD and with a drag, so the wheel had no job and did nothing when turned — which reads as
+broken, not as reserved. Plain wheel now zooms, anchored on the cursor rather than the viewport
+centre, which is the difference between magnifying a map and being thrown across one. Ctrl still
+works.

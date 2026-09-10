@@ -46,7 +46,7 @@ export interface PlaceholderSpec {
    * service and already exactly w*16 x h*16 pixels. Drawn as the component body instead of the
    * flat fill.
    */
-  face?: HTMLImageElement | null;
+  face?: HTMLImageElement | HTMLCanvasElement | null;
   /**
    * The LOGO: a smaller square badge, centred on the face, already dithered and already exactly
    * logoBoxTiles(fp)*16 on a side. It keeps its transparency, so the wallpaper shows around it.
@@ -220,14 +220,25 @@ export class SpriteStore {
    * assets/atlas/ is git-ignored and regenerated, so a fresh clone has none until
    * `npm run assets:bake` runs. Everything renders as placeholders until then.
    */
-  async load(atlasJsonUrl: string | null): Promise<{ loaded: boolean; frames: number; reason?: string }> {
+  async load(
+    atlasJsonUrl: string | null,
+    /**
+     * The atlas image's real URL.
+     *
+     * Passed in rather than derived from `meta.image`. The bundler emits each imported asset at a
+     * hashed path, so a relative resolve from the JSON's URL points at a file that does not exist
+     * — which is precisely how this failed: "The source image cannot be decoded", in the built app
+     * only, while dev worked fine.
+     */
+    atlasImageUrl?: string
+  ): Promise<{ loaded: boolean; frames: number; reason?: string }> {
     if (!atlasJsonUrl) return { loaded: false, frames: 0, reason: 'no atlas built yet — run `npm run assets:bake`' };
     try {
       const response = await fetch(atlasJsonUrl);
       if (!response.ok) return { loaded: false, frames: 0, reason: `atlas fetch failed: HTTP ${response.status}` };
       const data = (await response.json()) as AtlasData;
 
-      const imageUrl = new URL(data.meta.image, atlasJsonUrl).href;
+      const imageUrl = atlasImageUrl ?? new URL(data.meta.image, atlasJsonUrl).href;
       const image = new Image();
       image.src = imageUrl;
       await image.decode();
@@ -248,6 +259,23 @@ export class SpriteStore {
 
   get frameCount(): number {
     return this.atlas ? Object.keys(this.atlas.frames).length : 0;
+  }
+
+  /**
+   * How many frames the atlas holds for a key. 0 when it holds none, 1 for a still.
+   *
+   * Read from the `animations` table the baker writes, falling back to counting `key#n` entries —
+   * a hand-written atlas is allowed to omit the table, and a light that silently stops pulsing is
+   * a worse failure than one that never started.
+   */
+  frameCountFor(key: string): number {
+    if (!this.atlas) return 0;
+    const animation = this.atlas.animations?.[key];
+    if (animation) return animation.frames.length;
+    let n = 0;
+    while (this.atlas.frames[`${key}#${n}`]) n++;
+    if (n) return n;
+    return key in this.atlas.frames ? 1 : 0;
   }
 
   /** True if the atlas can actually supply this key. Frame 0 of an animated key counts. */
@@ -315,7 +343,18 @@ export class SpriteStore {
    */
   placeholder(spec: PlaceholderSpec): Texture {
     const name = (spec.name ?? '').trim().toUpperCase();
-    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.maskLight}:${spec.signal}:${spec.face?.src.length ?? 0}:${spec.logo?.src.length ?? 0}`;
+    /*
+     * The cache key has to change when the FACE changes, and a glow frame is a canvas with no
+     * `src` at all. `glowKey` is stamped on each frame by the glow builder for exactly this: two
+     * frames of one cycle differ only in their pixels, so keying on anything else would serve
+     * frame 0 forever and the pulse would never move.
+     */
+    const faceKey = spec.face
+      ? (spec.face as { src?: string; dataset?: DOMStringMap }).src?.length
+        ?? (spec.face as HTMLCanvasElement).dataset?.['glowKey']
+        ?? 'canvas'
+      : 0;
+    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.maskLight}:${spec.signal}:${faceKey}:${spec.logo?.src.length ?? 0}`;
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 

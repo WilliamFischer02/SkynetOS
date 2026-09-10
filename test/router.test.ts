@@ -1,3 +1,4 @@
+import { isPrinted } from '../packages/shared/types.js';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -21,7 +22,7 @@ const boards = walk(join(process.cwd(), 'board')).map((f) => JSON.parse(readFile
 
 function obstaclesOf(board: Board): RouteObstacle[] {
   return board.nodes
-    .filter((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone')
+    .filter((n) => !isPrinted(n.kind))
     .map((n) => {
       const fp = footprintOf(n);
       return {

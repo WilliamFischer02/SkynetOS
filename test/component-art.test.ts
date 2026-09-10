@@ -49,7 +49,7 @@ describe('the kinds you actually look at are visually distinct', () => {
    * Printed on the board rather than mounted to it. These have no package, so they have no
    * silhouette — a bracket, a heading and a backdrop are not components.
    */
-  const PRINTED = ['note.silk', 'group.zone', 'decor.image'] as const;
+  const PRINTED = ['note.silk', 'group.zone', 'decor.image', 'decor.part'] as const;
 
   it('never leaves a mounted kind on the fallback shape', () => {
     for (const kind of NODE_KINDS) {

@@ -728,6 +728,122 @@ canvas {
   top: calc(9 * var(--gap));
   left: calc(2 * var(--gap));
   z-index: 30;
+  /* Scaled up from 210: three labelled bars need room to be read at a glance, which is the
+     entire point of drawing them instead of printing three numbers. */
+  width: calc(300 * var(--p));
+  padding: calc(1.5 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+  /* The same hard 2px drop the buttons wear, so the meter reads as mounted on the board. */
+  box-shadow: calc(2 * var(--p)) calc(2 * var(--p)) 0 0 rgba(0, 0, 0, 0.5);
+}
+
+.usage-meter.ok { border-color: var(--copper); }
+.usage-meter.warn { border-color: var(--warn); }
+.usage-meter.fault { border-color: var(--fault); }
+
+.usage-head-row {
+  display: flex;
+  gap: var(--gap);
+  align-items: baseline;
+  width: 100%;
+  font: inherit;
+  text-transform: uppercase;
+  color: var(--copper);
+  background: none;
+  border: 0;
+  padding: 0 0 var(--gap) 0;
+  margin-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+}
+
+.usage-head-row:hover { color: var(--signal); }
+.usage-title { letter-spacing: var(--p); }
+.usage-window { color: var(--copper-dark); }
+.usage-toggle { margin-left: auto; color: var(--copper-dark); }
+
+/* The plan chip. `~` marks an estimate, which is most of why the chip exists. */
+.usage-plan {
+  color: var(--signal);
+  border: var(--p) solid var(--signal);
+  padding: 0 var(--gap);
+  cursor: help;
+}
+.usage-plan.est { color: var(--warn); border-color: var(--warn); }
+
+/* ---------- one measured value: label, number, bar ---------- */
+
+.meter-row { margin-bottom: calc(1.5 * var(--gap)); }
+.meter-row:last-of-type { margin-bottom: 0; }
+
+.meter-line { display: flex; gap: var(--gap); align-items: baseline; }
+.meter-label { color: var(--copper-dark); text-transform: uppercase; }
+.meter-value { margin-left: auto; color: var(--silk); white-space: nowrap; }
+.meter-unit { color: var(--copper-dark); }
+
+/*
+ * Whole cells only. A fractional cell is a sub-pixel edge, and docs/02 anti-mush applies to the
+ * chrome as much as to the canvas — a bar drawn with a percentage width would be the one blurred
+ * thing on an otherwise exact screen.
+ */
+.meter-bar {
+  display: flex;
+  gap: var(--p);
+  margin-top: calc(0.75 * var(--gap));
+  height: calc(8 * var(--p));
+}
+
+.meter-bar .cell {
+  flex: 1 1 0;
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+}
+
+.meter-bar.ok .cell.on { background: var(--signal); border-color: var(--signal); }
+.meter-bar.warn .cell.on { background: var(--warn); border-color: var(--warn); }
+.meter-bar.fault .cell.on { background: var(--fault); border-color: var(--fault); }
+
+/* Nothing to measure against: the track is drawn, empty, so the row keeps its shape. */
+.meter-bar.unknown .cell { border-style: dotted; }
+
+.usage-unset { color: var(--warn); }
+.usage-error { color: var(--fault); overflow-wrap: anywhere; }
+
+/* ---------- the drawer ---------- */
+
+.usage-drawer {
+  margin-top: calc(2 * var(--gap));
+  padding-top: var(--gap);
+  border-top: var(--p) solid var(--copper-dark);
+}
+.usage-projects-head { color: var(--copper); text-transform: uppercase; margin-bottom: var(--gap); }
+.usage-project { margin-bottom: var(--gap); }
+.up-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-tokens { margin-left: auto; color: var(--signal); }
+
+.usage-calibrate { margin-top: calc(2 * var(--gap)); padding-top: var(--gap); border-top: var(--p) solid var(--copper-dark); }
+.usage-note { margin: var(--gap) 0 0 0; color: var(--silk); }
+.usage-note.dim { color: var(--copper-dark); }
+.usage-note code { color: var(--copper); }
+.usage-foot { margin-top: var(--gap); color: var(--copper-dark); text-transform: uppercase; }
+
+/* ---------- footprint: two tile counts and a stepper ---------- */
+
+.footprint-field { display: flex; gap: var(--gap); align-items: flex-end; }
+.footprint-cell { display: flex; flex-direction: column; gap: calc(0.5 * var(--gap)); }
+.footprint-cell span { color: var(--copper); text-transform: uppercase; }
+.footprint-cell .input { width: calc(56 * var(--p)); }
+.footprint-x { color: var(--copper-dark); padding-bottom: calc(2 * var(--p)); }
+.footprint-note { color: var(--copper-dark); text-transform: uppercase; padding-bottom: calc(2 * var(--p)); }
+
+/* ---------- usage meter: top-left, always on ---------- */
+
+.usage-meter {
+  position: absolute;
+  top: calc(9 * var(--gap));
+  left: calc(2 * var(--gap));
+  z-index: 30;
   min-width: calc(210 * var(--p));
   padding: var(--gap);
   background: var(--mask-dark);
@@ -930,3 +1046,54 @@ canvas {
 
 .mailbox-compose { display: flex; flex-direction: column; gap: var(--gap); }
 .mailbox-foot { color: var(--copper-dark); border-top: var(--p) solid var(--copper-dark); padding-top: var(--gap); }
+
+/* ---------- board parts, in the add palette ---------- */
+
+.palette-parts {
+  margin-top: calc(2 * var(--gap));
+  padding-top: calc(2 * var(--gap));
+  border-top: var(--p) solid var(--copper-dark);
+}
+
+.palette-parts-head {
+  display: flex;
+  gap: calc(2 * var(--gap));
+  align-items: baseline;
+  color: var(--copper);
+  text-transform: uppercase;
+  margin-bottom: var(--gap);
+}
+.palette-parts-note { color: var(--copper-dark); text-transform: none; }
+
+.palette-parts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(78 * var(--p)), 1fr));
+  gap: var(--gap);
+}
+
+.part-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(0.5 * var(--gap));
+  padding: var(--gap);
+  font: inherit;
+  color: var(--silk);
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+  box-shadow: var(--p) var(--p) 0 0 rgba(0, 0, 0, 0.45);
+}
+
+.part-item:hover { border-color: var(--copper); color: var(--signal); }
+.part-item:active { transform: translate(var(--p), var(--p)); box-shadow: none; }
+
+/* 16x16 art at 3x. Integer scale and pixelated, like everything else. */
+.part-swatch {
+  width: calc(48 * var(--p));
+  height: calc(48 * var(--p));
+  image-rendering: pixelated;
+  background: var(--mask-dark);
+}
+
+.part-name { text-transform: uppercase; font-size: calc(var(--f) * 0.9); text-align: center; }

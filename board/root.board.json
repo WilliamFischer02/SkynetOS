@@ -22,17 +22,18 @@
       "kind": "decor.image",
       "name": "BACKDROP DEMO",
       "pos": {
-        "x": 3,
-        "y": 5
+        "x": 27,
+        "y": 16
       },
       "footprint": {
-        "w": 16,
-        "h": 11
+        "w": 10,
+        "h": 8
       },
-      "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/circuittry.jpg",
       "showName": false,
       "showDesignator": false,
-      "notes": "decor.image: a picture drawn behind everything, resizable like any other node. Delete it, repoint it, or drag it wherever you like — it never collides and never steals a click while you are browsing."
+      "notes": "decor.image: a picture drawn behind everything, resizable like any other node. Delete it, repoint it, or drag it wherever you like — it never collides and never steals a click while you are browsing.",
+      "pulseGlow": true
     },
     {
       "id": "u1_jarvis",
@@ -43,16 +44,12 @@
         "x": 28,
         "y": 17
       },
-      "footprint": {
-        "w": 8,
-        "h": 6
-      },
       "url": "https://claude.ai/chat/93fc89d6-6544-4483-9dd1-1641e2c564f6",
       "partition": "persist:jarvis",
       "persona": "C:/dev/SkynetOS/codex/personas/persona.md",
       "codexRef": "codex/index.md",
       "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp.",
-      "image": "C:/dev/SkynetOS/assets/sprites/SkynetOS-worker.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/circuit-board-garden-stockcake.jpg",
       "tags": [
         "ai",
         "manager",
@@ -60,7 +57,7 @@
         "creative",
         "jarvis"
       ],
-      "logo": "C:/dev/SkynetOS/assets/sprites/skynet-logo.png"
+      "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-sprite.png"
     },
     {
       "id": "u3_jarvis_hands",
@@ -68,14 +65,10 @@
       "kind": "agent.code",
       "name": "JARVIS-HANDS",
       "pos": {
-        "x": 38,
-        "y": 17
+        "x": 39,
+        "y": 19
       },
-      "footprint": {
-        "w": 3,
-        "h": 3
-      },
-      "cwd": "C:/dev/SkynetOS",
+      "cwd": "C:/dev",
       "launch": "popout",
       "resume": true,
       "initialPrompt": "You are the Hands of JARVIS. You act on William’s machine: you read and write files, run commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and plans but cannot see this disk; you are how its decisions become real. Follow docs/07-SECURITY.md as a hard boundary: never delete files, force-push, or remove a board node without explicit approval in that exact exchange. Check codex/mailbox/ for anything the Face has left you, and end every session with a CODEX PATCH and a HANDOFF block.",
@@ -99,7 +92,14 @@
         "codex/index.md",
         "docs/07-SECURITY.md",
         "handoff.md"
-      ]
+      ],
+      "addDirs": [
+        "C:/"
+      ],
+      "footprint": {
+        "w": 4,
+        "h": 4
+      }
     },
     {
       "id": "d1_minecraftos",
@@ -109,8 +109,8 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 19,
-        "y": 12
+        "x": 18,
+        "y": 14
       },
       "footprint": {
         "w": 6,
@@ -132,8 +132,8 @@
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
-        "x": 36,
-        "y": 10
+        "x": 25,
+        "y": 8
       },
       "footprint": {
         "w": 6,
@@ -154,8 +154,8 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 17,
-        "y": 22
+        "x": 18,
+        "y": 23
       },
       "footprint": {
         "w": 6,
@@ -176,8 +176,8 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 38,
-        "y": 27
+        "x": 26,
+        "y": 29
       },
       "footprint": {
         "w": 6,
@@ -196,8 +196,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 27,
-        "y": 27
+        "x": 44,
+        "y": 21
       },
       "footprint": {
         "w": 3,
@@ -232,8 +232,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 21,
-        "y": 31
+        "x": 44,
+        "y": 27
       },
       "footprint": {
         "w": 4,
@@ -256,8 +256,8 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 26,
-        "y": 11
+        "x": 34,
+        "y": 8
       },
       "footprint": {
         "w": 4,
@@ -282,11 +282,15 @@
       "kind": "note.silk",
       "name": "jarvis label",
       "pos": {
-        "x": 28,
-        "y": 24
+        "x": 36,
+        "y": 17
       },
-      "text": "U1  PRIMARY  JURISDICTION: ALL",
-      "size": 11
+      "text": "U1  -  PRIMARY JURISDICTION: ALL",
+      "size": 11,
+      "footprint": {
+        "w": 1,
+        "h": 1
+      }
     },
     {
       "id": "j1_github",
@@ -294,8 +298,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 28,
-        "y": 32
+        "x": 48,
+        "y": 23
       },
       "footprint": {
         "w": 2,
@@ -312,7 +316,7 @@
       "name": "Nightly journal",
       "pos": {
         "x": 40,
-        "y": 22
+        "y": 14
       },
       "footprint": {
         "w": 2,
@@ -324,6 +328,210 @@
         "type": "jarvis.headless",
         "prompt": "Review today's session events across all rooms. Append a five-line summary to codex/journal/. Update each active project's handoff file. Flag anything blocked on William."
       }
+    },
+    {
+      "id": "p_via_1",
+      "kind": "decor.part",
+      "name": "VIA",
+      "pos": {
+        "x": 46,
+        "y": 16
+      },
+      "part": "via",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_via_2",
+      "kind": "decor.part",
+      "name": "VIA",
+      "pos": {
+        "x": 46,
+        "y": 22
+      },
+      "part": "via",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_via_3",
+      "kind": "decor.part",
+      "name": "VIA",
+      "pos": {
+        "x": 36,
+        "y": 15
+      },
+      "part": "via",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_via_4",
+      "kind": "decor.part",
+      "name": "VIA",
+      "pos": {
+        "x": 36,
+        "y": 23
+      },
+      "part": "via",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "SCREW",
+      "pos": {
+        "x": 35,
+        "y": 14
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "SCREW",
+      "pos": {
+        "x": 47,
+        "y": 14
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "SCREW",
+      "pos": {
+        "x": 35,
+        "y": 24
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "SCREW",
+      "pos": {
+        "x": 47,
+        "y": 24
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_u1",
+      "kind": "decor.part",
+      "name": "LED OK",
+      "pos": {
+        "x": 46,
+        "y": 17
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_u3",
+      "kind": "decor.part",
+      "name": "LED WARN",
+      "pos": {
+        "x": 45,
+        "y": 19
+      },
+      "part": "led_warn",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_u2",
+      "kind": "decor.part",
+      "name": "LED IDLE",
+      "pos": {
+        "x": 40,
+        "y": 27
+      },
+      "part": "led_idle",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fid_1",
+      "kind": "decor.part",
+      "name": "FIDUCIAL",
+      "pos": {
+        "x": 34,
+        "y": 13
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fid_2",
+      "kind": "decor.part",
+      "name": "FIDUCIAL",
+      "pos": {
+        "x": 48,
+        "y": 25
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_grille",
+      "kind": "decor.part",
+      "name": "GRILLE",
+      "pos": {
+        "x": 44,
+        "y": 15
+      },
+      "part": "grille",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads",
+      "kind": "decor.part",
+      "name": "PADS",
+      "pos": {
+        "x": 44,
+        "y": 23
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_cap",
+      "kind": "decor.part",
+      "name": "CAP",
+      "pos": {
+        "x": 37,
+        "y": 27
+      },
+      "part": "cap",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_junc",
+      "kind": "decor.part",
+      "name": "JUNCTION",
+      "pos": {
+        "x": 43,
+        "y": 27
+      },
+      "part": "junction",
+      "showName": false,
+      "showDesignator": false
     }
   ],
   "edges": [

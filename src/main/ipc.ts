@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
 import { CHANNELS, type Channel, type SkynetApi } from '@shared/ipc.js';
 import type { BoardNode } from '@shared/types.js';
-import { DEFAULT_FOOTPRINT } from '@shared/types.js';
+import { DEFAULT_FOOTPRINT, isDecorPart } from '@shared/types.js';
 import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
@@ -191,10 +191,18 @@ const handlers: Handlers = {
     return watchBoard(load.board);
   },
 
-  'node:add': (boardId, kind, pos) => {
+  'node:add': (boardId, kind, pos, fields) => {
     const load = loadBoard(boardId);
     if (!load.ok) return { ok: false, error: load.error };
     const node = makeNode(load.board, kind, pos);
+
+    /*
+     * A deliberately tiny allowlist. The palette needs to say WHICH decor part it is placing and
+     * nothing else; everything else about a new node is decided by the factory or by the editor
+     * afterwards. Accepting an arbitrary patch here would make `node:add` a second, unvalidated
+     * way to write board JSON straight out of the renderer.
+     */
+    if (fields?.part && isDecorPart(fields.part)) node.part = fields.part;
 
     /*
      * A printed kind (note.silk, group.zone) is placed exactly where it was asked for. It has no

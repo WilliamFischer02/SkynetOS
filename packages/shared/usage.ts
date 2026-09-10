@@ -93,10 +93,19 @@ export interface UsageSummary {
   window: TokenCounts;
   allTime: TokenCounts;
   /**
-   * The allowance, from settings.json. Null when the user has not set one — see the header for
-   * why this is not guessed.
+   * The allowance, from settings.json. Null when neither a `tokenBudget` nor a `plan` is set —
+   * see the header for why this is not guessed.
    */
   budgetTokens: number | null;
+  /** Where that number came from, so the meter can say whether it is chosen or estimated. */
+  budgetSource: 'setting' | 'plan' | 'none';
+  /** The plan named in settings, if any. */
+  plan: string | null;
+  /**
+   * Calibration, measured from the whole history rather than the window: the busiest five-hour
+   * span this account has ever had. If a ceiling has ever been hit, this is approximately it.
+   */
+  peakWindowTokens: number;
   /** Set when reading the conversation store failed, so the widget can say so. */
   error?: string;
 }
@@ -171,6 +180,19 @@ export interface UsageRoute {
   projects: string[];
   /** Weighted tokens inside the window, attributed to this node. */
   windowTokens: number;
+}
+
+/**
+ * Where a value sits between zero and a ceiling, as a fraction 0..1.
+ *
+ * Pulled out because three different bars need it and each one has a different reason to be
+ * ungraded: no ceiling at all, a ceiling of zero, or a value past it. Every one of those has to
+ * come back as a number a bar can draw rather than NaN or Infinity.
+ */
+export function fraction(value: number, ceiling: number | null): number {
+  if (ceiling === null || !Number.isFinite(ceiling) || ceiling <= 0) return 0;
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(1, value / ceiling);
 }
 
 /** Compact token counts for a HUD: 1.2M, 43.7K, 812. Never scientific notation. */

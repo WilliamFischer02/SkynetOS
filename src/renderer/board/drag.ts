@@ -16,6 +16,7 @@
  * not a zero-distance drag. DRAG_THRESHOLD_PX is what separates them.
  */
 
+import { PRINTED_KINDS as SHARED_PRINTED_KINDS } from '@shared/types.js';
 import type { NodeRect } from './layout.js';
 import { TILE } from './camera.js';
 
@@ -186,15 +187,37 @@ export function shouldCommitResize(state: DragState): boolean {
  * and both are exactly what `validate-board.mjs` and the command bus would reject — so checking
  * here means the ghost turns red before the drop rather than the drop failing with a toast.
  */
+/**
+ * Kinds that are PRINTED on the board rather than mounted to it.
+ *
+ * They occupy no grid, so they are neither obstacles to anything else nor obstructed by anything
+ * else. That has to hold in BOTH directions, and getting only one of them right is a subtle bug:
+ * a backdrop was correctly ignored when a chip was dropped on it, and then refused to be dragged
+ * anywhere itself, because the check only skipped printed kinds in the "other" position.
+ *
+ * Kept in step with `PRINTED_ONLY` in layout.ts, `graphProblems` in board-store.ts, and the
+ * overlap check in tools/validate-board.mjs. Four copies of one rule; see docs/DECISIONS.md.
+ */
+export const PRINTED_KINDS: readonly string[] = SHARED_PRINTED_KINDS;
+
 export function canDrop(
   nodeId: string,
   tile: { x: number; y: number },
   footprint: { w: number; h: number },
   others: NodeRect[],
-  grid: { width: number; height: number }
+  grid: { width: number; height: number },
+  /** The kind being moved. Printed kinds are bounded by the board and by nothing else. */
+  movingKind?: string
 ): boolean {
   if (tile.x < 0 || tile.y < 0) return false;
   if (tile.x + footprint.w > grid.width || tile.y + footprint.h > grid.height) return false;
+
+  /*
+   * A backdrop is scenery and a zone is a bracket drawn AROUND things. Both are meant to sit over
+   * or under components — that is the entire job — so the only rule either has to obey is staying
+   * on the board.
+   */
+  if (movingKind && PRINTED_KINDS.includes(movingKind)) return true;
 
   const left = tile.x * TILE;
   const top = tile.y * TILE;
@@ -203,9 +226,9 @@ export function canDrop(
 
   for (const other of others) {
     if (other.nodeId === nodeId) continue;
-    // Zones overlap their members and backdrops sit under everything, by design. Neither is an
-    // obstacle, or a board with a full-room backdrop would have nowhere legal to drop anything.
-    if (other.kind === 'group.zone' || other.kind === 'decor.image') continue;
+    // The same rule from the other side: printed kinds are never obstacles, or a board with a
+    // full-room backdrop would have nowhere legal to drop anything at all.
+    if (PRINTED_KINDS.includes(other.kind)) continue;
     const overlaps = left < other.x + other.w && right > other.x && top < other.y + other.h && bottom > other.y;
     if (overlaps) return false;
   }

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
+import { isPlanId, type PlanId } from '@shared/plans.js';
 
 /**
  * Settings live in %APPDATA%/SkynetOS/settings.json.
@@ -33,12 +34,25 @@ export interface Settings {
   usageWindowHours: number;
 
   /**
-   * Weighted tokens you consider one window's worth. Null until you set one.
+   * Which Claude plan this account is on: `free`, `pro`, `max-5x`, `max-20x`, `custom`.
+   *
+   * SkynetOS cannot ask — nothing local reports it. Naming the plan here supplies the published
+   * multiplier (Max 20x is twenty times Pro), which is applied to a baseline calibrated from this
+   * machine's own history. See packages/shared/plans.ts for exactly what that calibration was.
+   *
+   * The resulting budget is an ESTIMATE and is labelled as one everywhere it is shown.
+   */
+  plan: PlanId | null;
+
+  /**
+   * Weighted tokens you consider one window's worth. Overrides `plan` completely.
    *
    * There is no file on this disk and no local API that says how much of a subscription is left,
-   * so SkynetOS cannot know it. Prime directive 1 forbids inventing it: with this unset the meter
-   * shows the real rate and says SET A BUDGET where the allowance would go, rather than printing
-   * a confident fiction. Weighted means cache reads count at a tenth — see packages/shared/usage.ts.
+   * so SkynetOS cannot know it. Prime directive 1 forbids inventing it: with both this and `plan`
+   * unset, the meter shows the real rate and says SET A BUDGET where the allowance would go,
+   * rather than printing a confident fiction. A number here always wins over a plan estimate — a
+   * measurement should never argue with an instruction. Weighted means cache reads count at a
+   * tenth; see packages/shared/usage.ts.
    */
   tokenBudget: number | null;
 }
@@ -51,6 +65,7 @@ const DEFAULTS: Settings = {
   undoDepth: 200,
   snapshotRetentionDays: 30,
   usageWindowHours: 5,
+  plan: null,
   tokenBudget: null
 };
 
@@ -74,6 +89,12 @@ export function getSettings(): Settings {
     const parsed = JSON.parse(readFileSync(file, 'utf8')) as Partial<Settings>;
     // Merge over defaults so a hand-edited file missing a key still works.
     cached = { ...DEFAULTS, ...parsed };
+    // A hand-edited plan is free text until it is checked. An unrecognised one becomes null,
+    // which means "no budget" — better than silently metering against the wrong ceiling.
+    if (cached.plan !== null && !(typeof cached.plan === 'string' && isPlanId(cached.plan))) {
+      console.warn(`[settings] unknown plan "${String(cached.plan)}" — ignoring it. Use one of: free, pro, max-5x, max-20x, custom`);
+      cached.plan = null;
+    }
   } catch (err) {
     console.error(`[settings] ${file} is malformed (${(err as Error).message}) — using defaults`);
     cached = { ...DEFAULTS };

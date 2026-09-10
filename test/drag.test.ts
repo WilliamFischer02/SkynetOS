@@ -299,3 +299,54 @@ describe('resize', () => {
     expect(canDrop('u1', { x: 4, y: 4 }, { w: 5, h: 3 }, others, grid)).toBe(false);
   });
 });
+
+/*
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ * Printed kinds are not obstacles, in BOTH directions.
+ *
+ * William: "uploaded image nodes should be able to go behind the other nodes and intercept with
+ * them; they're meant to be background elements."
+ *
+ * The first version of this only skipped printed kinds in the OTHER position — so a chip dropped
+ * on a backdrop was correctly allowed, and the backdrop itself then refused to be dragged
+ * anywhere, because every component on the board counted against it. Half a rule reads as a
+ * capricious one.
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ */
+describe('printed kinds and collision', () => {
+  const grid = { width: 64, height: 40 };
+  const chip: NodeRect = { nodeId: 'u1', kind: 'agent.code', x: 160, y: 160, w: 48, h: 48 };
+  const backdrop: NodeRect = { nodeId: 'bg1', kind: 'decor.image', x: 0, y: 0, w: 320, h: 240 };
+  const zone: NodeRect = { nodeId: 'g1', kind: 'group.zone', x: 0, y: 0, w: 320, h: 240 };
+  const others = [chip, backdrop, zone];
+
+  it('lets a component land on top of a backdrop', () => {
+    expect(canDrop('u2', { x: 2, y: 2 }, { w: 3, h: 3 }, others, grid, 'agent.code')).toBe(true);
+  });
+
+  it('lets a backdrop be dragged across components', () => {
+    // The half that was broken. A backdrop covering the whole board must still be movable.
+    expect(canDrop('bg1', { x: 8, y: 8 }, { w: 20, h: 14 }, others, grid, 'decor.image')).toBe(true);
+  });
+
+  it('lets a zone be dragged across the components it brackets', () => {
+    expect(canDrop('g1', { x: 9, y: 9 }, { w: 20, h: 14 }, others, grid, 'group.zone')).toBe(true);
+  });
+
+  it('still keeps a printed kind on the board', () => {
+    // The one rule they do obey. Off-board cannot be represented in the board JSON.
+    expect(canDrop('bg1', { x: 60, y: 8 }, { w: 20, h: 14 }, others, grid, 'decor.image')).toBe(false);
+    expect(canDrop('bg1', { x: -1, y: 8 }, { w: 20, h: 14 }, others, grid, 'decor.image')).toBe(false);
+  });
+
+  it('still refuses to stack two components', () => {
+    // The rule that has to survive all of this.
+    expect(canDrop('u2', { x: 10, y: 10 }, { w: 3, h: 3 }, others, grid, 'agent.code')).toBe(false);
+  });
+
+  it('behaves as before when no kind is given', () => {
+    // The parameter is optional, so an older call site keeps its old meaning rather than
+    // silently gaining permission to overlap.
+    expect(canDrop('u2', { x: 10, y: 10 }, { w: 3, h: 3 }, others, grid)).toBe(false);
+  });
+});

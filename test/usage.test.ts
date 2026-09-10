@@ -32,6 +32,9 @@ const summary = (over: Partial<UsageSummary> = {}): UsageSummary => ({
   window: ZERO_TOKENS,
   allTime: ZERO_TOKENS,
   budgetTokens: null,
+  budgetSource: 'none',
+  plan: null,
+  peakWindowTokens: 0,
   ...over
 });
 
