@@ -25,9 +25,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Match the local toolchain. Electron 44 bundles Node 24 itself, but the build tools
           # and the validators run on the runner's Node.
@@ -46,6 +46,13 @@ jobs:
         # downloadable exe at all.
         run: npm run verify
 
+      - name: Compile main, preload and renderer
+        # electron-builder packages whatever is in out/. It does NOT build it. Locally out/ was
+        # already there from a previous run, so this step was invisible; on a clean checkout the
+        # packager produced an asar with no entry file. `npm run verify` deliberately does not
+        # compile — it typechecks, validates and tests — so the compile is its own step here.
+        run: npm run build:app
+
       - name: Build installer
         run: npx electron-builder --win nsis --publish never
 
@@ -62,7 +69,7 @@ jobs:
           done
           ls -la release/*.exe
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SkynetOS-installer-${{ steps.name.outputs.sha_short }}
           path: |
