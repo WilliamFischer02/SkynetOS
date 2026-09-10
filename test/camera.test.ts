@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type Camera,
+  PAN_MARGIN,
   PAN_MAX_SPEED,
   PAN_MIN_SPEED,
   PAN_RAMP_FRAMES,
@@ -15,6 +15,7 @@ import {
   stagePosition,
   stepCamera,
   stepZoom,
+  type Camera,
   worldToTile
 } from '../src/renderer/board/camera.js';
 
@@ -124,11 +125,27 @@ describe('pan', () => {
 });
 
 describe('clampCamera', () => {
-  it('keeps the viewport inside a board larger than the screen', () => {
+  it('keeps the viewport near a board larger than the screen, with a margin of slack', () => {
+    /*
+     * The clamp used to pin the board's edge to the viewport's exactly. That made a component near
+     * an edge impossible to bring to the middle of the screen to work on — and with the inspector
+     * open, a node on the right edge could not be brought out from under it at all. PAN_MARGIN is
+     * eight tiles of deliberate overscroll on every side.
+     */
     const bigBoard = { width: 8000, height: 8000 };
     const clamped = clampCamera({ x: -500, y: 99999, zoom: 2 }, bigBoard, view);
-    expect(clamped.x).toBe(0);
-    expect(clamped.y).toBe(bigBoard.height - view.height / 2);
+    expect(clamped.x).toBe(-PAN_MARGIN);
+    expect(clamped.y).toBe(bigBoard.height - view.height / 2 + PAN_MARGIN);
+  });
+
+  it('still refuses to let the board leave the screen entirely', () => {
+    // Slack, not freedom. Eight tiles is enough to centre anything and little enough that the
+    // board is always still there when you stop panning.
+    const bigBoard = { width: 8000, height: 8000 };
+    const clamped = clampCamera({ x: -999999, y: -999999, zoom: 2 }, bigBoard, view);
+    expect(clamped.x).toBe(-PAN_MARGIN);
+    expect(clamped.y).toBe(-PAN_MARGIN);
+    expect(PAN_MARGIN).toBeLessThan(view.width / 2);
   });
 
   it('centres a board smaller than the viewport instead of pinning it to the corner', () => {

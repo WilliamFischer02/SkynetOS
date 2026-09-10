@@ -38,6 +38,8 @@ function toDraft(node: BoardNode): Draft {
       draft[field.key] = value === undefined ? defaultBoolean(field) : Boolean(value);
     } else if (field.control === 'tags' || field.control === 'multi' || field.control === 'dir-list') {
       draft[field.key] = Array.isArray(value) ? value.join(', ') : '';
+    } else if (field.control === 'priority') {
+      draft[field.key] = String(value ?? 0);
     } else if (field.control === 'footprint') {
       const fp = footprintOf(node);
       draft[field.key] = `${fp.w}x${fp.h}`;
@@ -121,6 +123,11 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
           continue;
         }
       }
+    } else if (field.control === 'priority') {
+      const level = Number.parseInt(String(raw ?? '0'), 10);
+      // 0 is flat and is the default, so it is stored as absent rather than as a zero — a board
+      // file full of `"priority": 0` says nothing and reads as though something was configured.
+      next = Number.isInteger(level) && level > 0 ? Math.min(5, level) : undefined;
     } else if (field.control === 'footprint') {
       const [w, h] = String(raw ?? '').split('x').map((n) => Number.parseInt(n, 10));
       if (!Number.isInteger(w) || !Number.isInteger(h)) { errors.push(`${field.label} must be two whole numbers`); continue; }
@@ -249,6 +256,31 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                 <option value="">— unset —</option>
                 {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
+            ) : field.control === 'priority' ? (
+              <div className="priority-field">
+                <input
+                  id={`f-${String(field.key)}`}
+                  type="range"
+                  min={0}
+                  max={5}
+                  step={1}
+                  value={Number(value ?? 0)}
+                  disabled={saving}
+                  onChange={(e) => set(field.key, e.target.value)}
+                />
+                {/*
+                  * A preview of the actual stack, not a number. The control is choosing a HEIGHT,
+                  * so it shows one — each notch is the same two pixels the board draws.
+                  */}
+                <span className="priority-stack" aria-hidden="true">
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <span key={i} className={i < Number(value ?? 0) ? 'notch on' : 'notch'} />
+                  ))}
+                </span>
+                <span className="priority-value">
+                  {Number(value ?? 0) === 0 ? 'FLAT' : `LEVEL ${Number(value)}`}
+                </span>
+              </div>
             ) : field.control === 'footprint' ? (
               <FootprintField
                 value={String(value ?? '')}

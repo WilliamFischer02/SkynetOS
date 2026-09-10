@@ -1,5 +1,6 @@
 import type { NodeKind } from '@shared/types.js';
 import { COPPER, COPPER_DARK, SILK } from '@shared/palette.js';
+import type { NodeFrame } from '@shared/frames.js';
 
 /**
  * Per-kind component silhouettes.
@@ -276,4 +277,202 @@ export function drawComponent(d: DrawContext, style: ComponentStyle): void {
       body(d, bx, by, bw, bh);
       break;
   }
+}
+
+/* ────────────────────────── node frames and depth ────────────────────────── */
+
+/**
+ * Frames: the copper that hangs off the edge of a node.
+ *
+ * William: "with some nodes you've added an excellent copper leg sort of effect that looks like
+ * mini copper wiring cascading from the side of a node; I want a variety of variations of these
+ * sorts of effects to be togglable on each node."
+ *
+ * That effect was `legs()` on a `dip`, only available to `agent.code`, and only when the node had
+ * no wallpaper — because a face image replaced the drawn package entirely. These are the same idea
+ * made independent of kind and of whether there is a picture: a node's frame is a separate choice
+ * from what it IS and what it shows.
+ *
+ * The frame draws in a MARGIN outside the footprint, the way the nameplate does. Collision,
+ * routing and hit-testing keep running on the grid the board file describes — a framed node is not
+ * a bigger node, it is a node with legs.
+ */
+export type { NodeFrame } from '@shared/frames.js';
+export { NODE_FRAMES, isNodeFrame } from '@shared/frames.js';
+
+/** How much room each frame needs outside the footprint, in px. */
+export function frameMargin(frame: NodeFrame | undefined): number {
+  switch (frame) {
+    case 'dip':
+    case 'quad':
+    case 'fingers':
+    case 'castellated':
+      return 4;
+    case 'tabs':
+    case 'rails':
+      return 3;
+    case 'bga':
+    case 'socket':
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Draw a frame around a body at (x, y, w, h), using the `margin` of space outside it.
+ *
+ * Every variant is copper or copper-dark and nothing else. docs/02: copper is an EDGE colour —
+ * traces, pads, pin legs, connector fingers — which is exactly the vocabulary a frame is made of.
+ */
+export function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  frame: NodeFrame,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  margin: number,
+  signal: string
+): void {
+  if (frame === 'none' || margin <= 0 || w <= 4 || h <= 4) return;
+  const d: DrawContext = { ctx, x, y, w, h, maskLight: '#000000', signal };
+
+  switch (frame) {
+    case 'dip':
+      legs(d, 'left', x, y, w, h, margin);
+      legs(d, 'right', x, y, w, h, margin);
+      break;
+
+    case 'quad':
+      for (const edge of ['left', 'right', 'top', 'bottom'] as const) legs(d, edge, x, y, w, h, margin);
+      break;
+
+    case 'fingers': {
+      // Edge-connector fingers along the bottom — wider and closer together than pin legs, which
+      // is what makes a cartridge read as a cartridge rather than as a chip.
+      for (let fx = x + 3; fx <= x + w - 6; fx += 7) px(ctx, COPPER, fx, y + h, 4, margin);
+      px(ctx, COPPER_DARK, x + 2, y + h + margin - 1, w - 4, 1);
+      break;
+    }
+
+    case 'tabs': {
+      // Mounting tabs at the four corners, each with a hole. A real bracket.
+      const t = margin + 2;
+      for (const [tx, ty] of [[x - margin, y - margin], [x + w - t + margin, y - margin],
+        [x - margin, y + h - t + margin], [x + w - t + margin, y + h - t + margin]]) {
+        px(ctx, COPPER_DARK, tx as number, ty as number, t, t);
+        px(ctx, COPPER, (tx as number) + 1, (ty as number) + 1, t - 2, t - 2);
+        px(ctx, COPPER_DARK, (tx as number) + Math.floor(t / 2) - 1, (ty as number) + Math.floor(t / 2) - 1, 2, 2);
+      }
+      break;
+    }
+
+    case 'rails': {
+      // A power rail top and bottom, with via dots along it. The look of a board's supply bus.
+      px(ctx, COPPER, x - margin, y - margin, w + margin * 2, 2);
+      px(ctx, COPPER, x - margin, y + h + margin - 2, w + margin * 2, 2);
+      for (let rx = x; rx < x + w; rx += 8) {
+        px(ctx, COPPER_DARK, rx, y - margin, 2, 2);
+        px(ctx, COPPER_DARK, rx, y + h + margin - 2, 2, 2);
+      }
+      break;
+    }
+
+    case 'socket':
+      // A socket ring: the component sits IN something. Two nested outlines, one tone apart.
+      outline(d, COPPER_DARK, x - margin, y - margin, w + margin * 2, h + margin * 2);
+      outline(d, COPPER, x - 1, y - 1, w + 2, h + 2);
+      break;
+
+    case 'bga': {
+      // A pad array peeking out from underneath on all four sides — a chip you cannot see the
+      // pins of, because they are under it.
+      for (let bx = x + 2; bx < x + w - 2; bx += 5) {
+        px(ctx, COPPER, bx, y - margin, 2, 2);
+        px(ctx, COPPER, bx, y + h + margin - 2, 2, 2);
+      }
+      for (let by = y + 2; by < y + h - 2; by += 5) {
+        px(ctx, COPPER, x - margin, by, 2, 2);
+        px(ctx, COPPER, x + w + margin - 2, by, 2, 2);
+      }
+      break;
+    }
+
+    case 'castellated': {
+      // Castellated edges: half-holes cut into the board edge, all the way round. The look of a
+      // solder-down module.
+      for (let cx = x + 2; cx < x + w - 2; cx += 6) {
+        px(ctx, COPPER, cx, y - margin, 3, margin);
+        px(ctx, COPPER, cx, y + h, 3, margin);
+        px(ctx, COPPER_DARK, cx + 1, y - margin, 1, margin);
+        px(ctx, COPPER_DARK, cx + 1, y + h, 1, margin);
+      }
+      for (let cy = y + 2; cy < y + h - 2; cy += 6) {
+        px(ctx, COPPER, x - margin, cy, margin, 3);
+        px(ctx, COPPER, x + w, cy, margin, 3);
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+
+/**
+ * The long-shadow depth stack, which is what a node's PRIORITY looks like.
+ *
+ * William wants priority to be visible as physical height: "level 3 or high priority nodes have 3
+ * layers of node thickness... These should be relatively thin layers of depth though as I don't
+ * want the items to look too protruded."
+ *
+ * So each level is TWO pixels, offset down and to the right, drawn darkest-first behind the body.
+ * Two is the smallest offset that reads as a distinct step at 1:1 and still stacks to something
+ * legible at five — a three-priority node sits 6px proud, which is visible across a room and never
+ * looks like a tower.
+ *
+ * Flat colour per layer rather than a gradient: this is a 2D spoof of depth, and a gradient would
+ * be both off-palette and blurred. The nearest layer is copper-dark and the ones behind it are
+ * mask-dark, so the stack reads as a lit edge over shadow.
+ */
+export const DEPTH_STEP = 2;
+export { MAX_PRIORITY } from '@shared/frames.js';
+const MAX_PRIORITY_LOCAL = 5;
+
+export function depthOffset(priority: number | undefined): number {
+  const p = Math.max(0, Math.min(MAX_PRIORITY_LOCAL, Math.round(priority ?? 0)));
+  return p * DEPTH_STEP;
+}
+
+export function drawDepth(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  priority: number,
+  maskDark: string
+): void {
+  const levels = Math.max(0, Math.min(MAX_PRIORITY_LOCAL, Math.round(priority)));
+  if (levels <= 0 || w <= 0 || h <= 0) return;
+
+  /*
+   * Farthest first, so each nearer layer paints over the one behind it.
+   *
+   * Every layer is mask-dark — this is SHADOW, and shadow is the absence of light rather than a
+   * second material. An earlier version made the nearest layer copper-dark and the stack read as a
+   * copper slab the component was sitting on: at three levels it looked protruded rather than
+   * raised, which is the one thing William asked it not to do.
+   *
+   * What survives of that idea is a single copper-dark pixel line down the lit edges of the
+   * nearest layer. One pixel is enough to say "this has a side"; anything more is a plinth.
+   */
+  for (let i = levels; i >= 1; i--) {
+    const off = i * DEPTH_STEP;
+    px(ctx, maskDark, x + off, y + off, w, h);
+  }
+  const near = DEPTH_STEP;
+  px(ctx, COPPER_DARK, x + w, y + near, near, h - near);
+  px(ctx, COPPER_DARK, x + near, y + h, w - near, near);
 }

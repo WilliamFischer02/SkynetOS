@@ -15,7 +15,8 @@ import { COPPER_DARK, SILK } from '@shared/palette.js';
 import type { NodeKind } from '@shared/types.js';
 import { TILE } from './camera.js';
 import { renderSilkText, measureSilkText } from './silkscreen.js';
-import { COMPONENT_STYLE, drawComponent } from './component-art.js';
+import { COMPONENT_STYLE, depthOffset, drawComponent, drawDepth, drawFrame, frameMargin } from './component-art.js';
+import type { NodeFrame } from '@shared/frames.js';
 
 export interface AtlasFrame {
   frame: { x: number; y: number; w: number; h: number };
@@ -37,6 +38,12 @@ export interface PlaceholderSpec {
   name?: string;
   /** Title size. 11 or 22 — the only two this pixel font is exact at. */
   nameSize?: 11 | 22;
+  /** The copper hanging off the edge. Drawn in a margin outside the footprint. */
+  frame?: NodeFrame;
+  /** 0-5. Layers of long shadow cast down-right, behind the body. */
+  priority?: number;
+  /** The room's mask-dark, for the shadow stack. */
+  maskDark?: string;
   /** The node kind, which decides the package silhouette. See component-art.ts. */
   kind: NodeKind;
   /** The current room's mask-light. Stands in for @mask-light until the M2 palette shader lands. */
@@ -134,6 +141,22 @@ export function drawBevel(
  */
 export function nameplateOffset(name: string | undefined, size: 11 | 22 = 11): number {
   return name && name.trim() ? nameplateHeight(size) : 0;
+}
+
+/**
+ * How far LEFT and UP a node's texture starts from its grid position.
+ *
+ * The nameplate extends upward and the frame extends in every direction, so a framed node's
+ * texture begins outside its own footprint. The footprint itself is unchanged — see the
+ * placeholder's comment — so this is purely a placement offset.
+ */
+export function textureOffset(
+  name: string | undefined,
+  size: 11 | 22,
+  frame: NodeFrame | undefined
+): { x: number; y: number } {
+  const margin = frameMargin(frame);
+  return { x: margin, y: nameplateOffset(name, size) + margin };
 }
 
 /**
@@ -386,12 +409,23 @@ export class SpriteStore {
       : 0;
     const styleKey = spec.nameStyle ? `${spec.nameStyle.color}|${spec.nameStyle.stroke ?? ''}|${spec.nameStyle.plateFill}|${spec.nameStyle.plateBorder}` : '';
     const suffixKey = spec.suffix ? `${spec.suffix.text}|${spec.suffix.size}|${spec.suffix.color}|${spec.suffix.stroke ?? ''}` : '';
-    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.nameSize ?? 11}:${spec.maskLight}:${spec.signal}:${faceKey}:${spec.logo?.src.length ?? 0}:${styleKey}:${suffixKey}`;
+    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.nameSize ?? 11}:${spec.maskLight}:${spec.signal}:${faceKey}:${spec.logo?.src.length ?? 0}:${styleKey}:${suffixKey}:${spec.frame ?? ''}:${spec.priority ?? 0}`;
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 
     const bodyW = Math.max(TILE, spec.w * TILE);
     const bodyH = Math.max(TILE, spec.h * TILE);
+
+    /*
+     * Two extensions to the texture, both OUTSIDE the footprint — the same rule the nameplate
+     * follows. Collision, routing and hit-testing keep running on the grid the board file
+     * describes; a framed, raised node is not a bigger node.
+     *
+     *   margin  room on every side for the frame's legs, fingers or tabs.
+     *   depth   room down and to the right for the long-shadow stack.
+     */
+    const margin = frameMargin(spec.frame);
+    const depth = depthOffset(spec.priority);
 
     const nameSize = spec.nameSize === 22 ? 22 : 11;
     const nameColor = spec.nameStyle?.color ?? SILK;
@@ -407,8 +441,8 @@ export class SpriteStore {
     const plateH = plate ? nameplateHeight(nameSize) : 0;
     const plateW = plate ? plate.width + (suffixText ? suffixText.width + 1 : 0) + 6 : 0;
 
-    const width = Math.max(bodyW, plateW);
-    const height = bodyH + plateH;
+    const width = Math.max(bodyW + margin * 2 + depth, plateW);
+    const height = bodyH + plateH + margin * 2 + depth;
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -420,18 +454,18 @@ export class SpriteStore {
     // --- nameplate, above the package, one line, whatever the name's length ---
     if (plate) {
       ctx.fillStyle = spec.nameStyle?.plateFill ?? spec.maskLight;
-      ctx.fillRect(0, 0, plateW, plateH - 2);
+      ctx.fillRect(margin, 0, plateW, plateH - 2);
       ctx.fillStyle = spec.nameStyle?.plateBorder ?? SILK;
-      ctx.fillRect(0, 0, plateW, 1);
-      ctx.fillRect(0, plateH - 3, plateW, 1);
-      ctx.fillRect(0, 0, 1, plateH - 2);
-      ctx.fillRect(plateW - 1, 0, 1, plateH - 2);
+      ctx.fillRect(margin, 0, plateW, 1);
+      ctx.fillRect(margin, plateH - 3, plateW, 1);
+      ctx.fillRect(margin, 0, 1, plateH - 2);
+      ctx.fillRect(margin + plateW - 1, 0, 1, plateH - 2);
       const nameY = Math.floor((plateH - 2 - plate.height) / 2);
       if (spec.nameStyle?.stroke) {
         // Same eight-way stamp as a text node's outline. Whole pixels only; see text-plate.ts.
         const outline = renderSilkText(name, nameSize, spec.nameStyle.stroke);
         for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-          ctx.drawImage(outline.canvas, 3 + (dx as number), nameY + (dy as number));
+          ctx.drawImage(outline.canvas, margin + 3 + (dx as number), nameY + (dy as number));
         }
       }
       ctx.drawImage(plate.canvas, 3, nameY);
@@ -440,7 +474,7 @@ export class SpriteStore {
         // Baseline-aligned, not top-aligned: a smaller suffix hung from the top of the strip
         // would float above the title instead of sitting on the same line as it.
         const suffixY = nameY + plate.height - suffixText.height;
-        const suffixX = 3 + plate.width + 1;
+        const suffixX = margin + 3 + plate.width + 1;
         if (suffixOutline) {
           for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
             ctx.drawImage(suffixOutline.canvas, suffixX + (dx as number), suffixY + (dy as number));
@@ -450,14 +484,25 @@ export class SpriteStore {
       }
       // A short stem down to the package, so the plate reads as belonging to it.
       ctx.fillStyle = COPPER_DARK;
-      ctx.fillRect(Math.min(plateW, bodyW) >> 1, plateH - 3, 1, 3);
+      ctx.fillRect(margin + (Math.min(plateW, bodyW) >> 1), plateH - 3, 1, 3);
     }
 
-    // --- the package itself ---
+    // --- the shadow stack, then the frame, then the package ---
+    const bodyX = margin;
+    const bodyY = plateH + margin;
+
+    // Behind everything: the long shadow that makes priority read as height.
+    if (depth > 0) drawDepth(ctx, bodyX, bodyY, bodyW, bodyH, spec.priority ?? 0, spec.maskDark ?? '#000000');
+
+    // Behind the body, in the margin: the copper.
+    if (spec.frame && spec.frame !== 'none') {
+      drawFrame(ctx, spec.frame, bodyX, bodyY, bodyW, bodyH, margin, spec.signal);
+    }
+
     if (spec.face) {
       // A face image replaces the package body entirely: it is the component's printed face.
-      ctx.drawImage(spec.face, 0, plateH, bodyW, bodyH);
-      drawBevel(ctx, 0, plateH, bodyW, bodyH);
+      ctx.drawImage(spec.face, bodyX, bodyY, bodyW, bodyH);
+      drawBevel(ctx, bodyX, bodyY, bodyW, bodyH);
 
       /*
        * The logo goes ON the wallpaper, centred, with its own bevel.
@@ -468,8 +513,8 @@ export class SpriteStore {
        */
       if (spec.logo) {
         const box = spec.logo.width;
-        const lx = Math.floor((bodyW - box) / 2);
-        const ly = plateH + Math.floor((bodyH - box) / 2);
+        const lx = bodyX + Math.floor((bodyW - box) / 2);
+        const ly = bodyY + Math.floor((bodyH - box) / 2);
         // A mask-light plate behind it, so a logo with transparent padding still reads as a badge
         // rather than as a hole cut in the wallpaper.
         ctx.fillStyle = spec.maskLight;
@@ -479,15 +524,15 @@ export class SpriteStore {
       }
     } else {
       drawComponent(
-        { ctx, x: 0, y: plateH, w: bodyW, h: bodyH, maskLight: spec.maskLight, signal: spec.signal },
+        { ctx, x: bodyX, y: bodyY, w: bodyW, h: bodyH, maskLight: spec.maskLight, signal: spec.signal },
         COMPONENT_STYLE[spec.kind] ?? { silhouette: 'plain', inset: 2 }
       );
       // A logo is a badge on the component, not on the picture — so it lands on a drawn package
       // exactly as it lands on a wallpaper.
       if (spec.logo) {
         const box = spec.logo.width;
-        const lx = Math.floor((bodyW - box) / 2);
-        const ly = plateH + Math.floor((bodyH - box) / 2);
+        const lx = bodyX + Math.floor((bodyW - box) / 2);
+        const ly = bodyY + Math.floor((bodyH - box) / 2);
         ctx.fillStyle = spec.maskLight;
         ctx.fillRect(lx, ly, box, box);
         ctx.drawImage(spec.logo, lx, ly, box, box);
@@ -499,8 +544,8 @@ export class SpriteStore {
     const desig = spec.designator.trim().toUpperCase();
     if (desig && measureSilkText(desig, 11) <= bodyW - 6 && bodyH >= 16) {
       const rendered = renderSilkText(desig, 11, SILK);
-      const tx = Math.floor((bodyW - rendered.width) / 2);
-      const ty = plateH + Math.floor((bodyH - rendered.height) / 2);
+      const tx = bodyX + Math.floor((bodyW - rendered.width) / 2);
+      const ty = bodyY + Math.floor((bodyH - rendered.height) / 2);
       // Clear a patch behind it, the way a real package leaves bare plastic for its marking.
       ctx.fillStyle = spec.maskLight;
       ctx.fillRect(tx - 2, ty - 1, rendered.width + 4, rendered.height + 2);

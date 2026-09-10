@@ -6,6 +6,7 @@
  * the other changes in the same commit, or the "data before pixels" rule is already broken.
  */
 
+import type { NodeFrame } from './frames.js';
 import type { PaletteToken } from './palette.js';
 import type { PrimeStepId } from './prime-steps.js';
 
@@ -212,6 +213,27 @@ export interface BoardNode {
   showName?: boolean;
   showThumbnail?: boolean;
   showLogo?: boolean;
+
+  /* ── how this node is dressed ───────────────────────────────────────────────────────────── */
+
+  /**
+   * The copper that hangs off the edge of this node: pin legs, connector fingers, mounting tabs,
+   * a socket ring, a pad array. See NODE_FRAMES in src/renderer/board/component-art.ts.
+   *
+   * Independent of kind and of whether the node shows a picture — a frame is a styling choice, not
+   * a consequence of what a node IS. It draws in a margin OUTSIDE the footprint, the way the
+   * nameplate does, so collision and routing still run on the grid the board file describes.
+   */
+  frame?: NodeFrame;
+
+  /**
+   * How important this node is, 0-5, shown as physical height.
+   *
+   * Each level is two pixels of long shadow cast down and to the right, drawn behind the body. A
+   * priority-3 node sits six pixels proud — visible across a room, and never so tall that the
+   * board looks like a city. 0 is flat.
+   */
+  priority?: number;
 
   /* ── how this node's text is printed ────────────────────────────────────────────────────── */
 

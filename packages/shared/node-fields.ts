@@ -14,6 +14,7 @@
 import { PRIME_STEP_IDS } from './prime-steps.js';
 import { DECOR_PARTS } from './types.js';
 import { PALETTE_TOKENS } from './palette.js';
+import { NODE_FRAMES } from './frames.js';
 import type { BoardNode, NodeKind } from './types.js';
 
 /**
@@ -30,6 +31,8 @@ import type { BoardNode, NodeKind } from './types.js';
  *              Used by `addDirs`, which is how an agent reaches repos outside its own cwd.
  *  footprint   two tile counts, w and h. The typed path to scaling a node; the corner handle
  *              and Shift+arrows are the other two.
+ *  priority    a 0-5 slider. Drawn as layers of long shadow, so the control is a slider rather
+ *              than a number: you are choosing a height, not entering a value.
  *  path-file   a file on disk. Offers Browse (native open dialog) + existence check.
  *  path-dir    a directory on disk. Offers Browse (native folder dialog) + existence check.
  *  glob        a path with a `*` in it. Resolves to the newest match and shows which file won.
@@ -40,7 +43,7 @@ import type { BoardNode, NodeKind } from './types.js';
 export type FieldControl =
   | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags' | 'multi'
   | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json'
-  | 'dir-list' | 'footprint';
+  | 'dir-list' | 'footprint' | 'priority';
 
 /** Controls that name something outside the board and therefore need verifying. */
 export const TARGET_CONTROLS = ['path-file', 'path-dir', 'glob', 'url', 'board-file'] as const;
@@ -94,6 +97,15 @@ const TRAILING: FieldSpec[] = [
   {
     key: 'showLogo', label: 'Show logo', control: 'boolean',
     help: 'Draw the logo badge centred on the face. Independent of the wallpaper — a badge on a drawn package reads well, and so does a photograph with nothing over it.'
+  },
+  {
+    key: 'frame', label: 'Frame', control: 'select',
+    options: NODE_FRAMES,
+    help: 'The copper that hangs off the edge of this node — pin legs, connector fingers, mounting tabs, a socket ring. Works with a wallpaper: the frame draws in a margin outside the footprint, so it never covers the picture and never changes what the node collides with.'
+  },
+  {
+    key: 'priority', label: 'Priority / height', control: 'priority',
+    help: 'How important this node is, shown as physical height. Each level is two pixels of long shadow cast down and to the right — a level-3 node sits six pixels proud. Deliberately thin: it is a hierarchy cue, not a skyline.'
   },
   {
     key: 'textColor', label: 'Text colour', control: 'select',

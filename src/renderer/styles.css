@@ -1187,3 +1187,63 @@ canvas {
 .usage-unset.link:hover { color: var(--signal); border-bottom-color: var(--signal); }
 .usage-plan[role="button"] { cursor: pointer; }
 .usage-plan[role="button"]:hover { color: var(--signal); border-color: var(--signal); }
+
+/* ---------- the "+" box: add a component while editing ---------- */
+
+.add-fab {
+  position: absolute;
+  /*
+   * Left edge, vertically centred. Bottom-left put it straight through the session dock, whose
+   * height depends on how many sessions are running — so there is no fixed offset that clears it.
+   * The middle of the left edge is empty at every window size.
+   */
+  left: calc(2 * var(--gap));
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  width: calc(44 * var(--p));
+  height: calc(44 * var(--p));
+  font: inherit;
+  font-size: calc(24px * var(--ui-scale));
+  line-height: 1;
+  color: var(--signal);
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper);
+  cursor: pointer;
+  box-shadow:
+    inset var(--p) var(--p) 0 0 rgba(233, 228, 214, 0.14),
+    calc(3 * var(--p)) calc(3 * var(--p)) 0 0 rgba(0, 0, 0, 0.55);
+}
+
+.add-fab:hover { background: var(--copper-dark); color: var(--silk); }
+.add-fab:active {
+  /* Keeps the -50% or the button jumps to the bottom of the screen when pressed. */
+  transform: translateY(-50%) translate(calc(3 * var(--p)), calc(3 * var(--p)));
+  box-shadow: inset var(--p) var(--p) 0 0 rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- priority: a slider that shows a height ---------- */
+
+.priority-field { display: flex; align-items: center; gap: calc(2 * var(--gap)); }
+.priority-field input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--signal); }
+
+/*
+ * A preview of the actual stack. Each notch steps down and right by the same two pixels the board
+ * draws, so the control shows the thing it is choosing rather than a number standing for it.
+ */
+.priority-stack { display: inline-block; position: relative; width: calc(18 * var(--p)); height: calc(18 * var(--p)); }
+.priority-stack .notch {
+  position: absolute;
+  width: calc(8 * var(--p));
+  height: calc(8 * var(--p));
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+}
+.priority-stack .notch.on { background: var(--copper); border-color: var(--copper); }
+.priority-stack .notch:nth-child(1) { left: 0; top: calc(8 * var(--p)); }
+.priority-stack .notch:nth-child(2) { left: calc(2 * var(--p)); top: calc(6 * var(--p)); }
+.priority-stack .notch:nth-child(3) { left: calc(4 * var(--p)); top: calc(4 * var(--p)); }
+.priority-stack .notch:nth-child(4) { left: calc(6 * var(--p)); top: calc(2 * var(--p)); }
+.priority-stack .notch:nth-child(5) { left: calc(8 * var(--p)); top: 0; }
+
+.priority-value { color: var(--copper); text-transform: uppercase; white-space: nowrap; }

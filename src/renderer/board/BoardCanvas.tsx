@@ -35,13 +35,13 @@ import { buildSubstrate } from './substrate.js';
 import { CourierLayer, courierColor, courierSource, type CourierRoute } from './couriers.js';
 import { GLOW_FPS, GLOW_FRAMES, buildGlowFrames } from './glow.js';
 import type { Point } from './traces.js';
-import { SpriteStore, nameplateOffset } from './sprites.js';
+import { SpriteStore, textureOffset } from './sprites.js';
 import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
 import { buildRouteGrid, routeAStar, type RouteObstacle } from './router.js';
 import { buildBrokenOverlay, buildSelectionOverlay, buildSilkNote, buildZone } from './silk-layer.js';
 import { measureTextBlock } from './text-plate.js';
 import { roomTitle, suffixSize } from '@shared/room-title.js';
-import { COPPER_DARK, resolveToken } from '@shared/palette.js';
+import { COPPER_DARK, SILK as SILK_HEX, brighten, resolveToken } from '@shared/palette.js';
 import { centreOn, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
 import {
   NO_DRAG,
@@ -187,6 +187,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let traceLayer: Container | null = null;
     let zoneLayer: Container | null = null;
     let nodeLayer: Container | null = null;
+    let partLayer: Container | null = null;
     let noteLayer: Container | null = null;
     let gridLayer: Container | null = null;
     let overlayLayer: Container | null = null;
@@ -449,8 +450,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        */
       const sprite = spriteById.get(node.id);
       if (sprite) {
-        sprite.x = tile.x * TILE;
-        sprite.y = tile.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined, titleSize(node));
+        const off = textureOffset(displayOf(node).name ? node.name : undefined, titleSize(node), node.frame);
+        sprite.x = tile.x * TILE - off.x;
+        sprite.y = tile.y * TILE - off.y;
       }
     };
 
@@ -519,24 +521,29 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       };
     };
 
-    const nameStyleFor = (node: BoardNode) => ({
-      color: resolveToken(node.textColor, board.theme),
-      stroke: node.textStroke ? resolveToken(node.textStroke, board.theme, COPPER_DARK) : null,
-      plateFill: resolveToken(node.plateColor, board.theme, board.theme.maskLight),
-      plateBorder: resolveToken(node.plateBorder, board.theme, SILK)
-    });
+    /** `lift` brightens the title along the room's ramp — the nameplate half of the text pulse. */
+    const nameStyleFor = (node: BoardNode, lift = 0) => {
+      const base = resolveToken(node.textColor, board.theme);
+      return {
+        color: lift > 0 ? brighten(base, lift, board.theme) : base,
+        stroke: node.textStroke ? resolveToken(node.textStroke, board.theme, COPPER_DARK) : null,
+        plateFill: resolveToken(node.plateColor, board.theme, board.theme.maskLight),
+        plateBorder: resolveToken(node.plateBorder, board.theme, SILK_HEX)
+      };
+    };
 
     /** Put a node's sprite where the board data says it belongs. */
     const placeSprite = (nodeId: string): void => {
       const node = nodeById(nodeId);
       const sprite = spriteById.get(nodeId);
       if (!node || !sprite) return;
-      sprite.x = node.pos.x * TILE;
-      sprite.y = node.pos.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined, titleSize(node));
+      const off = textureOffset(displayOf(node).name ? node.name : undefined, titleSize(node), node.frame);
+      sprite.x = node.pos.x * TILE - off.x;
+      sprite.y = node.pos.y * TILE - off.y;
     };
 
     /** Redraw one node's texture from whatever images it currently has. */
-    const drawNode = (nodeId: string): void => {
+    const drawNode = (nodeId: string, textLift = 0): void => {
       const node = nodeById(nodeId);
       const sprite = spriteById.get(nodeId);
       if (!node || !sprite || !sprites) return;
@@ -574,7 +581,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         face: show.thumbnail ? faces.get(nodeId)?.image ?? null : null,
         logo: show.logo ? logos.get(nodeId)?.image ?? null : null,
         nameSize: titleSize(node),
-        nameStyle: nameStyleFor(node),
+        frame: node.frame,
+        priority: node.priority,
+        maskDark: board.theme.maskDark,
+        nameStyle: nameStyleFor(node, node.textGlow ? textLift : 0),
         suffix: show.name ? roomSuffixFor(node) : null
       });
       placeSprite(nodeId);
@@ -692,13 +702,15 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     };
 
     const buildNodes = (): void => {
-      if (!nodeLayer || !decorLayer || !sprites) return;
+      if (!nodeLayer || !decorLayer || !partLayer || !sprites) return;
       clearLayer(nodeLayer);
       clearLayer(decorLayer);
+      clearLayer(partLayer);
       spriteById.clear();
 
       placeholderCount = 0;
       animated.length = 0;
+      glowingPlates = [];
       for (const node of board.nodes) {
         if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
         const key = spriteKeyOf(node);
@@ -706,9 +718,16 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
         const sprite = new Sprite(sprites.get(key) ?? undefined);
         sprite.roundPixels = true;
-        // A backdrop is a node in every other respect — selectable in Edit Board mode, movable,
-        // resizable, undoable — it just lives at the bottom of the stack.
-        (node.kind === 'decor.image' ? decorLayer : nodeLayer).addChild(sprite);
+        /*
+         * Three layers, by kind. A backdrop is scenery and goes to the bottom; a part is furniture
+         * screwed through the board and goes on top of everything mounted to it; a component goes
+         * in between. All three are nodes in every other respect — selectable in Edit Board mode,
+         * movable, resizable, undoable.
+         */
+        const layer = node.kind === 'decor.image' ? decorLayer
+          : node.kind === 'decor.part' ? partLayer
+            : nodeLayer;
+        layer.addChild(sprite);
         spriteById.set(node.id, sprite);
         drawNode(node.id);
         loadImages(node);
@@ -717,6 +736,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           const frames = sprites.frameCountFor(key);
           if (frames > 1) animated.push({ nodeId: node.id, key, frames });
         }
+        if (node.textGlow && displayOf(node).name) glowingPlates.push(node.id);
       }
 
       // Drop cached images for nodes that no longer exist, so a long editing session does not
@@ -725,11 +745,25 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       for (const store of [faces, logos]) {
         for (const id of [...store.keys()]) if (!alive.has(id)) store.delete(id);
       }
+      /*
+       * Reconcile the glow cycles against what the board now says.
+       *
+       * Both directions matter and only one of them used to happen. Dropping a cycle when the
+       * node is gone or its glow is off was here; BUILDING one when the glow was just switched on
+       * was not, because that only happened when a mosaic arrived — and `loadImages` skips the
+       * fetch when the image has not changed, which is precisely the case when you tick a box.
+       */
       for (const id of [...glows.keys()]) {
         const node = nodeById(id);
-        // Dropped when the node is gone, and also when its glow was switched off — otherwise the
-        // ticker would keep animating a node the board no longer says should move.
         if (!alive.has(id) || !node?.pulseGlow) glows.delete(id);
+      }
+      for (const node of board.nodes) {
+        if (!node.pulseGlow || glows.has(node.id)) continue;
+        if (live.current.reducedMotion) continue;
+        const face = faces.get(node.id)?.image;
+        if (!face) continue; // The image is still loading; its own arrival will build the cycle.
+        const frames = buildGlowFrames(face, board.theme);
+        if (frames.length) glows.set(node.id, frames);
       }
     };
 
@@ -743,6 +777,11 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     /** Text nodes whose glow is on, so the ticker knows which ones to re-render. */
     let glowingNotes: string[] = [];
+    /**
+     * Nodes whose NAMEPLATE pulses. Separate from `glowingNotes` because a nameplate is part of a
+     * component's texture and a note is its own sprite, so they are redrawn by different code.
+     */
+    let glowingPlates: string[] = [];
 
     const buildNotes = (glowStep = 0): void => {
       if (!noteLayer) return;
@@ -954,7 +993,12 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         /*
          * Layers 1-7, in paint order.
          *
-         * backdrops -> copper -> zones -> COURIERS -> components -> printed notes -> grid -> overlays.
+         * backdrops -> copper -> zones -> COURIERS -> components -> PARTS -> notes -> grid -> overlays.
+         *
+         * `decor.part` sits above the components, not among them. William: "aesthetic elements
+         * should be rendered OVER / on top of the board so mini robots pass UNDER the '+' box
+         * aesthetic elements used on the board." A via screwed through the board is on top of
+         * everything mounted to it, and a courier walking past goes underneath.
          *
          * `decor.image` sits at the very bottom, above the substrate and below the wiring: it is
          * scenery the board is built on top of, so a trace running across it should be visible,
@@ -971,6 +1015,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         zoneLayer = new Container(); world.addChild(zoneLayer);
         couriers = new CourierLayer(); world.addChild(couriers.container);
         nodeLayer = new Container(); world.addChild(nodeLayer);
+        partLayer = new Container(); world.addChild(partLayer);
         noteLayer = new Container(); world.addChild(noteLayer);
         gridLayer = new Container(); world.addChild(gridLayer);
         overlayLayer = new Container(); world.addChild(overlayLayer);
@@ -1107,12 +1152,20 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
            * handful of text nodes and the glyphs are cached by the silkscreen renderer — and it
            * keeps one code path for "draw the notes" instead of two that can disagree.
            */
-          if (glowingNotes.length && !live.current.reducedMotion) {
-            const step = Math.floor(pulse / 12) % 4;
-            const lift = step === 3 ? 1 : step === 0 ? 2 : step === 1 ? 1 : 0;
+          /*
+           * The text pulse, for notes AND nameplates.
+           *
+           * Six steps rather than four, and the excursion runs the full 0-2-0: the first version
+           * spent half its cycle at lift 1 and read as a flicker rather than a pulse. Two rungs of
+           * a six-colour ramp is as much brightness as this palette has to give.
+           */
+          if ((glowingNotes.length || glowingPlates.length) && !live.current.reducedMotion) {
+            const step = Math.floor(pulse / 10) % 6;
+            const lift = [0, 1, 2, 2, 1, 0][step] ?? 0;
             if (lift !== lastTextGlow) {
               lastTextGlow = lift;
-              buildNotes(lift);
+              if (glowingNotes.length) buildNotes(lift);
+              for (const id of glowingPlates) drawNode(id, lift);
             }
           }
 

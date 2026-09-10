@@ -23,17 +23,18 @@
       "name": "BACKDROP DEMO",
       "pos": {
         "x": 27,
-        "y": 16
+        "y": 15
       },
       "footprint": {
-        "w": 10,
-        "h": 8
+        "w": 14,
+        "h": 11
       },
       "image": "C:/dev/SkynetOS/assets/sprites/circuittry.jpg",
       "showName": false,
       "showDesignator": false,
       "notes": "decor.image: a picture drawn behind everything, resizable like any other node. Delete it, repoint it, or drag it wherever you like — it never collides and never steals a click while you are browsing.",
-      "pulseGlow": true
+      "pulseGlow": true,
+      "frame": "dip"
     },
     {
       "id": "u1_jarvis",
@@ -57,16 +58,22 @@
         "creative",
         "jarvis"
       ],
-      "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-sprite.png"
+      "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-sprite.png",
+      "footprint": {
+        "w": 11,
+        "h": 6
+      },
+      "frame": "quad",
+      "priority": 3
     },
     {
       "id": "u3_jarvis_hands",
       "designator": "U3",
       "kind": "agent.code",
-      "name": "JARVIS-HANDS",
+      "name": "JARVIS-PRIME",
       "pos": {
-        "x": 39,
-        "y": 19
+        "x": 42,
+        "y": 15
       },
       "cwd": "C:/dev",
       "launch": "popout",
@@ -79,7 +86,7 @@
         "hands"
       ],
       "notes": "The Hands of JARVIS. The Face (U1) thinks and cannot see this disk; this chip is how its decisions become real. Same identity, same codex, same persona.",
-      "image": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/circuit-board-garden-stockcake.jpg",
       "prelaunch": [
         "claude",
         "git-fetch",
@@ -97,9 +104,14 @@
         "C:/"
       ],
       "footprint": {
-        "w": 4,
-        "h": 4
-      }
+        "w": 6,
+        "h": 7
+      },
+      "textGlow": true,
+      "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg",
+      "pulseGlow": true,
+      "frame": "castellated",
+      "priority": 2
     },
     {
       "id": "d1_minecraftos",
@@ -123,7 +135,9 @@
       ],
       "image": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg",
       "showDesignator": false,
-      "size": 22
+      "size": 22,
+      "frame": "socket",
+      "priority": 2
     },
     {
       "id": "d2_deductionos",
@@ -134,11 +148,7 @@
       "boardFile": "deductionos/room.board.json",
       "pos": {
         "x": 25,
-        "y": 8
-      },
-      "footprint": {
-        "w": 6,
-        "h": 4
+        "y": 7
       },
       "tags": [
         "learning",
@@ -146,7 +156,10 @@
         "memory"
       ],
       "image": "C:/dev/SkynetOS/assets/sprites/deduction-bg.jpg",
-      "size": 22
+      "size": 22,
+      "showDesignator": false,
+      "frame": "socket",
+      "priority": 2
     },
     {
       "id": "d3_storyos",
@@ -156,12 +169,8 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 18,
+        "x": 20,
         "y": 23
-      },
-      "footprint": {
-        "w": 6,
-        "h": 4
       },
       "tags": [
         "writing",
@@ -169,7 +178,10 @@
         "screenplay"
       ],
       "image": "C:/dev/SkynetOS/assets/sprites/writing-cover.jpg",
-      "size": 22
+      "size": 22,
+      "showDesignator": false,
+      "frame": "socket",
+      "priority": 2
     },
     {
       "id": "d4_gameos",
@@ -179,12 +191,8 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 26,
+        "x": 27,
         "y": 29
-      },
-      "footprint": {
-        "w": 6,
-        "h": 4
       },
       "tags": [
         "truthquestretro",
@@ -192,7 +200,10 @@
         "handheld"
       ],
       "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
-      "size": 22
+      "size": 22,
+      "showDesignator": false,
+      "frame": "socket",
+      "priority": 2
     },
     {
       "id": "u2_agent_skynet",
@@ -200,12 +211,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 44,
-        "y": 21
-      },
-      "footprint": {
-        "w": 3,
-        "h": 3
+        "x": 42,
+        "y": 24
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
@@ -228,7 +235,10 @@
         "docs/DECISIONS.md"
       ],
       "initialPrompt": "You are the SkynetOS architect. This repo is the board you are looking at: the app renders board/*.json and every node on it is bound to something real on this disk. Hold the seven prime directives in CLAUDE.md as constraints, not suggestions — especially \"bind to reality\" and \"data before pixels\". handoff.md is the state of play; docs/06-ROADMAP.md is what comes next.",
-      "logo": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg"
+      "logo": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg",
+      "showLogo": false,
+      "frame": "dip",
+      "priority": 1
     },
     {
       "id": "s1_repo_skynet",
@@ -236,8 +246,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 44,
-        "y": 27
+        "x": 37,
+        "y": 30
       },
       "footprint": {
         "w": 4,
@@ -252,7 +262,9 @@
         "claude",
         "git-fetch",
         "git-status"
-      ]
+      ],
+      "frame": "tabs",
+      "priority": 1
     },
     {
       "id": "m1_psu",
@@ -260,15 +272,17 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 34,
-        "y": 8
+        "x": 35,
+        "y": 7
       },
       "footprint": {
         "w": 4,
         "h": 4
       },
       "image": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg",
-      "showDesignator": false
+      "showDesignator": false,
+      "frame": "rails",
+      "priority": 1
     },
     {
       "id": "n1_title",
@@ -289,10 +303,10 @@
       "kind": "note.silk",
       "name": "jarvis label",
       "pos": {
-        "x": 36,
-        "y": 17
+        "x": 28,
+        "y": 24
       },
-      "text": "U1  -  PRIMARY JURISDICTION: ALL",
+      "text": "PRIMARY JURISDICTION: ALL",
       "size": 11,
       "footprint": {
         "w": 1,
@@ -310,16 +324,18 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 48,
-        "y": 23
+        "x": 45,
+        "y": 30
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 3,
+        "h": 3
       },
       "url": "https://github.com/WilliamFischer02/SkynetOS",
       "image": "C:/dev/SkynetOS/assets/sprites/github.jpg",
-      "showDesignator": false
+      "showDesignator": false,
+      "frame": "fingers",
+      "priority": 1
     },
     {
       "id": "t1_nightly",
@@ -327,8 +343,8 @@
       "kind": "task.scheduled",
       "name": "Nightly journal",
       "pos": {
-        "x": 40,
-        "y": 14
+        "x": 44,
+        "y": 12
       },
       "footprint": {
         "w": 2,
@@ -382,7 +398,7 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 36,
+        "x": 30,
         "y": 23
       },
       "part": "via",
@@ -454,8 +470,8 @@
       "kind": "decor.part",
       "name": "LED WARN",
       "pos": {
-        "x": 45,
-        "y": 19
+        "x": 47,
+        "y": 21
       },
       "part": "led_warn",
       "showName": false,
@@ -466,8 +482,8 @@
       "kind": "decor.part",
       "name": "LED IDLE",
       "pos": {
-        "x": 40,
-        "y": 27
+        "x": 38,
+        "y": 25
       },
       "part": "led_idle",
       "showName": false,
@@ -526,8 +542,8 @@
       "kind": "decor.part",
       "name": "CAP",
       "pos": {
-        "x": 37,
-        "y": 27
+        "x": 40,
+        "y": 28
       },
       "part": "cap",
       "showName": false,

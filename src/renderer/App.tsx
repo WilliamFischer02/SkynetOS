@@ -241,6 +241,25 @@ export function App(): React.JSX.Element {
       {/* Top-left, under the breadcrumb: what this is costing, measured off disk. */}
       <UsageMeter />
 
+      {/*
+        * The "+" box. William: "while in board edit mode those / any and all aesthetic
+        * preconstructed assets should be available to add via a '+' box somewhere on screen."
+        *
+        * `N` already opened the palette, but a keyboard shortcut is not discoverable and this is a
+        * thing you reach for repeatedly while dressing a board. It only exists in Edit Board mode,
+        * because placing a component is an edit.
+        */}
+      {editMode && !paletteOpen ? (
+        <button
+          type="button"
+          className="add-fab"
+          onClick={() => setPaletteOpen(true)}
+          title="Add a component or a board part (N)"
+        >
+          +
+        </button>
+      ) : null}
+
       <AddPalette />
       <Mailbox />
 

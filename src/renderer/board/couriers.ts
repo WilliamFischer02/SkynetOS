@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
-import { COPPER, COPPER_DARK, SILK, hexToNumber } from '@shared/palette.js';
+import { COPPER, COPPER_DARK, hexToNumber } from '@shared/palette.js';
 import { TILE } from './camera.js';
 
 /**
@@ -58,36 +58,102 @@ interface Courier {
   sprite: Sprite;
   /** Animation phase, so legs do not all move in lockstep. */
   phase: number;
+  /** Amplitude and phase of this individual's drift off the straight line. */
+  wobble: number;
+  wobblePhase: number;
+  /** Which of the three body silvers this one is, so a crowd is not one stamp repeated. */
+  shade: number;
 }
 
 /** Frames the glitch-dissolve takes. Four steps, each a whole frame, no partial alpha. */
 const DECAY_FRAMES = 8;
 
-/** Never more than this walking at once, however busy the board is. Past this it is noise. */
-const MAX_COURIERS = 90;
+/**
+ * Never more than this walking at once, however busy the board is.
+ *
+ * Doubled from 90 with the spawn rate, on request. The cap has to move with the rate or the extra
+ * couriers are simply never born on a busy board — a rate ceiling and a population ceiling are the
+ * same ceiling wearing two hats.
+ */
+const MAX_COURIERS = 180;
 
 /**
- * A courier's colour, derived from the node id.
+ * How far a courier drifts off the straight line, in world pixels.
  *
- * Deterministic, so a node keeps its colour across restarts and you can learn it. Chosen from a
- * fixed list of palette-legal hues rather than generated, because "any hue" is how a six-colour
- * board turns into a rainbow — docs/02 §Anti-mush rule 2.
+ * William: "add a variance / slight path wobble." Without it a route is a single-pixel queue and
+ * twice as many couriers just makes the queue denser rather than making it look like traffic. The
+ * wobble is a slow sine across the whole journey, with its own phase per individual, so a column
+ * fans out and re-converges at the destination instead of marching in file.
+ *
+ * Applied on the axis PERPENDICULAR to the current leg, and rounded — the walk stays orthogonal
+ * and on whole pixels, which is the rule the copper follows and the reason the board does not
+ * shimmer.
  */
-const COURIER_COLORS = [
-  '#7fe0b0', // signal green
-  '#c08a3e', // copper
-  '#e9e4d6', // silk
-  '#57c25a', // ok green
-  '#e0a22e', // warn amber
-  '#8ab6d6', // sky
-  '#c98ad6', // orchid
-  '#d67f7f'  // clay
+const WOBBLE_PX = 5;
+
+/**
+ * ── Colour: every robot is silver; its DESTINATION is in the outline ─────────────────────────
+ *
+ * William: "make the robots all a silver / gray color and instead make their unique colors their
+ * stroke color, mixed with black to make the stroke color darker."
+ *
+ * This is better than what it replaced in more than one way. The old version gave each destination
+ * a saturated body colour, which put eight bright hues on a six-colour board and made the courier
+ * layer the loudest thing on screen — louder than the components it was reporting on. A silver body
+ * with a dark coloured edge reads as a machine carrying a tag, the traffic recedes to where it
+ * belongs, and the per-destination identity survives intact because an outline at 6px is still
+ * perfectly legible as colour.
+ *
+ * ── The one place the six-colour rule is relaxed, and why ────────────────────────────────────
+ *
+ * docs/02 caps a frame at six palette colours. The courier layer exceeds that: there are more
+ * destinations on a busy board than the palette has entries, and per-destination identity is the
+ * entire feature. It is a deliberate, scoped exception — 6x8px sprites, one layer, everything
+ * derived from palette entries by darkening rather than invented — and it is written down here
+ * rather than left to be discovered.
+ */
+
+/**
+ * Three silvers, so a column of couriers is not eight identical stamps.
+ *
+ * William: "add a slight shade difference between each particle (robot) running along a path."
+ * Slight is the operative word: these are one and two steps toward copper-dark from silk, which is
+ * enough to break up a crowd and not enough to look like three different kinds of robot.
+ */
+const SHADES = ['#E9E4D6', '#D6CFBC', '#C3BBA4'] as const;
+
+const COURIER_HUES = [
+  '#7FE0B0', // signal green
+  '#C08A3E', // copper
+  '#57C25A', // ok green
+  '#E0A22E', // warn amber
+  '#8AB6D6', // sky
+  '#C98AD6', // orchid
+  '#D67F7F', // clay
+  '#7FBFD6'  // ice
 ] as const;
 
+/** Mix a colour toward black. 0 is unchanged, 1 is black. */
+function darken(hex: string, amount: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const mix = (c: number): number => Math.round(c * (1 - amount));
+  const r = mix((n >> 16) & 0xff);
+  const g = mix((n >> 8) & 0xff);
+  const b = mix(n & 0xff);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+/**
+ * A courier's OUTLINE colour, derived from the node id.
+ *
+ * Deterministic, so a destination keeps its colour across restarts and you learn it. Darkened
+ * heavily toward black: the outline has to sit against a silver body without competing with it,
+ * and a dark edge is what makes a 6px sprite read as drawn rather than as a smudge.
+ */
 export function courierColor(nodeId: string): string {
   let hash = 0;
   for (let i = 0; i < nodeId.length; i++) hash = (hash * 31 + nodeId.charCodeAt(i)) >>> 0;
-  return COURIER_COLORS[hash % COURIER_COLORS.length] as string;
+  return darken(COURIER_HUES[hash % COURIER_HUES.length] as string, 0.55);
 }
 
 /**
@@ -97,41 +163,53 @@ export function courierColor(nodeId: string): string {
  * per colour into textures and reused, because building a Graphics per courier per frame is how
  * a board with ninety of them stops being 60fps.
  */
-function buildWalkFrames(color: string): Texture[] {
+function buildWalkFrames(outline: string, body: string): Texture[] {
   const frames: Texture[] = [];
   for (let step = 0; step < 2; step++) {
+    // One pixel of margin all round, for the outline to live in.
     const canvas = document.createElement('canvas');
-    canvas.width = 6;
-    canvas.height = 8;
+    canvas.width = 8;
+    canvas.height = 10;
     const ctx = canvas.getContext('2d');
     if (!ctx) return frames;
     ctx.imageSmoothingEnabled = false;
 
-    // The packet, carried overhead. Copper: it is cargo, not part of the robot.
-    ctx.fillStyle = COPPER;
-    ctx.fillRect(1, 0, 4, 2);
-    ctx.fillStyle = COPPER_DARK;
-    ctx.fillRect(1, 1, 4, 1);
+    /*
+     * Drawn twice: the whole silhouette in the outline colour, one pixel bigger in every
+     * direction, then the body on top. The same eight-way stamp the text outline uses, and for
+     * the same reason — it is the only kind of outline made entirely of whole pixels.
+     */
+    const silhouette = (fill: string, ox: number, oy: number): void => {
+      ctx.fillStyle = fill;
+      // packet
+      ctx.fillRect(2 + ox, 1 + oy, 4, 2);
+      // head and body
+      ctx.fillRect(2 + ox, 3 + oy, 4, 1);
+      ctx.fillRect(2 + ox, 4 + oy, 4, 3);
+      // legs
+      if (step === 0) {
+        ctx.fillRect(2 + ox, 7 + oy, 1, 2);
+        ctx.fillRect(5 + ox, 7 + oy, 1, 1);
+      } else {
+        ctx.fillRect(2 + ox, 7 + oy, 1, 1);
+        ctx.fillRect(5 + ox, 7 + oy, 1, 2);
+      }
+    };
 
-    // Head and body in the destination's colour.
-    ctx.fillStyle = color;
-    ctx.fillRect(1, 2, 4, 1);
-    ctx.fillRect(1, 3, 4, 3);
-
-    // One lit eye, so it has a facing.
-    ctx.fillStyle = SILK;
-    ctx.fillRect(3, 3, 1, 1);
-
-    // Legs: swapped between the two frames. That swap is the entire walk cycle, and at 16px
-    // tiles it is all the animation a 6px figure can carry.
-    ctx.fillStyle = color;
-    if (step === 0) {
-      ctx.fillRect(1, 6, 1, 2);
-      ctx.fillRect(4, 6, 1, 1);
-    } else {
-      ctx.fillRect(1, 6, 1, 1);
-      ctx.fillRect(4, 6, 1, 2);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      silhouette(outline, dx as number, dy as number);
     }
+    silhouette(body, 0, 0);
+
+    // The packet is cargo, not part of the robot, so it keeps its own copper.
+    ctx.fillStyle = COPPER;
+    ctx.fillRect(2, 1, 4, 2);
+    ctx.fillStyle = COPPER_DARK;
+    ctx.fillRect(2, 2, 4, 1);
+
+    // One dark eye, so it has a facing.
+    ctx.fillStyle = outline;
+    ctx.fillRect(4, 4, 1, 1);
 
     const texture = Texture.from(canvas);
     texture.source.scaleMode = 'nearest';
@@ -147,7 +225,7 @@ function buildWalkFrames(color: string): Texture[] {
  * exact colours. It reads as a thing coming apart rather than a thing becoming transparent, which
  * is the difference between pixel art and a CSS transition.
  */
-function buildDissolveFrames(color: string): Texture[] {
+function buildDissolveFrames(outline: string, body: string): Texture[] {
   const frames: Texture[] = [];
   const patterns = [
     [[0, 0], [3, 2], [1, 5]],
@@ -158,21 +236,21 @@ function buildDissolveFrames(color: string): Texture[] {
 
   for (let step = 0; step < patterns.length; step++) {
     const canvas = document.createElement('canvas');
-    canvas.width = 6;
-    canvas.height = 8;
+    canvas.width = 8;
+    canvas.height = 10;
     const ctx = canvas.getContext('2d');
     if (!ctx) return frames;
     ctx.imageSmoothingEnabled = false;
 
-    ctx.fillStyle = color;
-    ctx.fillRect(1, 2, 4, 4);
-    ctx.fillStyle = SILK;
-    ctx.fillRect(3, 3, 1, 1);
+    ctx.fillStyle = outline;
+    ctx.fillRect(1, 2, 6, 6);
+    ctx.fillStyle = body;
+    ctx.fillRect(2, 3, 4, 4);
 
     // Punch out everything this step and every step before it, so the decay accumulates.
     ctx.globalCompositeOperation = 'destination-out';
     for (let s = 0; s <= step; s++) {
-      for (const [x, y] of patterns[s] ?? []) ctx.fillRect(x as number, y as number, 1, 1);
+      for (const [x, y] of patterns[s] ?? []) ctx.fillRect((x as number) + 1, (y as number) + 1, 1, 1);
     }
     ctx.globalCompositeOperation = 'source-over';
 
@@ -210,19 +288,29 @@ export class CourierLayer {
     for (const key of [...this.owed.keys()]) if (!live.has(key)) this.owed.delete(key);
   }
 
-  private framesFor(color: string, kind: 'walk' | 'dissolve'): Texture[] {
+  /**
+   * Textures are cached per (outline, shade) pair, not per courier.
+   *
+   * Eight destinations times three silvers is twenty-four walk cycles for a whole board — built
+   * once and shared by every individual. Building a Graphics per courier per frame is how a board
+   * with a hundred and eighty of them stops being 60fps.
+   */
+  private framesFor(outline: string, shade: number, kind: 'walk' | 'dissolve'): Texture[] {
     const store = kind === 'walk' ? this.walkFrames : this.dissolveFrames;
-    let frames = store.get(color);
+    const body = SHADES[shade % SHADES.length] as string;
+    const key = `${outline}|${body}`;
+    let frames = store.get(key);
     if (!frames) {
-      frames = kind === 'walk' ? buildWalkFrames(color) : buildDissolveFrames(color);
-      store.set(color, frames);
+      frames = kind === 'walk' ? buildWalkFrames(outline, body) : buildDissolveFrames(outline, body);
+      store.set(key, frames);
     }
     return frames;
   }
 
   private spawn(route: CourierRoute): void {
     if (this.couriers.length >= MAX_COURIERS) return;
-    const frames = this.framesFor(route.color, 'walk');
+    const shade = Math.floor(Math.random() * SHADES.length);
+    const frames = this.framesFor(route.color, shade, 'walk');
     if (!frames.length) return;
 
     const sprite = new Sprite(frames[0]);
@@ -238,7 +326,12 @@ export class CourierLayer {
       decay: 0,
       horizontalFirst: Math.random() < 0.5,
       sprite,
-      phase: Math.floor(Math.random() * 8)
+      phase: Math.floor(Math.random() * 8),
+      // Signed, so half of them drift one way and half the other and the column fans out rather
+      // than bulging to one side.
+      wobble: (Math.random() * 2 - 1) * WOBBLE_PX,
+      wobblePhase: Math.random() * Math.PI * 2,
+      shade
     });
   }
 
@@ -255,7 +348,8 @@ export class CourierLayer {
     // that a project with 2% of the traffic still sends one every few seconds instead of never.
     if (spawnScale > 0) {
       for (const route of this.routes) {
-        const perFrame = (route.share * 6 * spawnScale) / 60;
+        // Doubled on request: twice as many bots for the same measured traffic.
+        const perFrame = (route.share * 12 * spawnScale) / 60;
         const owed = (this.owed.get(route.nodeId) ?? 0) + perFrame;
         const whole = Math.floor(owed);
         this.owed.set(route.nodeId, owed - whole);
@@ -286,10 +380,22 @@ export class CourierLayer {
           y = courier.t < 0.5 ? from.y + (to.y - from.y) * (courier.t * 2) : to.y;
         }
 
-        courier.sprite.x = Math.round(x) - 3;
-        courier.sprite.y = Math.round(y) - 4;
+        /*
+         * The wobble, on the axis perpendicular to the leg being walked.
+         *
+         * `sin(t * 2pi + phase)` is a single slow excursion across the whole journey rather than a
+         * jitter, and it is scaled down to nothing at both ends — so couriers leave the source and
+         * arrive at the destination on the line, and only wander in between. Rounded, because the
+         * board is whole pixels.
+         */
+        const taper = Math.sin(courier.t * Math.PI); // 0 at both ends, 1 in the middle
+        const drift = Math.round(courier.wobble * taper * Math.sin(courier.t * Math.PI * 2 + courier.wobblePhase));
+        const onHorizontalLeg = courier.horizontalFirst ? courier.t < 0.5 : courier.t >= 0.5;
 
-        const walk = this.framesFor(courier.route.color, 'walk');
+        courier.sprite.x = Math.round(x) + (onHorizontalLeg ? 0 : drift) - 4;
+        courier.sprite.y = Math.round(y) + (onHorizontalLeg ? drift : 0) - 5;
+
+        const walk = this.framesFor(courier.route.color, courier.shade, 'walk');
         const step = Math.floor((this.frame + courier.phase) / 6) % 2;
         if (walk[step]) courier.sprite.texture = walk[step];
 
@@ -299,7 +405,7 @@ export class CourierLayer {
       }
 
       // Dissolving.
-      const dissolve = this.framesFor(courier.route.color, 'dissolve');
+      const dissolve = this.framesFor(courier.route.color, courier.shade, 'dissolve');
       const index = Math.min(dissolve.length - 1, Math.floor((courier.decay / DECAY_FRAMES) * dissolve.length));
       if (dissolve[index]) courier.sprite.texture = dissolve[index];
       courier.decay++;
@@ -354,11 +460,18 @@ export function courierSource(
   return distances[0]?.point ?? { x: 0, y: 0 };
 }
 
-/** A debug grid of every courier colour, for the asset catalogue. Not used at runtime. */
+/** Every outline colour a destination can be given, darkened exactly as `courierColor` does it. */
+export const COURIER_OUTLINES: readonly string[] = COURIER_HUES.map((hue) => darken(hue, 0.55));
+
+/** A debug grid of every courier outline, for the asset catalogue. Not used at runtime. */
 export function courierPalettePreview(): Graphics {
   const g = new Graphics();
-  COURIER_COLORS.forEach((color, i) => {
+  COURIER_OUTLINES.forEach((color, i) => {
     g.rect(i * 8, 0, 6, 6);
+    g.fill({ color: hexToNumber(color) });
+  });
+  SHADES.forEach((color, i) => {
+    g.rect(i * 8, 8, 6, 6);
     g.fill({ color: hexToNumber(color) });
   });
   return g;

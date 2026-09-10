@@ -824,3 +824,88 @@ bare `96M` if you would rather state the budget. It echoes back what it understo
 commit, and says so plainly when it understood nothing rather than picking something. It also
 offers the account's own measured peak as a budget, which is the one figure that is not an estimate
 at all.
+
+## 2026-09-10 — Why the two glow checkboxes did nothing
+
+Reported: "the pulse glow and text glow checkboxes don't appear to do anything right now." Both were
+real bugs and both were the same shape — a feature wired to the wrong event.
+
+**`pulseGlow`** built its frames only inside the `.then()` of a mosaic fetch. `loadImages` skips
+that fetch when the image key (`source@WxH`) is unchanged — which is exactly the case when you tick
+a checkbox. So the glow only ever worked on a node that already had it set the first time its image
+was fetched, which the seeded board happened to cover and no edit ever could. Glows are now
+reconciled against the board on every rebuild, in both directions.
+
+**`textGlow`** was read by the note layer and by nothing else, so ticking it on a component — where
+the field was offered, and where William ticked it — was a control that silently did nothing. It
+now drives nameplates too, through a separate list because a nameplate is part of a component's
+texture and a note is its own sprite.
+
+The pulse itself was also too timid: four steps that spent half the cycle at one rung. Six steps
+running the full 0-2-0 excursion, which is as much brightness as a six-colour ramp has to give.
+
+## 2026-09-10 — The camera gets slack on every side
+
+`clampCamera` pinned the board's edge to the viewport's exactly. A component near an edge could
+never be brought to the middle of the screen to work on, and with the inspector open a node on the
+right edge could not be brought out from under it at all.
+
+`PAN_MARGIN` is eight tiles of deliberate overscroll in every direction. In WORLD pixels, not
+screen: the same slack at 2x and 4x, where a screen-pixel margin would give four times as much room
+to get lost in at the lowest zoom. Slack, not freedom — the board is always still there when you
+stop panning.
+
+## 2026-09-10 — Frames and priority: dressing a node
+
+**Frames.** The copper-leg effect was `legs()` on a `dip` silhouette: available only to
+`agent.code`, and only when the node had no wallpaper, because a face image replaced the drawn
+package entirely. `frame` makes it a styling choice independent of both — nine variants (dip, quad,
+bga, fingers, tabs, rails, socket, castellated) drawn in a margin OUTSIDE the footprint, the way the
+nameplate is. A framed node is not a bigger node; collision and routing still run on the grid the
+board file describes.
+
+**Priority as height.** Each level is two pixels of long shadow cast down and to the right, drawn
+behind the body. Every layer is mask-dark, with a single copper-dark pixel line down the lit edges
+of the nearest one. A first attempt made the nearest layer copper-dark throughout and the stack read
+as a copper slab the component was sitting on — protruded rather than raised, which is the one thing
+William asked it not to be. One pixel says "this has a side"; anything more is a plinth.
+
+The editor control is a slider with a live preview of the actual stack, because you are choosing a
+height rather than entering a value.
+
+## 2026-09-10 — Couriers: silver bodies, coloured edges, and twice as many
+
+**Colour.** Every robot is silver now, and its destination is in the OUTLINE, darkened 55% toward
+black. The old version gave each destination a saturated body colour, which put eight bright hues on
+a six-colour board and made the courier layer louder than the components it was reporting on. A
+silver body with a dark coloured edge reads as a machine carrying a tag; per-destination identity
+survives because an outline at 6px is still perfectly legible as colour.
+
+Three silvers rather than one, so a crowd is not one stamp repeated. Textures are cached per
+(outline, shade) pair — twenty-four cycles for a whole board, not one per courier.
+
+**Doubled**, with the population cap doubled too: a rate ceiling and a population ceiling are the
+same ceiling wearing two hats, and raising only one means the extra couriers are never born.
+
+**Wobble.** A slow sine across the whole journey, per-individual phase, applied perpendicular to the
+leg being walked and tapered to zero at both ends — so couriers leave and arrive on the line and
+only wander in between. Rounded, so the walk stays orthogonal and on whole pixels.
+
+**The six-colour exception.** docs/02 caps a frame at six palette colours and this layer exceeds it:
+there are more destinations on a busy board than the palette has entries, and per-destination
+identity is the entire feature. Deliberate, scoped to 6x8px sprites in one layer, everything derived
+from palette entries by darkening rather than invented — and written down rather than left to be
+discovered.
+
+## 2026-09-10 — Parts render above the components
+
+`decor.part` moved to its own layer above `nodeLayer`. William: "aesthetic elements should be
+rendered OVER / on top of the board so mini robots pass UNDER the '+' box aesthetic elements." A via
+screwed through the board is on top of everything mounted to it, and a courier walking past goes
+underneath. Paint order is now backdrops -> copper -> zones -> couriers -> components -> parts ->
+notes -> grid -> overlays.
+
+The **"+" box** is a persistent way into that palette while editing. `N` already opened it, but a
+keyboard shortcut is not discoverable and dressing a board means reaching for it repeatedly. It
+lives at the middle of the left edge: bottom-left put it straight through the session dock, whose
+height depends on how many sessions are running, so no fixed offset clears it.

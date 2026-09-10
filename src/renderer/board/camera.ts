@@ -63,17 +63,36 @@ export function boardPixelSize(grid: { width: number; height: number }): { width
  * it on that axis rather than pinning it to the origin — an under-filled window should look like
  * a board sitting on a bench, not a board jammed into a corner.
  */
+/**
+ * How far past each edge of a board the camera may go, in world pixels.
+ *
+ * William: "the camera constraints are a little too tight and margin for movement / navigation
+ * needs to be added to each room and board on every side so the user can move the viewport around
+ * more freely."
+ *
+ * The old clamp pinned the board's edge to the viewport's, so a component near an edge could never
+ * be brought to the middle of the screen to work on — and with the inspector open, a node on the
+ * right edge could not be brought out from under it at all. Eight tiles is enough to centre
+ * anything and still little enough that you cannot lose the board off-screen.
+ */
+export const PAN_MARGIN = 8 * TILE;
+
 export function clampCamera(cam: Camera, board: { width: number; height: number }, view: Viewport): Camera {
   const visibleW = view.width / cam.zoom;
   const visibleH = view.height / cam.zoom;
 
-  const x = board.width <= visibleW
+  /*
+   * The margin is in WORLD pixels, so it is a fixed amount of board rather than a fixed amount of
+   * screen: the same eight tiles of slack at 2x and at 4x. A margin in screen pixels would give
+   * you four times as much room to get lost in at the lowest zoom.
+   */
+  const x = board.width + PAN_MARGIN * 2 <= visibleW
     ? (board.width - visibleW) / 2
-    : Math.min(Math.max(cam.x, 0), board.width - visibleW);
+    : Math.min(Math.max(cam.x, -PAN_MARGIN), board.width - visibleW + PAN_MARGIN);
 
-  const y = board.height <= visibleH
+  const y = board.height + PAN_MARGIN * 2 <= visibleH
     ? (board.height - visibleH) / 2
-    : Math.min(Math.max(cam.y, 0), board.height - visibleH);
+    : Math.min(Math.max(cam.y, -PAN_MARGIN), board.height - visibleH + PAN_MARGIN);
 
   return { x, y, zoom: cam.zoom };
 }

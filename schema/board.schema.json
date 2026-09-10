@@ -506,6 +506,26 @@
           "type": "boolean",
           "default": false,
           "description": "Pulse the text brighter and back along the room's own colour ramp. Off under reducedMotion."
+        },
+        "frame": {
+          "enum": [
+            "none",
+            "dip",
+            "quad",
+            "bga",
+            "fingers",
+            "tabs",
+            "rails",
+            "socket",
+            "castellated"
+          ],
+          "description": "The copper that hangs off the edge of this node — pin legs, connector fingers, mounting tabs, a socket ring, a pad array. Drawn in a margin OUTSIDE the footprint, like the nameplate, so collision and routing are unaffected."
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "How important this node is, shown as physical height: each level is two pixels of long shadow cast down and to the right. 0 is flat, 5 sits ten pixels proud. Deliberately thin — it is a hierarchy cue, not a skyline."
         }
       },
       "allOf": [

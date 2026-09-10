@@ -17,8 +17,21 @@ const minecraft = JSON.parse(readFileSync(join(process.cwd(), 'board', 'minecraf
 
 describe('nodeRect', () => {
   it('places a node at 16px per tile', () => {
+    /*
+     * Derived from the node, not hard-coded. An earlier version pinned u1_jarvis at tile 28,17 and
+     * broke the moment the node was dragged somewhere else on a real board — a test asserting on
+     * this developer's current layout rather than on the rule it is supposed to hold.
+     */
     const jarvis = root.nodes.find((n) => n.id === 'u1_jarvis')!;
-    expect(nodeRect(jarvis)).toEqual({ nodeId: 'u1_jarvis', kind: 'agent.jarvis', x: 28 * 16, y: 17 * 16, w: 8 * 16, h: 6 * 16 });
+    const fp = jarvis.footprint ?? { w: 8, h: 6 };
+    expect(nodeRect(jarvis)).toEqual({
+      nodeId: 'u1_jarvis',
+      kind: 'agent.jarvis',
+      x: jarvis.pos.x * 16,
+      y: jarvis.pos.y * 16,
+      w: fp.w * 16,
+      h: fp.h * 16
+    });
   });
 
   it('falls back to the kind default when no footprint is declared', () => {
