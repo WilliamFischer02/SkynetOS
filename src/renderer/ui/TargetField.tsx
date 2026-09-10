@@ -83,9 +83,11 @@ export function TargetField({ field, value, context, onChange, disabled }: Targe
 
   return (
     <div className="field">
-      <label className="field-label" htmlFor={`f-${String(field.key)}`}>
+      {/* Help is a tooltip here too — see NodeEditor for why the paragraphs came out. */}
+      <label className="field-label" htmlFor={`f-${String(field.key)}`} title={field.help ?? field.label}>
         {field.label}
         {field.required ? <span className="req" title="Required by the schema"> *</span> : null}
+        {field.help ? <span className="field-hint" aria-hidden="true">?</span> : null}
       </label>
 
       <div className="field-row">
@@ -121,7 +123,6 @@ export function TargetField({ field, value, context, onChange, disabled }: Targe
       ) : null}
 
       {note ? <div className="field-note">{note}</div> : null}
-      {field.help ? <div className="field-help">{field.help}</div> : null}
     </div>
   );
 }

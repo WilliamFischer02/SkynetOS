@@ -179,9 +179,19 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
 
         return (
           <div className="field" key={String(field.key)}>
-            <label className="field-label" htmlFor={`f-${String(field.key)}`}>
+            {/*
+              * The help text lives in the tooltip, not under the field.
+              *
+              * Every field carrying a paragraph turned the editor into a wall of prose you had to
+              * scroll past to reach the next input — and after the second read you are not reading
+              * it, you are scrolling around it. The `?` says there is more to know; hovering says
+              * what. The label itself carries the same tooltip, so you do not have to hit a 6px
+              * target to get it.
+              */}
+            <label className="field-label" htmlFor={`f-${String(field.key)}`} title={field.help ?? field.label}>
               {field.label}
               {field.required ? <span className="req" title="Required by the schema"> *</span> : null}
+              {field.help ? <span className="field-hint" aria-hidden="true">?</span> : null}
             </label>
 
             {field.control === 'boolean' ? (
@@ -271,7 +281,6 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
               />
             )}
 
-            {field.help ? <div className="field-help">{field.help}</div> : null}
           </div>
         );
       })}

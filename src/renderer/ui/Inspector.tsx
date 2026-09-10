@@ -5,6 +5,7 @@ import { isBroken, type TargetInfo } from '@shared/targets.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { NodeEditor } from './NodeEditor.js';
 import { formatBytes, relativeTime } from './TargetField.js';
+import { formatTokens } from '@shared/usage.js';
 
 /**
  * The inspector: everything about the selected node, and the way in to editing it.
@@ -50,6 +51,7 @@ export function Inspector(): React.JSX.Element | null {
   const stopSession = useBoardStore((s) => s.stopSession);
   const copyResumeCommand = useBoardStore((s) => s.copyResumeCommand);
   const openTerminal = useBoardStore((s) => s.openTerminal);
+  const usageRoutes = useBoardStore((s) => s.usageRoutes);
 
   if (!board) return null;
 
@@ -71,6 +73,7 @@ export function Inspector(): React.JSX.Element | null {
   );
   const failedSession = sessions.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'error');
   const service = services.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'running');
+  const usageRoute = usageRoutes.find((r) => r.nodeId === node.id);
 
   const save = async (patch: Partial<BoardNode>) => {
     const result = await runCommand(
@@ -241,20 +244,46 @@ export function Inspector(): React.JSX.Element | null {
           ) : null}
 
           <dl className="facts">
-            <dt>Position</dt><dd>{node.pos.x}, {node.pos.y} tiles</dd>
-            <dt>Footprint</dt><dd>{fp.w} × {fp.h} tiles</dd>
+            <dt title="Grid position, in tiles from the board origin. Drag in Edit Board mode (E) to change it.">Position</dt>
+            <dd>{node.pos.x}, {node.pos.y}</dd>
+            <dt title="Size in tiles. Drag the corner handle in Edit Board mode, use Shift+arrows, or set it in the editor.">Size</dt>
+            <dd>{fp.w} × {fp.h}</dd>
             {targetField ? <><dt>{targetField.label}</dt><dd className="wrap">{String(node[targetField.key] ?? '(unset)')}</dd></> : null}
-            {node.launch ? <><dt>Launch</dt><dd>{node.launch}{node.launch === 'popout-elevated' ? ' ⚡ ELEVATED' : ''}</dd></> : null}
-            {node.openWith ? <><dt>Open with</dt><dd>{node.openWith}</dd></> : null}
+            {node.launch ? <>
+              <dt title="popout opens Windows Terminal. popout-elevated raises a UAC prompt on every launch.">Launch</dt>
+              <dd>{node.launch}{node.launch === 'popout-elevated' ? ' ⚡ ELEVATED' : ''}</dd>
+            </> : null}
+            {node.prelaunch?.length ? <>
+              <dt title="Named update steps this terminal runs before handing over. The commands live in code, never in board JSON.">Primes</dt>
+              <dd>{node.prelaunch.join(', ')}</dd>
+            </> : null}
+            {node.addDirs?.length ? <>
+              <dt title="Directories outside the working directory this agent may read and write (claude --add-dir).">Granted</dt>
+              <dd className="wrap">{node.addDirs.join('\n')}</dd>
+            </> : null}
+            {node.openWith ? <><dt title="What a click does.">Open with</dt><dd>{node.openWith}</dd></> : null}
             {node.remote ? <><dt>Remote</dt><dd className="wrap">{node.remote}</dd></> : null}
             {node.schedule ? <><dt>Schedule</dt><dd>{node.schedule}</dd></> : null}
             {node.port !== undefined ? <><dt>Port</dt><dd>{node.port}</dd></> : null}
-            {node.tags?.length ? <><dt>Tags</dt><dd>{node.tags.join(', ')}</dd></> : null}
+            {node.tags?.length ? <><dt title="Searchable from Ctrl+K.">Tags</dt><dd>{node.tags.join(', ')}</dd></> : null}
             {node.codexRef ? <><dt>Codex</dt><dd className="wrap">{node.codexRef}</dd></> : null}
-            {node.provisional ? <><dt>Provisional</dt><dd className="warntext">UNPOPULATED FOOTPRINT — A TODO ON THE BOARD</dd></> : null}
+            {node.provisional ? <>
+              <dt title="A real PCB convention: the footprint is on the board but nothing is fitted to it yet. Bind this node to something and clear the flag.">Provisional</dt>
+              <dd className="warntext">UNPOPULATED</dd>
+            </> : null}
           </dl>
 
-          {node.notes ? <div className="notes">{node.notes}</div> : null}
+          {usageRoute ? (
+            <div className="state ok" title={`Measured from ~/.claude/projects for ${usageRoute.projects.join(', ')}. This is what the couriers walking to this node are in proportion to.`}>
+              <div className="state-line">{Math.round(usageRoute.share * 100)}% OF BOARD ACTIVITY</div>
+              <div className="state-meta">
+                <span>{formatTokens(usageRoute.windowTokens)} TOKENS</span>
+                <span>{usageRoute.projects.length} PROJECT{usageRoute.projects.length === 1 ? '' : 'S'}</span>
+              </div>
+            </div>
+          ) : null}
+
+          {node.notes ? <div className="notes" title="Free text on the node. Never rendered on the board.">{node.notes}</div> : null}
 
           <div className="traces-list">
             <div className="section-head">Traces</div>
