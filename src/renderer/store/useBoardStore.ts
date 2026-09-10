@@ -16,6 +16,12 @@ import type { TargetInfo } from '@shared/targets.js';
 
 export type EditMode = 'view' | 'edit';
 
+/** One level of the room stack: how you got here and what to print in the breadcrumb. */
+export interface Crumb {
+  boardId: string;
+  engraving: string;
+}
+
 export interface Toast {
   id: number;
   level: 'ok' | 'warn' | 'fault';
@@ -26,6 +32,16 @@ interface BoardState {
   boardId: string;
   load: BoardLoad | null;
   board: Board | null;
+
+  /**
+   * The room stack, root first. Descending pushes, going back pops.
+   *
+   * A stack rather than following `board.parent` because rooms nest arbitrarily and a room could
+   * one day be reachable from more than one place — the way you got in is what "back" means.
+   */
+  stack: Crumb[];
+  /** Non-null while an iris wipe is running. The canvas keeps rendering underneath it. */
+  transition: 'closing' | 'opening' | null;
 
   selectedId: string | null;
   /** Node id whose form is open. Null means the inspector is read-only. */
@@ -40,8 +56,19 @@ interface BoardState {
 
   /** Focus mode (F): dim everything except the selection and its direct traces. */
   focus: boolean;
+  /** Integer chrome scale, derived from the OS scale factor. See App.uiScaleFor. */
+  uiScale: number;
+  setUiScale: (scale: number) => void;
+  /** Camera jump requested by the minimap, consumed by the canvas. */
+  jumpTo: { x: number; y: number; seq: number } | null;
+  requestJump: (world: { x: number; y: number }) => void;
 
   loadBoard: (boardId: string) => Promise<void>;
+  /** Descend into a drive.room node. No-op if the node is not a room or its file is missing. */
+  descend: (nodeId: string) => Promise<void>;
+  /** Back up one level. No-op at the root. */
+  ascend: () => Promise<void>;
+  setTransition: (phase: 'closing' | 'opening' | null) => void;
   refreshTargets: () => Promise<void>;
   select: (nodeId: string | null) => void;
   setMode: (mode: EditMode) => void;
@@ -69,6 +96,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   boardId: 'root',
   load: null,
   board: null,
+  stack: [],
+  transition: null,
   selectedId: null,
   editingId: null,
   mode: 'view',
@@ -77,14 +106,22 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   toasts: [],
   busy: false,
   focus: false,
+  uiScale: 1,
+  jumpTo: null,
 
   loadBoard: async (boardId) => {
     set({ busy: true });
     const load = await window.skynet['board:load'](boardId);
+    const stack = get().stack.length
+      ? get().stack
+      : load.ok
+        ? [{ boardId: load.board.id, engraving: (load.board.engraving ?? load.board.name).toUpperCase() }]
+        : [];
     set({
       boardId,
       load,
       board: load.ok ? load.board : null,
+      stack,
       selectedId: null,
       editingId: null,
       busy: false
@@ -97,6 +134,74 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ targets: byNodeId(statuses), history });
     }
   },
+
+  descend: async (nodeId) => {
+    const { board, stack, transition } = get();
+    if (!board || transition) return;
+    const node = board.nodes.find((n) => n.id === nodeId);
+    if (!node || node.kind !== 'drive.room' || !node.boardFile) return;
+
+    // Close the iris BEFORE loading, so a slow read never shows a half-swapped board.
+    set({ transition: 'closing' });
+    await new Promise((r) => setTimeout(r, 200));
+
+    const load = await window.skynet['board:loadRoom'](node.boardFile);
+    if (!load.ok) {
+      set({ transition: null });
+      get().toast('fault', load.error);
+      return;
+    }
+
+    const [statuses, history] = await Promise.all([
+      window.skynet['target:resolveBoard'](load.board.id),
+      window.skynet['command:history']()
+    ]);
+
+    set({
+      boardId: load.board.id,
+      load,
+      board: load.board,
+      stack: [...stack, { boardId: load.board.id, engraving: (load.board.engraving ?? load.board.name).toUpperCase() }],
+      targets: byNodeId(statuses),
+      history,
+      selectedId: null,
+      editingId: null,
+      transition: 'opening'
+    });
+  },
+
+  ascend: async () => {
+    const { stack, transition } = get();
+    if (transition || stack.length < 2) return;
+    const parent = stack[stack.length - 2]!;
+
+    set({ transition: 'closing' });
+    await new Promise((r) => setTimeout(r, 200));
+
+    const load = await window.skynet['board:load'](parent.boardId);
+    if (!load.ok) {
+      set({ transition: null });
+      get().toast('fault', load.error);
+      return;
+    }
+    const [statuses, history] = await Promise.all([
+      window.skynet['target:resolveBoard'](parent.boardId),
+      window.skynet['command:history']()
+    ]);
+    set({
+      boardId: parent.boardId,
+      load,
+      board: load.board,
+      stack: stack.slice(0, -1),
+      targets: byNodeId(statuses),
+      history,
+      selectedId: null,
+      editingId: null,
+      transition: 'opening'
+    });
+  },
+
+  setTransition: (phase) => set({ transition: phase }),
 
   refreshTargets: async () => {
     const { boardId, board } = get();
@@ -131,6 +236,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   cancelEdit: () => set({ editingId: null }),
 
   toggleFocus: () => set((state) => ({ focus: !state.focus })),
+
+  setUiScale: (scale) => set({ uiScale: scale }),
+
+  // seq makes every jump distinct, so clicking the same minimap spot twice still moves the
+  // camera back after you have panned away from it.
+  requestJump: (world) => set((state) => ({
+    jumpTo: { x: world.x, y: world.y, seq: (state.jumpTo?.seq ?? 0) + 1 }
+  })),
 
   runCommand: async (command, label) => {
     set({ busy: true });
@@ -186,6 +299,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   openNode: async (nodeId) => {
+    // A room drive is navigation, not an OS action — clicking it descends.
+    const node = get().board?.nodes.find((n) => n.id === nodeId);
+    if (node?.kind === 'drive.room') { await get().descend(nodeId); return; }
+
     const result = await window.skynet['node:open'](get().boardId, nodeId);
     if (result.ok) get().toast('ok', result.action);
     else get().toast(result.target.state === 'missing' ? 'fault' : 'warn', result.error ?? result.action);

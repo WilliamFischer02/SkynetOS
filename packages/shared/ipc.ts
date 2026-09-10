@@ -81,6 +81,8 @@ export interface AppSettingsView {
 export interface SkynetApi {
   // --- read ---
   'board:load': (boardId: string) => BoardLoad;
+  /** Descend into a room: resolve a drive.room's `boardFile` and load what it points at. */
+  'board:loadRoom': (boardFile: string) => BoardLoad;
   'board:list': () => string[];
   'display:info': () => DisplayInfo;
   'app:version': () => { app: string; electron: string; chrome: string; node: string };
@@ -114,6 +116,7 @@ export type Channel = keyof SkynetApi;
 
 export const CHANNELS = [
   'board:load',
+  'board:loadRoom',
   'board:list',
   'display:info',
   'app:version',

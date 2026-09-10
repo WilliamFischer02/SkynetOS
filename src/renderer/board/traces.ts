@@ -14,9 +14,12 @@
  *    room you land in. Traces are geometry, not atlas sprites, so this costs the six-colour
  *    sprite budget nothing.
  *
- * The router is deliberately dumb: a two-bend orthogonal Z, no A*, no obstacle avoidance, no
- * bundling. docs/06 puts the real router at M2. Until then this makes the edge data visible and
- * exercised, which is what "data before pixels" needs, and it is replaced wholesale later.
+ * routeOrthogonal below is the HAND-ROUTED path and the fallback: it honours explicit waypoints
+ * from the board JSON, and it is what runs when A* cannot find a way through. The automatic
+ * router is router.ts, which does A* on the half-grid with node footprints as obstacles.
+ * Neither can emit a diagonal.
+ *
+ * Still not done, from docs/01: bundling parallel runs with a ribbon clamp.
  */
 
 import { Container, Graphics } from 'pixi.js';
@@ -197,6 +200,22 @@ export interface RoutedEdge {
   edge: BoardEdge;
   points: Point[];
   style: TraceStyle;
+}
+
+/** Snap an A* path's endpoints onto the component faces, so copper meets a pad, not thin air. */
+export function attachEndpoints(points: Point[], from: Rect, to: Rect): Point[] {
+  if (points.length < 2) return points;
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  const second = points[1]!;
+  const penultimate = points[points.length - 2]!;
+  const startHorizontal = first.y === second.y;
+  const endHorizontal = last.y === penultimate.y;
+  return dedupe([
+    exitPoint(from, second, startHorizontal),
+    ...points.slice(1, -1),
+    exitPoint(to, penultimate, endHorizontal)
+  ]);
 }
 
 /**

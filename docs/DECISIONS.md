@@ -143,3 +143,28 @@ Append-only. Newest at the bottom. One entry per real decision: what, alternativ
 **Decision:** `clampCamera` keeps centring a board smaller than the viewport, and the HUD shows `WHOLE BOARD VISIBLE — NOTHING TO PAN` when it is.
 **Rejected:** Allowing overscroll so a drag always appears to do something.
 **Why:** The root board is 64×40 tiles = 1024×640 world px, so at zoom 2 in a 2534px-wide window it is smaller than the viewport and centring it is correct — there is nothing to pan to. But a gesture that correctly does nothing is indistinguishable from a broken one, and this is very likely what "click and drag still doesn't work" was: the first drag test I wrote ran at 2x, reported 0.00% of pixels changed, and looked like proof of a bug. Retested at 4x: 25.94% of the board area changed. Saying it in the HUD costs one line and removes the ambiguity permanently.
+
+## 2026-09-09 — The auto-router is A* with a turn penalty, not a shortest path
+**Decision:** `src/renderer/board/router.ts` — A* on the 8px half-grid, node footprints as obstacles, state is (cell, incoming direction) so a direction change can be charged `TURN_COST = 3`, plus a `HUG_COST = 2` halo around obstacles.
+**Rejected:** Plain shortest-path A*; keeping the M1 two-bend Z; a full commercial-style autorouter with rip-up and retry.
+**Why:** On a 4-connected grid a staircase and an L are the *same length*, so a plain shortest-path A* picks between them arbitrarily and usually returns a staircase. Copper does not staircase. Charging for a direction change makes a long straight run strictly cheaper, and it is the single change that makes the output look like a circuit board rather than a maze solution. The halo keeps runs off component edges without forbidding a squeeze through a one-cell gap when that is the only way past. State has to include the incoming direction because plain cell-based A* cannot express "arriving here going east costs less than arriving going north". Deterministic tie-breaking matters because a board that routes differently on every launch makes the planned M5 golden-image diff worthless. Measured: 29 tests across all five seeded boards in 74ms; every trace on every board routes with zero fallbacks, and none cuts through a component it does not terminate at.
+
+## 2026-09-09 — The room stack is a stack, not `board.parent`
+**Decision:** Descending pushes onto `stack: Crumb[]`; Backspace pops. `board.parent` is not consulted for navigation.
+**Rejected:** Following the `parent` field.
+**Why:** "Back" means the way you came in, not the room's declared owner. Rooms nest arbitrarily and one could be reachable from more than one place — a shared drive appearing in two rooms is an obvious future want — and at that point `parent` is a lie about how you got there. The stack is also what the breadcrumb renders, so navigation and the breadcrumb have one source of truth instead of two that can disagree.
+
+## 2026-09-09 — The iris is a DOM canvas, not part of the Pixi scene
+**Decision:** `src/renderer/ui/Iris.tsx` draws the 8-step wipe on its own 2D canvas overlaying the board.
+**Rejected:** A Pixi overlay on the stage; a CSS transition.
+**Why:** The board's Pixi application is destroyed and rebuilt when the board changes — which is exactly the moment the iris has to be covering the screen. An overlay tied to that lifecycle blinks out on the worst possible frame. A CSS transition was never an option: it is a smooth alpha ramp across every pixel on screen, the precise opposite of a hard-edged pixel iris. The canvas draws eight discrete steps of flat filled rectangles, so at any instant the screen is either mask-dark or it is not. Verified: a captured mid-transition frame contains exactly **one** colour across the sampled region, `mc-mask-dark`.
+
+## 2026-09-09 — The DOM chrome takes the room's colours
+**Decision:** On every board change, `--mask-dark`, `--mask-light` and `--signal` are written to `:root` from `board.theme`.
+**Rejected:** Keeping the chrome on the root SKYNET palette in every room.
+**Why:** The point of a room theme is that the place looks different when you are in it. Descending into MinecraftOS and finding the inspector and the HUD still wearing SKYNET green makes the room read as a popup over the mainboard rather than somewhere you went. The board and the chrome now change together. Verified: the MinecraftOS board area renders 6 colours, all exact `skynet.gpl` entries, in the room's own mask tones and lime signal.
+
+## 2026-09-09 — Zone outlines break around their own labels
+**Decision:** `buildZone` measures the label and omits any bracket or dash segment that would overlap it.
+**Rejected:** Moving the label inside the box; drawing the label on top of the line.
+**Why:** The label sits *on* the top edge, so without a gap the zone's own dashed run draws straight through the text and every cluster title reads as struck through — plainly visible on `THE STALKER` and `THERE COULD BE GIANTS` in MinecraftOS. Real silkscreen leaves a clearance around printed text for exactly this reason. Moving the label inside the box would have cost a tile of usable space in every zone on every board.

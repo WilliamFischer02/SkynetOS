@@ -47,12 +47,25 @@ export function buildZone(node: BoardNode, roomSignal: string): Container {
   // signal, so the connection is visible without reading anything.
   const color = hexToNumber(node.relation ? signalOf(node.relation, roomSignal) : SILK);
 
-  const g = new Graphics();
+  const label = node.name.trim().toUpperCase();
+  const labelColor = node.relation ? signalOf(node.relation, roomSignal) : SILK;
+  const rendered = label ? renderSilkText(label, 11, labelColor) : null;
+
+  // The label sits ON the top edge, so the edge has to break around it. Without this gap the
+  // zone's own dashed run draws straight through the text and every cluster title reads as
+  // struck through. Real silkscreen leaves a clearance around printed text for the same reason.
   const CORNER = TILE; // length of each corner bracket arm
+  const labelX = x + CORNER + 2;
+  const labelGapStart = rendered ? labelX - 3 : 0;
+  const labelGapEnd = rendered ? labelX + rendered.width + 3 : 0;
+  const inLabelGap = (px: number, runWidth: number): boolean =>
+    rendered !== null && px < labelGapEnd && px + runWidth > labelGapStart;
+
+  const g = new Graphics();
   // Top-left, top-right, bottom-left, bottom-right brackets only — an open box.
-  g.rect(x, y, CORNER, 1);
+  if (!inLabelGap(x, CORNER)) g.rect(x, y, CORNER, 1);
   g.rect(x, y, 1, CORNER);
-  g.rect(x + w - CORNER, y, CORNER, 1);
+  if (!inLabelGap(x + w - CORNER, CORNER)) g.rect(x + w - CORNER, y, CORNER, 1);
   g.rect(x + w - 1, y, 1, CORNER);
   g.rect(x, y + h - 1, CORNER, 1);
   g.rect(x, y + h - CORNER, 1, CORNER);
@@ -60,19 +73,16 @@ export function buildZone(node: BoardNode, roomSignal: string): Container {
   g.rect(x + w - 1, y + h - CORNER, 1, CORNER);
   // Dashed run along the top and bottom between the brackets, 8 on / 8 off.
   for (let dx = CORNER + 8; dx < w - CORNER - 8; dx += 16) {
-    g.rect(x + dx, y, 8, 1);
+    if (!inLabelGap(x + dx, 8)) g.rect(x + dx, y, 8, 1);
     g.rect(x + dx, y + h - 1, 8, 1);
   }
   g.fill({ color });
   container.addChild(g);
 
-  // Zone label, top-left, inset one tile so it sits inside the bracket.
-  const label = node.name.trim().toUpperCase();
-  if (label) {
-    const rendered = renderSilkText(label, 11, node.relation ? signalOf(node.relation, roomSignal) : SILK);
+  if (rendered) {
     const sprite = new Sprite(Texture.from(rendered.canvas));
     sprite.texture.source.scaleMode = 'nearest';
-    sprite.x = x + CORNER + 2;
+    sprite.x = labelX;
     sprite.y = y - Math.floor(rendered.height / 2);
     sprite.roundPixels = true;
     container.addChild(sprite);

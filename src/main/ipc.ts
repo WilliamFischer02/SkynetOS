@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
 import { CHANNELS, type Channel, type SkynetApi } from '@shared/ipc.js';
 import type { BoardNode } from '@shared/types.js';
-import { findNode, listBoards, loadBoard } from './services/board-store.js';
+import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
 import { getSettings } from './services/settings.js';
@@ -28,6 +28,8 @@ function nodeOrThrow(boardId: string, nodeId: string): BoardNode {
 
 const handlers: Handlers = {
   'board:load': (boardId) => loadBoard(boardId),
+
+  'board:loadRoom': (boardFile) => loadBoardByFile(boardFile),
 
   'board:list': () => listBoards(),
 

@@ -139,6 +139,42 @@ export function loadBoard(boardId: string): BoardLoad {
   return { ok: true, board: parsed as Board, file };
 }
 
+/**
+ * Load a board by its FILE path, as a `drive.room` node names it.
+ *
+ * The board's own `id` field is the authority for what room you have arrived in — deriving it
+ * from the path would break the moment a room file is named anything but `<id>/room.board.json`,
+ * and the schema does not require that.
+ */
+export function loadBoardByFile(boardFile: string): BoardLoad {
+  const root = boardRoot();
+  const candidate = resolve(root, boardFile);
+  const rel = relative(root, candidate);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    return { ok: false, file: boardFile, error: `BOARD FILE ESCAPES board/ — ${boardFile}` };
+  }
+  if (!existsSync(candidate)) {
+    return { ok: false, file: candidate, error: `BOARD FILE NOT FOUND — ${candidate}` };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(candidate, 'utf8'));
+  } catch (err) {
+    return { ok: false, file: candidate, error: `MALFORMED BOARD JSON — ${(err as Error).message}` };
+  }
+  const problems = validateBoard(parsed);
+  if (problems.length) {
+    return {
+      ok: false,
+      file: candidate,
+      error: `BOARD FAILS SCHEMA (${problems.length} problem${problems.length === 1 ? '' : 's'})`,
+      problems
+    };
+  }
+  return { ok: true, board: parsed as Board, file: candidate };
+}
+
 export function listBoards(): string[] {
   const root = boardRoot();
   if (!existsSync(root)) return [];

@@ -31,8 +31,10 @@ import {
   TILE
 } from './camera.js';
 import { buildSubstrate } from './substrate.js';
+import type { Point } from './traces.js';
 import { SpriteStore } from './sprites.js';
-import { buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
+import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
+import { buildRouteGrid, routeAStar, type RouteObstacle } from './router.js';
 import { buildBrokenOverlay, buildSelectionOverlay, buildSilkNote, buildZone } from './silk-layer.js';
 import { centreOn, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
 import {
@@ -63,6 +65,10 @@ export interface BoardCanvasProps {
   onActivate: (nodeId: string) => void;
   onMoveNode: (nodeId: string, pos: { x: number; y: number }) => void;
   onStatus?: (status: BoardCanvasStatus) => void;
+  /** Written every frame so the minimap can track the camera without a React render. */
+  cameraRef?: React.RefObject<{ x: number; y: number; zoom: number; viewW: number; viewH: number }>;
+  /** Bumped by the minimap to ask the camera to centre somewhere. */
+  jumpTo?: { x: number; y: number; seq: number } | null;
 }
 
 export interface BoardCanvasStatus {
@@ -80,6 +86,9 @@ export interface BoardCanvasStatus {
   placeholderCount: number;
   brokenCount: number;
   faceCount: number;
+  /** How many traces the A* router handled, and how many fell back to the dumb Z-route. */
+  routedCount: number;
+  fallbackCount: number;
   fps: number;
 }
 
@@ -287,19 +296,45 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           boardPx
         ));
 
-        // Layer 1 — copper traces.
+        /*
+         * Layer 1 — copper traces, auto-routed.
+         *
+         * A* on the half-grid with every mounted footprint as an obstacle, so a trace goes AROUND
+         * a component instead of through it. Hand-placed waypoints in the board JSON still win,
+         * and a route A* cannot find falls back to the two-bend Z rather than vanishing.
+         */
         const routed: RoutedEdge[] = [];
         const rectById = new Map(props.board.nodes.map((n) => [n.id, nodeRect(n)] as const));
+        const obstacles: RouteObstacle[] = props.board.nodes
+          .filter((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone')
+          .map((n) => ({ ...nodeRect(n), nodeId: n.id }));
+        const routeGrid = buildRouteGrid(obstacles, boardPx);
+
+        let routedCount = 0;
+        let fallbackCount = 0;
         for (const edge of props.board.edges) {
           const from = rectById.get(edge.from);
           const to = rectById.get(edge.to);
           if (!from || !to) continue;
-          routed.push({
-            edge,
-            points: routeOrthogonal(from, to, edge.waypoints, props.board.grid.tile),
-            style: styleFor(edge, props.board.theme.signal)
-          });
+
+          let points: Point[] | null = null;
+          if (edge.waypoints?.length) {
+            points = routeOrthogonal(from, to, edge.waypoints, props.board.grid.tile);
+          } else {
+            const path = routeAStar(
+              { from: { ...from, nodeId: edge.from }, to: { ...to, nodeId: edge.to }, obstacles, boardPx },
+              routeGrid
+            );
+            if (path) { points = attachEndpoints(path, from, to); routedCount++; }
+          }
+          if (!points) {
+            points = routeOrthogonal(from, to, edge.waypoints, props.board.grid.tile);
+            if (!edge.waypoints?.length) fallbackCount++;
+          }
+
+          routed.push({ edge, points, style: styleFor(edge, props.board.theme.signal) });
         }
+        console.info(`[router] ${routedCount} auto-routed, ${fallbackCount} fell back to a direct run`);
         world.addChild(buildTraceLayer(routed));
 
         // Layer 2 — silkscreen zones, printed under the components they group.
@@ -483,6 +518,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         let lastFocus = false;
         let lastEditMode = live.current.editMode;
         let lastDragKey = '';
+        let lastJumpSeq = live.current.jumpTo?.seq ?? 0;
 
         app.ticker.add((ticker) => {
           const view = viewport();
@@ -494,6 +530,25 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           camera = panning
             ? stepCamera(camera, { ...held }, boardPx, view)
             : clampCamera(camera, boardPx, view);
+
+          // Minimap jump: centre on the requested world point, once per seq bump.
+          const jump = live.current.jumpTo;
+          if (jump && jump.seq !== lastJumpSeq) {
+            lastJumpSeq = jump.seq;
+            camera = clampCamera(
+              { ...camera, x: jump.x - view.width / (2 * camera.zoom), y: jump.y - view.height / (2 * camera.zoom) },
+              boardPx,
+              view
+            );
+          }
+
+          if (live.current.cameraRef?.current) {
+            live.current.cameraRef.current.x = camera.x;
+            live.current.cameraRef.current.y = camera.y;
+            live.current.cameraRef.current.zoom = camera.zoom;
+            live.current.cameraRef.current.viewW = view.width;
+            live.current.cameraRef.current.viewH = view.height;
+          }
 
           // The one line that keeps the board from shimmering.
           const pos = stagePosition(camera);
@@ -537,6 +592,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               placeholderCount,
               brokenCount,
               faceCount,
+              routedCount,
+              fallbackCount,
               fps
             });
           }

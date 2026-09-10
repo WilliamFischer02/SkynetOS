@@ -1,15 +1,15 @@
 # Handoff
 
-**Updated:** 2026-09-09 — M0 done, M1 substantially done, M6's editing pulled forward.
+**Updated:** 2026-09-09 — M0, M1 and M2 done. M6's editing pulled forward.
 
 ## State
 
-The app builds, launches, renders `board/root.board.json` with traces and silkscreen, resolves
-every node's target against the real filesystem, opens real folders in Explorer and VS Code, and
-lets you edit any node through a form with a native file picker. Every edit is validated,
-snapshotted and undoable. Drag pans the board; drag in Edit Board mode moves components. Any node
-can take an image, which is re-drawn in the room's six colours. `npm run verify` is green:
-208 tests.
+The app builds, launches, and renders any board with auto-routed copper, silkscreen and a minimap.
+Click a room drive and you descend into it through an iris wipe; Backspace brings you back. Every
+node resolves its target against the real filesystem, opens real folders in Explorer and VS Code,
+and can be edited through a form with a native file picker. Every edit is validated, snapshotted
+and undoable. Drag pans; drag in Edit Board mode moves components. Any node can take an image,
+which is re-drawn in the room's six colours. `npm run verify` is green: **237 tests**.
 
 Everything on the board is still a placeholder rectangle. That is intended — no atlas exists yet.
 
@@ -20,6 +20,12 @@ exercises the command bus over the real IPC bridge. Latest run:
 
 ```
 devicePixelRatio = 1                            (on a machine at 200% OS scaling)
+descend: "SKYNETOS" -> "SKYNETOS/MINECRAFTOS"   changed=true
+room HUD: 27 NODES / 15 TRACES / ROUTED 15
+ascend:  back to "SKYNETOS"                     returned=true
+[router] 7 auto-routed, 0 fell back      root
+[router] 15 auto-routed, 0 fell back     inside MinecraftOS
+[router] 7 auto-routed, 0 fell back      re-routed BECAUSE a node moved
 drag-pan at 4x: 25.94% of the board area changed
 node drag moved 1 node(s): u1_jarvis 28,17 -> 32,19
 node drag undo: ok=true  every node back at origin=true
@@ -84,6 +90,22 @@ signals appear at once on the root board, which is the relation colour working. 
 - **Text rendering.** `-webkit-font-smoothing` is a no-op on Windows; the Chromium switches
   `disable-lcd-text` and `disable-font-subpixel-positioning` removed every colour fringe.
 
+**M2 — rooms, routing, minimap (this session)**
+- **Room descent and return.** Click or Space a `drive.room` and you descend; Backspace comes
+  back; the breadcrumb shows the path. Navigation is a stack, not `board.parent`, because "back"
+  means the way you came in.
+- **8-step iris wipe**, drawn on its own DOM canvas so it survives the Pixi teardown that happens
+  mid-transition. A captured mid-wipe frame is exactly one colour — hard-edged, no alpha ramp.
+- **A\* auto-router** with a turn penalty, obstacle halo and deterministic tie-break. Every trace
+  on all five boards routes with zero fallbacks, and none cuts through a component it does not
+  terminate at. This fixes the visible M1 bug where `s1_repo_skynet -> j1_github` ran straight
+  through U2.
+- **The DOM chrome takes the room's colours**, so a room reads as somewhere you went rather than
+  a popup over the mainboard.
+- **Minimap**, bottom-right, live viewport box, click to jump. Reads the camera from a ref in its
+  own rAF loop rather than through React state.
+- Zone outlines now break around their own labels, which were being struck through.
+
 **Infrastructure**
 - Board JSON has an enforced canonical form; `validate:board` fails if a file drifts, so an edit
   is a one-line diff instead of a whole-file reformat.
@@ -93,15 +115,20 @@ signals appear at once on the root board, which is the relation colour working. 
 
 ## Next
 
-**Finish M1, then M2.** In order:
+**M3 — agent nodes and real sessions.** This is the one that makes the board earn its keep:
+clicking `CC-STALKER` should open Windows Terminal in `C:/dev/TheStalker` with Claude Code
+resumed on that project's prior conversation.
 
-1. **Descend into a room.** `drive.room` click still reports "M2". The board loader, the theme
-   and the breadcrumb are all already per-board — this is mostly the iris transition and a
-   navigation stack.
-2. **The real trace router** (M2). The current one has no obstacle avoidance and it shows: the
-   `s1_repo_skynet -> j1_github` run passes straight through U2 on the root board. Orthogonal A*
-   on the 16px grid, avoiding node footprints, with bundling.
-3. Seeded procedural substrate per room, and the palette-swap shader.
+1. `SessionManager` with the `popout` launch mode first — `wt.exe -d <cwd> pwsh -NoExit -Command
+   claude ...`. It needs no PTY, so it is not blocked on the node-gyp problem below.
+2. Capture the Claude Code session id from the stream-json `system/init` event and store it in
+   `sessions`, so a second click resumes rather than starting fresh. `node:sqlite` is verified
+   working in Electron 44 and needs no native build.
+3. The session dock, so a session running in another room is never invisible.
+4. `service.process` start/stop.
+
+The embedded xterm tab (`node-pty`) is the only part of M3 that hits the toolchain problem, and
+it is not needed for M3's exit criterion.
 
 ## Landmines
 
@@ -116,8 +143,9 @@ signals appear at once on the root board, which is the relation colour working. 
 - **Board files must stay canonical.** If `validate:board` complains, run the file through
   `JSON.stringify(…, null, 2) + '\n'` — do not relax the check. It is what keeps board diffs
   reviewable.
-- **The trace router has no obstacle avoidance.** A trace whose endpoints line up across a third
-  node will run straight through it. Known, visible on the root board, fixed at M2.
+- **The router does not bundle parallel runs.** Several traces between the same two clusters
+  route independently and can end up alongside each other without a ribbon clamp. Cosmetic;
+  docs/01 wants bundling eventually.
 - **Cell coordinates in `manifest.json` are still illustrative.** The `sheets` block is measured
   and trustworthy; the two example sprite entries are not, and are disabled by their `$` prefix.
   Run `npm run sheet` before trusting any `cell: [x, y]`.

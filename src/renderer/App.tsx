@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
 import { Inspector } from './ui/Inspector.js';
+import { Iris } from './ui/Iris.js';
+import { Minimap } from './ui/Minimap.js';
 import { useBoardStore } from './store/useBoardStore.js';
 
 /**
@@ -30,6 +32,11 @@ export function App(): React.JSX.Element {
   const toasts = useBoardStore((s) => s.toasts);
   const focus = useBoardStore((s) => s.focus);
   const mode = useBoardStore((s) => s.mode);
+  const stack = useBoardStore((s) => s.stack);
+  const jumpTo = useBoardStore((s) => s.jumpTo);
+  const ascend = useBoardStore((s) => s.ascend);
+  const requestJump = useBoardStore((s) => s.requestJump);
+  const setUiScale = useBoardStore((s) => s.setUiScale);
   const loadBoard = useBoardStore((s) => s.loadBoard);
   const select = useBoardStore((s) => s.select);
   const beginEdit = useBoardStore((s) => s.beginEdit);
@@ -41,8 +48,11 @@ export function App(): React.JSX.Element {
   const toggleFocus = useBoardStore((s) => s.toggleFocus);
 
   const [status, setStatus] = useState<BoardCanvasStatus | null>(null);
-  const [uiScale, setUiScale] = useState(1);
+  const uiScale = useBoardStore((s) => s.uiScale);
   const onStatus = useCallback((next: BoardCanvasStatus) => setStatus(next), []);
+  // Written by the canvas every frame; read by the minimap in its own rAF loop. Deliberately a
+  // ref and not state — 165 camera updates a second through React would be absurd.
+  const cameraRef = useRef({ x: 0, y: 0, zoom: 3, viewW: 0, viewH: 0 });
 
   useEffect(() => { void loadBoard('root'); }, [loadBoard]);
 
@@ -56,6 +66,19 @@ export function App(): React.JSX.Element {
   }, []);
 
   const editMode = mode === 'edit';
+
+  /*
+   * The chrome takes the room's colours too. Descending into MinecraftOS should not leave the
+   * inspector and the HUD wearing SKYNET green — the whole point of a room theme is that the
+   * place looks different when you are in it.
+   */
+  useEffect(() => {
+    if (!board) return;
+    const root = document.documentElement.style;
+    root.setProperty('--mask-dark', board.theme.maskDark);
+    root.setProperty('--mask-light', board.theme.maskLight);
+    root.setProperty('--signal', board.theme.signal);
+  }, [board]);
 
   /**
    * Global shortcuts. Ctrl+Z / Ctrl+Y go through main's command bus, so they undo an agent's
@@ -77,7 +100,11 @@ export function App(): React.JSX.Element {
       if (event.code === 'KeyE') { event.preventDefault(); setMode(editMode ? 'view' : 'edit'); return; }
       if (event.code === 'F2' && selectedId) { event.preventDefault(); beginEdit(selectedId); return; }
       if (event.code === 'KeyF') { event.preventDefault(); toggleFocus(); return; }
-      if (event.code === 'KeyR') { event.preventDefault(); void loadBoard(boardId); }
+      if (event.code === 'KeyR') { event.preventDefault(); void loadBoard(boardId); return; }
+      // Backspace always goes up a room. Escape deselects first, and goes up only when there is
+      // nothing selected — so Escape never surprises you out of a room you were working in.
+      if (event.code === 'Backspace') { event.preventDefault(); void ascend(); return; }
+      if (event.code === 'Escape' && !selectedId) { event.preventDefault(); void ascend(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -118,10 +145,17 @@ export function App(): React.JSX.Element {
         onActivate={(nodeId) => void openNode(nodeId)}
         onMoveNode={(nodeId, pos) => void moveNode(nodeId, pos)}
         onStatus={onStatus}
+        cameraRef={cameraRef}
+        jumpTo={jumpTo}
       />
 
       <div className="breadcrumb">
-        {(board.engraving ?? board.name).toUpperCase()}
+        {stack.map((crumb, i) => (
+          <span key={crumb.boardId} className={i === stack.length - 1 ? 'crumb here' : 'crumb'}>
+            {i > 0 ? <span className="crumb-sep">/</span> : null}
+            {crumb.engraving}
+          </span>
+        ))}
         {editMode ? <span className="mode-badge">EDIT BOARD</span> : null}
       </div>
 
@@ -135,6 +169,9 @@ export function App(): React.JSX.Element {
             <span>{board.nodes.length} NODES · {board.edges.length} TRACES</span>
             {status.fitsOnScreen ? <span className="warn">WHOLE BOARD VISIBLE — NOTHING TO PAN</span> : null}
             {status.faceCount > 0 ? <span className="ok-text">{status.faceCount} FACE{status.faceCount === 1 ? '' : 'S'}</span> : null}
+            <span className={status.fallbackCount > 0 ? 'warn' : undefined}>
+              ROUTED {status.routedCount}{status.fallbackCount > 0 ? ` · ${status.fallbackCount} DIRECT` : ''}
+            </span>
             {status.brokenCount > 0 ? <span className="fault-text">{status.brokenCount} BROKEN</span> : <span className="ok-text">ALL BOUND</span>}
             <span className={status.atlasFrames === 0 ? 'warn' : undefined}>
               ATLAS {status.atlasFrames} · {status.placeholderCount} PLACEHOLDER
@@ -145,12 +182,16 @@ export function App(): React.JSX.Element {
         )}
       </div>
 
+      <Minimap board={board} targets={targets} cameraRef={cameraRef} onJump={requestJump} />
+
       <Inspector />
+      <Iris />
 
       <div className="help">
         {editMode
           ? 'DRAG A COMPONENT TO MOVE IT · DRAG THE SUBSTRATE TO PAN · E LEAVE EDIT BOARD'
           : 'DRAG TO PAN · WASD PAN · 2 3 4 ZOOM · TAB CYCLE · SPACE ACTIVATE · E EDIT BOARD · F2 EDIT NODE'}
+        {stack.length > 1 ? ' · BACKSPACE UP A ROOM' : ''}
         {focus ? ' · FOCUS ON' : ''}
         {history.canUndo ? ` · CTRL+Z UNDO ${history.undoLabel?.toUpperCase() ?? ''}` : ''}
       </div>

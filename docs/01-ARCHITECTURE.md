@@ -154,14 +154,24 @@ Camera: integer zoom only (`2x 3x 4x`), position rounded to device pixels each f
 
 Traces are re-routed only on graph change, cached as a baked texture per room, with the animated overlay drawn on top. Target 60fps with 200 nodes; if a room exceeds ~300 nodes the answer is a sub-room, not an optimization.
 
+**Built 2026-09-09 (M2).** `src/renderer/board/router.ts` is A* on the 8px half-grid with every
+mounted footprint as an obstacle. Three details do the aesthetic work: a **turn penalty**, without
+which A* returns a staircase (a staircase and an L are the same length on a grid, and copper does
+not staircase); a **halo cost** that keeps runs off component edges; and a **deterministic
+tie-break**, so the same board produces the same copper every launch — otherwise a screenshot diff
+is worthless. Endpoints are carved out of the obstacle map so a trace can reach its own pads.
+Hand-placed `waypoints` still win, and a route A* cannot find falls back to the two-bend direct
+run rather than vanishing. Re-routing happens on board change, which is every edit, so a moved
+node re-routes its traces. Not yet done: bundling parallel runs with a ribbon clamp.
+
 ## Navigation
 
 - **Pan:** WASD / arrows (accelerating, 4px→16px per frame), middle-drag, or left-drag on empty substrate
 - **Zoom:** `2`/`3`/`4` keys, Ctrl+scroll, snapping to integers. The key is named for the zoom it
   selects. (Corrected 2026-09-09: this said `1`/`2`/`3`, which contradicted `docs/02` §Grid & sizes
   where zoom is defined as {2,3,4} and there is no 1x.)
-- **Enter a room:** click a `drive.room` node, or `Enter` with it selected → iris-wipe transition (hard-edged pixel iris, not a fade)
-- **Leave a room:** `Esc` / `Backspace`, or the ejector on the room's edge
+- **Enter a room:** click a `drive.room` node, or `Space`/`Enter` with it selected → iris-wipe transition (hard-edged pixel iris, not a fade)
+- **Leave a room:** `Backspace` always; `Esc` deselects first and only leaves the room when nothing is selected, so `Esc` never surprises you out of a room you were working in. *(The ejector sprite is M5 art.)*
 - **Breadcrumb:** `SKYNET / MINECRAFTOS / THE STALKER` rendered as silkscreen along the top edge
 - **Ctrl+K:** command bar — fuzzy search every node in every room, jump to it, or run its action without navigating
 - **Tab / Shift+Tab:** cycle nodes in reading order; `Space` activates. Full keyboard operation is a requirement, not a nicety.

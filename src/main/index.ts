@@ -209,6 +209,49 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     await wait(200);
 
     /*
+     * Prove ROOM DESCENT: Tab until MinecraftOS is selected, activate it, and confirm the
+     * breadcrumb and the board actually changed. Then Backspace back out. This is M2's exit
+     * criterion — "click MinecraftOS, descend, see four mod clusters, press Esc, come back" —
+     * driven through real key events rather than by calling the store.
+     */
+    const crumbText = () => win.webContents.executeJavaScript(
+      "document.querySelector('.breadcrumb')?.textContent ?? ''"
+    ) as Promise<string>;
+    const selectedName = () => win.webContents.executeJavaScript(
+      "document.querySelector('.inspector .nodename')?.textContent ?? ''"
+    ) as Promise<string>;
+
+    let found = false;
+    for (let i = 0; i < 14 && !found; i++) {
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
+      await wait(120);
+      found = (await selectedName()).toLowerCase().includes('minecraft');
+    }
+    console.log(`[smoke] found the MinecraftOS drive by tabbing: ${found}`);
+
+    const crumbBefore = await crumbText();
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Space' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Space' });
+    await wait(250);
+    await shoot('11-iris-closing.png');
+    await wait(900);
+    const crumbAfter = await crumbText();
+    const roomNodes = await win.webContents.executeJavaScript(
+      "document.querySelector('.hud')?.textContent ?? ''"
+    ) as string;
+    console.log(`[smoke] descend: "${crumbBefore.trim()}" -> "${crumbAfter.trim()}"  changed=${crumbBefore !== crumbAfter}`);
+    console.log(`[smoke] room HUD: ${roomNodes.replace(/\s+/g, ' ').trim().slice(0, 110)}`);
+    await shoot('12-inside-minecraftos.png');
+
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Backspace' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Backspace' });
+    await wait(1000);
+    const crumbBack = await crumbText();
+    console.log(`[smoke] ascend: back to "${crumbBack.trim()}"  returned=${crumbBack === crumbBefore}`);
+    await shoot('13-back-at-root.png');
+
+    /*
      * Prove NODE DRAGGING commits a move. Enter Edit Board mode, grab a component, drag it two
      * tiles, drop it, and read the position back out of the board file. This is the other half
      * of "click and drag": panning moves the camera, this moves the data.
@@ -349,7 +392,15 @@ app.whenReady().then(() => {
   const win = createWindow();
 
   const smokeDir = process.env['SKYNET_SMOKE_DIR'];
-  if (smokeDir) win.once('ready-to-show', () => void runSmokeCapture(win, smokeDir));
+  if (smokeDir) {
+    // Renderer console output goes to the renderer's own devtools, which a headless capture run
+    // never opens. Forwarding the lines we care about is how the smoke log can show that the
+    // router actually re-ran after a node moved, rather than asserting that it must have.
+    win.webContents.on('console-message', (event) => {
+      if (/^\[(router|atlas|ui|mosaic)\]/.test(event.message)) console.log(`[renderer] ${event.message}`);
+    });
+    win.once('ready-to-show', () => void runSmokeCapture(win, smokeDir));
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

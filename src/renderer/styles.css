@@ -375,7 +375,8 @@ canvas {
 
 .toasts {
   position: absolute;
-  bottom: calc(2 * var(--gap));
+  /* Above the minimap, which owns the bottom-right corner. */
+  bottom: calc(34 * var(--gap));
   right: calc(var(--inspector-width) + 2 * var(--gap));
   z-index: 30;
   display: flex;
@@ -397,3 +398,50 @@ canvas {
 .toast.ok { border-color: var(--ok); }
 .toast.warn { border-color: var(--warn); color: var(--warn); }
 .toast.fault { border-color: var(--fault); color: var(--fault); white-space: pre-wrap; }
+
+/* ---------- breadcrumb path ---------- */
+
+.crumb { color: var(--copper); }
+.crumb.here { color: var(--signal); }
+.crumb-sep { color: var(--copper-dark); padding: 0 var(--gap); }
+/* The breadcrumb must never grow into the HUD, which starts a fixed distance from the right.
+   A deep room path truncates from the left instead. */
+.breadcrumb { max-width: 26vw; overflow: hidden; white-space: nowrap; }
+
+/* ---------- minimap ---------- */
+
+/*
+ * Bottom-right, clear of the inspector. docs/03 says top-right, but the HUD and the inspector
+ * both already live there and a minimap under two other panels is a minimap nobody looks at.
+ */
+.minimap {
+  position: absolute;
+  bottom: calc(2 * var(--gap));
+  right: calc(var(--inspector-width) + 2 * var(--gap));
+  z-index: 15;
+  padding: var(--gap);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  line-height: 0;
+}
+
+.minimap canvas {
+  display: block;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+/* ---------- iris transition ---------- */
+
+/*
+ * Above everything including the inspector: a room change covers the whole window, the way a
+ * drive door closes over the whole bay. Hard-edged rectangles only — see ui/Iris.tsx.
+ */
+.iris {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

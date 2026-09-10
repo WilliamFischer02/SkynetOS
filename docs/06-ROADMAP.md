@@ -14,10 +14,36 @@ JSON Schema, board loader/validator, `BoardGraph`, static rendering of `store.re
 
 **Exit:** `board/root.board.json` renders as a recognizable board. Clicking a repo node opens that folder in Explorer. A malformed board file shows a clear error, not a blank screen.
 
-## M2 — Rooms + auto-routing + procedural substrate (2 days)
+## M2 — Rooms + auto-routing + procedural substrate (2 days) — **DONE 2026-09-09**
 `drive.room` nodes, iris transition, nested boards, back navigation, minimap. Orthogonal trace auto-router. Seeded procedural substrate per room.
 
 **Exit:** click MinecraftOS, descend, see four mod clusters, press Esc, come back. Traces route themselves when a node moves.
+
+**Met.** Evidence from `npm run smoke`, which drives the built app with real key events:
+
+```
+descend: "SKYNETOS" -> "SKYNETOS/MINECRAFTOS"   changed=true
+room HUD: 27 NODES / 15 TRACES / ROUTED 15
+ascend:  back to "SKYNETOS"                     returned=true
+[router] 7 auto-routed, 0 fell back      <- root
+[router] 15 auto-routed, 0 fell back     <- inside MinecraftOS
+[router] 7 auto-routed, 0 fell back      <- back at root
+node drag moved 1 node(s): u1_jarvis 28,17 -> 32,19
+[router] 7 auto-routed, 0 fell back      <- re-routed BECAUSE the node moved
+```
+
+All four mod clusters render as silkscreen zones. Zero traces fell back to the direct run on any
+of the five boards. `test/router.test.ts` additionally proves, on the real board data, that no
+routed trace cuts through a component it does not terminate at.
+
+Done in this milestone: room descent and return with a navigation stack, the 8-step iris wipe,
+per-room theming of the board *and* the DOM chrome, the A* auto-router with a turn penalty, and
+the minimap with a live viewport box and click-to-jump.
+
+Deliberately not done, and not blocking: **trace bundling** with a ribbon clamp (docs/01), and the
+**palette-swap shader** (docs/02 Theme keys) — the shader has nothing to swap until an atlas
+exists, so it belongs with M5's art rather than here. Room themes currently reach the board by
+recolouring at build time, which is correct for geometry and placeholders.
 
 ## M3 — Agent nodes and real sessions (3 days)
 `agent.code`, SessionManager with all four launch modes, session id capture + `--resume`, session dock, `service.process`, embedded xterm tab.
