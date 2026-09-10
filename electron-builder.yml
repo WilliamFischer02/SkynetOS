@@ -9,6 +9,11 @@ directories:
 files:
   - out/**/*
   - package.json
+  # electron-builder pulls in production dependencies' node_modules even when `files` does not
+  # list them. node-pty is declared for M3's embedded terminal, is not imported by anything yet,
+  # and is not even compiled here — so it would ship several megabytes of conpty binaries for a
+  # feature that does not exist. M3 removes this negation when the terminal actually lands.
+  - "!node_modules/node-pty/**"
 
 # The board and the codex are data the app reads at runtime and William edits by hand, so they
 # ship unpacked next to the executable rather than sealed inside app.asar.
@@ -37,3 +42,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: SkynetOS
+
+# No native modules are in the packaged app today. `node-pty` sits in optionalDependencies for
+# M3's embedded terminal and is not imported yet, and it has no working node-gyp toolchain on
+# this machine — so letting @electron/rebuild loose on it fails the build for a module nothing
+# uses. M3 flips this back to true and rebuilds node-pty against Electron's ABI.
+npmRebuild: false

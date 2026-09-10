@@ -1,0 +1,103 @@
+name: build
+
+# Every push to main produces a fresh installer. That is the point: William asked for an exe
+# that rebuilds itself with each commit, and doing it here rather than in a local git hook means
+# committing stays instant and the artifact is built from a clean checkout every time — which is
+# also the only way to catch "works on my machine" packaging bugs.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # A burst of commits should produce one installer for the newest one, not a queue of stale
+  # 40-second builds. In-progress runs on main are cancelled when a newer commit lands.
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Match the local toolchain. Electron 44 bundles Node 24 itself, but the build tools
+          # and the validators run on the runner's Node.
+          node-version: '24'
+          cache: npm
+
+      - name: Install
+        # npm 11 gates package install scripts behind `allowScripts` in package.json. electron
+        # and esbuild are approved there and both need theirs — without it the Electron binary
+        # is never downloaded and the packaging step fails with an empty node_modules/electron.
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify
+        # typecheck -> board schema + canonical form -> asset bake -> pixel purity -> 164 tests.
+        # This runs before packaging on purpose: a build that fails verify should not produce a
+        # downloadable exe at all.
+        run: npm run verify
+
+      - name: Build installer
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Name the artifact after the commit
+        id: name
+        shell: bash
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+          for f in release/*.exe; do
+            [ -e "$f" ] || continue
+            base=$(basename "$f" .exe)
+            mv "$f" "release/${base}-${SHA_SHORT}.exe"
+          done
+          ls -la release/*.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkynetOS-installer-${{ steps.name.outputs.sha_short }}
+          path: |
+            release/*.exe
+            release/*.blockmap
+          retention-days: 30
+          if-no-files-found: error
+
+      # A rolling prerelease so there is always one stable URL to download the newest build from,
+      # rather than digging through Actions runs. Only on main — a PR build stays an artifact.
+      - name: Publish rolling build
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passed through the environment, never interpolated into the shell script below.
+          # A commit message is attacker-controlled text as far as a workflow is concerned, and
+          # these messages genuinely contain backticks, quotes and $ — inlining one with ${{ }}
+          # would let it run as shell. GitHub's own hardening guidance, and it bites here.
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          {
+            echo "Automatic build of \`$COMMIT_SHA\`."
+            echo
+            echo '```'
+            printf '%s\n' "$COMMIT_MESSAGE"
+            echo '```'
+            echo
+            echo 'Unsigned — Windows SmartScreen will warn on first run: "More info" then "Run anyway".'
+          } > release/NOTES.md
+
+          gh release delete main-latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create main-latest release/*.exe \
+            --title "Latest main build" \
+            --notes-file release/NOTES.md \
+            --prerelease \
+            --target "$COMMIT_SHA"

@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
 import { registerIpc } from './ipc.js';
 import { getSettings } from './services/settings.js';
-import { pruneSnapshots } from './services/board-store.js';
+import { boardRoot, pruneSnapshots } from './services/board-store.js';
 
 const isDev = !app.isPackaged;
 
@@ -152,7 +152,9 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     // Screenshots show that the form renders; this shows that saving it changes the file on
     // disk, that the change validates, that a snapshot was taken, and that Ctrl+Z reverses it.
     const { readFileSync } = await import('node:fs');
-    const boardFile = join(app.getAppPath(), 'board', 'root.board.json');
+    // boardRoot() resolves to resources/board when packaged and the repo copy in dev, so the
+    // same harness proves the same thing against a real installed build.
+    const boardFile = join(boardRoot(), 'root.board.json');
     const MARKER = 'SMOKE TEST MARKER ' + Date.now();
     const before = readFileSync(boardFile, 'utf8');
 

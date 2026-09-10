@@ -98,3 +98,18 @@ Append-only. Newest at the bottom. One entry per real decision: what, alternativ
 **Decision:** Traces, zone outlines, selection brackets and the broken-target stipple are built from filled `rect()` calls only. No strokes, no paths, no diagonals. The trace router emits orthogonal polylines and inserts elbows so a hand-placed waypoint cannot produce a diagonal segment.
 **Rejected:** Stroked polylines; 45° elbows as docs/01 mentions for the router.
 **Why:** A 1px stroke straddles the pixel boundary and lands as two half-lit rows even with MSAA off, and a rasterised diagonal cannot be pixel-exact at all — both are anti-mush violations of the same severity as a crash. Filled rects at integer coordinates are the only primitive that is hard-edged by construction. Verified: the rendered board contains exactly 11 colours, every one an exact `skynet.gpl` entry, with no intermediate values anywhere. 45° elbows return at M2 as pre-drawn atlas tiles, which is how docs/02 rule 7 says diagonals are allowed to exist.
+
+## 2026-09-09 — Automatic builds run in GitHub Actions, not in a local git hook
+**Decision:** `.github/workflows/build.yml` builds an NSIS installer on every push to `main`, uploads it as an artifact, and republishes a rolling `main-latest` prerelease. A local post-commit hook is available but opt-in (`npm run hooks:install`) and only does the 14-second unpacked build, in the background, never failing the commit.
+**Rejected:** A blocking post-commit hook that builds the installer.
+**Why:** Measured on this machine: NSIS is 36s warm, unpacked is 14s. A 36-second blocking hook turns every commit into a wait, and the predictable outcome is `--no-verify` becoming a habit — which is worse than having no hook. CI also builds from a clean checkout, which is the only thing that catches packaging bugs like the two found today. The hook exists for the machine you are sitting at; CI is the thing that actually produces the artifact for every commit.
+
+## 2026-09-09 — better-sqlite3 and keytar deleted from package.json
+**Decision:** Removed both. `node-pty` stays in `optionalDependencies` for M3, and `electron-builder.yml` sets `npmRebuild: false` plus a `!node_modules/node-pty/**` file negation.
+**Rejected:** Keeping them as unused optional dependencies.
+**Why:** They were not merely unused, they actively broke `electron-builder`: it runs `@electron/rebuild` over production dependencies, which invoked node-gyp on better-sqlite3 and failed the packaging step for a module nothing imports. `node:sqlite` in Electron 44 already replaces better-sqlite3 (verified, FTS5 included) and keytar is unmaintained, so M7 will pick a maintained credential library. node-pty was additionally shipping several megabytes of conpty binaries into the installer for a terminal that does not exist yet. M3 flips `npmRebuild` back and drops the negation when the embedded terminal actually lands.
+
+## 2026-09-09 — CI passes the commit message through the environment, never inline
+**Decision:** The release step reads `$COMMIT_MESSAGE` from `env:` and writes it to a notes file, rather than interpolating `${{ github.event.head_commit.message }}` into the shell script.
+**Rejected:** Inlining it, which is the shorter and more obvious way to write it.
+**Why:** A commit message is attacker-controlled text from a workflow's point of view, and `${{ }}` interpolation splices it into the script before bash ever sees it — a message containing a backtick or `$(…)` executes. This is not hypothetical here: the commit messages in this repo already contain backticks, quotes and `$`. GitHub's own hardening guidance says to pass untrusted values through the environment; costs three extra lines.

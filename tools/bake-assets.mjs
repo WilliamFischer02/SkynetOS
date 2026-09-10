@@ -207,6 +207,10 @@ for (const [key, spec] of Object.entries(manifest.sprites ?? {})) {
 }
 
 if (!baked.length) {
+  // Create the directory even with nothing in it. electron-builder lists assets/atlas under
+  // extraResources and warns "file source doesn't exist" otherwise, which means a packaged
+  // build has no atlas path at all for the loader to look at.
+  mkdirSync(OUT_DIR, { recursive: true });
   console.warn('\nNothing baked. Drop packs into assets/vendor/, fill in assets/sprites/manifest.json,');
   console.warn('and re-run. Until then the app renders placeholder rectangles — that is expected before M5.\n');
   process.exit(0);

@@ -11,6 +11,9 @@
     "dev": "electron-vite dev",
     "build:app": "electron-vite build",
     "smoke": "npm run build:app && node tools/smoke-shot.mjs",
+    "app": "electron-vite build && electron-builder --win --dir && \"release/win-unpacked/SkynetOS.exe\"",
+    "hooks:install": "node tools/install-hooks.mjs install",
+    "hooks:uninstall": "node tools/install-hooks.mjs uninstall",
     "sheet": "node tools/sheet-contact.mjs",
     "build": "npm run verify && electron-vite build && electron-builder --win nsis",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -45,18 +48,19 @@
   "optionalDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@xterm/xterm": "^5.5.0",
-    "better-sqlite3": "^11.10.0",
     "chokidar": "^4.0.3",
-    "keytar": "^7.9.0",
     "node-pty": "^1.0.0",
     "simple-git": "^3.36.0"
   },
   "$deps": [
-    "Native modules (better-sqlite3, node-pty, keytar) are in optionalDependencies ON PURPOSE.",
-    "They need a node-gyp toolchain this machine does not have, and nothing before M3 imports them.",
-    "npm install therefore succeeds with them omitted instead of rolling the whole tree back.",
-    "M3 must resolve the toolchain properly (@electron/rebuild against Electron's ABI, or a",
-    "WASM/built-in sqlite swap) and promote them back to dependencies. See docs/DECISIONS.md."
+    "node-pty is in optionalDependencies because M3's embedded terminal will need it and nothing",
+    "imports it yet. It has no working node-gyp toolchain on this machine, so it installs unbuilt.",
+    "electron-builder.yml therefore sets npmRebuild:false \u2014 the packaged app contains zero native",
+    "modules today. M3 must flip that back and rebuild node-pty against Electron's ABI.",
+    "",
+    "better-sqlite3 and keytar were REMOVED on 2026-09-09. node:sqlite in Electron 44 replaces",
+    "better-sqlite3 outright (DatabaseSync and FTS5 both verified against the real binary), and",
+    "keytar is unmaintained; M7 picks a maintained credential library then. See docs/DECISIONS.md."
   ],
   "allowScripts": {
     "electron": true,

@@ -4,7 +4,58 @@ An overhead pixel-art motherboard that is also a real control surface for every 
 
 Agents are microchips. Repos and folders are disk drives. Files are components. Copper traces show what produces what. Clicking a chip launches the actual agent in the actual directory. Clicking a drive opens the actual folder — or descends into a room. Nothing on the board is decorative-only; every sprite is bound to something real on disk, in GitHub, or in the cloud.
 
-**Status:** design-complete, code not written. This repo is the build contract. An agent reads `CLAUDE.md` + `docs/` and builds the app.
+**Status:** M0 done, M1 substantially done. The app builds, launches, renders the real board with
+copper traces, resolves every node against the real filesystem, opens real folders, and lets you
+edit any node through a form with a native file picker. All art is still placeholder rectangles —
+no atlas has been baked yet, which is by design until M5.
+
+---
+
+## Running it
+
+**Day to day — this is the one you want:**
+
+```bash
+npm install     # once. Downloads Electron (~250MB), takes a couple of minutes.
+npm run dev     # opens the app with hot reload on the renderer
+```
+
+Edit anything under `src/renderer/` and the window updates without restarting. Changes to
+`src/main/` or `src/preload/` restart Electron automatically.
+
+**Controls:** `WASD`/arrows pan · `2` `3` `4` zoom · `Ctrl+scroll` zoom · click or `Tab`/`Shift+Tab`
+to select · `Space`/`Enter` or double-click to activate · `E` edit the selected node · `F` focus
+mode · `R` re-read the board file · `Ctrl+Z`/`Ctrl+Y` undo/redo.
+
+**A real double-clickable exe:**
+
+| Command | Time | Produces |
+|---|---|---|
+| `npm run app` | ~14s | `release/win-unpacked/SkynetOS.exe`, then launches it. No installer. Pin it to the taskbar. |
+| `npm run build` | ~40s | `release/SkynetOS-<version>-x64.exe` — a real NSIS installer, ~129MB. Runs `verify` first. |
+| `npm run smoke` | ~20s | Launches the built app headless, screenshots it, drives pan/zoom, exercises the command bus, exits. Evidence, not claims. |
+
+**Checks:**
+
+```bash
+npm run verify   # typecheck + board schema + canonical form + asset bake + pixel purity + tests
+npm run sheet <sheet-id> out.png --zoom 6   # ruled contact sheet of a vendor sheet
+```
+
+## Automatic builds
+
+**Every push to `main` builds an installer.** `.github/workflows/build.yml` runs `npm run verify`,
+packages the NSIS installer, uploads it as a run artifact, and republishes the rolling
+[`main-latest`](../../releases/tag/main-latest) prerelease so there is always one URL for the
+newest build. A failing `verify` produces no downloadable exe.
+
+The installer is **unsigned**, so Windows SmartScreen warns on first run — "More info", then
+"Run anyway". Code signing needs a certificate; it is not a build problem.
+
+**Optional, local:** `npm run hooks:install` adds a post-commit hook that rebuilds
+`release/win-unpacked/SkynetOS.exe` in the background after every commit, so a pinned shortcut is
+always current. It never blocks or fails a commit; errors land in `release/build.log`.
+`npm run hooks:uninstall` removes it.
 
 ---
 
