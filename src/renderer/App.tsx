@@ -4,6 +4,8 @@ import { Inspector } from './ui/Inspector.js';
 import { Iris } from './ui/Iris.js';
 import { Minimap } from './ui/Minimap.js';
 import { SessionDock } from './ui/SessionDock.js';
+import { DragBadges } from './ui/DragBadges.js';
+import { IngestWizard } from './ui/IngestWizard.js';
 import { useBoardStore } from './store/useBoardStore.js';
 
 /**
@@ -49,6 +51,9 @@ export function App(): React.JSX.Element {
   const toggleFocus = useBoardStore((s) => s.toggleFocus);
 
   const liveSessionCount = useBoardStore((s) => s.sessions.filter((x) => x.state === 'running').length);
+  const artifacts = useBoardStore((s) => s.artifacts);
+  const offerIngest = useBoardStore((s) => s.offerIngest);
+  const staleCount = Object.values(artifacts).filter((a) => a.stale === 'stale').length;
   const [status, setStatus] = useState<BoardCanvasStatus | null>(null);
   const uiScale = useBoardStore((s) => s.uiScale);
   const onStatus = useCallback((next: BoardCanvasStatus) => setStatus(next), []);
@@ -138,8 +143,38 @@ export function App(): React.JSX.Element {
 
   if (!board) return <div className="boot">READING BOARD…</div>;
 
+  /*
+   * Drop-in ingestion. The whole window is a drop target: dragging a repo from Explorer onto the
+   * board should work wherever you let go, not only over one small zone.
+   *
+   * `dragover` must preventDefault or the browser refuses the drop entirely, and Chromium's
+   * default action for a dropped file is to NAVIGATE to it — which would replace the app with a
+   * jar. docs/07 blocks navigation anyway, but preventing it here is what makes the drop land.
+   */
+  const onDragOver = (event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const onDrop = (event: React.DragEvent) => {
+    if (!event.dataTransfer.files.length) return;
+    event.preventDefault();
+    const paths = window.skynet.pathsForFiles(Array.from(event.dataTransfer.files));
+    if (!paths.length) return;
+    const cam = cameraRef.current;
+    const world = cam
+      ? { x: (cam.x + event.clientX / cam.zoom) / board.grid.tile, y: (cam.y + event.clientY / cam.zoom) / board.grid.tile }
+      : { x: 1, y: 1 };
+    void offerIngest(paths, { x: Math.floor(world.x), y: Math.floor(world.y) });
+  };
+
   return (
-    <div className={editMode ? 'app edit-mode' : 'app'}>
+    <div
+      className={editMode ? 'app edit-mode' : 'app'}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <BoardCanvas
         board={board}
         boardId={boardId}
@@ -176,6 +211,7 @@ export function App(): React.JSX.Element {
             {status.fitsOnScreen ? <span className="warn">WHOLE BOARD VISIBLE — NOTHING TO PAN</span> : null}
             {status.faceCount > 0 ? <span className="ok-text">{status.faceCount} FACE{status.faceCount === 1 ? '' : 'S'}</span> : null}
             {liveSessionCount > 0 ? <span className="ok-text">{liveSessionCount} LIVE</span> : null}
+            {staleCount > 0 ? <span className="warn">{staleCount} STALE</span> : null}
             <span className={status.fallbackCount > 0 ? 'warn' : undefined}>
               ROUTED {status.routedCount}{status.fallbackCount > 0 ? ` · ${status.fallbackCount} DIRECT` : ''}
             </span>
@@ -191,7 +227,9 @@ export function App(): React.JSX.Element {
 
       <Minimap board={board} targets={targets} cameraRef={cameraRef} onJump={requestJump} />
 
+      <DragBadges board={board} artifacts={artifacts} cameraRef={cameraRef} />
       <SessionDock />
+      <IngestWizard />
       <Inspector />
       <Iris />
 

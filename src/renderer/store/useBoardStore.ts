@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Board, BoardNode } from '@shared/types.js';
 import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js';
-import type { BoardLoad, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
+import type { ArtifactInfo, BoardLoad, IngestSuggestion, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
 import type { TargetInfo } from '@shared/targets.js';
 
 /**
@@ -66,6 +66,14 @@ interface BoardState {
    */
   sessions: SessionInfo[];
   services: ServiceInfo[];
+  /** Resolved build outputs by node id: filename, version, and whether it is behind its source. */
+  artifacts: Record<string, ArtifactInfo>;
+  refreshArtifacts: () => Promise<void>;
+  /** Pending drop-in suggestions awaiting confirmation in the wizard. */
+  pendingIngest: { suggestions: IngestSuggestion[]; pos: { x: number; y: number } } | null;
+  offerIngest: (paths: string[], pos: { x: number; y: number }) => Promise<void>;
+  acceptIngest: (suggestion: IngestSuggestion) => Promise<void>;
+  cancelIngest: () => void;
   subscribeToProcesses: () => () => void;
   startSession: (nodeId: string, force?: boolean) => Promise<void>;
   stopSession: (sessionId: string) => Promise<void>;
@@ -123,6 +131,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   jumpTo: null,
   sessions: [],
   services: [],
+  artifacts: {},
+  pendingIngest: null,
 
   loadBoard: async (boardId) => {
     set({ busy: true });
@@ -147,6 +157,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         window.skynet['command:history']()
       ]);
       set({ targets: byNodeId(statuses), history });
+      // Artifacts and watchers follow the board you are actually looking at.
+      void get().refreshArtifacts();
+      void window.skynet['watch:board'](boardId);
     }
   },
 
@@ -183,6 +196,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       editingId: null,
       transition: 'opening'
     });
+    void get().refreshArtifacts();
+    void window.skynet['watch:board'](load.board.id);
   },
 
   ascend: async () => {
@@ -214,6 +229,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       editingId: null,
       transition: 'opening'
     });
+    void get().refreshArtifacts();
+    void window.skynet['watch:board'](parent.boardId);
   },
 
   setTransition: (phase) => set({ transition: phase }),
@@ -264,8 +281,53 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     void window.skynet['service:list']().then((services) => set({ services }));
     const offSessions = window.skynet.on('sessions:changed', (sessions) => set({ sessions }));
     const offServices = window.skynet.on('services:changed', (services) => set({ services }));
-    return () => { offSessions(); offServices(); };
+
+    /*
+     * A watched file changed. Re-resolve only the nodes that care about it, not the whole board:
+     * a rebuild in a repo with twenty file nodes should not re-run twenty git calls.
+     */
+    const offFiles = window.skynet.on('files:changed', (event) => {
+      if (event.boardId !== get().boardId) return;
+      void get().refreshArtifacts();
+      void get().refreshTargets();
+    });
+
+    return () => { offSessions(); offServices(); offFiles(); };
   },
+
+  refreshArtifacts: async () => {
+    const { boardId, board } = get();
+    if (!board) return;
+    const list = await window.skynet['artifact:resolveBoard'](boardId);
+    const byId: Record<string, ArtifactInfo> = {};
+    for (const a of list) byId[a.nodeId] = a;
+    set({ artifacts: byId });
+  },
+
+  offerIngest: async (paths, pos) => {
+    const suggestions = await window.skynet['ingest:classify'](paths);
+    if (!suggestions.length) {
+      get().toast('warn', 'NOTHING USABLE IN THAT DROP');
+      return;
+    }
+    set({ pendingIngest: { suggestions, pos } });
+  },
+
+  acceptIngest: async (suggestion) => {
+    const { boardId, pendingIngest } = get();
+    const pos = pendingIngest?.pos ?? { x: 1, y: 1 };
+    const result = await window.skynet['ingest:create'](boardId, suggestion, pos);
+    if (!result.ok) { get().toast('fault', result.error ?? 'could not place the node'); return; }
+
+    const remaining = (pendingIngest?.suggestions ?? []).filter((s) => s.path !== suggestion.path);
+    set({ pendingIngest: remaining.length ? { suggestions: remaining, pos } : null });
+
+    await get().loadBoard(boardId);
+    set({ selectedId: result.nodeId ?? null });
+    get().toast('ok', `placed ${suggestion.name} as ${suggestion.kind}`);
+  },
+
+  cancelIngest: () => set({ pendingIngest: null }),
 
   startSession: async (nodeId, force) => {
     const { boardId, board } = get();

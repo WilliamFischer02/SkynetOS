@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { CHANNELS, EVENTS, type EventName, type SkynetBridge, type SkynetEvents } from '@shared/ipc.js';
 
 /**
@@ -32,5 +32,21 @@ bridge.on = <K extends EventName>(event: K, handler: (payload: SkynetEvents[K]) 
   ipcRenderer.on(event, wrapped);
   return () => ipcRenderer.removeListener(event, wrapped);
 };
+
+/**
+ * Turn dropped File objects back into real paths.
+ *
+ * `File.path` was removed in Electron 32+; `webUtils.getPathForFile` is the replacement and it
+ * only exists in the preload. It reads a path the USER chose by dropping it — it cannot enumerate
+ * anything, so it hands the renderer no capability it did not already have by dropping the file.
+ */
+bridge.pathsForFiles = (files: File[]): string[] =>
+  files.map((f) => {
+    try {
+      return webUtils.getPathForFile(f);
+    } catch {
+      return '';
+    }
+  }).filter(Boolean);
 
 contextBridge.exposeInMainWorld('skynet', bridge);

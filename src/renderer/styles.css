@@ -509,3 +509,99 @@ canvas {
 .btn.tiny { padding: 0 var(--gap); margin-left: auto; }
 
 .session-block { display: flex; flex-direction: column; gap: var(--gap); }
+
+/* ---------- drag-out badges ---------- */
+
+/*
+ * The drag-out handles. See ui/DragBadges.tsx for why these are DOM and not canvas: once
+ * startDrag fires, Windows owns the gesture, so drag-out and drag-to-move must be different
+ * ELEMENTS, decided before the OS takes over.
+ *
+ * The layer itself is click-through; only the badges take pointer events, so the canvas
+ * underneath still gets its clicks, its selection and its drag-to-move.
+ */
+.drag-badges {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/*
+ * Sized by its CONTENT, not by the node's footprint. A 3-tile cartridge is 144 device pixels at
+ * zoom 3, and `thestalker-0.1.0.jar v0.1.0` at the chrome's 22px does not fit in that — the
+ * first version clipped it to `TH`. The badge is chrome pinned to a board position, so it keeps
+ * a readable size and lets the label decide the width.
+ */
+.drag-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 0 var(--gap);
+  height: calc(16 * var(--p));
+  max-width: calc(320 * var(--p));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  color: var(--silk);
+  font-size: var(--f);
+  line-height: calc(16 * var(--p));
+  white-space: nowrap;
+  overflow: hidden;
+  text-transform: uppercase;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.drag-badge:hover { border-color: var(--signal); color: var(--signal); }
+.drag-badge:active { cursor: grabbing; }
+
+.drag-badge.stale { border-color: var(--warn); }
+.drag-badge.missing { border-color: var(--fault); color: var(--fault); cursor: not-allowed; }
+
+.badge-grip { color: var(--copper); letter-spacing: calc(-1 * var(--p)); }
+.badge-label { overflow: hidden; text-overflow: clip; }
+.badge-stale { color: var(--warn); }
+
+/* ---------- drop-in wizard ---------- */
+
+.ingest {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  width: calc(560 * var(--p));
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--signal);
+}
+
+.ingest-head {
+  color: var(--signal);
+  text-transform: uppercase;
+  border-bottom: var(--p) solid var(--copper-dark);
+  padding-bottom: var(--gap);
+  margin-bottom: calc(2 * var(--gap));
+}
+
+.ingest-row {
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.5 * var(--gap));
+  padding: calc(1.5 * var(--gap)) 0;
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+
+.ingest-kind { color: var(--copper); text-transform: uppercase; }
+.ingest-name { color: var(--silk); font-size: var(--f2); line-height: var(--f2); text-transform: uppercase; }
+.ingest-path { color: var(--copper-dark); overflow-wrap: anywhere; }
+.ingest-reason { color: var(--silk); }
+.ingest-field { color: var(--copper); overflow-wrap: anywhere; }
+.ingest-row .btn { align-self: flex-start; margin-top: var(--gap); }
+.ingest-actions { display: flex; gap: var(--gap); padding-top: calc(2 * var(--gap)); }

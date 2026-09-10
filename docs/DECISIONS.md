@@ -203,3 +203,23 @@ Append-only. Newest at the bottom. One entry per real decision: what, alternativ
 **Decision:** The smoke harness proves the resume decision against the real database and exercises every IPC guard, but never spawns a real Claude Code session.
 **Rejected:** Launching one and killing it.
 **Why:** It would open a terminal and start a real conversation in a real repo, consuming William's usage, for a test he did not ask for. What can honestly be automated is the part that actually decides resume-versus-fresh, and that is: the id is written, read back through the database that survives a restart, and turned into `--resume`. The argv, quoting, working directory and Windows-Terminal fallback are unit-tested exactly; the spawn itself is three lines. Clicking the chip once is the remaining verification and it is William's to make — and the roadmap says so rather than implying M3 is fully machine-verified.
+
+## 2026-09-09 — Drag-out is a DOM badge; the node body stays canvas
+**Decision:** Every draggable file node gets a small DOM badge overlaid on the canvas at its bottom edge, and that badge is the only drag-out handle. `webContents.startDrag` fires from its `dragstart`.
+**Rejected:** Starting the drag from the Pixi canvas; one handle for both gestures.
+**Why:** CLAUDE.md's landmine, and it is real: once `startDrag` is called Windows owns the gesture and the app stops receiving mouse events for it, so an in-app drag can never become a drag-out or vice versa. The decision has to be made at `dragstart`, before any of that, purely from which element was grabbed — which means two *elements*, not one element with a mode flag. The badge is sized by its content rather than by the node footprint: the first version clamped it to the cartridge's 3 tiles and clipped `thestalker-0.1.0.jar` down to `TH`.
+
+## 2026-09-09 — Staleness is measured against the producing repo's last commit
+**Decision:** `stale` follows the incoming `produces` edge to its source node, resolves that to a working tree, asks `git log -1 --format=%cI`, and compares to the artifact's mtime. No producer or no repo ⇒ `unknown`, never guessed.
+**Rejected:** An age threshold ("older than a day is stale"); comparing against the repo's file mtimes.
+**Why:** docs/03 says a STALE badge means "the producing agent has committed since the artifact was built", which is a checkable claim rather than a guess about time — and the board already knows who produces what, because a `produces` edge says so. An age heuristic would call a correct, finished build stale simply for being old. Verified against the real repos: `thestalker-0.1.0.jar` reads `stale`, and `a4_jar_time` reads `unknown` because TimeServed does not exist on disk — reported as unknown rather than assumed fresh.
+
+## 2026-09-09 — Watchers poll unless the path is provably a local fixed disk
+**Decision:** `usePolling()` returns true for UNC paths, cloud-sync roots (by name and by the OneDrive env vars), and anything without a local drive letter. If any watched directory needs polling, the whole chokidar instance polls at 5s.
+**Rejected:** Native notifications everywhere; per-directory watcher instances.
+**Why:** CLAUDE.md names this landmine, and the failure mode is the worst kind — silent. A cloud-sync folder that materialises files on demand can deliver change events late, coalesced, or not at all, and the board would simply stop noticing rebuilds while continuing to look correct. Erring toward polling costs a few stat calls every five seconds. Chokidar takes one polling setting per instance, and a room with twenty file nodes in the same repo should not open twenty watchers on overlapping trees, so one instance that polls when any member needs it is the right trade.
+
+## 2026-09-09 — A dropped build output becomes a glob, not a pinned filename
+**Decision:** `classify()` turns a `.jar` in a recognised build directory into a `file.artifact` with `glob`, `exclude` and a `versionPattern`, and says why in the wizard.
+**Rejected:** Creating a `file.exe`/`file.document` pinned to the exact dropped path.
+**Why:** The next build produces a different filename and a pinned node would immediately render broken — which is the entire reason `file.artifact` exists as a kind. Ingestion is also only ever a *suggestion*: docs/03 §2 says you cannot place a broken node by accident, so the wizard shows the kind, the fields and the reason, and accepting goes through the same command bus with the same validation and the same undo as any other edit.

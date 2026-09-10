@@ -6,6 +6,7 @@ import { boardRoot, pruneSnapshots } from './services/board-store.js';
 import { closeDb, reapDeadSessions } from './services/db.js';
 import { onSessionsChanged, restoreSessions, sweepSessions } from './services/session-manager.js';
 import { onServicesChanged, stopAllServices, sweepServices } from './services/service-runner.js';
+import { onFileChanged, stopWatching } from './services/watchers.js';
 
 const isDev = !app.isPackaged;
 
@@ -210,6 +211,56 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     await wait(200);
+
+    /*
+     * M4: the artifact cartridge, resolved against the REAL jars in C:/dev/TheStalker.
+     * This is the milestone's exit criterion — "the Stalker artifact cartridge shows
+     * thestalker-0.4.2.jar / 11m ago" — checked against whatever is actually on disk.
+     */
+    const artifacts = await win.webContents.executeJavaScript(
+      `window.skynet['artifact:resolveBoard']('minecraftos')`
+    ) as {
+      nodeId: string; fileName: string | null; version: string | null;
+      stale: string; lastCommit: string | null;
+      target: { state: string; resolved: string | null; matchCount?: number; mtimeMs?: number };
+    }[];
+
+    for (const a of artifacts) {
+      const age = a.target.mtimeMs
+        ? `${Math.round((Date.now() - a.target.mtimeMs) / 60000)}m ago`
+        : 'no mtime';
+      console.log(
+        `[smoke] artifact ${a.nodeId}: ${a.fileName ?? '(none)'}` +
+        `${a.version ? ` v${a.version}` : ''} · ${age} · ${a.target.state}` +
+        ` · stale=${a.stale}${a.target.matchCount !== undefined ? ` · ${a.target.matchCount} match(es)` : ''}`
+      );
+    }
+
+    // Drag-out: resolve the file the badge would hand to Windows. Not actually starting the drag
+    // -- startDrag needs a live mouse gesture, and once it fires the OS owns the pointer.
+    const dragTarget = await win.webContents.executeJavaScript(
+      `window.skynet['artifact:resolve']('minecraftos', 'a1_jar_stalker')`
+    ) as { target: { resolved: string | null } };
+    console.log(`[smoke] drag-out would hand Windows: ${dragTarget.target.resolved ?? '(nothing)'}`);
+
+    // Drop-in ingestion, classified against real paths on this machine.
+    const suggestions = await win.webContents.executeJavaScript(
+      `window.skynet['ingest:classify'](${JSON.stringify([
+        'C:/dev/TheStalker/build/libs/thestalker-0.1.0.jar',
+        'C:/dev/TheStalker',
+        'C:/definitely/not/here.jar'
+      ])})`
+    ) as { path: string; kind: string; fields: Record<string, unknown> }[];
+    for (const s of suggestions) {
+      console.log(`[smoke] drop-in ${s.path} -> ${s.kind}${s.fields['glob'] ? ` glob=${String(s.fields['glob'])}` : ''}`);
+    }
+    console.log(`[smoke] drop-in ignored the path that does not exist: ${suggestions.length === 2}`);
+
+    // Watchers, with the polling decision reported.
+    const watch = await win.webContents.executeJavaScript(
+      `window.skynet['watch:board']('minecraftos')`
+    ) as { watched: number; polled: number };
+    console.log(`[smoke] watching ${watch.watched} director(ies), ${watch.polled} need polling`);
 
     /*
      * Prove the RESUME mechanism end to end, against the real database, without launching a
@@ -483,6 +534,9 @@ app.whenReady().then(() => {
   onServicesChanged((services) => {
     if (!win.isDestroyed()) win.webContents.send('services:changed', services);
   });
+  onFileChanged((event) => {
+    if (!win.isDestroyed()) win.webContents.send('files:changed', event);
+  });
 
   // A detached popout terminal can be closed in ways that never reach our 'exit' handler, so the
   // dock is reconciled against the OS on a slow timer as well as on events.
@@ -492,6 +546,7 @@ app.whenReady().then(() => {
     // Agent popouts are detached on purpose and outlive us. Services do not: a dev server that
     // survives the app that started it is a port you cannot rebind and a process you cannot find.
     stopAllServices();
+    void stopWatching();
     closeDb();
   });
 

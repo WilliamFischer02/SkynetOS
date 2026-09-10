@@ -20,6 +20,12 @@ import {
   stopService
 } from './services/service-runner.js';
 import { openTarget } from './services/shell-opener.js';
+import { resolveArtifact, resolveBoardArtifacts } from './services/artifacts.js';
+import { startDragOut } from './services/drag-out.js';
+import { classify, suggestionToNode } from './services/ingest.js';
+import { watchBoard } from './services/watchers.js';
+import { apply as applyCommand } from './services/command-bus.js';
+import { findFreeSpaceOnBoard } from './services/placement.js';
 import { resolveNodeTarget, resolveValue } from './services/target-resolver.js';
 
 /**
@@ -120,6 +126,51 @@ const handlers: Handlers = {
   'service:stop': (boardId, nodeId) => stopService(boardId, nodeId),
   'service:list': () => listServices(),
   'service:tail': (boardId, nodeId) => serviceTail(boardId, nodeId),
+
+  'artifact:resolve': async (boardId, nodeId) => {
+    const load = loadBoard(boardId);
+    if (!load.ok) throw new Error(load.error);
+    return resolveArtifact(load.board, nodeOrThrow(boardId, nodeId));
+  },
+
+  'artifact:resolveBoard': async (boardId) => {
+    const load = loadBoard(boardId);
+    if (!load.ok) return [];
+    return resolveBoardArtifacts(load.board);
+  },
+
+  'drag:startFile': async (boardId, nodeId, ..._rest) => {
+    void _rest;
+    const load = loadBoard(boardId);
+    if (!load.ok) return { ok: false, error: load.error };
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) return { ok: false, error: 'NO WINDOW' };
+    return startDragOut(win.webContents, load.board, nodeId);
+  },
+
+  'ingest:classify': (paths) => paths.map((p) => classify(p)).filter((s): s is NonNullable<typeof s> => s !== null),
+
+  'ingest:create': (boardId, suggestion, pos) => {
+    const load = loadBoard(boardId);
+    if (!load.ok) return { ok: false, error: load.error };
+    const existing = new Set(load.board.nodes.map((n) => n.id));
+    const free = findFreeSpaceOnBoard(load.board, suggestion.footprint, pos);
+    if (!free) return { ok: false, error: 'NO FREE GRID SPACE ON THIS BOARD' };
+    const node = suggestionToNode(suggestion, free, existing);
+    const result = applyCommand({
+      command: { type: 'node.create', boardId, node },
+      actor: 'user',
+      label: `drop in ${node.name}`
+    });
+    if (!result.ok) return { ok: false, error: result.error };
+    return { ok: true, nodeId: node.id };
+  },
+
+  'watch:board': async (boardId) => {
+    const load = loadBoard(boardId);
+    if (!load.ok) return { watched: 0, polled: 0 };
+    return watchBoard(load.board);
+  },
 
   'node:open': async (boardId, nodeId) => {
     const result = await openTarget(nodeOrThrow(boardId, nodeId));

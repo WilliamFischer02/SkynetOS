@@ -14,7 +14,7 @@
 import type { CommandRequest, CommandResult, HistoryStatus } from './commands.js';
 import type { FieldControl } from './node-fields.js';
 import type { TargetInfo } from './targets.js';
-import type { Board, BoardNode, LaunchMode } from './types.js';
+import type { Board, BoardNode, Footprint, LaunchMode, NodeKind } from './types.js';
 
 /** What a board file's load attempt produced. A failure is data, not an exception. */
 export type BoardLoad =
@@ -108,6 +108,35 @@ export interface ServiceInfo {
   error?: string;
 }
 
+/** A resolved build output, and whether it is behind the source that produces it. */
+export interface ArtifactInfo {
+  nodeId: string;
+  target: TargetInfo;
+  /** Just the filename, e.g. `thestalker-0.1.0.jar`. */
+  fileName: string | null;
+  /** Captured by the node's versionPattern, e.g. `0.1.0`. */
+  version: string | null;
+  /**
+   * 'stale' when the producing repo has committed since this file was built, 'fresh' when it has
+   * not, 'unknown' when there is no producer edge or no repo to ask. Never guessed.
+   */
+  stale: 'fresh' | 'stale' | 'unknown';
+  producerId: string | null;
+  lastCommit: string | null;
+}
+
+/** What a dropped file or folder should become. A suggestion — the wizard still shows it. */
+export interface IngestSuggestion {
+  path: string;
+  kind: NodeKind;
+  name: string;
+  suggestedId: string;
+  fields: Partial<BoardNode>;
+  footprint: Footprint;
+  /** Why this kind was chosen, in one sentence, shown in the wizard. */
+  reason: string;
+}
+
 export interface AppSettingsView {
   devRoots: string[];
   reducedMotion: boolean;
@@ -139,6 +168,23 @@ export interface SkynetApi {
 
   // --- node face images ---
   'mosaic:forNode': (boardId: string, nodeId: string) => MosaicResult;
+
+  // --- artifacts ---
+  'artifact:resolve': (boardId: string, nodeId: string) => ArtifactInfo;
+  'artifact:resolveBoard': (boardId: string) => ArtifactInfo[];
+
+  /**
+   * Hand a real file drag to the OS. Called from the artifact badge's `dragstart`, and ONLY from
+   * there — once this returns Windows owns the gesture. See services/drag-out.ts.
+   */
+  'drag:startFile': (boardId: string, nodeId: string) => { ok: boolean; file?: string; error?: string };
+
+  // --- drop-in ingestion ---
+  'ingest:classify': (paths: string[]) => IngestSuggestion[];
+  'ingest:create': (boardId: string, suggestion: IngestSuggestion, pos: { x: number; y: number }) => { ok: boolean; nodeId?: string; error?: string };
+
+  // --- watchers ---
+  'watch:board': (boardId: string) => { watched: number; polled: number };
 
   // --- act ---
   'node:open': (boardId: string, nodeId: string) => OpenTargetResult;
@@ -180,6 +226,12 @@ export const CHANNELS = [
   'target:verify',
   'pick:target',
   'mosaic:forNode',
+  'artifact:resolve',
+  'artifact:resolveBoard',
+  'drag:startFile',
+  'ingest:classify',
+  'ingest:create',
+  'watch:board',
   'node:open',
   'session:start',
   'session:stop',
@@ -208,11 +260,13 @@ export function isChannel(value: string): value is Channel {
 export interface SkynetEvents {
   'sessions:changed': SessionInfo[];
   'services:changed': ServiceInfo[];
+  /** A watched file changed. Carries the nodes that care, so the renderer can refresh just those. */
+  'files:changed': { boardId: string; nodeIds: string[]; path: string; reason: string };
 }
 
 export type EventName = keyof SkynetEvents;
 
-export const EVENTS = ['sessions:changed', 'services:changed'] as const satisfies readonly EventName[];
+export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed'] as const satisfies readonly EventName[];
 
 /** The shape contextBridge exposes on window.skynet. */
 export type SkynetBridge = {
@@ -220,4 +274,9 @@ export type SkynetBridge = {
 } & {
   /** Subscribe to a pushed event. Returns an unsubscribe function. */
   on: <K extends EventName>(event: K, handler: (payload: SkynetEvents[K]) => void) => () => void;
+  /**
+   * Real filesystem paths for dropped File objects. `File.path` was removed in Electron 32+;
+   * this wraps `webUtils.getPathForFile`, which only reads paths the user chose by dropping them.
+   */
+  pathsForFiles: (files: File[]) => string[];
 };
