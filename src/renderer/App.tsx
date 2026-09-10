@@ -3,6 +3,7 @@ import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
 import { Inspector } from './ui/Inspector.js';
 import { Iris } from './ui/Iris.js';
 import { UsageMeter } from './ui/UsageMeter.js';
+import { AddPalette } from './ui/AddPalette.js';
 import { Minimap } from './ui/Minimap.js';
 import { SessionDock } from './ui/SessionDock.js';
 import { DragBadges } from './ui/DragBadges.js';
@@ -49,6 +50,8 @@ export function App(): React.JSX.Element {
   const moveNode = useBoardStore((s) => s.moveNode);
   const resizeNode = useBoardStore((s) => s.resizeNode);
   const usageRoutes = useBoardStore((s) => s.usageRoutes);
+  const paletteOpen = useBoardStore((s) => s.paletteOpen);
+  const setPaletteOpen = useBoardStore((s) => s.setPaletteOpen);
   const refreshUsageRoutes = useBoardStore((s) => s.refreshUsageRoutes);
   const undo = useBoardStore((s) => s.undo);
   const redo = useBoardStore((s) => s.redo);
@@ -123,6 +126,13 @@ export function App(): React.JSX.Element {
       // E is Edit Board mode, per docs/03 §1 — the grid overlay and draggable components.
       // Editing the selected node's FIELDS is F2, which keeps the two meanings of "edit" apart.
       if (event.code === 'KeyE') { event.preventDefault(); setMode(editMode ? 'view' : 'edit'); return; }
+      // N adds a component. Edit Board mode only — placing a node is an edit, and the mode is
+      // what separates browsing a board from rearranging one.
+      if (event.code === 'KeyN' && editMode) {
+        event.preventDefault();
+        setPaletteOpen(!paletteOpen);
+        return;
+      }
       if (event.code === 'F2' && selectedId) { event.preventDefault(); beginEdit(selectedId); return; }
       if (event.code === 'KeyF') { event.preventDefault(); toggleFocus(); return; }
       if (event.code === 'KeyR') { event.preventDefault(); void loadBoard(boardId); return; }
@@ -133,7 +143,7 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selectedId, beginEdit, setMode, editMode, toggleFocus, loadBoard, boardId]);
+  }, [undo, redo, selectedId, beginEdit, setMode, editMode, toggleFocus, loadBoard, boardId, paletteOpen, setPaletteOpen]);
 
   if (!load) return <div className="boot">READING BOARD…</div>;
 
@@ -224,6 +234,8 @@ export function App(): React.JSX.Element {
 
       {/* Top-left, under the breadcrumb: what this is costing, measured off disk. */}
       <UsageMeter />
+
+      <AddPalette />
 
       <div className="hud">
         {status ? (

@@ -23,11 +23,38 @@ function schemaPath(): string {
     : join(app.getAppPath(), 'schema', 'board.schema.json');
 }
 
+/**
+ * The compiled validator, recompiled whenever schema/board.schema.json changes on disk.
+ *
+ * It used to be compiled once and cached for the life of the process, which produced a genuinely
+ * baffling failure: add a field to the schema while the app is open, add it to a board, and every
+ * load reports "nodes 0 and 6 must not have additional properties" — against a schema that
+ * declares the property perfectly well, as `npm run validate:board` would confirm from the same
+ * file a second later. The only fix was to restart, and nothing said so.
+ *
+ * The schema is a file, it is editable, and this project's whole premise is that an agent may
+ * edit files while the app is running. So the cache is keyed on its mtime and size.
+ */
+let validatorStamp = '';
+
 function getValidator(): ValidateFunction<Board> {
-  if (validator) return validator;
-  const schema = JSON.parse(readFileSync(schemaPath(), 'utf8')) as object;
+  const file = schemaPath();
+  let stamp = '';
+  try {
+    const stat = statSync(file);
+    stamp = `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    // Unreadable: keep whatever is compiled rather than failing every board load over it.
+    if (validator) return validator;
+  }
+
+  if (validator && stamp === validatorStamp) return validator;
+
+  const schema = JSON.parse(readFileSync(file, 'utf8')) as object;
   const ajv = addFormats(new Ajv2020({ allErrors: true, strict: false }));
   validator = ajv.compile<Board>(schema);
+  validatorStamp = stamp;
+  if (stamp) console.log(`[board] compiled ${file}`);
   return validator;
 }
 

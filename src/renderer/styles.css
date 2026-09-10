@@ -776,3 +776,74 @@ canvas {
 .up-tokens { color: var(--signal); }
 .up-msgs { color: var(--copper-dark); }
 .usage-foot { margin-top: var(--gap); color: var(--copper-dark); text-transform: uppercase; }
+
+/* ---------- add-component palette (N in Edit Board mode) ---------- */
+
+.palette {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: calc(560 * var(--p));
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+}
+
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  color: var(--copper);
+  text-transform: uppercase;
+  padding-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+.palette-head .btn.tiny { margin-left: auto; }
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(160 * var(--p)), 1fr));
+  gap: var(--gap);
+  padding: calc(2 * var(--gap)) 0;
+}
+
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(0.5 * var(--gap));
+  padding: var(--gap);
+  font: inherit;
+  text-align: left;
+  color: var(--silk);
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+  box-shadow:
+    inset var(--p) var(--p) 0 0 rgba(233, 228, 214, 0.12),
+    calc(2 * var(--p)) calc(2 * var(--p)) 0 0 rgba(0, 0, 0, 0.45);
+}
+
+.palette-item:hover { border-color: var(--copper); color: var(--signal); }
+.palette-item:active {
+  transform: translate(calc(2 * var(--p)), calc(2 * var(--p)));
+  box-shadow: inset var(--p) var(--p) 0 0 rgba(0, 0, 0, 0.4);
+}
+
+/* 32x24 art at 2x. Integer scale and pixelated, like everything else on this board. */
+.palette-swatch {
+  width: calc(64 * var(--p));
+  height: calc(48 * var(--p));
+  image-rendering: pixelated;
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+}
+
+.palette-label { text-transform: uppercase; }
+.palette-kind { color: var(--copper-dark); }
+.palette-foot { color: var(--copper-dark); border-top: var(--p) solid var(--copper-dark); padding-top: var(--gap); }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Board, BoardNode } from '@shared/types.js';
+import type { Board, BoardNode, NodeKind } from '@shared/types.js';
 import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js';
 import type { ArtifactInfo, BoardLoad, IngestSuggestion, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
 import type { UsageRoute } from '@shared/usage.js';
@@ -120,6 +120,11 @@ interface BoardState {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   openNode: (nodeId: string) => Promise<void>;
+  /** Put a new node on the board and select it, ready to be bound to something. */
+  addNode: (kind: NodeKind, pos: { x: number; y: number }) => Promise<void>;
+  /** The add-component palette, open only in Edit Board mode. */
+  paletteOpen: boolean;
+  setPaletteOpen: (open: boolean) => void;
 
   toast: (level: Toast['level'], text: string) => void;
   dismissToast: (id: number) => void;
@@ -152,6 +157,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   artifacts: {},
   usageRoutes: [],
   pendingIngest: null,
+  paletteOpen: false,
 
   loadBoard: async (boardId) => {
     set({ busy: true });
@@ -506,6 +512,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const result = await window.skynet['node:open'](get().boardId, nodeId);
     if (result.ok) get().toast('ok', result.action);
     else get().toast(result.target.state === 'missing' ? 'fault' : 'warn', result.error ?? result.action);
+  },
+
+  setPaletteOpen: (open) => set({ paletteOpen: open }),
+
+  addNode: async (kind, pos) => {
+    const { boardId } = get();
+    const result = await window.skynet['node:add'](boardId, kind, pos);
+    if (!result.ok) { get().toast('fault', result.error ?? 'COULD NOT ADD THAT'); return; }
+    await get().loadBoard(boardId);
+    // Select AND open the editor: a node created unbound is useless until it is pointed at
+    // something, so the form it needs is the next thing you want.
+    set({ selectedId: result.nodeId ?? null, editingId: result.nodeId ?? null, paletteOpen: false });
+    get().toast('ok', `added ${kind} — bind it to something`);
   },
 
   toast: (level, text) => {

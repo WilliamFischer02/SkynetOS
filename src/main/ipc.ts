@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
 import { CHANNELS, type Channel, type SkynetApi } from '@shared/ipc.js';
 import type { BoardNode } from '@shared/types.js';
+import { DEFAULT_FOOTPRINT } from '@shared/types.js';
 import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
@@ -27,6 +28,7 @@ import { classify, suggestionToNode } from './services/ingest.js';
 import { watchBoard } from './services/watchers.js';
 import { apply as applyCommand } from './services/command-bus.js';
 import { findFreeSpaceOnBoard } from './services/placement.js';
+import { makeNode } from './services/node-factory.js';
 import { resolveNodeTarget, resolveValue } from './services/target-resolver.js';
 
 /**
@@ -182,6 +184,33 @@ const handlers: Handlers = {
     const load = loadBoard(boardId);
     if (!load.ok) return { watched: 0, polled: 0 };
     return watchBoard(load.board);
+  },
+
+  'node:add': (boardId, kind, pos) => {
+    const load = loadBoard(boardId);
+    if (!load.ok) return { ok: false, error: load.error };
+    const node = makeNode(load.board, kind, pos);
+
+    /*
+     * A printed kind (note.silk, group.zone) is placed exactly where it was asked for. It has no
+     * footprint on the grid and never collides, so looking for "free space" would move a bracket
+     * away from the cluster it was drawn around — which is the one thing it must not do.
+     */
+    const printed = kind === 'note.silk' || kind === 'group.zone';
+    if (!printed) {
+      const fp = node.footprint ?? DEFAULT_FOOTPRINT[kind];
+      const free = findFreeSpaceOnBoard(load.board, fp, node.pos);
+      if (!free) return { ok: false, error: 'NO FREE GRID SPACE ON THIS BOARD' };
+      node.pos = free;
+    }
+
+    const result = applyCommand({
+      command: { type: 'node.create', boardId, node },
+      actor: 'user',
+      label: `add ${kind}`
+    });
+    if (!result.ok) return { ok: false, error: result.error };
+    return { ok: true, nodeId: node.id };
   },
 
   'node:open': async (boardId, nodeId) => {

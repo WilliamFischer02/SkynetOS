@@ -535,3 +535,48 @@ A React hooks violation (an effect added after an early return) rendered a compl
 and the smoke capture saved a screenshot of an empty board with no hint of why: the error existed
 only in a devtools window a headless run never opens. `console-message` now forwards anything that
 is not `info`, so a capture that produces a blank frame also produces the reason.
+
+## 2026-09-10 — Couriers paint under the components
+
+William: "I want the robots to render as a layer under the nodes but over the wire and background."
+
+Paint order is now copper -> zones -> COURIERS -> components -> printed notes -> grid -> overlays.
+A courier walks across the substrate and along the traces in full view, then passes BEHIND the
+package it is delivering to. Being occluded by the destination is what makes the arrival read as
+going into the node rather than stopping on top of it; the glitch-dissolve finishes whatever is
+still sticking out.
+
+## 2026-09-10 — The sorting furniture is addable from the board
+
+**Decision.** `N` in Edit Board mode opens an add-component palette. Every node kind, each drawn
+with its real silhouette from the same `drawComponent` the board uses, so you pick a shape you
+recognise rather than reading type names. New nodes arrive unbound and `provisional` — an
+unpopulated footprint, a real PCB convention for "something goes here" — and the editor opens on
+whatever you add.
+
+**Why it was needed.** Drop-in ingestion covers the things that ARE files. It cannot cover a
+`group.zone` bracket or a `note.silk` heading, because those correspond to nothing on disk. The
+brackets around MinecraftOS's mod clusters were therefore fixtures of a JSON file you had to
+hand-edit, and William wants to add a subsection every time he adds a family of mods.
+
+Printed kinds are placed exactly where they are asked for, not at the nearest free space: they
+occupy no grid and never collide, so "finding space" would move a bracket away from the cluster it
+was drawn around, which is the one thing it must not do.
+
+**Printed kinds became selectable in Edit Board mode.** A `note.silk` was never a click target, so
+it could not be selected, moved, edited or deleted — only hand-edited. It now has a hit box derived
+arithmetically from its text (measuring needs a canvas, and layout.ts is pure so it can be tested),
+used for hit-testing only and never for drawing. Outside Edit Board mode print is still inert:
+a silkscreen heading stealing a click from the component under it would be maddening.
+
+## 2026-09-10 — The schema validator recompiles when the schema changes
+
+Reported by William mid-session: "it says nodes 0 and 6 must not have additional properties" — for
+`logo`, a property the schema declares, on a board `npm run validate:board` accepted from the same
+file a second later.
+
+The schema is read from disk, but the COMPILED Ajv validator was cached for the life of the
+process. An app started before the schema gained a field rejected every board using it, forever,
+and nothing said restarting would fix it. The cache is now keyed on the schema file's mtime and
+size. This project's premise is that agents edit files while the app is running; a validator that
+assumes its own schema is immutable does not belong in it.

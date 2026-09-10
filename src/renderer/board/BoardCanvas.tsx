@@ -750,7 +750,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const rebuild = (next: Board): void => {
       board = next;
       boardPx = boardPixelSize(board.grid);
-      rects = layoutRects(board);
+      rects = layoutRects(board, live.current.editMode);
       buildTraces();
       buildZones();
       buildNodes();
@@ -804,12 +804,21 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         ));
         world.addChild(substrateLayer);
 
-        // Layers 1-6, in paint order: copper, zones under the components they group, components,
-        // printed notes on top so a label is never buried, then the edit grid and the overlays.
+        /*
+         * Layers 1-7, in paint order.
+         *
+         * copper -> zones -> COURIERS -> components -> printed notes -> edit grid -> overlays.
+         *
+         * The couriers sit BELOW the components and above the wiring on purpose: a robot walks
+         * across the substrate and along the traces in full view, then passes behind the package
+         * it is delivering to. Being occluded by the destination is what makes the arrival read as
+         * going INTO the node rather than stopping on top of it — and the glitch-dissolve then
+         * finishes off whatever is still sticking out.
+         */
         traceLayer = new Container(); world.addChild(traceLayer);
         zoneLayer = new Container(); world.addChild(zoneLayer);
-        nodeLayer = new Container(); world.addChild(nodeLayer);
         couriers = new CourierLayer(); world.addChild(couriers.container);
+        nodeLayer = new Container(); world.addChild(nodeLayer);
         noteLayer = new Container(); world.addChild(noteLayer);
         gridLayer = new Container(); world.addChild(gridLayer);
         overlayLayer = new Container(); world.addChild(overlayLayer);
@@ -902,6 +911,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
           if (live.current.editMode !== lastEditMode) {
             lastEditMode = live.current.editMode;
+            // Printed kinds become click targets in Edit Board mode, so the hit-test set changes
+            // with the mode — see layoutRects.
+            rects = layoutRects(board, lastEditMode);
             buildGrid();
             rebuildOverlay();
           }

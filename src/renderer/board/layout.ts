@@ -17,10 +17,48 @@ export interface NodeRect {
   h: number;
 }
 
-/** Kinds that are printed on the board and are not click targets on the canvas. */
+/**
+ * Kinds that are printed on the board rather than mounted to it.
+ *
+ * They are not click targets while you are BROWSING — a silkscreen heading stealing a click from
+ * the component under it would be maddening, and print is not a thing you interact with. In Edit
+ * Board mode they are, because "addable, removable, and fully editable" has to include the
+ * furniture: a note you cannot select is a note you can only change by hand-editing JSON.
+ */
 const PRINTED_ONLY = new Set<BoardNode['kind']>(['note.silk']);
 
+/**
+ * A grab box for a printed note, derived from its text.
+ *
+ * Arithmetic rather than measured, deliberately: this module is pure so that test/layout.test.ts
+ * can run it, and `measureSilkText` needs a canvas. Departure Mono advances 6px per character at
+ * 11px and 12px at 22px, so this is close enough to put a handle under the text — and it is used
+ * ONLY for hit-testing, never for drawing, so being a tile out never shows on screen.
+ */
+function printedTextRect(node: BoardNode): { w: number; h: number } {
+  const text = (node.text ?? node.name ?? '').trim();
+  const size = node.size ?? 11;
+  const advance = size >= 22 ? 12 : 6;
+  const lines = text.split('\n');
+  const widest = lines.reduce((max, line) => Math.max(max, line.length), 1);
+  return {
+    w: Math.max(TILE, widest * advance + 4),
+    h: Math.max(TILE, lines.length * (size + 2))
+  };
+}
+
 export function nodeRect(node: BoardNode): NodeRect {
+  if (node.kind === 'note.silk' && !node.footprint) {
+    const box = printedTextRect(node);
+    return {
+      nodeId: node.id,
+      kind: node.kind,
+      x: node.pos.x * TILE,
+      y: node.pos.y * TILE,
+      w: box.w,
+      h: box.h
+    };
+  }
   const fp = footprintOf(node);
   return {
     nodeId: node.id,
@@ -32,8 +70,15 @@ export function nodeRect(node: BoardNode): NodeRect {
   };
 }
 
-export function layoutRects(board: Board): NodeRect[] {
-  return board.nodes.filter((n) => !PRINTED_ONLY.has(n.kind)).map(nodeRect);
+/**
+ * The click targets on this board.
+ *
+ * `includePrinted` is Edit Board mode. See PRINTED_ONLY for why it is not simply always on.
+ */
+export function layoutRects(board: Board, includePrinted = false): NodeRect[] {
+  return board.nodes
+    .filter((n) => includePrinted || !PRINTED_ONLY.has(n.kind))
+    .map(nodeRect);
 }
 
 function contains(rect: NodeRect, x: number, y: number): boolean {

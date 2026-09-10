@@ -220,6 +220,16 @@ export interface SkynetApi {
   // --- watchers ---
   'watch:board': (boardId: string) => { watched: number; polled: number };
 
+  /**
+   * Put a new node of `kind` on the board, near `pos`.
+   *
+   * The other half of drop-in ingestion: a `group.zone` bracket or a `note.silk` heading has no
+   * file to drag, so without this the sorting furniture on a board could only be added by
+   * hand-editing JSON. Created unbound and provisional — see services/node-factory.ts.
+   */
+  'node:add': (boardId: string, kind: NodeKind, pos: { x: number; y: number }) =>
+    { ok: boolean; nodeId?: string; error?: string };
+
   // --- act ---
   'node:open': (boardId: string, nodeId: string) => OpenTargetResult;
 
@@ -284,6 +294,7 @@ export const CHANNELS = [
   'ingest:classify',
   'ingest:create',
   'watch:board',
+  'node:add',
   'node:open',
   'session:start',
   'session:stop',
