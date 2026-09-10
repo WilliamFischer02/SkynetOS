@@ -25,7 +25,7 @@ export interface NodeRect {
  * Board mode they are, because "addable, removable, and fully editable" has to include the
  * furniture: a note you cannot select is a note you can only change by hand-editing JSON.
  */
-const PRINTED_ONLY = new Set<BoardNode['kind']>(['note.silk']);
+const PRINTED_ONLY = new Set<BoardNode['kind']>(['note.silk', 'decor.image']);
 
 /**
  * A grab box for a printed note, derived from its text.
@@ -164,7 +164,7 @@ export function findFreeSpace(
 ): { x: number; y: number } | null {
   const occupied = new Set<string>();
   for (const node of board.nodes) {
-    if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
+    if (node.kind === 'note.silk' || node.kind === 'group.zone' || node.kind === 'decor.image') continue;
     const fp = footprintOf(node);
     for (let y = node.pos.y; y < node.pos.y + fp.h; y++) {
       for (let x = node.pos.x; x < node.pos.x + fp.w; x++) occupied.add(`${x},${y}`);

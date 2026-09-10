@@ -169,6 +169,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     let world: Container | null = null;
     let substrateLayer: Container | null = null;
+    let decorLayer: Container | null = null;
     let traceLayer: Container | null = null;
     let zoneLayer: Container | null = null;
     let nodeLayer: Container | null = null;
@@ -565,8 +566,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     };
 
     const buildNodes = (): void => {
-      if (!nodeLayer || !sprites) return;
+      if (!nodeLayer || !decorLayer || !sprites) return;
       clearLayer(nodeLayer);
+      clearLayer(decorLayer);
       spriteById.clear();
 
       placeholderCount = 0;
@@ -577,7 +579,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
         const sprite = new Sprite(sprites.get(key) ?? undefined);
         sprite.roundPixels = true;
-        nodeLayer.addChild(sprite);
+        // A backdrop is a node in every other respect — selectable in Edit Board mode, movable,
+        // resizable, undoable — it just lives at the bottom of the stack.
+        (node.kind === 'decor.image' ? decorLayer : nodeLayer).addChild(sprite);
         spriteById.set(node.id, sprite);
         drawNode(node.id);
         loadImages(node);
@@ -807,7 +811,11 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         /*
          * Layers 1-7, in paint order.
          *
-         * copper -> zones -> COURIERS -> components -> printed notes -> edit grid -> overlays.
+         * backdrops -> copper -> zones -> COURIERS -> components -> printed notes -> grid -> overlays.
+         *
+         * `decor.image` sits at the very bottom, above the substrate and below the wiring: it is
+         * scenery the board is built on top of, so a trace running across it should be visible,
+         * and a component standing on it should occlude it.
          *
          * The couriers sit BELOW the components and above the wiring on purpose: a robot walks
          * across the substrate and along the traces in full view, then passes behind the package
@@ -815,6 +823,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
          * going INTO the node rather than stopping on top of it — and the glitch-dissolve then
          * finishes off whatever is still sticking out.
          */
+        decorLayer = new Container(); world.addChild(decorLayer);
         traceLayer = new Container(); world.addChild(traceLayer);
         zoneLayer = new Container(); world.addChild(zoneLayer);
         couriers = new CourierLayer(); world.addChild(couriers.container);

@@ -22,7 +22,7 @@ export const NODE_KINDS = [
   'store.repo', 'store.folder', 'store.cloud',
   'file.document', 'file.exe', 'file.artifact',
   'link.url', 'service.process', 'task.scheduled',
-  'monitor.system', 'note.silk', 'group.zone'
+  'monitor.system', 'note.silk', 'group.zone', 'decor.image'
 ] as const;
 export type NodeKind = (typeof NODE_KINDS)[number];
 
@@ -253,7 +253,12 @@ export const DEFAULT_FOOTPRINT: Record<NodeKind, Footprint> = {
   'task.scheduled': { w: 2, h: 1 },
   'monitor.system': { w: 4, h: 4 },
   'note.silk': { w: 0, h: 0 },
-  'group.zone': { w: 0, h: 0 }
+  'group.zone': { w: 0, h: 0 },
+  /*
+   * A backdrop wants to be big by default — small enough to place, big enough to see. Like the
+   * other printed kinds it never collides, so this is a starting size rather than a reservation.
+   */
+  'decor.image': { w: 12, h: 8 }
 };
 
 export function footprintOf(node: Pick<BoardNode, 'kind' | 'footprint'>): Footprint {
@@ -273,7 +278,10 @@ export const MAX_FOOTPRINT = 48;
 export const MAX_ZONE_FOOTPRINT = 512;
 
 export function maxFootprintFor(kind: NodeKind): number {
-  return kind === 'group.zone' ? MAX_ZONE_FOOTPRINT : MAX_FOOTPRINT;
+  // A zone is a bracket meant to span a room and a decor image is a backdrop meant to fill one.
+  // Both are printed rather than mounted, so neither is bounded by "an object you pick out at a
+  // glance" the way a component is.
+  return kind === 'group.zone' || kind === 'decor.image' ? MAX_ZONE_FOOTPRINT : MAX_FOOTPRINT;
 }
 
 /**
@@ -319,6 +327,7 @@ export function spriteKeyOf(node: Pick<BoardNode, 'kind'>, state = 'idle'): stri
     'service.process': 'component.vreg_service',
     'task.scheduled': 'component.xtal_task',
     'monitor.system': 'component.psu_monitor'
+    // decor.image has no package art at all: it IS its picture.
   };
   const base = byKind[node.kind];
   return base ? `${base}.${state}` : `component.unknown.${state}`;

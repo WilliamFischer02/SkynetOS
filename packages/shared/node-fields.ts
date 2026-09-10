@@ -214,12 +214,29 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
   'group.zone': [
     { key: 'members', label: 'Members', control: 'tags', placeholder: 'u1_agent_stalker, s1_repo_stalker', help: 'Node ids inside this zone. Selecting the zone selects them all.' },
     { key: 'relation', label: 'Related room', control: 'text', placeholder: 'gameos', help: 'A board id. Outlines this cluster in that room\'s signal colour to show they are connected.' }
-  ]
+  ],
+  /*
+   * Nothing kind-specific. A `decor.image` IS its picture, and `image` is already in TRAILING — a
+   * second copy would be two controls bound to the same key, which is a form that can disagree
+   * with itself. `fieldsFor` promotes the shared field to required for this kind instead.
+   */
+  'decor.image': []
 };
 
 /** The full, ordered field list for a kind: identity, kind-specific, then the common trailers. */
 export function fieldsFor(kind: NodeKind): FieldSpec[] {
-  return [...COMMON, ...(BY_KIND[kind] ?? []), ...TRAILING];
+  const fields = [...COMMON, ...(BY_KIND[kind] ?? []), ...TRAILING];
+
+  /*
+   * A backdrop's wallpaper is not decoration on top of something else — it is the whole node, and
+   * the schema requires it. Promoting the shared field beats declaring a duplicate: two controls
+   * bound to one key is a form that can disagree with itself.
+   */
+  if (kind === 'decor.image') {
+    return fields.map((f) =>
+      f.key === 'image' ? { ...f, label: 'Backdrop', required: true } : f);
+  }
+  return fields;
 }
 
 /** Just the fields that name something real and can therefore be picked and verified. */

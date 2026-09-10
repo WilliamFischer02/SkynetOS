@@ -30,6 +30,7 @@ function prefixFor(kind: NodeKind): string {
   if (kind === 'monitor.system') return 'm';
   if (kind === 'note.silk') return 'n';
   if (kind === 'group.zone') return 'g';
+  if (kind === 'decor.image') return 'bg';
   return 'f';
 }
 
@@ -107,6 +108,7 @@ function defaultName(kind: NodeKind): string {
     case 'service.process': return 'NEW SERVICE';
     case 'task.scheduled': return 'NEW TASK';
     case 'monitor.system': return 'MONITOR';
+    case 'decor.image': return 'BACKDROP';
     default: return 'NEW NODE';
   }
 }
@@ -144,6 +146,12 @@ export function makeNode(board: Board, kind: NodeKind, pos: GridPos): BoardNode 
   if (kind === 'note.silk') {
     node.text = 'NEW NOTE';
     node.size = 11;
+  }
+  if (kind === 'decor.image') {
+    // A backdrop with no name printed over it: the picture is the point, and a nameplate floating
+    // above a background element reads as a mistake.
+    node.showName = false;
+    node.showDesignator = false;
   }
 
   // Anything that binds to a real target starts explicitly unpopulated rather than pretending.

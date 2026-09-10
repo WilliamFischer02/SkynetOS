@@ -203,8 +203,9 @@ export function canDrop(
 
   for (const other of others) {
     if (other.nodeId === nodeId) continue;
-    // Zones deliberately overlap their members, so they are not obstacles.
-    if (other.kind === 'group.zone') continue;
+    // Zones overlap their members and backdrops sit under everything, by design. Neither is an
+    // obstacle, or a board with a full-room backdrop would have nowhere legal to drop anything.
+    if (other.kind === 'group.zone' || other.kind === 'decor.image') continue;
     const overlaps = left < other.x + other.w && right > other.x && top < other.y + other.h && bottom > other.y;
     if (overlaps) return false;
   }

@@ -647,3 +647,24 @@ row each produced a 764-row table nobody would read, which is the same as having
 Anything with a real grid gets a row; the rest is a per-directory summary.
 
 `--check` fails when the catalogue is stale, so it can be a CI gate.
+
+## 2026-09-10 — `decor.image`: backdrops behind the board
+
+William: "add to the board the ability to upload images as background elements, rescalable."
+
+**Decision.** A new node kind that is printed rather than mounted. It draws in its own layer above
+the substrate and BELOW the copper, so a trace crosses it, a component stands on it and a courier
+walks over it. Resizable to the whole board (the `group.zone` cap, not the component one), and not
+a click target outside Edit Board mode — a board-sized backdrop that swallowed every click on empty
+substrate would be unusable.
+
+New ones arrive with `showName` and `showDesignator` off. A nameplate floating over a background
+element reads as a mistake.
+
+**What the addition taught.** "Which kinds are obstacles" turned out to have FOUR separate
+implementations: `tools/validate-board.mjs`, `board-store.graphProblems`, `layout.findFreeSpace`
+and `drag.canDrop`. Three were updated and the app then refused to load a perfectly valid board
+with 59 overlap errors — because the fourth, the app's own copy, still counted the backdrop as an
+obstacle. That failure was loud, legible and named the exact nodes, which is the failure mode this
+project wants; it is still four copies of one rule, and the next kind added to that list will hit
+it again. Noted here so the next person greps for it rather than rediscovering it.

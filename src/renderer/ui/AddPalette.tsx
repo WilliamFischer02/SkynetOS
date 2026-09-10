@@ -18,7 +18,7 @@ import { useBoardStore } from '../store/useBoardStore.js';
 
 /** Reading order: the things with jurisdiction, then storage, then files, then the furniture. */
 const ORDER: NodeKind[] = [
-  'group.zone', 'note.silk',
+  'group.zone', 'note.silk', 'decor.image',
   'agent.code', 'agent.chat', 'agent.jarvis',
   'drive.room',
   'store.repo', 'store.folder', 'store.cloud',
@@ -29,6 +29,7 @@ const ORDER: NodeKind[] = [
 const BLURB: Record<NodeKind, string> = {
   'group.zone': 'A bracket printed around a cluster. Add one per subsection — a mod family, a phase. Resize it to fit; it never collides with anything.',
   'note.silk': 'Text engraved on the substrate. Headings and reminders.',
+  'decor.image': 'A picture behind everything. Any image on disk, dithered to the room’s six colours, resizable to fill as much of the board as you like. It never collides and never steals a click while you are browsing.',
   'agent.code': 'A Claude Code chip. Opens a real terminal in a repo, on its own conversation.',
   'agent.chat': 'A claude.ai conversation in its own window.',
   'agent.jarvis': 'The Face: the persistent conversation with board-wide jurisdiction.',
@@ -48,6 +49,7 @@ const BLURB: Record<NodeKind, string> = {
 const LABEL: Record<NodeKind, string> = {
   'group.zone': 'CLUSTER BRACKET',
   'note.silk': 'SILKSCREEN NOTE',
+  'decor.image': 'BACKDROP IMAGE',
   'agent.code': 'CLAUDE CODE CHIP',
   'agent.chat': 'CONVERSATION',
   'agent.jarvis': 'JARVIS HEAD',
@@ -76,6 +78,19 @@ function KindSwatch({ kind, maskLight, signal }: { kind: NodeKind; maskLight: st
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // Printed kinds have no package to draw, so they get their own mark rather than an empty box.
+    if (kind === 'decor.image') {
+      // A picture frame with a horizon: says "image" without borrowing any vendor art.
+      ctx.fillStyle = maskLight;
+      ctx.fillRect(2, 2, 28, 20);
+      ctx.fillStyle = signal;
+      ctx.fillRect(2, 14, 28, 8);
+      ctx.fillRect(2, 2, 28, 1);
+      ctx.fillRect(2, 21, 28, 1);
+      ctx.fillRect(2, 2, 1, 20);
+      ctx.fillRect(29, 2, 1, 20);
+      ctx.fillRect(8, 8, 4, 4);
+      return;
+    }
     if (kind === 'group.zone' || kind === 'note.silk') {
       ctx.fillStyle = signal;
       if (kind === 'group.zone') {

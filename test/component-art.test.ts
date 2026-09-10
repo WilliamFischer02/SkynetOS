@@ -45,16 +45,21 @@ describe('the kinds you actually look at are visually distinct', () => {
     expect(new Set(shapes).size).toBeGreaterThanOrEqual(11);
   });
 
+  /**
+   * Printed on the board rather than mounted to it. These have no package, so they have no
+   * silhouette — a bracket, a heading and a backdrop are not components.
+   */
+  const PRINTED = ['note.silk', 'group.zone', 'decor.image'] as const;
+
   it('never leaves a mounted kind on the fallback shape', () => {
     for (const kind of NODE_KINDS) {
-      if (kind === 'note.silk' || kind === 'group.zone') continue;
+      if ((PRINTED as readonly string[]).includes(kind)) continue;
       expect(COMPONENT_STYLE[kind].silhouette, `${kind} is still a plain box`).not.toBe('plain');
     }
   });
 
   it('leaves the printed-only kinds plain — they are not packages', () => {
-    expect(COMPONENT_STYLE['note.silk'].silhouette).toBe('plain');
-    expect(COMPONENT_STYLE['group.zone'].silhouette).toBe('plain');
+    for (const kind of PRINTED) expect(COMPONENT_STYLE[kind].silhouette).toBe('plain');
   });
 
   it('gives a package enough inset for its legs without leaving the footprint', () => {

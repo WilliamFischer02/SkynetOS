@@ -3,159 +3,384 @@
   "$id": "https://skynetos.local/schema/board.schema.json",
   "title": "SkynetOS Board",
   "type": "object",
-  "required": ["schemaVersion", "id", "name", "theme", "grid", "nodes", "edges"],
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "theme",
+    "grid",
+    "nodes",
+    "edges"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "id": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
-    "name": { "type": "string" },
-    "engraving": { "type": "string", "pattern": "^[A-Z0-9 ._-]{1,20}$" },
-    "parent": { "type": ["string", "null"], "description": "Parent board id, null for root" },
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "engraving": {
+      "type": "string",
+      "pattern": "^[A-Z0-9 ._-]{1,20}$"
+    },
+    "parent": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Parent board id, null for root"
+    },
     "theme": {
       "type": "object",
-      "required": ["maskDark", "maskLight", "signal"],
+      "required": [
+        "maskDark",
+        "maskLight",
+        "signal"
+      ],
       "additionalProperties": false,
       "properties": {
-        "maskDark": { "$ref": "#/$defs/hex" },
-        "maskLight": { "$ref": "#/$defs/hex" },
-        "signal": { "$ref": "#/$defs/hex" },
-        "substrateSeed": { "type": "integer" }
+        "maskDark": {
+          "$ref": "#/$defs/hex"
+        },
+        "maskLight": {
+          "$ref": "#/$defs/hex"
+        },
+        "signal": {
+          "$ref": "#/$defs/hex"
+        },
+        "substrateSeed": {
+          "type": "integer"
+        }
       }
     },
     "grid": {
       "type": "object",
-      "required": ["tile", "width", "height"],
+      "required": [
+        "tile",
+        "width",
+        "height"
+      ],
       "additionalProperties": false,
       "properties": {
-        "tile": { "const": 16 },
-        "width": { "type": "integer", "minimum": 16, "maximum": 512, "description": "in tiles" },
-        "height": { "type": "integer", "minimum": 16, "maximum": 512 }
+        "tile": {
+          "const": 16
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 512,
+          "description": "in tiles"
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 512
+        }
       }
     },
-    "agentEditPolicy": { "enum": ["require-approval", "auto"], "default": "require-approval" },
+    "agentEditPolicy": {
+      "enum": [
+        "require-approval",
+        "auto"
+      ],
+      "default": "require-approval"
+    },
     "relatedBoards": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Board ids this room is related to. Purely declarative: it tells the renderer which rooms may share colour and wire treatment, so a relation is visible at a glance instead of remembered. See docs/02 Relation colour."
     },
-    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
-    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    }
   },
   "$defs": {
-    "hex": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+    "hex": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
     "pos": {
       "type": "object",
-      "required": ["x", "y"],
+      "required": [
+        "x",
+        "y"
+      ],
       "additionalProperties": false,
       "properties": {
-        "x": { "type": "integer", "minimum": 0, "description": "grid tiles from board origin" },
-        "y": { "type": "integer", "minimum": 0 }
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "grid tiles from board origin"
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     },
     "node": {
       "type": "object",
-      "required": ["id", "kind", "name", "pos"],
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "pos"
+      ],
       "additionalProperties": false,
       "$strictness": "additionalProperties:false is deliberate and matches $defs/edge. Without it a typo like \"cdw\" instead of \"cwd\" validates clean and the node silently fails to resolve at runtime — the exact class of bug this schema exists to catch. Every field a node may carry is declared below; the allOf branches only add `required`, never new properties, so they do not interact with this.",
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-        "designator": { "type": "string", "pattern": "^[A-Z]{1,2}[0-9]{1,3}$", "description": "U4, J2, D7 — auto-assigned per room" },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "designator": {
+          "type": "string",
+          "pattern": "^[A-Z]{1,2}[0-9]{1,3}$",
+          "description": "U4, J2, D7 — auto-assigned per room"
+        },
         "kind": {
           "enum": [
-            "agent.code", "agent.chat", "agent.jarvis",
+            "agent.code",
+            "agent.chat",
+            "agent.jarvis",
             "drive.room",
-            "store.repo", "store.folder", "store.cloud",
-            "file.document", "file.exe", "file.artifact",
-            "link.url", "service.process", "task.scheduled",
-            "monitor.system", "note.silk", "group.zone"
+            "store.repo",
+            "store.folder",
+            "store.cloud",
+            "file.document",
+            "file.exe",
+            "file.artifact",
+            "link.url",
+            "service.process",
+            "task.scheduled",
+            "monitor.system",
+            "note.silk",
+            "group.zone",
+            "decor.image"
           ]
         },
-        "name": { "type": "string", "maxLength": 40 },
-        "pos": { "$ref": "#/$defs/pos" },
+        "name": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "pos": {
+          "$ref": "#/$defs/pos"
+        },
         "footprint": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "w": { "type": "integer", "minimum": 1, "maximum": 512 },
-            "h": { "type": "integer", "minimum": 1, "maximum": 512 }
+            "w": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            },
+            "h": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 512
+            }
           },
           "description": "In tiles. Defaults per kind if omitted. Scalable from the node editor, by dragging the corner handle in Edit Board mode, or with Shift+arrows. The interactive cap is per kind — see maxFootprintFor() in packages/shared/types.ts — because a group.zone is a bracket drawn around a cluster and is meant to span a room, while a component is an object you pick out at a glance."
         },
-        "tags": { "type": "array", "items": { "type": "string" } },
-        "notes": { "type": "string" },
-        "provisional": { "type": "boolean", "default": false, "description": "Unpopulated footprint — a TODO on the board" },
-        "codexRef": { "type": "string", "description": "Path within codex/ describing this thing" },
-
-        "cwd": { "type": "string" },
-        "launch": { "enum": ["popout", "popout-elevated", "embedded", "headless"] },
-        "model": { "type": "string" },
-        "resume": { "type": "boolean", "default": true },
-        "initialPrompt": { "type": "string" },
-        "mcpServers": { "type": "array", "items": { "type": "string" } },
-
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        },
+        "provisional": {
+          "type": "boolean",
+          "default": false,
+          "description": "Unpopulated footprint — a TODO on the board"
+        },
+        "codexRef": {
+          "type": "string",
+          "description": "Path within codex/ describing this thing"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "launch": {
+          "enum": [
+            "popout",
+            "popout-elevated",
+            "embedded",
+            "headless"
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "resume": {
+          "type": "boolean",
+          "default": true
+        },
+        "initialPrompt": {
+          "type": "string"
+        },
+        "mcpServers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "prelaunch": {
           "type": "array",
           "items": {
             "enum": [
-              "claude", "git-fetch", "git-status",
-              "npm-install", "npm-update", "npm-audit",
-              "pip-self", "pip-reqs"
+              "claude",
+              "git-fetch",
+              "git-status",
+              "npm-install",
+              "npm-update",
+              "npm-audit",
+              "pip-self",
+              "pip-reqs"
             ]
           },
           "description": "Named update steps to run before the session starts. Ids only — the shell text lives in packages/shared/prime-steps.ts, because docs/07 forbids executable strings in board JSON. Omit for the safe default; [] to prime nothing."
         },
         "addDirs": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Directories outside cwd this agent may read and write, passed as claude --add-dir. How one agent oversees repos scattered across the disk without moving them."
         },
         "readOnLaunch": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Documents the session reads first, repo-relative, in order. Omit to derive from CLAUDE.md + persona + codexRef; [] to open with no reading."
         },
         "briefing": {
-          "enum": ["none", "first", "every"],
+          "enum": [
+            "none",
+            "first",
+            "every"
+          ],
           "default": "first",
           "description": "When the session briefing is sent. first = new conversations only; every = re-orient on resume too."
         },
-
-        "url": { "type": "string", "format": "uri" },
-        "partition": { "type": "string" },
-        "persona": { "type": "string" },
-
-        "boardFile": { "type": "string", "description": "Relative path to the child board JSON" },
-        "engraving": { "type": "string", "pattern": "^[A-Z0-9 ._-]{1,20}$" },
-
-        "path": { "type": "string" },
-        "localPath": { "type": "string" },
-        "remote": { "type": "string" },
-        "openWith": { "enum": ["explorer", "default", "browser", "terminal", "vscode"] },
-
-        "glob": { "type": "string" },
-        "exclude": { "type": "array", "items": { "type": "string" } },
-        "versionPattern": { "type": "string", "description": "Regex with one capture group for the version label" },
-
-        "args": { "type": "array", "items": { "type": "string" } },
-        "confirmBeforeLaunch": { "type": "boolean", "default": true },
-
-        "startCommand": { "type": "string" },
-        "port": { "type": "integer" },
-        "healthUrl": { "type": "string" },
-
-        "schedule": { "type": "string", "description": "cron expression" },
-        "action": { "type": "object" },
-        "enabled": { "type": "boolean", "default": true },
-
-        "text": { "type": "string" },
-        "size": { "enum": [11, 22] },
-        "members": { "type": "array", "items": { "type": "string" } },
-
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "partition": {
+          "type": "string"
+        },
+        "persona": {
+          "type": "string"
+        },
+        "boardFile": {
+          "type": "string",
+          "description": "Relative path to the child board JSON"
+        },
+        "engraving": {
+          "type": "string",
+          "pattern": "^[A-Z0-9 ._-]{1,20}$"
+        },
+        "path": {
+          "type": "string"
+        },
+        "localPath": {
+          "type": "string"
+        },
+        "remote": {
+          "type": "string"
+        },
+        "openWith": {
+          "enum": [
+            "explorer",
+            "default",
+            "browser",
+            "terminal",
+            "vscode"
+          ]
+        },
+        "glob": {
+          "type": "string"
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "versionPattern": {
+          "type": "string",
+          "description": "Regex with one capture group for the version label"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confirmBeforeLaunch": {
+          "type": "boolean",
+          "default": true
+        },
+        "startCommand": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "healthUrl": {
+          "type": "string"
+        },
+        "schedule": {
+          "type": "string",
+          "description": "cron expression"
+        },
+        "action": {
+          "type": "object"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "text": {
+          "type": "string"
+        },
+        "size": {
+          "enum": [
+            11,
+            22
+          ]
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "relation": {
           "type": "string",
           "description": "A board id. On a group.zone, draws the zone outline in that board's signal colour, marking this cluster as related to that room. Colour only — no behaviour."
         },
-
         "image": {
           "type": "string",
           "description": "WALLPAPER. Path to any image on disk, stretched to fill the whole footprint, dithered onto the room's six palette colours and drawn as the component's face. The source file is never copied or modified; the mosaic is cached in userData and regenerated when the file changes. If the file moves, the node renders broken like any other unresolved target."
@@ -164,7 +389,6 @@
           "type": "string",
           "description": "LOGO. A smaller image centred on the face, aspect ratio preserved, with its own bevel so it reads as a badge sitting on the wallpaper. Sized by logoBoxTiles() in packages/shared/types.ts — proportional to the footprint, always a whole number of tiles."
         },
-
         "showDesignator": {
           "type": "boolean",
           "default": true,
@@ -182,28 +406,200 @@
         }
       },
       "allOf": [
-        { "if": { "properties": { "kind": { "const": "agent.code" } } }, "then": { "required": ["cwd", "launch"] } },
-        { "if": { "properties": { "kind": { "const": "drive.room" } } }, "then": { "required": ["boardFile", "engraving"] } },
-        { "if": { "properties": { "kind": { "const": "file.artifact" } } }, "then": { "required": ["glob"] } },
-        { "if": { "properties": { "kind": { "enum": ["store.repo", "store.folder", "file.document", "file.exe"] } } }, "then": { "required": ["path"] } },
-        { "if": { "properties": { "kind": { "enum": ["link.url", "store.cloud", "agent.chat", "agent.jarvis"] } } }, "then": { "required": ["url"] } },
-        { "if": { "properties": { "kind": { "const": "service.process" } } }, "then": { "required": ["startCommand", "cwd"] } },
-        { "if": { "properties": { "kind": { "const": "task.scheduled" } } }, "then": { "required": ["schedule", "action"] } },
-        { "if": { "properties": { "kind": { "const": "note.silk" } } }, "then": { "required": ["text"] } }
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "agent.code"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "cwd",
+              "launch"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "drive.room"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "boardFile",
+              "engraving"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "file.artifact"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "glob"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "store.repo",
+                  "store.folder",
+                  "file.document",
+                  "file.exe"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "link.url",
+                  "store.cloud",
+                  "agent.chat",
+                  "agent.jarvis"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "url"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "service.process"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "startCommand",
+              "cwd"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "task.scheduled"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "schedule",
+              "action"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "note.silk"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "text"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "decor.image"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "image"
+            ]
+          }
+        }
       ]
     },
     "edge": {
       "type": "object",
-      "required": ["id", "from", "to", "kind"],
+      "required": [
+        "id",
+        "from",
+        "to",
+        "kind"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-        "from": { "type": "string" },
-        "to": { "type": "string" },
-        "kind": { "enum": ["produces", "reads", "depends", "deploys", "syncs", "supervises"] },
-        "width": { "enum": [2, 3], "default": 2 },
-        "waypoints": { "type": "array", "items": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 } },
-        "label": { "type": "string", "maxLength": 24 },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "produces",
+            "reads",
+            "depends",
+            "deploys",
+            "syncs",
+            "supervises"
+          ]
+        },
+        "width": {
+          "enum": [
+            2,
+            3
+          ],
+          "default": 2
+        },
+        "waypoints": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 24
+        },
         "relation": {
           "type": "string",
           "description": "A board id. Draws this trace's inner strand in that board's signal colour, so a wire that leads to another room carries that room's identity. Colour only — it changes nothing about routing or behaviour."

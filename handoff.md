@@ -2,64 +2,101 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
-**Last session:** the turn-10 pass — display toggles, the launch bug, the JARVIS window.
-**Milestones done:** M0–M4. **Next on the roadmap:** M5 (telemetry, heat, animation, occupants,
-activity feed, alerts, PSU monitor) — `docs/06-ROADMAP.md`.
+**Last session:** the launch was fixed — it had never worked — then a large feature pass.
+**Milestones done:** M0–M4, plus most of what M5 was going to be (usage telemetry, animation).
+**`npm run verify` is green: 400 tests.**
 
 ---
 
 ## What landed this session
 
-1. **Per-node display toggles.** `showDesignator`, `showName`, `showThumbnail` — three optional
-   booleans on `BoardNode`, three tickers in the node editor, all defaulting to ON. Resolved by
-   `displayOf()` in `packages/shared/types.ts`; honoured in `BoardCanvas.tsx`. A node with its
-   thumbnail off does not even ask main for a mosaic.
+### 1. No chip had ever launched. Four stacked bugs.
 
-2. **The launch bug.** Clicking Launch session on U3 opened nothing at all and the UI said it
-   had worked. `wt.exe` splits its own command line on `;`, and U3's initial prompt contains one.
-   Two fixes: `wtEscape()` in `launch-args.ts`, and — the one that matters — an `initialPrompt`
-   is now staged in `userData/prompts/<board>.<node>.txt` and read back with `Get-Content -Raw`,
-   so prose never crosses a shell parser again. Full story in `docs/DECISIONS.md`.
+Every conversation id in `skynet.db` was a phantom; `claude` had never once started from the board.
+Full write-up in `docs/DECISIONS.md` — read it before touching the launch path.
 
-3. **"New session (fresh context)" now means it.** The old `force` flag still resumed the stored
-   conversation. `fresh` mints a new id and re-sends the initial prompt. The idle chip gained a
-   separate **Resume conversation** button.
+- **`existsSync` is `false` for every Windows App Execution Alias.** They are zero-length reparse
+  points; `stat` throws EACCES. So `wt.exe` and `pwsh.exe` were both "not installed" and the
+  launcher silently fell back to PowerShell 5.1. Fixed by `services/which.ts`, which resolves by
+  listing PATH directories. **Never use `existsSync` to test for an executable again.**
+- **Electron main is a GUI-subsystem process with no console**, so spawning a console app from it
+  detached opened no window at all. The no-wt fallback now goes through `cmd /c start`.
+- **`wt.exe` is a stub that exits 0 in ~200ms**, and `spawn` succeeding was read as a launch.
+- **The conversation id was recorded before the spawn**, so one failure poisoned the chip forever.
 
-4. **The JARVIS conversation is its own window.** `agent.jarvis` / `agent.chat` open an Electron
-   `BrowserWindow` with the node's `partition`, its own title and its own taskbar entry, instead
-   of a tab in whatever browser was default. Still a browser tab in every sense docs/07 cares
-   about: no preload, no bridge, sandboxed, https-only.
+Now: the whole launch is a staged `.ps1` under userData whose command line carries nothing but
+file paths; it confirms itself by writing a pid file; and `services/conversations.ts` checks
+`~/.claude/projects` before any id reaches `--resume`.
 
-## Mid-flight — nothing
+**Prove it, don't assume it:** `SKYNET_SMOKE_LAUNCH=terminal node tools/smoke-shot.mjs` opens a
+real shell; `=agent` opens a real Claude Code session and checks the process is running on that
+conversation id.
 
-`npm run verify` is green (329 tests). Working tree is clean at `589fa75`.
+### 2. The camera stopped being destroyed on every edit
+
+`BoardCanvas` was keyed on `[props.board, props.boardId]`, and the store replaces `props.board`
+after every mutation — so moving one node rebuilt the entire Pixi application. The app is now built
+once per ROOM and the scene is rebuilt in place. Dragging moves the sprite itself, not just a ghost.
+
+### 3. Everything else
+
+- **Priming and briefings.** `prelaunch` (allowlisted ids, never shell strings), `briefing`,
+  `readOnLaunch`, `addDirs` -> `claude --add-dir`.
+- **Terminals anywhere.** `terminal:open`, plain and admin, on any node with a directory.
+- **Node scaling** three ways: corner handle, Shift+arrows, W×H field. Per-kind caps.
+- **Two images per node**: `image` (wallpaper, fills the footprint) and `logo` (centred badge,
+  aspect preserved). `drawBevel()` on every component and badge.
+- **Usage meter** (top-left) and **couriers** — robots carrying packets in proportion to real
+  measured Claude usage, read from `~/.claude/projects`.
+- **Add-component palette** (`N` in Edit Board mode) and editable printed furniture.
+- **`decor.image`** — backdrops behind everything, resizable to the whole board.
+- **JARVIS mailbox** (`M`) — `codex/mailbox/`, with unread mail folded into session briefings.
+- **`docs/08-AGENT-INTAKE.md`** — the brief to hand another agent to populate a room.
+- **`docs/09-ASSET-CATALOGUE.md`** — generated; 764 files measured.
+
+## Mid-flight — nothing. Working tree is clean.
+
+## What William has asked for that is NOT done
+
+- **A tilesheet palette in the board editor** — "open a palette of the tilesheet assets in the board
+  editor and redesign the board myself". `AddPalette` covers node KINDS; picking arbitrary sheet
+  cells as art is not built. `docs/09-ASSET-CATALOGUE.md` is the inventory it would draw from, and
+  `assets/sprites/manifest.json` is where a chosen cell has to end up.
+- **Using more of the vendor sheets.** The catalogue now says what is there (21,981 non-empty
+  cells); nothing new has been kitbashed from it. `ATLAS_URL` in `BoardCanvas.tsx` is still `null`,
+  so every node draws as a placeholder.
+- **`tokenBudget` is unset**, so the meter shows SET A BUDGET where the pool would be. That is
+  deliberate — see the DECISIONS entry — but William may want to pick a number.
 
 ## Landmines, in the order they will bite you
 
-- **Bash heredocs eat backslashes in this environment.** A doubled backslash inside a `<<'EOF'`
-  block arrives as a single one, and a single one can vanish entirely. It has produced a broken
-  regex, an invalid string escape, one wrong fix and one wrong bug repro in a single session —
-  including in the paragraph that warns about it. Write patch scripts with the Write tool, or
-  build every backslash with `chr(92)`.
-- **wt.exe is a second parser.** Anything you hand it is parsed by Windows Terminal before
-  PowerShell sees it, and `;` is its tab delimiter. Do not put free text on that command line.
-- **A successful `spawn` is not a successful launch.** `wt.exe` exits 0 after failing to parse.
-  If a launch path ever reports success, prove it opened something.
-- **`--session-id` vs `--resume`.** SkynetOS assigns the conversation id; it never scrapes it.
-  Getting this wrong is silent — a chip that opens a fresh conversation every time looks fine.
-- **Copper is an edge colour, not a fill.** Filling a package with copper-dark turns the board
-  into a wall of brown. `outline()` in `component-art.ts` exists because of that mistake.
-- **The nameplate extends the TEXTURE, not the footprint.** Collision, routing and hit-testing
-  all still run on the grid the board file describes. Keep it that way.
+- **`existsSync` cannot see a WindowsApps alias.** Cost this project every launch it ever
+  attempted. Use `services/which.ts`.
+- **A console app spawned from Electron main has nowhere to appear.** It needs `wt` or
+  `cmd /c start`.
+- **A successful `spawn` is not a successful launch.** Wait for the pid file.
+- **An assigned conversation id is a plan, not a fact.** Check `~/.claude/projects` before
+  `--resume`, and walk the node's history past phantoms.
+- **Four separate implementations of "which kinds are obstacles"** must stay in step:
+  `tools/validate-board.mjs`, `board-store.graphProblems`, `layout.findFreeSpace`, `drag.canDrop`.
+  Adding `decor.image` needed all four; missing one made the app refuse to load a valid board.
+- **Bash heredocs eat backslashes in this environment.** Write patch scripts with the Write tool,
+  or build every backslash with `String.fromCharCode(92)`. It has produced a broken regex, an
+  invalid string escape and two wrong bug repros across sessions.
+- **`wt.exe` is a second parser.** Only file paths go on its command line now. Keep it that way.
+- **Every hook must run on every render.** An effect added after `if (!board) return` rendered a
+  blank window; renderer errors now reach the smoke log, which is how it was found.
+- **The Ajv validator is compiled from a file that agents may edit while the app runs.** It is
+  keyed on the schema's mtime — do not re-cache it unconditionally.
+- **Copper is an edge colour, not a fill.**
+- **The nameplate extends the TEXTURE, not the footprint.**
 - **Canonical board JSON** is 2-space, LF, trailing newline. Python's `json.dumps` escapes
-  em-dashes into an ASCII `\uXXXX` escape and breaks the check; normalise before writing with
-  the JS one-liner the validator prints.
+  em-dashes; pass `ensure_ascii=False`, or write it with Node.
 
 ## Open questions for William
 
-- **Head vs hands.** The two-body split (U1 Face on claude.ai, U3 Hands in a terminal) is a
-  design I proposed and it costs him copy-paste, which he has said he does not want. Options are
-  written up in `codex/JARVIS-SETUP.md` — the recommendation is to talk to the Hands and treat
-  the Face as optional.
-- **M5 or the JARVIS workflow first?** M5 is the roadmap; the JARVIS workflow is what he is
-  actually trying to use.
+- **What should `tokenBudget` be?** Until it is set, two of the meter's three numbers are blank.
+- **Is the backdrop demo wanted?** `bg_board` on the root board exists to prove `decor.image`
+  works. Delete it, repoint it, or move it.
+- **M5 proper.** Heat, occupants, the activity feed and alerts are still unbuilt; telemetry and
+  animation arrived early via the usage meter and the couriers.

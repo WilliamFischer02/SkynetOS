@@ -5,7 +5,7 @@
 Each entry: what it is · required fields · primary click · secondary (right-click menu) · live state shown.
 
 ### `agent.code` — a Claude Code session
-- **Fields:** `cwd`, `launch` (`popout` | `popout-elevated` | `embedded`), `model?`, `resume: true`, `initialPrompt?`, `mcpServers?`
+- **Fields:** `cwd`, `launch` (`popout` | `popout-elevated` | `embedded`), `model?`, `resume: true`, `initialPrompt?`, `mcpServers?`, `prelaunch?`, `addDirs?`, `readOnLaunch?`, `briefing?`
 - **Click:** launch or focus its session. If a session already exists, focus it instead of spawning a second one.
 
 > **Built 2026-09-09 (M3).** `popout`, `popout-elevated` and the resume mechanism are live;
@@ -15,6 +15,18 @@ Each entry: what it is · required fields · primary click · secondary (right-c
 > (fresh context)" is the deliberate way to get a second one. The `initialPrompt` is sent only on
 > a conversation that does not exist yet — resending it on every resume would re-ask the same
 > question at the top of every session.
+>
+> **Rewritten 2026-09-10.** No chip had ever actually launched — four stacked bugs, written up in
+> `docs/DECISIONS.md`. The whole launch is now a staged `.ps1` under userData whose command line
+> carries nothing but file paths, it confirms itself by writing a pid file, and a conversation id
+> is verified against `~/.claude/projects` before it is passed to `--resume`.
+>
+> Four fields arrived with it. `prelaunch` names update steps from an allowlisted registry
+> (`packages/shared/prime-steps.ts`) — ids only, because docs/07 forbids executable strings in
+> board JSON. `addDirs` becomes one `claude --add-dir` per entry, which is how one agent oversees
+> repos on other drives without anything being moved. `readOnLaunch` and `briefing` decide what the
+> session is told as it opens; the briefing is composed from the node's own bindings and ends by
+> telling the agent to report READY and wait.
 - **Right-click:** New session (fresh context) · Open cwd in Explorer · Open in VS Code · Copy resume command · View last 200 lines · Kill
 - **Live:** running/idle/fault LED, heat, session uptime, last tool-use summary in the inspector
 
@@ -82,6 +94,29 @@ Real machine stats: CPU %, RAM, free space on `C:`/dev drives. This is the only 
 
 ### `group.zone` — a silkscreen outline box
 A labelled rectangle grouping related components inside a room, like a functional block on a real schematic. Selecting the zone selects its members. Purely organizational, no target.
+
+> **Built 2026-09-10.** Addable, removable and fully editable from the board. `N` in Edit Board
+> mode opens the add-component palette; a new zone arrives 10x6 and is dragged and resized to fit.
+> Its interactive size cap is the board (512 tiles), not the 48 a component gets — a bracket is
+> meant to span a room. Selecting the empty margin selects the zone; clicking a component inside
+> it selects the component, because hit-testing is smallest-area-wins.
+
+### `decor.image` — a backdrop
+- **Fields:** `image` (required), `footprint`
+- **Click:** nothing while browsing. It is not a click target outside Edit Board mode.
+
+Any image on disk, dithered onto the room's six colours and drawn in its own layer above the
+substrate and BELOW the copper. So a trace crosses it, a component stands on it, and a courier
+walks over it. Resizable like any other node, up to the whole board.
+
+Printed rather than mounted: it occupies no grid, never collides, and is excluded from every
+overlap check — `tools/validate-board.mjs`, `board-store.graphProblems`, `layout.findFreeSpace`
+and `drag.canDrop`, which are four separate implementations of the same rule and must stay in
+step. It is also not a click target while browsing, so a board-sized backdrop does not swallow
+every click on empty substrate.
+
+New ones arrive with `showName` and `showDesignator` off: a nameplate floating over a background
+element reads as a mistake.
 
 ---
 

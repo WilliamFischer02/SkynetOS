@@ -104,7 +104,13 @@ export function graphProblems(board: Board): string[] {
     if (ids.has(node.id)) problems.push(`duplicate node id "${node.id}"`);
     ids.add(node.id);
 
-    if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
+    /*
+     * Printed kinds occupy no grid. A note is text, a zone is a bracket drawn AROUND components,
+     * and a decor.image is scenery the board stands on — counting any of them as an obstacle
+     * would make every board that uses one fail its own overlap check. Kept in step with the same
+     * list in tools/validate-board.mjs and src/renderer/board/layout.ts.
+     */
+    if (node.kind === 'note.silk' || node.kind === 'group.zone' || node.kind === 'decor.image') continue;
     const { w, h } = footprintOf(node);
     if (node.pos.x + w > board.grid.width || node.pos.y + h > board.grid.height) {
       problems.push(`node "${node.id}" extends past the board edge`);

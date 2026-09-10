@@ -18,6 +18,23 @@
   "agentEditPolicy": "require-approval",
   "nodes": [
     {
+      "id": "bg_board",
+      "kind": "decor.image",
+      "name": "BACKDROP DEMO",
+      "pos": {
+        "x": 3,
+        "y": 5
+      },
+      "footprint": {
+        "w": 16,
+        "h": 11
+      },
+      "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "notes": "decor.image: a picture drawn behind everything, resizable like any other node. Delete it, repoint it, or drag it wherever you like — it never collides and never steals a click while you are browsing."
+    },
+    {
       "id": "u1_jarvis",
       "designator": "U1",
       "kind": "agent.jarvis",
