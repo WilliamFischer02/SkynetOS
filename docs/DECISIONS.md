@@ -305,3 +305,109 @@ link SkynetOS happened to know about rather than something living on the board.
 keeps the node's name instead of renaming itself to "Claude". Popups are allowed only as more
 windows of exactly this kind (same partition, https only), because denying them would make OAuth
 sign-in impossible; `will-navigate` refuses any scheme that is not http(s).
+
+## 2026-09-10 — Why no chip had ever launched, and the four bugs behind it
+
+William: "the buttons that should open powershell iterations or even console iterations still
+isn't producing actual command like windows". Investigation found four separate defects stacked
+on top of each other. Every one of them was silent, and each masked the next.
+
+**1. `existsSync` cannot see an App Execution Alias.** SkynetOS decided Windows Terminal was
+installed with `existsSync('%LOCALAPPDATA%/Microsoft/WindowsApps/wt.exe')`. That is `false` on
+every Windows 11 machine: the entries under `WindowsApps` are zero-length reparse points that
+`CreateProcess` resolves and `stat` cannot (it throws EACCES). `hasWindowsTerminal()` was
+therefore permanently false, and the shell resolver fell through to `powershell.exe` 5.1 for the
+same reason.
+
+**2. A console app spawned from Electron main has nowhere to appear.** Electron's main process is
+a GUI-subsystem process and owns no console. With wt out of the picture by bug 1, the launcher
+spawned `powershell.exe` directly, detached — the process ran, wrote to nothing, and no window
+ever appeared. Verified: a detached `pwsh.exe -File <script>` never reported in; the identical
+script under `wt` did, in 500ms.
+
+**3. `spawn` succeeding was mistaken for a launch.** `wt.exe` is a stub that hands off and exits
+0 in ~200ms whether or not it parsed its arguments. All fifteen sessions in `skynet.db` "started"
+and "exited" within a second, and each was reported to the UI as a success.
+
+**4. Phantom conversation ids poisoned every chip permanently.** The conversation id was recorded
+before the spawn, correctly, so a crash could not orphan a conversation. But an assigned id is a
+plan, not a fact. The first launch of each chip failed (bug 1+2), leaving an id naming a
+conversation that was never created; every click after that ran `claude --resume <phantom>`, got
+`No conversation found with session ID`, and exited 1. **Every one of the four conversation ids in
+this machine's database was a phantom. `claude` had never once started from the board.**
+
+**Decisions taken.**
+
+- **`services/which.ts`** resolves executables by listing PATH directories, which reads aliases
+  correctly, instead of stat-ing a guessed path. Nothing in the app may use `existsSync` to test
+  for an executable again.
+- **`services/launch-script.ts`** stages the entire launch as a `.ps1` under userData. The command
+  line now contains nothing but file paths. This retires the escaping arms race: `spawn -> wt ->
+  pwsh -> claude argv` was four parsers, and it is now one, with every value single-quoted.
+  A test asserts the command line contains only paths and known flags.
+- **The staged script writes its own `$PID` first and deletes it in a `finally`.** A launch is
+  confirmed by that file appearing, not by `spawn` returning. No file, no launch — and the caller
+  gets the script's path to run by hand. Sessions gained a `starting` state for the window in
+  between, which is where an elevated launch sits during the UAC prompt.
+- **`services/conversations.ts`** checks `~/.claude/projects/<mangled-cwd>/<id>.jsonl` before
+  passing an id to `--resume`, and `claudeSessionIdsForNode` walks the node's history until it
+  finds one that exists. A failed launch can no longer poison a chip, and a chip with real history
+  under a phantom recovers it. The user is told when a conversation was lost rather than being
+  quietly given a new one.
+- **The no-wt fallback goes through `cmd /c start`**, which is what asks the shell to create a new
+  console for a program. Bug 2 has no other fix.
+
+**Alternative rejected:** keeping the child-process handle and treating its `exit` as the
+session's exit. It never was the session — it is a launcher — and two sessions' worth of
+debugging came from that assumption.
+
+## 2026-09-10 — Priming is a named allowlist, never a shell string
+
+**Decision.** A node stores `prelaunch: ["claude", "git-fetch"]` — ids from
+`packages/shared/prime-steps.ts`. The shell text lives in that registry, in code. An id the
+registry does not know is dropped, not run.
+
+**Why.** docs/07: "Board JSON is data. It never contains executable code." Board files are what
+an agent is allowed to edit. If priming were a free shell string, "edit a node" and "run arbitrary
+code as William" would be the same permission.
+
+Steps are also marker-checked in the generated script: `npm-install` in a repo with no
+package.json prints "skipped, no package.json here" instead of a stack trace. Defaults are the
+three that cannot rewrite a lockfile (`claude`, `git-fetch`, `git-status`); anything that mutates
+a repo is opt-in and is badged "writes" in the editor.
+
+## 2026-09-10 — The session briefing is assembled, not typed
+
+**Decision.** `briefing: 'none' | 'first' | 'every'` (default `first`). SkynetOS composes the
+first message from what the node already declares — `readOnLaunch` (defaulting to CLAUDE.md + the
+persona brief + the codex ref), the granted `addDirs`, and `initialPrompt` as the character notes.
+It ends by requiring a READY / CONTEXT / NEXT block and telling the agent to stop and wait.
+
+**Why.** William asked for sessions that arrive knowing their documentation and personality and
+are "then ready for me". Deriving the briefing from the node's own bindings means priming a new
+chip is an act of binding it to real files, not of writing the same prompt twice. Documents are
+existence-checked in main, so a briefing states what is missing rather than sending an agent after
+a file that is not there.
+
+`every` re-orients on resume instead of re-introducing: the resumed text says "you have context
+from before" and asks only for a re-read of what was lost.
+
+## 2026-09-10 — `addDirs`, so repos stay where they are
+
+**Decision.** `addDirs: string[]` on an agent node becomes one `claude --add-dir` per entry.
+Directories outside the dev roots are confirmed on every launch, exactly like a working directory
+outside them. A granted directory that is not on disk is dropped from the invocation (one bad path
+makes Claude Code reject the whole thing) and named in the briefing as missing.
+
+**Why.** William: "other repos I want Jarvis to oversee are in other root folders but must still
+be accessible to Jarvis WITHOUT me needing to relocate all of my repos on my drive."
+
+## 2026-09-10 — Any node with a directory can open a terminal
+
+**Decision.** New `terminal:open` IPC channel and two inspector buttons, "Open terminal" and
+"Admin terminal". `openWith: 'terminal'` is implemented rather than answering "arrives at M3".
+Both run the same staged script an agent launch does, so a repo that primes with `git-fetch`
+primes here too. Elevation is confirmed in main with the blast radius spelled out.
+
+**Why.** Nothing on the board could put you in a shell except an agent chip, and that was
+William's first request.

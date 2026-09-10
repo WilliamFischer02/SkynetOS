@@ -208,23 +208,104 @@ canvas {
 
 /* ---------- buttons ---------- */
 
+/*
+ * Buttons are physical.
+ *
+ * A board full of components you can actually press should not be driven by flat rectangles that
+ * do nothing when you click them. Every button here is a keycap: a hard 2px bevel (light on the
+ * top-left, dark on the bottom-right, drawn with a zero-blur box-shadow so it stays pixel-crisp),
+ * and pressing it moves the cap down onto the board and swaps the bevel over. No blur, no
+ * gradient, no fractional transform — docs/02 anti-mush applies to the chrome, not only the
+ * canvas, and `translateY` of a whole --p is a whole device pixel by construction.
+ */
 .btn {
   font: inherit;
   text-transform: uppercase;
-  padding: var(--gap) calc(2 * var(--gap));
+  padding: calc(2 * var(--gap)) calc(3 * var(--gap));
+  min-height: calc(24 * var(--p));
   background: var(--mask-light);
   color: var(--silk);
   border: var(--p) solid var(--copper-dark);
   cursor: pointer;
+  position: relative;
+  box-shadow:
+    inset var(--p) var(--p) 0 0 rgba(233, 228, 214, 0.14),
+    inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 0 rgba(0, 0, 0, 0.45),
+    calc(2 * var(--p)) calc(2 * var(--p)) 0 0 rgba(0, 0, 0, 0.5);
+  transition: none;
 }
 
-.btn:hover:not(:disabled) { border-color: var(--copper); color: var(--signal); }
+.btn:hover:not(:disabled) { border-color: var(--copper); color: var(--signal); background: #1b2e23; }
 .btn:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
-.btn:disabled { color: var(--copper-dark); cursor: not-allowed; }
-.btn.primary { border-color: var(--copper); }
+
+/* Pressed: the cap drops the full height of its own shadow and the bevel inverts. */
+.btn:active:not(:disabled) {
+  transform: translate(calc(2 * var(--p)), calc(2 * var(--p)));
+  box-shadow:
+    inset var(--p) var(--p) 0 0 rgba(0, 0, 0, 0.45),
+    inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 0 rgba(233, 228, 214, 0.10);
+  background: var(--copper-dark);
+  color: var(--mask-dark);
+}
+
+.btn:disabled {
+  color: var(--copper-dark);
+  cursor: not-allowed;
+  box-shadow: inset var(--p) var(--p) 0 0 rgba(233, 228, 214, 0.05);
+}
+
+.btn.primary { border-color: var(--copper); color: var(--signal); }
 .btn.primary:hover:not(:disabled) { background: var(--copper-dark); color: var(--silk); }
 .btn.danger { border-color: var(--fault); color: var(--fault); }
 .btn.danger:hover:not(:disabled) { background: var(--fault); color: var(--mask-dark); }
+.btn.warn { border-color: var(--warn); color: var(--warn); }
+.btn.warn:hover:not(:disabled) { background: var(--warn); color: var(--mask-dark); }
+
+/* ---------- multi: a ticker per allowlisted id ---------- */
+
+.multi { display: flex; flex-direction: column; gap: calc(0.5 * var(--gap)); }
+
+.multi-row {
+  display: flex;
+  gap: calc(1.5 * var(--gap));
+  align-items: center;
+  padding: calc(0.5 * var(--gap)) var(--gap);
+  border: var(--p) solid transparent;
+  cursor: pointer;
+}
+
+.multi-row:hover { border-color: var(--copper-dark); }
+.multi-row.on { border-color: var(--copper); color: var(--signal); }
+.multi-row input { accent-color: var(--signal); width: calc(11 * var(--p)); height: calc(11 * var(--p)); }
+.multi-label { flex: 1 1 auto; text-transform: uppercase; }
+
+/* A step that can rewrite a lockfile says so on its own row, not in a paragraph below. */
+.multi-warn {
+  color: var(--warn);
+  border: var(--p) solid var(--warn);
+  padding: 0 var(--gap);
+  text-transform: uppercase;
+}
+
+/* ---------- dir-list: granted directories ---------- */
+
+.dirlist { display: flex; flex-direction: column; gap: var(--gap); }
+
+.dirlist-row {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  padding: var(--gap);
+  border-left: calc(2 * var(--p)) solid var(--copper-dark);
+  background: var(--mask-light);
+}
+
+.dirlist-row.ok { border-left-color: var(--ok); }
+.dirlist-row.warn { border-left-color: var(--warn); }
+.dirlist-row.fault { border-left-color: var(--fault); }
+.dirlist-path { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.dirlist-state { color: var(--copper); text-transform: uppercase; white-space: nowrap; }
+.dirlist-empty { color: var(--copper-dark); text-transform: uppercase; }
 
 /* ---------- inspector ---------- */
 

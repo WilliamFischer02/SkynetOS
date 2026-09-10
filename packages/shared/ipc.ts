@@ -81,10 +81,28 @@ export interface SessionInfo {
   claudeSessionId: string | null;
   pid: number | null;
   startedAt: string;
-  state: 'running' | 'exited' | 'error';
+  /**
+   * `starting` is the window between asking for a terminal and that terminal proving it exists.
+   * It is a real state, not a nicety: an elevated launch sits here on a UAC prompt, and the old
+   * code's habit of jumping straight to `running` is how a launch that never happened got
+   * reported as one. See src/main/services/terminal.ts.
+   */
+  state: 'starting' | 'running' | 'exited' | 'error';
   /** True when this launch continued an existing conversation rather than starting one. */
   resumed: boolean;
   exitCode?: number | null;
+  error?: string;
+}
+
+/** A plain terminal opened on a node's directory — no agent, no conversation, no session row. */
+export interface TerminalOpenResult {
+  ok: boolean;
+  /** The shell's pid, proved by the staged script reporting in. Null when the launch failed. */
+  pid: number | null;
+  /** Always returned. When a launch fails, this is the file to run by hand to find out why. */
+  scriptFile: string;
+  elevated: boolean;
+  cwd: string;
   error?: string;
 }
 
@@ -204,6 +222,15 @@ export interface SkynetApi {
   /** The resume command for this node, so it can be copied and run by hand. */
   'session:resumeCommand': (boardId: string, nodeId: string) => string | null;
 
+  /**
+   * Open a plain terminal on this node's directory — no agent, no conversation.
+   *
+   * The thing every repo node was missing: `openWith: 'terminal'` used to answer "TERMINAL LAUNCH
+   * ARRIVES AT M3" and nothing else on the board could put you in a shell. `elevated` is the
+   * admin variant and raises a UAC prompt, which is confirmed in main like every other elevation.
+   */
+  'terminal:open': (boardId: string, nodeId: string, options?: { elevated?: boolean }) => TerminalOpenResult;
+
   // --- service.process ---
   'service:start': (boardId: string, nodeId: string) => { ok: boolean; error?: string; info?: ServiceInfo };
   'service:stop': (boardId: string, nodeId: string) => { ok: boolean; error?: string };
@@ -244,6 +271,7 @@ export const CHANNELS = [
   'session:stop',
   'session:list',
   'session:resumeCommand',
+  'terminal:open',
   'service:start',
   'service:stop',
   'service:list',

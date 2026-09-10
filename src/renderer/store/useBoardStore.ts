@@ -80,6 +80,11 @@ interface BoardState {
   startService: (nodeId: string) => Promise<void>;
   stopService: (boardId: string, nodeId: string) => Promise<void>;
   copyResumeCommand: (nodeId: string) => Promise<void>;
+  /**
+   * Open a plain shell on a node's directory. `elevated` raises a UAC prompt, which main
+   * confirms first — the renderer can ask for elevation but can never grant it.
+   */
+  openTerminal: (nodeId: string, elevated: boolean) => Promise<void>;
   /** Camera jump requested by the minimap, consumed by the canvas. */
   jumpTo: { x: number; y: number; seq: number } | null;
   requestJump: (world: { x: number; y: number }) => void;
@@ -357,6 +362,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const result = await window.skynet['service:stop'](boardId, nodeId);
     if (!result.ok) get().toast('warn', result.error ?? 'could not stop');
     else get().toast('ok', 'service stopped');
+  },
+
+  openTerminal: async (nodeId, elevated) => {
+    const { boardId, board } = get();
+    const node = board?.nodes.find((n) => n.id === nodeId);
+    const label = node?.designator ? `${node.designator} ${node.name}` : (node?.name ?? nodeId);
+    const result = await window.skynet['terminal:open'](boardId, nodeId, { elevated });
+    if (!result.ok) {
+      /*
+       * A failed launch used to be reported as a success. The script path is in the message on
+       * purpose: it is the exact file to run by hand, and it is the difference between "nothing
+       * happened" and a bug you can see.
+       */
+      get().toast('fault', result.error ?? 'COULD NOT OPEN A TERMINAL');
+      return;
+    }
+    get().toast('ok', `${label} — ${elevated ? 'ADMIN ' : ''}terminal open in ${result.cwd} (pid ${result.pid ?? '?'})`);
   },
 
   copyResumeCommand: async (nodeId) => {

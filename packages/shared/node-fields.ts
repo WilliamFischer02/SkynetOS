@@ -11,6 +11,7 @@
  * hardware; a Browse button and a Verify check make the real target the easy option.
  */
 
+import { PRIME_STEP_IDS } from './prime-steps.js';
 import type { BoardNode, NodeKind } from './types.js';
 
 /**
@@ -21,6 +22,10 @@ import type { BoardNode, NodeKind } from './types.js';
  *  boolean     checkbox
  *  select      one of `options`
  *  tags        comma-separated list -> string[]
+ *  multi       a set of tickers over `options` -> string[]. For allowlisted ids, where free
+ *              text would be wrong: the choices are the only legal values.
+ *  dir-list    a list of directories, each with its own Browse button and existence check.
+ *              Used by `addDirs`, which is how an agent reaches repos outside its own cwd.
  *  path-file   a file on disk. Offers Browse (native open dialog) + existence check.
  *  path-dir    a directory on disk. Offers Browse (native folder dialog) + existence check.
  *  glob        a path with a `*` in it. Resolves to the newest match and shows which file won.
@@ -29,8 +34,9 @@ import type { BoardNode, NodeKind } from './types.js';
  *  json        a raw JSON object (task.scheduled action)
  */
 export type FieldControl =
-  | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags'
-  | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json';
+  | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags' | 'multi'
+  | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json'
+  | 'dir-list';
 
 /** Controls that name something outside the board and therefore need verifying. */
 export const TARGET_CONTROLS = ['path-file', 'path-dir', 'glob', 'url', 'board-file'] as const;
@@ -84,10 +90,20 @@ const TRAILING: FieldSpec[] = [
   { key: 'provisional', label: 'Provisional', control: 'boolean', help: 'Renders as an unpopulated footprint — a TODO printed on the board. A real PCB convention and a good way to place a node before its target exists.' }
 ];
 
+/**
+ * Priming on a plain terminal. The same allowlist an agent chip uses — "open a shell here and
+ * bring it up to date" is the same act whether or not an agent follows it.
+ */
+const PRIME_FIELD: FieldSpec = {
+  key: 'prelaunch', label: 'Prime before launch', control: 'multi',
+  options: PRIME_STEP_IDS,
+  help: 'Update steps to run when a terminal opens on this folder. Ids only — the commands live in code, never in board JSON.'
+};
+
 const OPEN_WITH: FieldSpec = {
   key: 'openWith', label: 'Open with', control: 'select',
   options: ['explorer', 'default', 'browser', 'terminal', 'vscode'],
-  help: 'What a click does. explorer reveals it in File Explorer; default hands it to Windows; vscode runs `code <path>`.'
+  help: 'What a click does. explorer reveals it in File Explorer; default hands it to Windows; vscode runs `code <path>`; terminal opens a shell there.'
 };
 
 const BY_KIND: Record<NodeKind, FieldSpec[]> = {
@@ -96,7 +112,26 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
     { key: 'launch', label: 'Launch mode', control: 'select', required: true, options: ['popout', 'popout-elevated', 'embedded', 'headless'], help: 'popout opens Windows Terminal. popout-elevated triggers a UAC prompt every launch and is badged on the sprite — opt in per node only.' },
     { key: 'model', label: 'Model', control: 'text', placeholder: 'claude-opus-5', help: 'Optional. Omit to use the CLI default.' },
     { key: 'resume', label: 'Resume prior session', control: 'boolean', help: 'On: reattaches to this node\'s own conversation with `claude --resume`. Off: a fresh context every launch.' },
-    { key: 'initialPrompt', label: 'Initial prompt', control: 'textarea', help: 'Sent on first launch only, not on resume.' },
+    {
+      key: 'prelaunch', label: 'Prime before launch', control: 'multi',
+      options: PRIME_STEP_IDS,
+      help: 'Update steps the terminal runs before handing over. Ids only — the commands live in code, never in board JSON. Leave every box clear to prime nothing.'
+    },
+    {
+      key: 'briefing', label: 'Send the briefing', control: 'select',
+      options: ['first', 'every', 'none'],
+      help: 'first: only when a conversation starts. every: re-orient on resume too. none: open at an empty prompt. The briefing is built from the reading list, the persona and the granted directories below.'
+    },
+    {
+      key: 'readOnLaunch', label: 'Read on launch', control: 'tags',
+      placeholder: 'CLAUDE.md, codex/persona.md',
+      help: 'Repo-relative documents the session reads first, in order. Leave empty to derive from CLAUDE.md + the persona brief + the codex ref.'
+    },
+    {
+      key: 'addDirs', label: 'Granted directories', control: 'dir-list',
+      help: 'Directories outside the working directory this agent may read and write (claude --add-dir). How one agent oversees repos scattered across the disk without moving any of them. Anything outside your dev roots is confirmed on every launch.'
+    },
+    { key: 'initialPrompt', label: 'Extra briefing text', control: 'textarea', help: 'Added to the generated briefing. Persona and character notes go here; the reading list and the granted directories are added for you.' },
     { key: 'mcpServers', label: 'MCP servers', control: 'tags', placeholder: 'skynet-mcp' }
   ],
   'agent.chat': [
@@ -117,11 +152,13 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
   'store.repo': [
     { key: 'path', label: 'Repository path', control: 'path-dir', required: true, placeholder: 'C:/dev/TheStalker' },
     { key: 'remote', label: 'Remote URL', control: 'url', placeholder: 'https://github.com/you/TheStalker' },
-    OPEN_WITH
+    OPEN_WITH,
+    PRIME_FIELD
   ],
   'store.folder': [
     { key: 'path', label: 'Folder path', control: 'path-dir', required: true, placeholder: 'C:/dev/assets' },
-    OPEN_WITH
+    OPEN_WITH,
+    PRIME_FIELD
   ],
   'store.cloud': [
     { key: 'url', label: 'Cloud URL', control: 'url', required: true, placeholder: 'https://drive.google.com/drive/folders/…' },

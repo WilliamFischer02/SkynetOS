@@ -52,8 +52,8 @@
       "kind": "file.document",
       "name": "Something In The Woods.docx",
       "pos": {
-        "x": 14,
-        "y": 6
+        "x": 10,
+        "y": 7
       },
       "footprint": {
         "w": 2,
@@ -67,8 +67,8 @@
       "kind": "store.folder",
       "name": "SITW working files",
       "pos": {
-        "x": 20,
-        "y": 5
+        "x": 19,
+        "y": 9
       },
       "footprint": {
         "w": 4,
@@ -83,8 +83,8 @@
       "kind": "agent.chat",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 5,
-        "y": 14
+        "x": 8,
+        "y": 16
       },
       "footprint": {
         "w": 4,
@@ -117,7 +117,7 @@
       "name": "Dirty Plush (shared)",
       "pos": {
         "x": 20,
-        "y": 14
+        "y": 18
       },
       "footprint": {
         "w": 4,
@@ -132,8 +132,8 @@
       "kind": "file.exe",
       "name": "Word",
       "pos": {
-        "x": 32,
-        "y": 6
+        "x": 35,
+        "y": 12
       },
       "footprint": {
         "w": 2,
@@ -148,8 +148,8 @@
       "kind": "file.document",
       "name": "Series bible",
       "pos": {
-        "x": 32,
-        "y": 15
+        "x": 13,
+        "y": 22
       },
       "footprint": {
         "w": 2,
@@ -163,8 +163,8 @@
       "kind": "task.scheduled",
       "name": "Weekly wordcount",
       "pos": {
-        "x": 5,
-        "y": 23
+        "x": 34,
+        "y": 19
       },
       "footprint": {
         "w": 2,

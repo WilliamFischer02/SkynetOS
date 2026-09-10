@@ -49,6 +49,7 @@ export function Inspector(): React.JSX.Element | null {
   const startSession = useBoardStore((s) => s.startSession);
   const stopSession = useBoardStore((s) => s.stopSession);
   const copyResumeCommand = useBoardStore((s) => s.copyResumeCommand);
+  const openTerminal = useBoardStore((s) => s.openTerminal);
 
   if (!board) return null;
 
@@ -65,7 +66,10 @@ export function Inspector(): React.JSX.Element | null {
   const target = targets[node.id];
   const fp = footprintOf(node);
   const targetField = primaryTargetField(node.kind);
-  const session = sessions.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'running');
+  const session = sessions.find(
+    (s) => s.nodeId === node.id && s.boardId === boardId && (s.state === 'running' || s.state === 'starting')
+  );
+  const failedSession = sessions.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'error');
   const service = services.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'running');
 
   const save = async (patch: Partial<BoardNode>) => {
@@ -146,12 +150,49 @@ export function Inspector(): React.JSX.Element | null {
             <button type="button" className="btn" onClick={() => beginEdit(node.id)}>Edit node (F2)</button>
           </div>
 
+          {/*
+            * A shell, on any node that has a directory.
+            *
+            * The board could not do this at all until now: `openWith: 'terminal'` answered
+            * "TERMINAL LAUNCH ARRIVES AT M3" and an agent chip was the only thing that could
+            * open a console. Both buttons run the same staged script an agent launch does, so a
+            * repo primed with `git-fetch` primes here too.
+            */}
+          {hasDirectory(node) ? (
+            <div className="inspector-actions">
+              <button
+                type="button"
+                className="btn"
+                disabled={target ? isBroken(target) && target.state !== 'outside-dev-root' : false}
+                onClick={() => void openTerminal(node.id, false)}
+                title="Open a PowerShell window in this folder, primed with the update steps this node declares"
+              >
+                Open terminal
+              </button>
+              <button
+                type="button"
+                className="btn warn"
+                disabled={target ? isBroken(target) && target.state !== 'outside-dev-root' : false}
+                onClick={() => void openTerminal(node.id, true)}
+                title="Open an ELEVATED PowerShell window in this folder. Windows will ask for confirmation."
+              >
+                Admin terminal
+              </button>
+            </div>
+          ) : null}
+
           {node.kind === 'agent.code' ? (
             <div className="session-block">
               {session ? (
                 <>
-                  <div className="state ok">
-                    <div className="state-line">SESSION RUNNING{session.resumed ? ' — RESUMED' : ' — NEW CONVERSATION'}</div>
+                  <div className={session.state === 'starting' ? 'state warn' : 'state ok'}>
+                    <div className="state-line">
+                      {session.state === 'starting'
+                        ? (node.launch === 'popout-elevated'
+                            ? 'STARTING — WAITING ON THE UAC PROMPT'
+                            : 'STARTING — WAITING FOR THE TERMINAL TO REPORT IN')
+                        : `SESSION RUNNING${session.resumed ? ' — RESUMED' : ' — NEW CONVERSATION'}`}
+                    </div>
                     <div className="state-meta">
                       <span>PID {session.pid ?? '?'}</span>
                       <span>{session.mode}</span>
@@ -167,12 +208,20 @@ export function Inspector(): React.JSX.Element | null {
                   </div>
                 </>
               ) : (
-                <div className="inspector-actions">
-                  <button type="button" className="btn primary" onClick={() => void startSession(node.id)}>
-                    {node.resume === false ? 'Launch session' : 'Resume conversation'}
-                  </button>
-                  <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
-                </div>
+                <>
+                  {failedSession ? (
+                    <div className="state fault">
+                      <div className="state-line">LAST LAUNCH FAILED</div>
+                      <div className="state-detail">{failedSession.error}</div>
+                    </div>
+                  ) : null}
+                  <div className="inspector-actions">
+                    <button type="button" className="btn primary" onClick={() => void startSession(node.id)}>
+                      {node.resume === false ? 'Launch session' : 'Resume conversation'}
+                    </button>
+                    <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
+                  </div>
+                </>
               )}
               <div className="inspector-actions">
                 <button type="button" className="btn" onClick={() => void copyResumeCommand(node.id)}>Copy resume command</button>
@@ -224,6 +273,29 @@ export function Inspector(): React.JSX.Element | null {
       )}
     </aside>
   );
+}
+
+/**
+ * Kinds that resolve to somewhere on this disk you could stand in a shell.
+ *
+ * Not the same as "has a target": a link.url and a store.cloud point at real things that are not
+ * folders, and offering a terminal for them would be a button that can only fail.
+ */
+function hasDirectory(node: BoardNode): boolean {
+  switch (node.kind) {
+    case 'store.repo':
+    case 'store.folder':
+    case 'agent.code':
+    case 'service.process':
+    case 'file.document':
+    case 'file.exe':
+    case 'file.artifact':
+      return true;
+    case 'store.cloud':
+      return Boolean(node.localPath);
+    default:
+      return false;
+  }
 }
 
 /** Buttons say what happens. docs/02: "Launch session", "Open in Explorer", not "Go". */

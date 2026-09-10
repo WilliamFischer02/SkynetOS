@@ -2,17 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { BoardNode } from '@shared/types.js';
 
 /**
- * How a Claude Code session is spelled on the command line.
+ * How a Claude Code session is spelled, and what it is told when it opens.
  *
- * Pure policy, deliberately in its own module with no Electron and no database import, so it can
- * be read and tested on its own. It is also the most consequential logic in M3 — a mistake here
- * is silent: a chip that opens a fresh conversation every time looks like it is working.
+ * Pure policy, deliberately in its own module with no Electron, no fs and no database import, so
+ * it can be read and tested on its own. It is also the most consequential logic in M3 — a mistake
+ * here is silent: a chip that opens a fresh conversation every time looks like it is working.
  *
  * ── How resume actually works ─────────────────────────────────────────────────────────────────
  * docs/01 said to capture the session id from the stream-json `system/init` event. That works for
  * headless, but a `popout` session runs in a terminal SkynetOS does not own and whose stdout it
  * never sees — so there would be nothing to capture, and the marquee launch mode could never
- * resume. Checking `claude --help` on this machine (v2.1.267) turned up a better answer:
+ * resume. `claude --help` on this machine (v2.1.267) has a better answer:
  *
  *     --session-id <uuid>   Use a specific session ID for the conversation (must be a valid UUID)
  *     -r, --resume [value]  Resume a conversation by session ID
@@ -20,14 +20,19 @@ import type { BoardNode } from '@shared/types.js';
  * So SkynetOS *assigns* the id instead of discovering it. First launch generates a UUID and
  * passes `--session-id`; every later launch passes `--resume <uuid>`. Identical for popout,
  * elevated and headless, and it never depends on parsing another program's output.
+ *
+ * The correction that cost this project two sessions: an assigned id is a PLAN, not a fact. It
+ * only becomes a real conversation if the launch works. `storedIsReal` is the caller's answer to
+ * "does that conversation exist on disk" — see conversations.ts — and without it a single failed
+ * launch poisons the chip forever.
  */
 
 /**
  * Quote a single PowerShell argument. Single quotes, with '' as the escape for a literal quote.
  *
- * Everything that reaches a command line goes through this. Board JSON is git-tracked and
- * reviewed, but it is still data, and a repo path containing a quote or a `$(...)` must be a
- * path — not shell syntax.
+ * Everything that reaches PowerShell goes through this. Board JSON is git-tracked and reviewed,
+ * but it is still data, and a repo path containing a quote or a `$(...)` must be a path — not
+ * shell syntax.
  */
 export function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
@@ -36,26 +41,42 @@ export function psQuote(value: string): string {
 /**
  * Escape a value for Windows Terminal's OWN command-line parser, which runs before PowerShell's.
  *
- * `wt.exe` splits its command line on `;` to open a second tab. That is not a theory. The U3
- * JARVIS-HANDS node's initial prompt contained "...cannot see this disk; you are how its
- * decisions become real." — wt took everything after the semicolon as a second subcommand,
- * failed to parse it, and exited 0 without opening anything. `spawn` had succeeded, so SkynetOS
- * cheerfully reported LAUNCHED. Nothing on screen, no error, no clue.
+ * `wt.exe` splits its command line on `;` to open a second tab. That is not a theory. U3's
+ * initial prompt contained "...cannot see this disk; you are how its decisions become real." —
+ * wt took everything after the semicolon as a second subcommand, failed to parse it, and exited
+ * 0 without opening anything. `spawn` had succeeded, so SkynetOS reported LAUNCHED.
  *
- * Backslash-escaping the semicolon is Windows Terminal's documented escape, and it is verified
- * here to round-trip a literal `;` all the way through to the inner shell.
- *
- * Only `;` is escaped. Escaping backslashes as well would corrupt every Windows path that goes
- * through here, and wt does not treat a lone backslash as special.
+ * Since launch-script.ts, the only things that reach wt are two file paths, and a folder is
+ * still allowed to contain a semicolon. Only `;` is escaped: escaping backslashes as well would
+ * corrupt every Windows path, and wt does not treat a lone backslash as special.
  */
 export function wtEscape(value: string): string {
   return value.replace(/;/g, '\\;');
 }
 
+export interface ClaudeArgsInput {
+  node: BoardNode;
+  /** The conversation id remembered for this node, or null if it has never launched. */
+  storedSessionId: string | null;
+  /**
+   * Whether that stored id names a conversation that EXISTS. The caller checks the disk; this
+   * module refuses to resume on faith. See the header.
+   */
+  storedIsReal: boolean;
+  /** The user asked for a brand-new conversation. */
+  fresh: boolean;
+  /**
+   * Extra directories to grant the session, already resolved and existence-checked by the
+   * caller. This is how one agent oversees repos that live outside its own working directory
+   * without anything being moved on disk — `claude --add-dir`.
+   */
+  addDirs: readonly string[];
+}
+
 export interface ClaudeInvocation {
   /**
-   * Flags and their values. Never free text — see `initialPrompt`. Everything in here is a UUID,
-   * a model name, or a config path, which is why it is safe on a command line.
+   * Flags and their values. Never free text — see `briefing`. Everything in here is a UUID, a
+   * model name, or a path, which is why it is safe to put in a PowerShell array literal.
    */
   args: string[];
   /** The conversation id this launch will use, whether newly minted or resumed. */
@@ -63,92 +84,141 @@ export interface ClaudeInvocation {
   /** True when this launch continues an existing conversation rather than starting one. */
   resumed: boolean;
   /**
-   * The first message to send, present only when this launch STARTS a conversation.
-   *
-   * Deliberately not in `args`. It is arbitrary prose out of board JSON, and prose on a command
-   * line has to survive wt.exe's parser, then PowerShell's parser, then argv splitting — three
-   * chances to be mangled by a semicolon, a quote, an ampersand or a newline. The caller stages
-   * it in a file and the command reads the file. See `popoutCommand`.
+   * Set when the node WANTED to resume and could not, because the stored conversation is not on
+   * disk. Surfaced to the user rather than silently starting over — a chip quietly losing its
+   * history is exactly the failure that went unnoticed for two sessions.
    */
-  initialPrompt?: string;
+  recoveredFrom?: string;
 }
 
-export function claudeArgs(node: BoardNode, existingSessionId: string | null): ClaudeInvocation {
-  const resume = node.resume !== false;
-  const sessionId = resume && existingSessionId ? existingSessionId : randomUUID();
-  const args: string[] = [];
+export function claudeArgs(input: ClaudeArgsInput): ClaudeInvocation {
+  const { node, storedSessionId, storedIsReal, fresh, addDirs } = input;
+  const wantsResume = node.resume !== false && !fresh;
 
-  if (resume && existingSessionId) args.push('--resume', existingSessionId);
+  const canResume = wantsResume && Boolean(storedSessionId) && storedIsReal;
+  const sessionId = canResume && storedSessionId ? storedSessionId : randomUUID();
+
+  const args: string[] = [];
+  if (canResume && storedSessionId) args.push('--resume', storedSessionId);
   else args.push('--session-id', sessionId);
 
   if (node.model) args.push('--model', node.model);
+  for (const dir of addDirs) args.push('--add-dir', dir);
   for (const server of node.mcpServers ?? []) args.push('--mcp-config', server);
 
-  // The initial prompt is only meaningful on a conversation that does not exist yet. Sending it
-  // on every resume would re-ask the same question at the top of every session.
-  const fresh = !(resume && existingSessionId);
-  const initialPrompt = node.initialPrompt && fresh ? node.initialPrompt : undefined;
+  /*
+   * A display name, so the terminal's own title bar and `claude --resume`'s picker both say
+   * which chip this is. Costs one flag and turns a wall of identical windows into a board.
+   */
+  const label = node.designator ? `${node.designator} ${node.name}` : node.name;
+  if (label.trim()) args.push('--name', label.trim().slice(0, 60));
 
-  return { args, sessionId, resumed: Boolean(resume && existingSessionId), initialPrompt };
-}
+  const invocation: ClaudeInvocation = { args, sessionId, resumed: canResume };
 
-/**
- * The command line for a popout session.
- *
- * Windows Terminal when it is installed, plain pwsh when it is not — `wt.exe` ships with Windows
- * 11 but can be removed, and a launcher that fails on a missing optional component is a launcher
- * that fails.
- *
- * `-NoExit` is why you can still read the output of a session that died on startup, and `-d` is
- * what puts the tab in the node's repo. Getting `-d` wrong is the most damaging way this could
- * quietly misbehave: the agent would run, in the wrong directory, and say nothing about it.
- */
-export function popoutCommand(
-  cwd: string,
-  claudeArgv: string[],
-  hasWindowsTerminal: boolean,
-  promptFile?: string
-): { file: string; args: string[] } {
-  const inner = innerCommand(claudeArgv, promptFile);
-  if (hasWindowsTerminal) {
-    // Everything handed to wt gets escaped, the working directory included — a folder is allowed
-    // to contain a semicolon and would otherwise silently truncate the launch.
-    return { file: 'wt.exe', args: ['-d', wtEscape(cwd), 'pwsh', '-NoExit', '-Command', wtEscape(inner)] };
+  if (wantsResume && storedSessionId && !storedIsReal) {
+    invocation.recoveredFrom = storedSessionId;
   }
-  // Plain pwsh has no second parser in front of it, so nothing needs wt escaping here.
-  return { file: 'pwsh.exe', args: ['-NoExit', '-Command', inner] };
+  return invocation;
 }
 
+/* ────────────────────────────── the briefing ────────────────────────────── */
+
 /**
- * The PowerShell one-liner that actually runs Claude Code.
+ * When a node's briefing is sent.
  *
- * One statement, no `;` of our own — a statement separator here would need escaping for wt on
- * every single launch, and the whole point of `promptFile` is to stop relying on that.
+ *   none   never. The session opens at an empty prompt.
+ *   first  only on a launch that STARTS a conversation. The old `initialPrompt` behaviour.
+ *   every  on every launch, resumes included, re-orienting rather than re-introducing.
  */
-function innerCommand(claudeArgv: string[], promptFile?: string): string {
-  const parts = ['claude', ...claudeArgv.map(psQuote)];
-  if (promptFile) parts.push(`(Get-Content -Raw -LiteralPath ${psQuote(promptFile)})`);
-  return parts.join(' ');
+export type BriefingMode = 'none' | 'first' | 'every';
+
+export interface BriefingInput {
+  node: BoardNode;
+  /** The room this chip is mounted in, for the first line. */
+  boardName: string;
+  /** The working directory, as Windows spells it. */
+  cwd: string;
+  /** Documents that exist, repo-relative, in the order they should be read. */
+  reading: readonly string[];
+  /** Documents the node named that are NOT on disk. Stated, never quietly dropped. */
+  missing: readonly string[];
+  /** Extra granted directories, for the paragraph that tells the agent it can see them. */
+  addDirs: readonly string[];
+  /** True when this launch starts a conversation rather than continuing one. */
+  fresh: boolean;
+}
+
+/** A node's briefing mode, with the default applied. */
+export function briefingModeOf(node: BoardNode): BriefingMode {
+  return node.briefing ?? 'first';
 }
 
 /**
- * The elevated variant: PowerShell's `Start-Process -Verb RunAs`, which is what raises the UAC
- * prompt. SkynetOS itself stays non-elevated and asks Windows to create the elevated child —
- * docs/07: "SkynetOS itself never runs elevated. It launches an elevated child when asked."
+ * Compose what the session is told the moment it opens.
+ *
+ * This is the difference between "a terminal opened in the right folder" and "an agent that
+ * knows who it is". It is assembled from what the node ALREADY declares — its persona file, its
+ * codex entry, its working directory, the extra roots it was granted — so priming a new chip is
+ * a matter of binding it to real files, not of writing a prompt twice.
+ *
+ * It ends by telling the session to stop and wait. A briefing that starts working before William
+ * has said anything is a briefing that has to be interrupted, which is worse than no briefing.
  */
-export function elevatedCommand(
-  cwd: string,
-  claudeArgv: string[],
-  promptFile?: string
-): { file: string; args: string[] } {
-  const inner = innerCommand(claudeArgv, promptFile);
-  const argumentList = ['-NoExit', '-Command', `Set-Location ${psQuote(cwd)}; ${inner}`]
-    .map(psQuote)
-    .join(', ');
-  return {
-    file: 'powershell.exe',
-    args: ['-NoProfile', '-Command', `Start-Process pwsh.exe -Verb RunAs -ArgumentList ${argumentList}`]
-  };
+export function buildBriefing(input: BriefingInput): string | undefined {
+  const { node, boardName, cwd, reading, missing, addDirs, fresh } = input;
+  const mode = briefingModeOf(node);
+  if (mode === 'none') return undefined;
+  if (mode === 'first' && !fresh) return undefined;
+
+  const who = node.designator ? `${node.designator} ${node.name}` : node.name;
+  const lines: string[] = [];
+
+  if (fresh) {
+    lines.push(`You are ${who}, the agent bound to this chip on the SkynetOS board "${boardName}".`);
+    lines.push(`SkynetOS opened this terminal for you, in ${cwd}. Everything on that board is bound to something real on this machine.`);
+  } else {
+    lines.push(`You are ${who} on the SkynetOS board "${boardName}", resuming your own conversation in ${cwd}.`);
+    lines.push('You have context from before. Re-orient rather than re-introducing yourself.');
+  }
+  lines.push('');
+
+  if (reading.length) {
+    lines.push(fresh
+      ? 'Before anything else, read these in order:'
+      : 'Re-read whichever of these you have lost the thread of:');
+    reading.forEach((file, i) => lines.push(`  ${i + 1}. ${file}`));
+    lines.push('');
+  }
+
+  if (missing.length) {
+    // Bind to reality: a briefing that tells an agent to read a file that is not there teaches it
+    // that its own instructions are unreliable.
+    lines.push('This chip also names these, and they are NOT on disk. Do not go looking:');
+    for (const file of missing) lines.push(`  - ${file}`);
+    lines.push('');
+  }
+
+  if (addDirs.length) {
+    lines.push('You have also been granted these directories outside your working directory:');
+    for (const dir of addDirs) lines.push(`  - ${dir}`);
+    lines.push('They stay where they are. Read and work in them as if they were part of this repo.');
+    lines.push('');
+  }
+
+  if (node.initialPrompt?.trim()) {
+    lines.push(node.initialPrompt.trim());
+    lines.push('');
+  }
+
+  lines.push('When you have finished reading, reply with exactly this and nothing more:');
+  lines.push('');
+  lines.push('  READY - <who you are, one line, in the voice the persona describes>');
+  lines.push('  CONTEXT - <the single most important thing you now know about this repo>');
+  lines.push('  NEXT - <up to three things you could do, one line each>');
+  lines.push('');
+  lines.push('Then stop and wait. Do not start work, edit files or run commands until William asks.');
+
+  return lines.join('\n');
 }
 
 /** The command to reattach by hand — docs/03's "Copy resume command". */

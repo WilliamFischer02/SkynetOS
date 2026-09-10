@@ -30,7 +30,7 @@
         "w": 8,
         "h": 6
       },
-      "url": "https://claude.ai/share/5ce623ac-0e22-4f5f-83c7-08ff9581c1fb",
+      "url": "https://claude.ai/chat/93fc89d6-6544-4483-9dd1-1641e2c564f6",
       "partition": "persist:jarvis",
       "persona": "C:/dev/SkynetOS/codex/personas/persona.md",
       "codexRef": "codex/index.md",
@@ -60,7 +60,7 @@
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
       "resume": true,
-      "initialPrompt": "You are the Hands of JARVIS for SkynetOS. Read CLAUDE.md, then codex/persona.md, then codex/index.md before anything else. You act on William's machine: you read and write files, run commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and plans but cannot see this disk; you are how its decisions become real. Follow docs/07-SECURITY.md as a hard boundary: never delete files, force-push, or remove a board node without explicit approval in that exact exchange. End every session with a CODEX PATCH and a HANDOFF block.",
+      "initialPrompt": "You are the Hands of JARVIS. You act on William’s machine: you read and write files, run commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and plans but cannot see this disk; you are how its decisions become real. Follow docs/07-SECURITY.md as a hard boundary: never delete files, force-push, or remove a board node without explicit approval in that exact exchange. Check codex/mailbox/ for anything the Face has left you, and end every session with a CODEX PATCH and a HANDOFF block.",
       "persona": "codex/persona.md",
       "codexRef": "codex/index.md",
       "tags": [
@@ -68,7 +68,20 @@
         "hands"
       ],
       "notes": "The Hands of JARVIS. The Face (U1) thinks and cannot see this disk; this chip is how its decisions become real. Same identity, same codex, same persona.",
-      "image": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg"
+      "image": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg",
+      "prelaunch": [
+        "claude",
+        "git-fetch",
+        "git-status"
+      ],
+      "briefing": "every",
+      "readOnLaunch": [
+        "CLAUDE.md",
+        "codex/persona.md",
+        "codex/index.md",
+        "docs/07-SECURITY.md",
+        "handoff.md"
+      ]
     },
     {
       "id": "d1_minecraftos",
@@ -90,7 +103,8 @@
         "mods",
         "streaming"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg"
+      "image": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg",
+      "showDesignator": false
     },
     {
       "id": "d2_deductionos",
@@ -155,7 +169,8 @@
         "truthquestretro",
         "engine",
         "handheld"
-      ]
+      ],
+      "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg"
     },
     {
       "id": "u2_agent_skynet",
@@ -174,7 +189,23 @@
       "launch": "popout",
       "resume": true,
       "notes": "The agent that builds and maintains this program.",
-      "codexRef": "codex/projects/skynetos.md"
+      "codexRef": "codex/projects/skynetos.md",
+      "image": "C:/dev/SkynetOS/assets/sprites/SkynetOS-worker.jpg",
+      "showDesignator": false,
+      "prelaunch": [
+        "claude",
+        "git-fetch",
+        "git-status",
+        "npm-install"
+      ],
+      "briefing": "every",
+      "readOnLaunch": [
+        "CLAUDE.md",
+        "handoff.md",
+        "docs/06-ROADMAP.md",
+        "docs/DECISIONS.md"
+      ],
+      "initialPrompt": "You are the SkynetOS architect. This repo is the board you are looking at: the app renders board/*.json and every node on it is bound to something real on this disk. Hold the seven prime directives in CLAUDE.md as constraints, not suggestions — especially \"bind to reality\" and \"data before pixels\". handoff.md is the state of play; docs/06-ROADMAP.md is what comes next."
     },
     {
       "id": "s1_repo_skynet",
@@ -190,8 +221,15 @@
         "h": 3
       },
       "path": "C:/dev/SkynetOS",
-      "remote": "https://github.com/REPLACE_ME/SkynetOS",
-      "openWith": "vscode"
+      "remote": "https://github.com/WilliamFischer02/SkynetOS",
+      "openWith": "terminal",
+      "image": "C:/dev/SkynetOS/assets/sprites/skynet-logo.png",
+      "showDesignator": false,
+      "prelaunch": [
+        "claude",
+        "git-fetch",
+        "git-status"
+      ]
     },
     {
       "id": "m1_psu",
@@ -205,7 +243,9 @@
       "footprint": {
         "w": 4,
         "h": 4
-      }
+      },
+      "image": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg",
+      "showDesignator": false
     },
     {
       "id": "n1_title",
@@ -243,7 +283,8 @@
         "h": 2
       },
       "url": "https://github.com/WilliamFischer02/SkynetOS",
-      "image": "C:/dev/SkynetOS/assets/sprites/github.jpg"
+      "image": "C:/dev/SkynetOS/assets/sprites/github.jpg",
+      "showDesignator": false
     },
     {
       "id": "t1_nightly",

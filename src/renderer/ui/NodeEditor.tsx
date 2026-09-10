@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { BoardNode } from '@shared/types.js';
 import { fieldsFor, isTargetControl, missingRequired, type FieldSpec } from '@shared/node-fields.js';
+import { PRIME_STEPS, isPrimeStepId } from '@shared/prime-steps.js';
 import { TargetField } from './TargetField.js';
+import { DirListField } from './DirListField.js';
 
 /**
  * The node edit interface.
@@ -32,7 +34,7 @@ function toDraft(node: BoardNode): Draft {
     const value = node[field.key];
     if (field.control === 'boolean') {
       draft[field.key] = value === undefined ? defaultBoolean(field) : Boolean(value);
-    } else if (field.control === 'tags') {
+    } else if (field.control === 'tags' || field.control === 'multi' || field.control === 'dir-list') {
       draft[field.key] = Array.isArray(value) ? value.join(', ') : '';
     } else if (field.control === 'json') {
       draft[field.key] = value === undefined ? '' : JSON.stringify(value, null, 2);
@@ -71,9 +73,17 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
     if (field.control === 'boolean') {
       next = Boolean(raw);
       if (next === defaultBoolean(field) && current === undefined) continue;
-    } else if (field.control === 'tags') {
+    } else if (field.control === 'tags' || field.control === 'dir-list') {
       const parts = String(raw ?? '').split(',').map((s) => s.trim()).filter(Boolean);
       next = parts.length ? parts : undefined;
+    } else if (field.control === 'multi') {
+      /*
+       * An empty `multi` is NOT the same as an unset one, which is why this cannot share the
+       * `tags` branch. `prelaunch: []` means "prime nothing"; absent means "use the default".
+       * Collapsing the two would make it impossible to turn priming off.
+       */
+      const parts = String(raw ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+      next = current === undefined && parts.length === 0 ? undefined : parts;
     } else if (field.control === 'number') {
       const text = String(raw ?? '').trim();
       if (!text) next = undefined;
@@ -184,6 +194,40 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                 <option value="">— unset —</option>
                 {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
+            ) : field.control === 'multi' ? (
+              <div className="multi">
+                {field.options?.map((option) => {
+                  const chosen = String(value ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+                  const on = chosen.includes(option);
+                  const step = isPrimeStepId(option) ? PRIME_STEPS[option] : null;
+                  return (
+                    <label className={`multi-row${on ? ' on' : ''}`} key={option} title={step?.help ?? option}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={saving}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...chosen, option]
+                            : chosen.filter((c) => c !== option);
+                          // Kept in the registry's order, so the list reads the same every time
+                          // and a re-tick does not reorder what runs.
+                          const ordered = (field.options ?? []).filter((o) => next.includes(o));
+                          set(field.key, ordered.join(', '));
+                        }}
+                      />
+                      <span className="multi-label">{step?.label ?? option}</span>
+                      {step?.mutates ? <span className="multi-warn" title="Can change files in the repo">writes</span> : null}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : field.control === 'dir-list' ? (
+              <DirListField
+                value={String(value ?? '')}
+                disabled={saving}
+                onChange={(v) => set(field.key, v)}
+              />
             ) : field.control === 'textarea' || field.control === 'json' ? (
               <textarea
                 id={`f-${String(field.key)}`}

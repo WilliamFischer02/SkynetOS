@@ -90,6 +90,33 @@
         "initialPrompt": { "type": "string" },
         "mcpServers": { "type": "array", "items": { "type": "string" } },
 
+        "prelaunch": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "claude", "git-fetch", "git-status",
+              "npm-install", "npm-update", "npm-audit",
+              "pip-self", "pip-reqs"
+            ]
+          },
+          "description": "Named update steps to run before the session starts. Ids only — the shell text lives in packages/shared/prime-steps.ts, because docs/07 forbids executable strings in board JSON. Omit for the safe default; [] to prime nothing."
+        },
+        "addDirs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Directories outside cwd this agent may read and write, passed as claude --add-dir. How one agent oversees repos scattered across the disk without moving them."
+        },
+        "readOnLaunch": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Documents the session reads first, repo-relative, in order. Omit to derive from CLAUDE.md + persona + codexRef; [] to open with no reading."
+        },
+        "briefing": {
+          "enum": ["none", "first", "every"],
+          "default": "first",
+          "description": "When the session briefing is sent. first = new conversations only; every = re-orient on resume too."
+        },
+
         "url": { "type": "string", "format": "uri" },
         "partition": { "type": "string" },
         "persona": { "type": "string" },

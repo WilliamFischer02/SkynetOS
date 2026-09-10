@@ -6,7 +6,15 @@
  * the other changes in the same commit, or the "data before pixels" rule is already broken.
  */
 
+import type { PrimeStepId } from './prime-steps.js';
+
 export type Hex = `#${string}`;
+
+/**
+ * When a node's session briefing is sent. Mirrors `BriefingMode` in
+ * src/main/services/launch-args.ts, which is where the briefing is actually composed.
+ */
+export type BriefingMode = 'none' | 'first' | 'every';
 
 export const NODE_KINDS = [
   'agent.code', 'agent.chat', 'agent.jarvis',
@@ -65,6 +73,38 @@ export interface BoardNode {
   resume?: boolean;
   initialPrompt?: string;
   mcpServers?: string[];
+
+  /**
+   * Named update steps this terminal runs BEFORE handing over — `claude`, `git-fetch`,
+   * `npm-install`. Ids only: the shell text lives in packages/shared/prime-steps.ts, because
+   * docs/07 forbids board JSON from carrying executable strings. Absent means the safe default;
+   * an empty array means "prime nothing".
+   */
+  prelaunch?: PrimeStepId[];
+
+  /**
+   * Directories outside `cwd` that this agent may read and write, passed as `claude --add-dir`.
+   *
+   * This is how one agent oversees repos scattered across the disk without anything being moved:
+   * a chip in C:/dev/SkynetOS can be granted D:/work/OtherThing and treat it as part of the job.
+   * Every entry is confirmed against docs/07's dev-root policy on launch, like any other target.
+   */
+  addDirs?: string[];
+
+  /**
+   * Documents the session must read before it does anything, repo-relative and in order.
+   *
+   * Absent means SkynetOS derives the list from what the node already declares — CLAUDE.md, the
+   * `persona` brief, the `codexRef` entry — which is usually the right answer and needs no
+   * typing. Set it to take control; set it to `[]` to open with no reading at all.
+   */
+  readOnLaunch?: string[];
+
+  /**
+   * When the session briefing is sent: `none`, `first` (new conversations only, the default and
+   * the old `initialPrompt` behaviour), or `every` (re-orient on resume too).
+   */
+  briefing?: BriefingMode;
 
   // agent.chat / agent.jarvis / link.url / store.cloud
   url?: string;

@@ -274,18 +274,27 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
      * database that survives an app restart. The spawn itself is covered by unit tests on
      * launch-args.ts, and by clicking the chip once.
      */
-    const { insertSession, lastClaudeSessionId } = await import('./services/db.js');
+    const { insertSession, claudeSessionIdsForNode } = await import('./services/db.js');
     const { claudeArgs } = await import('./services/launch-args.js');
+    const { conversationExists } = await import('./services/conversations.js');
     const { randomUUID } = await import('node:crypto');
 
     const probeNode = 'smoke_probe_agent';
-    const conversationId = randomUUID();
+    const probe = {
+      id: probeNode, kind: 'agent.code' as const, name: 'PROBE',
+      pos: { x: 0, y: 0 }, cwd: 'C:/dev/SkynetOS', launch: 'popout' as const
+    };
+    const recordedIds = () => claudeSessionIdsForNode('root', probeNode);
+    const firstRealId = () => recordedIds().find((id) => conversationExists(id, 'C:\\dev\\SkynetOS')) ?? null;
 
     // First launch: SkynetOS mints a conversation id and records it before spawning.
-    const first = claudeArgs(
-      { id: probeNode, kind: 'agent.code', name: 'PROBE', pos: { x: 0, y: 0 }, cwd: 'C:/dev/SkynetOS', launch: 'popout' },
-      lastClaudeSessionId('root', probeNode)
-    );
+    const first = claudeArgs({
+      node: probe,
+      storedSessionId: firstRealId(),
+      storedIsReal: firstRealId() !== null,
+      fresh: false,
+      addDirs: []
+    });
     insertSession({
       id: randomUUID(),
       node_id: probeNode,
@@ -298,14 +307,26 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     });
     console.log(`[smoke] first launch: resumed=${first.resumed} conversation=${first.sessionId.slice(0, 8)} flag=${first.args[0]}`);
 
-    // Second launch: reads the id back out of the database, exactly as a restarted app would.
-    const recalled = lastClaudeSessionId('root', probeNode);
-    const second = claudeArgs(
-      { id: probeNode, kind: 'agent.code', name: 'PROBE', pos: { x: 0, y: 0 }, cwd: 'C:/dev/SkynetOS', launch: 'popout' },
-      recalled
-    );
+    /*
+     * Second launch. This used to assert "SAME CONVERSATION ACROSS LAUNCHES" and pass — while
+     * every conversation id in the real database was a phantom and `claude --resume` was failing
+     * on every click. The test proved the id round-tripped through SQLite, which was never the
+     * question. The question is whether the conversation EXISTS, so that is what it checks now.
+     */
+    const recalled = recordedIds();
+    const realId = firstRealId();
+    const phantoms = recalled.filter((id) => !conversationExists(id, 'C:\\dev\\SkynetOS'));
+    console.log(`[smoke] recorded ids: ${recalled.length}, real on disk: ${realId ? 1 : 0}, phantom: ${phantoms.length}`);
+
+    const second = claudeArgs({
+      node: probe,
+      storedSessionId: realId,
+      storedIsReal: realId !== null,
+      fresh: false,
+      addDirs: []
+    });
     console.log(`[smoke] second launch: resumed=${second.resumed} conversation=${second.sessionId.slice(0, 8)} flag=${second.args[0]}`);
-    console.log(`[smoke] SAME CONVERSATION ACROSS LAUNCHES: ${first.sessionId === second.sessionId && second.resumed}`);
+    console.log(`[smoke] REFUSED TO RESUME A CONVERSATION THAT DOES NOT EXIST: ${!second.resumed && second.args[0] === '--session-id'}`);
 
     // And the copy-able command, which is the escape hatch when the launcher itself is broken.
     const { resumeCommandLine } = await import('./services/launch-args.js');
@@ -335,6 +356,81 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       `window.skynet['service:start']('root', 'u2_agent_skynet')`
     ) as { ok: boolean; error?: string };
     console.log(`[smoke] service:start on a non-service node refused: ${!serviceGuard.ok} — ${serviceGuard.error ?? ''}`);
+
+    /*
+     * ── The launch proof ──────────────────────────────────────────────────────────────────────
+     *
+     * Everything above this line tests the launch WITHOUT launching, and that is exactly how the
+     * project shipped a session manager that had never once opened a working terminal. The unit
+     * tests were green, the smoke log said SAME CONVERSATION ACROSS LAUNCHES, and every chip on
+     * the board was dead.
+     *
+     * So: opt in with SKYNET_SMOKE_LAUNCH and a real window opens.
+     *
+     *   terminal  a plain shell on this repo. Proves the whole staged-script and pid-file
+     *             machinery end to end, and costs nothing.
+     *   agent     a real Claude Code session on U2. Opens a conversation and uses real quota,
+     *             which is why it is not the default.
+     *
+     * Left out of `npm run smoke` because a screenshot run should not litter the desktop with
+     * terminals — but it is one env var away whenever this path is touched.
+     */
+    const launchProof = process.env['SKYNET_SMOKE_LAUNCH'];
+    if (launchProof === 'terminal' || launchProof === 'agent') {
+      const before = Date.now();
+      if (launchProof === 'terminal') {
+        const result = await win.webContents.executeJavaScript(
+          `window.skynet['terminal:open']('root', 's1_repo_skynet', { elevated: false })`
+        ) as { ok: boolean; pid: number | null; cwd: string; scriptFile: string; error?: string };
+        console.log(`[smoke] terminal:open ok=${result.ok} pid=${result.pid ?? '-'} cwd=${result.cwd} in ${Date.now() - before}ms`);
+        console.log(`[smoke]   script: ${result.scriptFile}`);
+        if (!result.ok) console.log(`[smoke]   error: ${result.error ?? ''}`);
+        console.log(`[smoke] A REAL TERMINAL OPENED AND REPORTED ITS PID: ${result.ok && result.pid !== null}`);
+      } else {
+        const nodeId = process.env['SKYNET_SMOKE_LAUNCH_NODE'] ?? 'u2_agent_skynet';
+        const result = await win.webContents.executeJavaScript(
+          `window.skynet['session:start']('root', ${JSON.stringify(nodeId)}, { fresh: false })`
+        ) as { ok: boolean; error?: string; note?: string; session?: { pid: number | null; claudeSessionId: string | null; state: string } };
+        console.log(`[smoke] session:start ok=${result.ok} in ${Date.now() - before}ms`);
+        console.log(`[smoke]   note: ${result.note ?? result.error ?? ''}`);
+        if (result.session) {
+          console.log(`[smoke]   pid=${result.session.pid ?? '-'} state=${result.session.state} conversation=${result.session.claudeSessionId ?? '-'}`);
+          /*
+           * The claim that has to be checked on the OTHER side of the launch.
+           *
+           * Two different pieces of evidence, because they answer different questions and arrive
+           * at very different times:
+           *
+           *   process   is `claude` running, in this window, on THIS conversation id? Decisive,
+           *             and true within seconds of the agent starting. This is the launch.
+           *   jsonl     has ~/.claude/projects/<cwd>/<id>.jsonl appeared? That is Claude Code
+           *             committing the conversation to disk, which only happens once the first
+           *             turn completes — after priming, after reading, possibly after a trust
+           *             prompt a human has to answer. Absence proves nothing about the launch.
+           *
+           * Checking only the jsonl reports a perfectly good launch as a failure, which is its
+           * own kind of lying.
+           */
+          const { execFileSync } = await import('node:child_process');
+          const { conversationExists } = await import('./services/conversations.js');
+          const id = result.session.claudeSessionId ?? '';
+
+          let running = false;
+          for (let i = 0; i < 40 && !running; i++) {
+            try {
+              const out = execFileSync('powershell.exe', [
+                '-NoProfile', '-NonInteractive', '-Command',
+                `(Get-CimInstance Win32_Process -Filter "Name='claude.exe'" | Where-Object { $_.CommandLine -like '*${id}*' }).ProcessId`
+              ], { encoding: 'utf8', windowsHide: true }).trim();
+              running = out.length > 0;
+            } catch { /* powershell unavailable; the jsonl check still stands */ }
+            if (!running) await wait(500);
+          }
+          console.log(`[smoke] CLAUDE CODE IS RUNNING ON THIS CONVERSATION: ${running}`);
+          console.log(`[smoke]   (conversation committed to disk yet: ${conversationExists(id, 'C:\\dev\\SkynetOS')} — lags the launch by a full turn)`);
+        }
+      }
+    }
 
     /*
      * Prove ROOM DESCENT: Tab until MinecraftOS is selected, activate it, and confirm the

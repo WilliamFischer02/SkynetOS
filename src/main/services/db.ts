@@ -131,6 +131,25 @@ export function lastClaudeSessionId(boardId: string, nodeId: string): string | n
   return row?.claude_session_id ?? null;
 }
 
+/**
+ * Every conversation id this node has ever been assigned, newest first.
+ *
+ * `lastClaudeSessionId` alone is not enough, because an id is assigned BEFORE the launch is
+ * known to have worked. A single failed launch therefore puts a phantom id at the top of the
+ * list and hides the real conversation underneath it. The caller walks this list until it finds
+ * one that exists on disk (conversations.ts), so a chip recovers its own history instead of
+ * starting over. See docs/DECISIONS.md, 2026-09-10.
+ */
+export function claudeSessionIdsForNode(boardId: string, nodeId: string, limit = 20): string[] {
+  const rows = getDb().prepare(`
+    SELECT claude_session_id, MAX(started_at) AS latest FROM sessions
+    WHERE board_id = ? AND node_id = ? AND claude_session_id IS NOT NULL
+    GROUP BY claude_session_id
+    ORDER BY latest DESC LIMIT ?
+  `).all(boardId, nodeId, limit) as { claude_session_id: string }[];
+  return rows.map((r) => r.claude_session_id);
+}
+
 export function liveSessions(): SessionRow[] {
   return getDb().prepare(
     'SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC'

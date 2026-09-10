@@ -19,7 +19,7 @@ import {
   startService,
   stopService
 } from './services/service-runner.js';
-import { openTarget } from './services/shell-opener.js';
+import { openNodeTerminal, openTarget } from './services/shell-opener.js';
 import { resolveArtifact, resolveBoardArtifacts } from './services/artifacts.js';
 import { startDragOut } from './services/drag-out.js';
 import { classify, suggestionToNode } from './services/ingest.js';
@@ -121,6 +121,13 @@ const handlers: Handlers = {
     if (!id || !node.cwd) return null;
     return resumeCommandLine(node.cwd, id);
   },
+
+  /**
+   * A plain shell in a node's directory. The board's missing verb: until now the only thing that
+   * could open a console was an agent chip, and `openWith: 'terminal'` answered "arrives at M3".
+   */
+  'terminal:open': (boardId, nodeId, options) =>
+    openNodeTerminal(nodeOrThrow(boardId, nodeId), { elevated: options?.elevated === true }),
 
   'service:start': (boardId, nodeId) => startService(boardId, nodeOrThrow(boardId, nodeId)),
   'service:stop': (boardId, nodeId) => stopService(boardId, nodeId),

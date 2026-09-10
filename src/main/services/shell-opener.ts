@@ -1,10 +1,14 @@
 import { spawn } from 'node:child_process';
+import { statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { BrowserWindow, dialog, shell } from 'electron';
 import type { BoardNode } from '@shared/types.js';
+import type { TerminalOpenResult } from '@shared/ipc.js';
+import { primeStepsFor } from '@shared/prime-steps.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
+import { openTerminal } from './terminal.js';
 import { getSettings } from './settings.js';
 
 /**
@@ -172,9 +176,12 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
       return { ok: true, action: `opened in browser: ${url}`, target };
     }
 
-    case 'terminal':
-      // M3 owns real sessions. Saying so is better than silently doing something else.
-      return { ok: false, action: 'not built yet', target, error: 'TERMINAL LAUNCH ARRIVES AT M3 — use Explorer or VS Code for now' };
+    case 'terminal': {
+      const result = await openNodeTerminal(node, { elevated: false });
+      return result.ok
+        ? { ok: true, action: `opened a terminal in ${result.cwd}`, target }
+        : { ok: false, action: 'terminal failed', target, ...(result.error ? { error: result.error } : {}) };
+    }
 
     case 'default':
     default: {
@@ -184,4 +191,116 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
         : { ok: true, action: `opened with the default app: ${resolved}`, target };
     }
   }
+}
+
+/* ────────────────────────── plain terminals ────────────────────────── */
+
+/**
+ * The directory a terminal for this node should open in.
+ *
+ * A repo or folder opens in itself; an agent opens in its working directory; a document or a
+ * build artifact opens in the folder that contains it, because "give me a shell where this
+ * thing lives" is what you actually want when you are looking at a file.
+ */
+export function directoryForNode(node: BoardNode, resolved: string): string | null {
+  switch (node.kind) {
+    case 'store.repo':
+    case 'store.folder':
+      return resolved;
+    case 'agent.code':
+    case 'service.process':
+      return node.cwd ?? resolved;
+    case 'store.cloud':
+      return node.localPath ?? null;
+    case 'file.document':
+    case 'file.exe':
+    case 'file.artifact':
+      return dirname(resolved);
+    default: {
+      try {
+        return statSync(resolved).isDirectory() ? resolved : dirname(resolved);
+      } catch {
+        return null;
+      }
+    }
+  }
+}
+
+/**
+ * Open a plain terminal on a node's directory. No agent, no conversation, no session row.
+ *
+ * This is the gap the board had: `openWith: 'terminal'` answered "arrives at M3" and there was
+ * no other way to get a shell anywhere. It runs the same staged-script machinery an agent launch
+ * does, so it primes with the same named steps and proves it opened the same way — see
+ * services/terminal.ts.
+ */
+export async function openNodeTerminal(
+  node: BoardNode,
+  options: { elevated?: boolean } = {}
+): Promise<TerminalOpenResult> {
+  const elevated = options.elevated === true;
+  const target = resolveNodeTarget(node);
+  const resolved = target.resolved;
+
+  if (!resolved) {
+    return { ok: false, pid: null, scriptFile: '', elevated, cwd: '', error: target.detail ?? `${node.kind} POINTS AT NOTHING` };
+  }
+  if (isBroken(target) && target.state !== 'outside-dev-root') {
+    return { ok: false, pid: null, scriptFile: '', elevated, cwd: '', error: target.detail ?? 'TARGET DID NOT RESOLVE' };
+  }
+
+  const cwd = directoryForNode(node, resolved);
+  if (!cwd) {
+    return { ok: false, pid: null, scriptFile: '', elevated, cwd: '', error: `NO LOCAL DIRECTORY ON THIS NODE — ${node.kind} lives somewhere else` };
+  }
+
+  const label = `${node.designator ? node.designator + ' — ' : ''}${node.name}`;
+
+  // docs/07: outside a dev root -> confirm on every activation. A shell is at least as
+  // consequential as opening a file, so it gets the same gate rather than a weaker one.
+  if (target.state === 'outside-dev-root') {
+    const proceed = await confirm(
+      'Open a terminal outside your dev roots',
+      label,
+      `${cwd}\n\nNot under any configured dev root (${getSettings().devRoots.join(', ')}) or your user profile.`,
+      'Open terminal'
+    );
+    if (!proceed) return { ok: false, pid: null, scriptFile: '', elevated, cwd, error: 'CANCELLED' };
+  }
+
+  if (elevated) {
+    // docs/07 §Elevation: opt in, every time, with the blast radius spelled out. SkynetOS itself
+    // stays non-elevated and asks Windows for the elevated child.
+    const proceed = await confirm(
+      'Open an ADMINISTRATOR terminal?',
+      label,
+      `${cwd}\n\nWindows will show a UAC prompt. Anything run in that window can change this whole machine.\nSkynetOS itself stays non-elevated.`,
+      'Open as admin'
+    );
+    if (!proceed) return { ok: false, pid: null, scriptFile: '', elevated, cwd, error: 'CANCELLED' };
+  }
+
+  const prime = primeStepsFor(node.prelaunch);
+  const result = await openTerminal({
+    key: `terminal.${node.id}${elevated ? '.admin' : ''}`,
+    cwd,
+    elevated,
+    spec: {
+      title: `SkynetOS — ${label}${elevated ? ' [ADMIN]' : ''}`,
+      banner: [cwd, elevated ? 'ADMINISTRATOR - this shell can change anything on this machine' : node.kind],
+      prime,
+      readyNote: elevated
+        ? '  Admin shell ready. Everything here runs elevated.'
+        : '  Shell ready.'
+    }
+  });
+
+  return {
+    ok: result.ok,
+    pid: result.pid,
+    scriptFile: result.scriptFile,
+    elevated,
+    cwd,
+    ...(result.error ? { error: result.error } : {})
+  };
 }
