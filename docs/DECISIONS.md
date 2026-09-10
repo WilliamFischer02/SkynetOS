@@ -168,3 +168,38 @@ Append-only. Newest at the bottom. One entry per real decision: what, alternativ
 **Decision:** `buildZone` measures the label and omits any bracket or dash segment that would overlap it.
 **Rejected:** Moving the label inside the box; drawing the label on top of the line.
 **Why:** The label sits *on* the top edge, so without a gap the zone's own dashed run draws straight through the text and every cluster title reads as struck through — plainly visible on `THE STALKER` and `THERE COULD BE GIANTS` in MinecraftOS. Real silkscreen leaves a clearance around printed text for exactly this reason. Moving the label inside the box would have cost a tile of usable space in every zone on every board.
+
+## 2026-09-09 — SkynetOS assigns the Claude conversation id; it does not capture it
+**Decision:** First launch generates a UUID and passes `claude --session-id <uuid>`, writing it to `sessions` *before* spawning. Every later launch passes `claude --resume <uuid>`.
+**Rejected:** `docs/01`'s original plan — capture the id from the stream-json `system/init` event.
+**Why:** Capturing only works for `headless`. A `popout` session runs in a terminal SkynetOS does not own and whose stdout it never sees, so there would be nothing to capture — and `popout` is the marquee launch mode, the one M3's exit criterion is written about. Checking `claude --help` on this machine (v2.1.267) showed `--session-id <uuid>` exists and takes a caller-supplied UUID, which inverts the problem: assign the id instead of discovering it. One mechanism for all three modes, no dependency on parsing another program's output, and writing it before the spawn means a crash mid-launch still leaves the conversation recoverable. `docs/01` corrected in the same commit. Proved across a real process restart: a second run of the app read the id back out of `skynet.db` and resumed.
+
+## 2026-09-09 — `node:sqlite`, and migrations are a hand-rolled array
+**Decision:** `src/main/services/db.ts` opens `%APPDATA%/SkynetOS/skynet.db` with Node's built-in `node:sqlite`, WAL journal, and an ordered array of migration functions tracked in `PRAGMA user_version`.
+**Rejected:** better-sqlite3 (already removed); a migration library; an ORM.
+**Why:** Electron 44 bundles Node 24 with SQLite 3.53 and FTS5 compiled in, so this is a built-in with a synchronous API and no native build step — which is exactly what killed better-sqlite3 here. Four tables on a single-user desktop app do not justify a migration framework, and CLAUDE.md's "this has to still run in a year" argues against a dependency that has to survive a decade to save twenty lines. The rule is: never edit a shipped migration, append a new one.
+
+## 2026-09-09 — Reap before restore, and sweep on a timer
+**Decision:** At launch, `reapDeadSessions()` closes rows whose PID is gone, then `restoreSessions()` re-adopts the ones that genuinely survived. A 5-second timer reconciles the tracked set against the OS thereafter.
+**Rejected:** Trusting the `exit` event alone; clearing all session rows at startup.
+**Why:** A crash, a reboot, or a Task Manager kill all leave rows claiming to be live, and **a session dock that lies about what is running is worse than no dock** — the whole reason docs/03 §7 wants one is to stop sessions being orphaned. Clearing everything at startup would be the opposite error: closing and reopening SkynetOS would orphan an agent that is still working. A detached popout can also be closed in ways that never reach our `exit` handler, which is why the timer exists as well as the events.
+
+## 2026-09-09 — Services are owned; agent sessions are detached
+**Decision:** An `agent.code` popout is spawned detached and outlives the app. A `service.process` is not: SkynetOS keeps its stdout, and `will-quit` kills the whole tree with `taskkill /T`.
+**Rejected:** Treating both the same.
+**Why:** They fail in opposite directions. An agent session is a conversation you are having — closing the launcher must not kill it, and the terminal belongs to you, not to us. A dev server is infrastructure: one that outlives the app that started it is a bound port you cannot rebind and a process you cannot find, and you will discover it by wondering why the next start fails. `/T` because a dev server spawns children (node, esbuild, a watcher) and killing only the parent leaves the port held.
+
+## 2026-09-09 — Every command-line argument goes through `psQuote`
+**Decision:** One helper, PowerShell single-quoting with `''` as the escape, applied to every value that reaches a command line — including twice for the elevated path, which nests a `-Command` string inside an `-ArgumentList`.
+**Rejected:** String interpolation with manual escaping at each call site.
+**Why:** Board JSON is git-tracked and reviewed, but it is still data, and a repo path containing an apostrophe or a `$(...)` must be a path, not shell syntax. The elevated path is the dangerous one: two shell layers means a quote has to survive being doubled twice (`'` → `''` → `''''`), which is a command-injection bug that only appears on a path with an apostrophe in it. `test/sessions.test.ts` pins the nesting explicitly.
+
+## 2026-09-09 — Launch-argument construction is a separate, dependency-free module
+**Decision:** `src/main/services/launch-args.ts` holds `claudeArgs`, `popoutCommand`, `elevatedCommand`, `psQuote` and `resumeCommandLine`, importing nothing but `node:crypto` and the shared types.
+**Rejected:** Leaving them in `session-manager.ts` and configuring Vitest to stub `electron` and `node:sqlite`.
+**Why:** The trigger was that Vitest could not resolve `node:sqlite` through the import chain, but the split is right on its own terms: how a session is *spelled* is pure policy and is the most consequential logic in M3, while spawning, dialogs and database rows are side effects. Fixing the test config would have made the untestable arrangement permanent. Separating them makes the policy independently readable and gives it 24 tests it could not otherwise have had.
+
+## 2026-09-09 — Spawning `claude` is deliberately not automated in the smoke run
+**Decision:** The smoke harness proves the resume decision against the real database and exercises every IPC guard, but never spawns a real Claude Code session.
+**Rejected:** Launching one and killing it.
+**Why:** It would open a terminal and start a real conversation in a real repo, consuming William's usage, for a test he did not ask for. What can honestly be automated is the part that actually decides resume-versus-fresh, and that is: the id is written, read back through the database that survives a restart, and turned into `--resume`. The argv, quoting, working directory and Windows-Terminal fallback are unit-tested exactly; the spawn itself is three lines. Clicking the chip once is the remaining verification and it is William's to make — and the roadmap says so rather than implying M3 is fully machine-verified.

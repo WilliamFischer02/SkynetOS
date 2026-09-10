@@ -3,6 +3,7 @@ import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
 import { Inspector } from './ui/Inspector.js';
 import { Iris } from './ui/Iris.js';
 import { Minimap } from './ui/Minimap.js';
+import { SessionDock } from './ui/SessionDock.js';
 import { useBoardStore } from './store/useBoardStore.js';
 
 /**
@@ -47,6 +48,7 @@ export function App(): React.JSX.Element {
   const redo = useBoardStore((s) => s.redo);
   const toggleFocus = useBoardStore((s) => s.toggleFocus);
 
+  const liveSessionCount = useBoardStore((s) => s.sessions.filter((x) => x.state === 'running').length);
   const [status, setStatus] = useState<BoardCanvasStatus | null>(null);
   const uiScale = useBoardStore((s) => s.uiScale);
   const onStatus = useCallback((next: BoardCanvasStatus) => setStatus(next), []);
@@ -55,6 +57,10 @@ export function App(): React.JSX.Element {
   const cameraRef = useRef({ x: 0, y: 0, zoom: 3, viewW: 0, viewH: 0 });
 
   useEffect(() => { void loadBoard('root'); }, [loadBoard]);
+
+  // Live session and service state is pushed from main; the dock must never poll.
+  const subscribeToProcesses = useBoardStore((s) => s.subscribeToProcesses);
+  useEffect(() => subscribeToProcesses(), [subscribeToProcesses]);
 
   useEffect(() => {
     void window.skynet['display:info']().then((info) => {
@@ -169,6 +175,7 @@ export function App(): React.JSX.Element {
             <span>{board.nodes.length} NODES · {board.edges.length} TRACES</span>
             {status.fitsOnScreen ? <span className="warn">WHOLE BOARD VISIBLE — NOTHING TO PAN</span> : null}
             {status.faceCount > 0 ? <span className="ok-text">{status.faceCount} FACE{status.faceCount === 1 ? '' : 'S'}</span> : null}
+            {liveSessionCount > 0 ? <span className="ok-text">{liveSessionCount} LIVE</span> : null}
             <span className={status.fallbackCount > 0 ? 'warn' : undefined}>
               ROUTED {status.routedCount}{status.fallbackCount > 0 ? ` · ${status.fallbackCount} DIRECT` : ''}
             </span>
@@ -184,6 +191,7 @@ export function App(): React.JSX.Element {
 
       <Minimap board={board} targets={targets} cameraRef={cameraRef} onJump={requestJump} />
 
+      <SessionDock />
       <Inspector />
       <Iris />
 

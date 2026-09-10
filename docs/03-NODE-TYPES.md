@@ -7,6 +7,14 @@ Each entry: what it is · required fields · primary click · secondary (right-c
 ### `agent.code` — a Claude Code session
 - **Fields:** `cwd`, `launch` (`popout` | `popout-elevated` | `embedded`), `model?`, `resume: true`, `initialPrompt?`, `mcpServers?`
 - **Click:** launch or focus its session. If a session already exists, focus it instead of spawning a second one.
+
+> **Built 2026-09-09 (M3).** `popout`, `popout-elevated` and the resume mechanism are live;
+> `embedded` refuses with a legible message because `node-pty` does not build here yet.
+> Two Claude Code processes on the same conversation would fight over the same session file, so a
+> second click on a running chip reports the existing session rather than racing it. "New session
+> (fresh context)" is the deliberate way to get a second one. The `initialPrompt` is sent only on
+> a conversation that does not exist yet — resending it on every resume would re-ask the same
+> question at the top of every session.
 - **Right-click:** New session (fresh context) · Open cwd in Explorer · Open in VS Code · Copy resume command · View last 200 lines · Kill
 - **Live:** running/idle/fault LED, heat, session uptime, last tool-use summary in the inspector
 
@@ -54,6 +62,13 @@ Same as `agent.chat` plus a bound headless worker. See `docs/04-JARVIS.md`.
 ### `service.process` — a long-running local service
 - **Fields:** `startCommand`, `cwd`, `port?`, `healthUrl?`
 - **Click:** start/stop toggle. **Live:** up/down, port, last health check, tail of stdout in the inspector.
+
+> **Built 2026-09-09 (M3),** except the health check. Unlike an agent session a service is NOT
+> detached: SkynetOS owns the process, keeps a 200-line tail of its output, and kills the whole
+> tree on quit — a dev server that outlives the app that started it is a port you cannot rebind
+> and a process you cannot find. Stopping uses `taskkill /T` for the same reason. The working
+> directory must resolve inside a dev root; there is no IPC channel that accepts a command
+> string, so the only shell that can run is the one the node itself declares.
 - Example: the Goobtropolis test server, a Vite dev server, the BitRunners Colyseus server.
 
 ### `task.scheduled` — a recurring job

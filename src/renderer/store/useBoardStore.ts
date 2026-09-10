@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Board, BoardNode } from '@shared/types.js';
 import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js';
-import type { BoardLoad, NodeStatus } from '@shared/ipc.js';
+import type { BoardLoad, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
 import type { TargetInfo } from '@shared/targets.js';
 
 /**
@@ -59,6 +59,19 @@ interface BoardState {
   /** Integer chrome scale, derived from the OS scale factor. See App.uiScaleFor. */
   uiScale: number;
   setUiScale: (scale: number) => void;
+
+  /**
+   * Live sessions and services, pushed from main. Every room's, not just this one's — an agent
+   * running in a room you are not looking at is exactly the thing the dock exists to surface.
+   */
+  sessions: SessionInfo[];
+  services: ServiceInfo[];
+  subscribeToProcesses: () => () => void;
+  startSession: (nodeId: string, force?: boolean) => Promise<void>;
+  stopSession: (sessionId: string) => Promise<void>;
+  startService: (nodeId: string) => Promise<void>;
+  stopService: (boardId: string, nodeId: string) => Promise<void>;
+  copyResumeCommand: (nodeId: string) => Promise<void>;
   /** Camera jump requested by the minimap, consumed by the canvas. */
   jumpTo: { x: number; y: number; seq: number } | null;
   requestJump: (world: { x: number; y: number }) => void;
@@ -108,6 +121,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   focus: false,
   uiScale: 1,
   jumpTo: null,
+  sessions: [],
+  services: [],
 
   loadBoard: async (boardId) => {
     set({ busy: true });
@@ -239,6 +254,56 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   setUiScale: (scale) => set({ uiScale: scale }),
 
+  /**
+   * Subscribe to pushed session/service state, and take one snapshot immediately — the push only
+   * carries CHANGES, so a renderer that reloaded mid-session would otherwise show an empty dock
+   * until something happened to change.
+   */
+  subscribeToProcesses: () => {
+    void window.skynet['session:list']().then((sessions) => set({ sessions }));
+    void window.skynet['service:list']().then((services) => set({ services }));
+    const offSessions = window.skynet.on('sessions:changed', (sessions) => set({ sessions }));
+    const offServices = window.skynet.on('services:changed', (services) => set({ services }));
+    return () => { offSessions(); offServices(); };
+  },
+
+  startSession: async (nodeId, force) => {
+    const { boardId, board } = get();
+    const node = board?.nodes.find((n) => n.id === nodeId);
+    const result = await window.skynet['session:start'](boardId, nodeId, force ?? false);
+    if (!result.ok) { get().toast('fault', result.error); return; }
+    const label = node?.designator ? `${node.designator} ${node.name}` : (node?.name ?? nodeId);
+    get().toast('ok', result.focused
+      ? `${label} — ${result.note ?? 'already running'}`
+      : `${label} — ${result.note ?? 'launched'}`);
+  },
+
+  stopSession: async (sessionId) => {
+    const result = await window.skynet['session:stop'](sessionId);
+    if (!result.ok) get().toast('warn', result.error ?? 'could not stop');
+    else get().toast('ok', 'session stopped');
+  },
+
+  startService: async (nodeId) => {
+    const { boardId } = get();
+    const result = await window.skynet['service:start'](boardId, nodeId);
+    if (!result.ok) { get().toast('fault', result.error ?? 'could not start'); return; }
+    get().toast('ok', `started ${result.info?.command ?? 'service'}`);
+  },
+
+  stopService: async (boardId, nodeId) => {
+    const result = await window.skynet['service:stop'](boardId, nodeId);
+    if (!result.ok) get().toast('warn', result.error ?? 'could not stop');
+    else get().toast('ok', 'service stopped');
+  },
+
+  copyResumeCommand: async (nodeId) => {
+    const command = await window.skynet['session:resumeCommand'](get().boardId, nodeId);
+    if (!command) { get().toast('warn', 'NO CONVERSATION YET — LAUNCH THE CHIP ONCE FIRST'); return; }
+    await navigator.clipboard.writeText(command);
+    get().toast('ok', `copied: ${command}`);
+  },
+
   // seq makes every jump distinct, so clicking the same minimap spot twice still moves the
   // camera back after you have panned away from it.
   requestJump: (world) => set((state) => ({
@@ -299,9 +364,24 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   openNode: async (nodeId) => {
-    // A room drive is navigation, not an OS action — clicking it descends.
     const node = get().board?.nodes.find((n) => n.id === nodeId);
+
+    // A room drive is navigation, not an OS action — clicking it descends.
     if (node?.kind === 'drive.room') { await get().descend(nodeId); return; }
+
+    // An agent chip launches or focuses its own Claude Code conversation. This is the click the
+    // whole board exists for.
+    if (node?.kind === 'agent.code') { await get().startSession(nodeId); return; }
+
+    // A service toggles: running -> stop, otherwise start.
+    if (node?.kind === 'service.process') {
+      const live = get().services.find(
+        (s) => s.nodeId === nodeId && s.boardId === get().boardId && s.state === 'running'
+      );
+      if (live) await get().stopService(get().boardId, nodeId);
+      else await get().startService(nodeId);
+      return;
+    }
 
     const result = await window.skynet['node:open'](get().boardId, nodeId);
     if (result.ok) get().toast('ok', result.action);

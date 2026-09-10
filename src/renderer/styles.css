@@ -445,3 +445,67 @@ canvas {
   height: 100%;
   pointer-events: none;
 }
+
+/* ---------- session dock ---------- */
+
+/*
+ * Bottom-left, above the help bar. docs/03 §7 calls it "the thing that stops sessions getting
+ * orphaned" — so it shows sessions from EVERY room, with the room named when it is not this one.
+ * Filtering to the current room would recreate the problem it exists to solve.
+ */
+.dock {
+  position: absolute;
+  bottom: calc(9 * var(--gap));
+  left: calc(2 * var(--gap));
+  z-index: 16;
+  min-width: calc(300 * var(--p));
+  max-width: 46vw;
+  padding: var(--gap) calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--ok);
+}
+
+.dock-head {
+  color: var(--ok);
+  text-transform: uppercase;
+  border-bottom: var(--p) solid var(--copper-dark);
+  padding-bottom: calc(0.5 * var(--gap));
+  margin-bottom: calc(0.5 * var(--gap));
+}
+
+.dock-row {
+  display: flex;
+  gap: calc(1.5 * var(--gap));
+  align-items: center;
+  padding: calc(0.5 * var(--gap)) 0;
+}
+
+/* A flat square, not a glowing dot — no filters anywhere in this stack. */
+.dock-led {
+  width: calc(6 * var(--p));
+  height: calc(6 * var(--p));
+  background: var(--ok);
+  flex: 0 0 auto;
+}
+.dock-led.elevated { background: var(--warn); }
+.dock-led.service { background: var(--signal); }
+
+.dock-name {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--silk);
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+.dock-name:hover { color: var(--signal); }
+
+.dock-room { color: var(--copper); text-transform: uppercase; }
+.dock-meta { color: var(--copper-dark); text-transform: uppercase; }
+.dock-meta.elevated { color: var(--warn); }
+
+.btn.tiny { padding: 0 var(--gap); margin-left: auto; }
+
+.session-block { display: flex; flex-direction: column; gap: var(--gap); }

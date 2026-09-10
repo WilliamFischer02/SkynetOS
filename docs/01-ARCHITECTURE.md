@@ -105,10 +105,27 @@ Four launch modes, chosen per node:
 |---|---|
 | `popout` | `Start-Process wt.exe -ArgumentList "-d <cwd> pwsh -NoExit -Command claude ..."` (Windows Terminal if present, else `pwsh`) |
 | `popout-elevated` | same, `-Verb RunAs`. UAC prompt each time. Opt-in only. |
-| `embedded` | `node-pty` spawn → xterm.js tab inside SkynetOS |
+| `embedded` | `node-pty` spawn → xterm.js tab inside SkynetOS — **not built**; `node-pty` has no working node-gyp build on this machine and nothing imports it. The chip says so rather than silently opening a popout instead. |
 | `headless` | `claude -p --output-format stream-json` for supervision/automation, no UI |
 
 Resume behavior: on first launch, capture the Claude Code session id from the stream-json `system/init` event; store it in `sessions`; subsequent launches use `claude --resume <id>` so a chip always reopens *its* conversation, not a fresh one. Docs: <https://code.claude.com/docs/en/headless>.
+
+> **Corrected 2026-09-09 (M3). SkynetOS assigns the id; it does not capture it.**
+>
+> Capturing from `system/init` only works for `headless`. A `popout` session runs in a terminal
+> SkynetOS does not own and whose stdout it never sees — so there would be nothing to capture,
+> and the marquee launch mode could never resume. Checking `claude --help` on this machine
+> (v2.1.267) turned up a better mechanism:
+>
+> ```
+> --session-id <uuid>   Use a specific session ID for the conversation (must be a valid UUID)
+> -r, --resume [value]  Resume a conversation by session ID
+> ```
+>
+> So the first launch generates a UUID and passes `--session-id`, writing it to `sessions`
+> **before** the process starts — a crash during launch still leaves the id recorded. Every later
+> launch passes `--resume <uuid>`. Identical for popout, elevated and headless, and it never
+> depends on parsing another program's output. `src/main/services/launch-args.ts`.
 
 ### ShellOpener
 Maps a node's `openWith` to a real action:

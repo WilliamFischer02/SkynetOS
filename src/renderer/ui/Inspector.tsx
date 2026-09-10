@@ -44,6 +44,11 @@ export function Inspector(): React.JSX.Element | null {
   const runCommand = useBoardStore((s) => s.runCommand);
   const openNode = useBoardStore((s) => s.openNode);
   const toast = useBoardStore((s) => s.toast);
+  const sessions = useBoardStore((s) => s.sessions);
+  const services = useBoardStore((s) => s.services);
+  const startSession = useBoardStore((s) => s.startSession);
+  const stopSession = useBoardStore((s) => s.stopSession);
+  const copyResumeCommand = useBoardStore((s) => s.copyResumeCommand);
 
   if (!board) return null;
 
@@ -63,6 +68,8 @@ export function Inspector(): React.JSX.Element | null {
   const target = targets[node.id];
   const fp = footprintOf(node);
   const targetField = primaryTargetField(node.kind);
+  const session = sessions.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'running');
+  const service = services.find((s) => s.nodeId === node.id && s.boardId === boardId && s.state === 'running');
 
   const save = async (patch: Partial<BoardNode>) => {
     const result = await runCommand(
@@ -142,6 +149,48 @@ export function Inspector(): React.JSX.Element | null {
             <button type="button" className="btn" onClick={() => beginEdit(node.id)}>Edit node (F2)</button>
           </div>
 
+          {node.kind === 'agent.code' ? (
+            <div className="session-block">
+              {session ? (
+                <>
+                  <div className="state ok">
+                    <div className="state-line">SESSION RUNNING{session.resumed ? ' — RESUMED' : ' — NEW CONVERSATION'}</div>
+                    <div className="state-meta">
+                      <span>PID {session.pid ?? '?'}</span>
+                      <span>{session.mode}</span>
+                      <span>{relativeTime(Date.parse(session.startedAt))}</span>
+                    </div>
+                    {session.claudeSessionId ? (
+                      <div className="state-path">conversation {session.claudeSessionId}</div>
+                    ) : null}
+                  </div>
+                  <div className="inspector-actions">
+                    <button type="button" className="btn danger" onClick={() => void stopSession(session.id)}>Kill session</button>
+                    <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
+                  </div>
+                </>
+              ) : (
+                <div className="inspector-actions">
+                  <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
+                </div>
+              )}
+              <div className="inspector-actions">
+                <button type="button" className="btn" onClick={() => void copyResumeCommand(node.id)}>Copy resume command</button>
+              </div>
+            </div>
+          ) : null}
+
+          {node.kind === 'service.process' && service ? (
+            <div className="state ok">
+              <div className="state-line">SERVICE UP</div>
+              <div className="state-meta">
+                <span>PID {service.pid ?? '?'}</span>
+                {service.port !== null ? <span>PORT {service.port}</span> : null}
+                <span>{relativeTime(Date.parse(service.startedAt))}</span>
+              </div>
+            </div>
+          ) : null}
+
           <dl className="facts">
             <dt>Position</dt><dd>{node.pos.x}, {node.pos.y} tiles</dd>
             <dt>Footprint</dt><dd>{fp.w} × {fp.h} tiles</dd>
@@ -180,10 +229,10 @@ export function Inspector(): React.JSX.Element | null {
 /** Buttons say what happens. docs/02: "Launch session", "Open in Explorer", not "Go". */
 function openLabel(node: BoardNode): string {
   switch (node.kind) {
-    case 'agent.code': return 'Launch session (M3)';
+    case 'agent.code': return 'Launch session';
     case 'agent.chat':
     case 'agent.jarvis': return 'Open conversation in browser';
-    case 'drive.room': return 'Descend into room (M2)';
+    case 'drive.room': return 'Descend into room';
     case 'store.repo':
     case 'store.folder': return node.openWith === 'vscode' ? 'Open in VS Code' : 'Open in Explorer';
     case 'store.cloud':
@@ -191,7 +240,7 @@ function openLabel(node: BoardNode): string {
     case 'file.document': return 'Open document';
     case 'file.exe': return 'Launch program';
     case 'file.artifact': return 'Reveal newest build';
-    case 'service.process': return 'Start service (M3)';
+    case 'service.process': return 'Start / stop service';
     default: return 'Open target';
   }
 }

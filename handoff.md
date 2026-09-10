@@ -1,6 +1,6 @@
 # Handoff
 
-**Updated:** 2026-09-09 — M0, M1 and M2 done. M6's editing pulled forward.
+**Updated:** 2026-09-09 — M0 through M3 done. M6's editing pulled forward.
 
 ## State
 
@@ -9,7 +9,8 @@ Click a room drive and you descend into it through an iris wipe; Backspace bring
 node resolves its target against the real filesystem, opens real folders in Explorer and VS Code,
 and can be edited through a form with a native file picker. Every edit is validated, snapshotted
 and undoable. Drag pans; drag in Edit Board mode moves components. Any node can take an image,
-which is re-drawn in the room's six colours. `npm run verify` is green: **237 tests**.
+which is re-drawn in the room's six colours. **Clicking an agent chip launches a real Claude Code
+session in its repo, on that chip's own conversation.** `npm run verify` is green: **259 tests**.
 
 Everything on the board is still a placeholder rectangle. That is intended — no atlas exists yet.
 
@@ -26,6 +27,12 @@ ascend:  back to "SKYNETOS"                     returned=true
 [router] 7 auto-routed, 0 fell back      root
 [router] 15 auto-routed, 0 fell back     inside MinecraftOS
 [router] 7 auto-routed, 0 fell back      re-routed BECAUSE a node moved
+first launch:  resumed=false  conversation=51059e3a  flag=--session-id
+second launch: resumed=true   conversation=51059e3a  flag=--resume
+SAME CONVERSATION ACROSS LAUNCHES: true
+  ...and on the NEXT cold start, the first launch already resumed 51059e3a from skynet.db
+session:start on a non-agent node refused: agent.jarvis IS NOT A CLAUDE CODE AGENT
+service:start on a non-service node refused: agent.code IS NOT A SERVICE
 drag-pan at 4x: 25.94% of the board area changed
 node drag moved 1 node(s): u1_jarvis 28,17 -> 32,19
 node drag undo: ok=true  every node back at origin=true
@@ -106,6 +113,23 @@ signals appear at once on the root board, which is the relation colour working. 
   own rAF loop rather than through React state.
 - Zone outlines now break around their own labels, which were being struck through.
 
+**M3 — real sessions (this session)**
+- **Clicking an agent chip opens Windows Terminal in its repo, resumed on its own conversation.**
+  SkynetOS *assigns* the conversation id (`claude --session-id <uuid>`) instead of scraping it
+  from stream-json, because a popout's stdout is not ours to read. Every later launch uses
+  `--resume`. `docs/01` corrected.
+- `skynet.db` via Node's built-in `node:sqlite` — sessions and a telemetry events table, WAL,
+  hand-rolled migrations tracked in `user_version`. No native build step anywhere.
+- Session dock, bottom-left: every live session across every room, with the room named when it
+  is not this one. Kill from the dock. Services too.
+- `service.process` start/stop, with a 200-line output tail. Owned rather than detached: killed
+  with the whole tree on quit, because a dev server that outlives the app is a port you cannot
+  rebind.
+- Reap-then-restore at launch, plus a 5s sweep, so the dock never claims something is running
+  when it is not — and never orphans an agent that really is.
+- Elevated launch via `Start-Process -Verb RunAs` with a UAC prompt every time; SkynetOS itself
+  stays non-elevated.
+
 **Infrastructure**
 - Board JSON has an enforced canonical form; `validate:board` fails if a file drifts, so an edit
   is a one-line diff instead of a whole-file reformat.
@@ -115,20 +139,22 @@ signals appear at once on the root board, which is the relation colour working. 
 
 ## Next
 
-**M3 — agent nodes and real sessions.** This is the one that makes the board earn its keep:
-clicking `CC-STALKER` should open Windows Terminal in `C:/dev/TheStalker` with Claude Code
-resumed on that project's prior conversation.
+**One manual check, then M4.**
 
-1. `SessionManager` with the `popout` launch mode first — `wt.exe -d <cwd> pwsh -NoExit -Command
-   claude ...`. It needs no PTY, so it is not blocked on the node-gyp problem below.
-2. Capture the Claude Code session id from the stream-json `system/init` event and store it in
-   `sessions`, so a second click resumes rather than starting fresh. `node:sqlite` is verified
-   working in Electron 44 and needs no native build.
-3. The session dock, so a session running in another room is never invisible.
-4. `service.process` start/stop.
+The check: **click the CC-SKYNET chip.** A Windows Terminal tab should open in `C:/dev/SkynetOS`
+running `claude --session-id <uuid>`; close it, click again, and it should say RESUMED and reopen
+the same conversation. I did not automate this, deliberately — spawning a real session would have
+started a real conversation in a real repo and spent your usage on a test you did not ask for.
+Everything either side of the spawn is verified; the spawn is three lines.
 
-The embedded xterm tab (`node-pty`) is the only part of M3 that hits the toolchain problem, and
-it is not needed for M3's exit criterion.
+Then **M4 — files, artifacts, drag-out**:
+
+1. `file.artifact` glob resolution is already written and tested; wire the cartridge to it.
+2. `webContents.startDrag` so a `.jar` drags out of SkynetOS into the Minecraft launcher. Read
+   the CLAUDE.md landmine first: on Windows `startDrag` kills in-app drop targets for the same
+   gesture, so drag-out needs a different DOM handle from drag-to-move.
+3. chokidar watchers for staleness — with the 5s polling fallback on non-local paths.
+4. Drop-in ingestion: drag a file from Explorer into a room, get the right node kind pre-filled.
 
 ## Landmines
 
@@ -160,9 +186,16 @@ it is not needed for M3's exit criterion.
 - `validate-board.mjs` needs `ajv/dist/2020.js`, not `ajv` — the schema is draft 2020-12.
 - `assets/atlas/` is git-ignored. A fresh clone has no art until `npm run assets:bake`, which
   `npm run verify` does automatically.
-- **`node-pty` still has no working build here** (node-gyp 9 + Python 3.12 = no `distutils`).
-  M3's `popout` launch mode does not need a PTY, so M3 can hit its exit criterion without
-  solving this. Solve it when the embedded terminal is actually built.
+- **`node-pty` still has no working build here** (node-gyp 9 + Python 3.12 = no `distutils`), so
+  the `embedded` launch mode refuses with a legible message instead of silently opening a popout.
+  M3's exit criterion never needed it. Solve it when the embedded terminal is actually built, and
+  flip `npmRebuild` back on in `electron-builder.yml` at the same time.
+- **A second click on a running chip does not raise its terminal window.** It reports the running
+  session rather than spawning a second one — correct, because two Claude Code processes on the
+  same conversation would fight over the same session file — but "focus it" in docs/03 currently
+  means "tell you about it". Raising a detached `wt.exe` window needs a Win32 call.
+- **`session:list` is authoritative only for sessions this app started.** A `claude` you launched
+  yourself in a terminal is invisible to the dock, by design.
 
 ## Waiting on William
 

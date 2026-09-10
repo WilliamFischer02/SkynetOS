@@ -14,7 +14,7 @@
 import type { CommandRequest, CommandResult, HistoryStatus } from './commands.js';
 import type { FieldControl } from './node-fields.js';
 import type { TargetInfo } from './targets.js';
-import type { Board, BoardNode } from './types.js';
+import type { Board, BoardNode, LaunchMode } from './types.js';
 
 /** What a board file's load attempt produced. A failure is data, not an exception. */
 export type BoardLoad =
@@ -68,6 +68,46 @@ export type MosaicResult =
   | { ok: true; dataUrl: string; width: number; height: number; source: string; cached: boolean }
   | { ok: false; error: string };
 
+/** A live (or just-ended) Claude Code session. */
+export interface SessionInfo {
+  id: string;
+  boardId: string;
+  nodeId: string;
+  nodeName: string;
+  designator: string | null;
+  mode: LaunchMode;
+  cwd: string;
+  /** The Claude Code conversation id. This is what makes a chip reopen ITS conversation. */
+  claudeSessionId: string | null;
+  pid: number | null;
+  startedAt: string;
+  state: 'running' | 'exited' | 'error';
+  /** True when this launch continued an existing conversation rather than starting one. */
+  resumed: boolean;
+  exitCode?: number | null;
+  error?: string;
+}
+
+export type SessionStartResult =
+  | { ok: true; session: SessionInfo; focused: boolean; note?: string }
+  | { ok: false; error: string };
+
+/** A long-running local service started from a `service.process` node. */
+export interface ServiceInfo {
+  id: string;
+  boardId: string;
+  nodeId: string;
+  nodeName: string;
+  command: string;
+  cwd: string;
+  port: number | null;
+  pid: number | null;
+  startedAt: string;
+  state: 'running' | 'exited' | 'failed';
+  exitCode?: number | null;
+  error?: string;
+}
+
 export interface AppSettingsView {
   devRoots: string[];
   reducedMotion: boolean;
@@ -103,6 +143,20 @@ export interface SkynetApi {
   // --- act ---
   'node:open': (boardId: string, nodeId: string) => OpenTargetResult;
 
+  // --- real sessions: the point of the whole board ---
+  /** Launch or focus the Claude Code session for an agent.code node. */
+  'session:start': (boardId: string, nodeId: string, force?: boolean) => SessionStartResult;
+  'session:stop': (sessionId: string) => { ok: boolean; error?: string };
+  'session:list': () => SessionInfo[];
+  /** The resume command for this node, so it can be copied and run by hand. */
+  'session:resumeCommand': (boardId: string, nodeId: string) => string | null;
+
+  // --- service.process ---
+  'service:start': (boardId: string, nodeId: string) => { ok: boolean; error?: string; info?: ServiceInfo };
+  'service:stop': (boardId: string, nodeId: string) => { ok: boolean; error?: string };
+  'service:list': () => ServiceInfo[];
+  'service:tail': (boardId: string, nodeId: string) => string[];
+
   // --- mutate: one bus, one history, user and agent alike ---
   'command:apply': (request: CommandRequest) => CommandResult;
   'command:undo': () => CommandResult;
@@ -127,6 +181,14 @@ export const CHANNELS = [
   'pick:target',
   'mosaic:forNode',
   'node:open',
+  'session:start',
+  'session:stop',
+  'session:list',
+  'session:resumeCommand',
+  'service:start',
+  'service:stop',
+  'service:list',
+  'service:tail',
   'command:apply',
   'command:undo',
   'command:redo',
@@ -138,7 +200,24 @@ export function isChannel(value: string): value is Channel {
   return (CHANNELS as readonly string[]).includes(value);
 }
 
+/**
+ * Events pushed from main to the renderer. Separate from the request/response channels above and
+ * equally allowlisted — a session that starts, exits or dies has to reach the dock without the
+ * renderer polling for it.
+ */
+export interface SkynetEvents {
+  'sessions:changed': SessionInfo[];
+  'services:changed': ServiceInfo[];
+}
+
+export type EventName = keyof SkynetEvents;
+
+export const EVENTS = ['sessions:changed', 'services:changed'] as const satisfies readonly EventName[];
+
 /** The shape contextBridge exposes on window.skynet. */
 export type SkynetBridge = {
   [K in Channel]: (...args: Parameters<SkynetApi[K]>) => Promise<ReturnType<SkynetApi[K]>>;
+} & {
+  /** Subscribe to a pushed event. Returns an unsubscribe function. */
+  on: <K extends EventName>(event: K, handler: (payload: SkynetEvents[K]) => void) => () => void;
 };

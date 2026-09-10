@@ -3,6 +3,9 @@ import { app, BrowserWindow, screen, shell } from 'electron';
 import { registerIpc } from './ipc.js';
 import { getSettings } from './services/settings.js';
 import { boardRoot, pruneSnapshots } from './services/board-store.js';
+import { closeDb, reapDeadSessions } from './services/db.js';
+import { onSessionsChanged, restoreSessions, sweepSessions } from './services/session-manager.js';
+import { onServicesChanged, stopAllServices, sweepServices } from './services/service-runner.js';
 
 const isDev = !app.isPackaged;
 
@@ -209,6 +212,79 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     await wait(200);
 
     /*
+     * Prove the RESUME mechanism end to end, against the real database, without launching a
+     * real Claude Code session.
+     *
+     * Deliberately not spawning `claude`: that would open a terminal and start a conversation in
+     * William's repo, consuming his usage, for a test he did not ask for. What CAN be proved
+     * automatically is the part that actually decides resume-vs-fresh — that a conversation id
+     * written by one "launch" is the id the NEXT launch resumes, read back through the same
+     * database that survives an app restart. The spawn itself is covered by unit tests on
+     * launch-args.ts, and by clicking the chip once.
+     */
+    const { insertSession, lastClaudeSessionId } = await import('./services/db.js');
+    const { claudeArgs } = await import('./services/launch-args.js');
+    const { randomUUID } = await import('node:crypto');
+
+    const probeNode = 'smoke_probe_agent';
+    const conversationId = randomUUID();
+
+    // First launch: SkynetOS mints a conversation id and records it before spawning.
+    const first = claudeArgs(
+      { id: probeNode, kind: 'agent.code', name: 'PROBE', pos: { x: 0, y: 0 }, cwd: 'C:/dev/SkynetOS', launch: 'popout' },
+      lastClaudeSessionId('root', probeNode)
+    );
+    insertSession({
+      id: randomUUID(),
+      node_id: probeNode,
+      board_id: 'root',
+      kind: 'popout',
+      cwd: 'C:/dev/SkynetOS',
+      claude_session_id: first.sessionId,
+      pid: null,
+      started_at: new Date().toISOString()
+    });
+    console.log(`[smoke] first launch: resumed=${first.resumed} conversation=${first.sessionId.slice(0, 8)} flag=${first.args[0]}`);
+
+    // Second launch: reads the id back out of the database, exactly as a restarted app would.
+    const recalled = lastClaudeSessionId('root', probeNode);
+    const second = claudeArgs(
+      { id: probeNode, kind: 'agent.code', name: 'PROBE', pos: { x: 0, y: 0 }, cwd: 'C:/dev/SkynetOS', launch: 'popout' },
+      recalled
+    );
+    console.log(`[smoke] second launch: resumed=${second.resumed} conversation=${second.sessionId.slice(0, 8)} flag=${second.args[0]}`);
+    console.log(`[smoke] SAME CONVERSATION ACROSS LAUNCHES: ${first.sessionId === second.sessionId && second.resumed}`);
+
+    // And the copy-able command, which is the escape hatch when the launcher itself is broken.
+    const { resumeCommandLine } = await import('./services/launch-args.js');
+    console.log(`[smoke] resume command: ${resumeCommandLine('C:/dev/SkynetOS', second.sessionId)}`);
+
+    /*
+     * Exercise the session IPC channel and its guards, through the real bridge, without spawning
+     * anything. These are the paths a misconfigured board actually hits, and each must produce a
+     * legible refusal rather than an exception or a silent no-op.
+     */
+    const guardJarvis = await win.webContents.executeJavaScript(
+      `window.skynet['session:start']('root', 'u1_jarvis', false)`
+    ) as { ok: boolean; error?: string };
+    console.log(`[smoke] session:start on a non-agent node refused: ${!guardJarvis.ok} — ${guardJarvis.error ?? ''}`);
+
+    const listed = await win.webContents.executeJavaScript(
+      `window.skynet['session:list']()`
+    ) as unknown[];
+    console.log(`[smoke] session:list returned an array: ${Array.isArray(listed)} (${listed.length} live)`);
+
+    const noConversation = await win.webContents.executeJavaScript(
+      `window.skynet['session:resumeCommand']('root', 'u2_agent_skynet')`
+    ) as string | null;
+    console.log(`[smoke] resume command before any launch: ${noConversation === null ? 'null (correct)' : noConversation}`);
+
+    const serviceGuard = await win.webContents.executeJavaScript(
+      `window.skynet['service:start']('root', 'u2_agent_skynet')`
+    ) as { ok: boolean; error?: string };
+    console.log(`[smoke] service:start on a non-service node refused: ${!serviceGuard.ok} — ${serviceGuard.error ?? ''}`);
+
+    /*
      * Prove ROOM DESCENT: Tab until MinecraftOS is selected, activate it, and confirm the
      * breadcrumb and the board actually changed. Then Backspace back out. This is M2's exit
      * criterion — "click MinecraftOS, descend, see four mod clusters, press Esc, come back" —
@@ -388,8 +464,36 @@ app.whenReady().then(() => {
   console.log(`[settings] devRoots=${settings.devRoots.join(', ')} reducedMotion=${settings.reducedMotion} streamMode=${settings.streamMode}`);
   pruneSnapshots(settings.snapshotRetentionDays);
 
+  /*
+   * Reap before restore. A crash, a reboot or a Task Manager kill all leave rows claiming to be
+   * live, and a session dock that lies about what is running is worse than no dock at all.
+   * reapDeadSessions closes the rows whose processes are gone; restoreSessions re-adopts the
+   * ones that genuinely survived, so closing and reopening SkynetOS does not orphan an agent.
+   */
+  reapDeadSessions();
+  restoreSessions();
+
   registerIpc();
   const win = createWindow();
+
+  // Push live session and service state to the renderer. The dock must not have to poll.
+  onSessionsChanged((sessions) => {
+    if (!win.isDestroyed()) win.webContents.send('sessions:changed', sessions);
+  });
+  onServicesChanged((services) => {
+    if (!win.isDestroyed()) win.webContents.send('services:changed', services);
+  });
+
+  // A detached popout terminal can be closed in ways that never reach our 'exit' handler, so the
+  // dock is reconciled against the OS on a slow timer as well as on events.
+  const sweep = setInterval(() => { sweepSessions(); sweepServices(); }, 5000);
+  app.on('will-quit', () => {
+    clearInterval(sweep);
+    // Agent popouts are detached on purpose and outlive us. Services do not: a dev server that
+    // survives the app that started it is a port you cannot rebind and a process you cannot find.
+    stopAllServices();
+    closeDb();
+  });
 
   const smokeDir = process.env['SKYNET_SMOKE_DIR'];
   if (smokeDir) {

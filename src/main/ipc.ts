@@ -5,7 +5,20 @@ import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/boa
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
 import { getSettings } from './services/settings.js';
+import { lastClaudeSessionId } from './services/db.js';
+import { resumeCommandLine } from './services/launch-args.js';
 import { mosaicForNode } from './services/mosaic.js';
+import {
+  listSessions,
+  startSession,
+  stopSession
+} from './services/session-manager.js';
+import {
+  listServices,
+  serviceTail,
+  startService,
+  stopService
+} from './services/service-runner.js';
 import { openTarget } from './services/shell-opener.js';
 import { resolveNodeTarget, resolveValue } from './services/target-resolver.js';
 
@@ -83,6 +96,30 @@ const handlers: Handlers = {
     if (!node) return { ok: false, error: `NO SUCH NODE — "${nodeId}"` };
     return mosaicForNode(load.board, node);
   },
+
+  'session:start': (boardId, nodeId, force) =>
+    startSession(boardId, nodeOrThrow(boardId, nodeId), { force: force ?? false }),
+
+  'session:stop': (sessionId) => stopSession(sessionId),
+
+  'session:list': () => listSessions(),
+
+  /**
+   * The command to reattach to this node's conversation by hand. docs/03 lists "Copy resume
+   * command" in the right-click menu, and it is the escape hatch when the launcher itself is
+   * the thing that is broken.
+   */
+  'session:resumeCommand': (boardId, nodeId) => {
+    const node = nodeOrThrow(boardId, nodeId);
+    const id = lastClaudeSessionId(boardId, nodeId);
+    if (!id || !node.cwd) return null;
+    return resumeCommandLine(node.cwd, id);
+  },
+
+  'service:start': (boardId, nodeId) => startService(boardId, nodeOrThrow(boardId, nodeId)),
+  'service:stop': (boardId, nodeId) => stopService(boardId, nodeId),
+  'service:list': () => listServices(),
+  'service:tail': (boardId, nodeId) => serviceTail(boardId, nodeId),
 
   'node:open': async (boardId, nodeId) => {
     const result = await openTarget(nodeOrThrow(boardId, nodeId));

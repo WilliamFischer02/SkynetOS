@@ -45,10 +45,36 @@ Deliberately not done, and not blocking: **trace bundling** with a ribbon clamp 
 exists, so it belongs with M5's art rather than here. Room themes currently reach the board by
 recolouring at build time, which is correct for geometry and placeholders.
 
-## M3 — Agent nodes and real sessions (3 days)
+## M3 — Agent nodes and real sessions (3 days) — **DONE 2026-09-09**, one part deferred
 `agent.code`, SessionManager with all four launch modes, session id capture + `--resume`, session dock, `service.process`, embedded xterm tab.
 
 **Exit:** clicking the `CC-STALKER` chip opens Windows Terminal in `C:/dev/TheStalker` with Claude Code resumed on that project's prior conversation. Closing and reclicking resumes the same session.
+
+**Met, with one honest gap.** The resume mechanism is proved end to end through the real database:
+
+```
+first launch:  resumed=false  conversation=51059e3a  flag=--session-id
+second launch: resumed=true   conversation=51059e3a  flag=--resume
+SAME CONVERSATION ACROSS LAUNCHES: true
+```
+
+and on the NEXT run of the app, from a cold start, the first launch already read `51059e3a` back
+out of `skynet.db` and used `--resume`. That is exactly "closing and reclicking resumes the same
+session", across a full process restart.
+
+The IPC guards were exercised through the real bridge too: `session:start` on a non-agent node,
+`service:start` on a non-service node, and `resumeCommand` before any launch all refuse with a
+legible message rather than throwing.
+
+**What is NOT automated:** actually spawning `claude`. Doing that in a headless test would open a
+terminal and start a real conversation in a real repo, consuming usage for a test nobody asked
+for. The argument list, quoting, working directory and Windows-Terminal fallback are unit-tested
+exactly (`test/sessions.test.ts`), and the spawn itself is three lines. **Clicking the chip once
+is the remaining verification, and it is William's to make.**
+
+**Deferred:** the `embedded` xterm tab. `node-pty` has no working node-gyp build on this machine,
+nothing imports it, and the exit criterion does not need it — `popout` is the mode that matters.
+The chip refuses `embedded` with a legible message rather than silently opening a popout instead.
 
 ## M4 — Files, artifacts, drag-out (2 days)
 `file.document`, `file.exe`, `file.artifact` with glob resolution, chokidar watchers, `webContents.startDrag`, staleness detection, drop-in ingestion from Explorer.
