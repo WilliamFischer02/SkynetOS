@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { app, nativeImage } from 'electron';
 import type { Board, BoardNode, BoardTheme } from '@shared/types.js';
-import { footprintOf } from '@shared/types.js';
+import { footprintOf, logoBoxTiles } from '@shared/types.js';
 import { COPPER, COPPER_DARK, SILK, hexToRgb } from '@shared/palette.js';
 import type { MosaicResult } from '@shared/ipc.js';
 import { expandPath } from './target-resolver.js';
@@ -63,12 +63,16 @@ function thumbDir(): string {
  * is picked up, footprint so a resized node re-renders, and the theme so the same picture in
  * MinecraftOS and StoryOS are different mosaics.
  */
-function cacheKey(file: string, mtimeMs: number, size: number, w: number, h: number, ramp: [number, number, number][]): string {
+function cacheKey(
+  file: string, mtimeMs: number, size: number, w: number, h: number,
+  ramp: [number, number, number][], fit: string
+): string {
   const hash = createHash('sha256');
   hash.update(file.toLowerCase());
   hash.update(String(mtimeMs));
   hash.update(String(size));
   hash.update(`${w}x${h}`);
+  hash.update(fit);
   for (const c of ramp) hash.update(c.join(','));
   return hash.digest('hex').slice(0, 24);
 }
@@ -137,14 +141,25 @@ function rgbaToBgra(rgba: Buffer): Buffer {
 export interface MosaicRequest {
   /** Raw value from the node, may contain %ENV% or ~. */
   source: string;
-  /** Output size in pixels. Always the node footprint in tiles x 16, so it is always integral. */
+  /** Output size in pixels. Always a whole number of tiles x 16, so it is always integral. */
   width: number;
   height: number;
   theme: BoardTheme;
+  /**
+   * How the source is fitted into that box.
+   *
+   *   fill     stretch to the exact box. Right for a WALLPAPER: the face is the footprint, and
+   *            letterboxing it would leave dead bands of mask colour that read as a bug.
+   *   contain  scale to fit, preserve aspect, centre, leave the rest transparent. Right for a
+   *            LOGO: a squashed logo stops being recognisable, which is the only thing a logo is
+   *            for. The padding stays transparent so the wallpaper shows through around it.
+   */
+  fit?: 'fill' | 'contain';
 }
 
 export function buildMosaic(request: MosaicRequest): MosaicResult {
   const { width, height, theme } = request;
+  const fit = request.fit ?? 'fill';
   const file = expandPath(request.source);
 
   if (!file) return { ok: false, error: 'NO IMAGE SET' };
@@ -159,7 +174,7 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   }
 
   const ramp = themeRamp(theme);
-  const key = cacheKey(file, stat.mtimeMs, stat.size, width, height, ramp);
+  const key = cacheKey(file, stat.mtimeMs, stat.size, width, height, ramp, fit);
   const cached = join(thumbDir(), `${key}.png`);
 
   if (existsSync(cached)) {
@@ -178,14 +193,37 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
     return { ok: false, error: `NOT A DECODABLE IMAGE — ${file}` };
   }
 
-  // Resize to exactly the footprint. Aspect ratio is deliberately not preserved: the component
-  // face is the footprint, and letterboxing it would leave dead bands of mask colour that read
-  // as a rendering bug rather than a choice.
-  const resized = source.resize({ width, height, quality: 'good' });
-  const bitmap = resized.toBitmap();
-  const expected = width * height * 4;
-  if (bitmap.length < expected) {
-    return { ok: false, error: `RESIZE PRODUCED ${bitmap.length} BYTES, EXPECTED ${expected} — ${file}` };
+  let bitmap: Buffer;
+  if (fit === 'contain') {
+    /*
+     * Scale to fit inside the box, then centre it on a transparent field.
+     *
+     * The letterbox is transparent rather than a mask colour on purpose: a logo sits ON TOP of
+     * the node's wallpaper, and an opaque band around it would punch a rectangular hole in the
+     * picture underneath. `ditherToRamp` drops anything with alpha below 128, so the padding
+     * survives quantisation as real transparency.
+     */
+    const size = source.getSize();
+    const scale = Math.min(width / Math.max(1, size.width), height / Math.max(1, size.height));
+    const innerW = Math.max(1, Math.round(size.width * scale));
+    const innerH = Math.max(1, Math.round(size.height * scale));
+    const inner = source.resize({ width: innerW, height: innerH, quality: 'good' }).toBitmap();
+
+    bitmap = Buffer.alloc(width * height * 4); // zero = fully transparent
+    const offX = Math.floor((width - innerW) / 2);
+    const offY = Math.floor((height - innerH) / 2);
+    for (let y = 0; y < innerH; y++) {
+      const from = y * innerW * 4;
+      const to = ((y + offY) * width + offX) * 4;
+      inner.copy(bitmap, to, from, from + innerW * 4);
+    }
+  } else {
+    // Stretch to exactly the box. See `fit` above for why aspect is not preserved here.
+    bitmap = source.resize({ width, height, quality: 'good' }).toBitmap();
+    const expected = width * height * 4;
+    if (bitmap.length < expected) {
+      return { ok: false, error: `RESIZE PRODUCED ${bitmap.length} BYTES, EXPECTED ${expected} — ${file}` };
+    }
   }
 
   const dithered = ditherToRamp(bitmap, width, height, ramp);
@@ -209,11 +247,33 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   };
 }
 
-/** Build the mosaic for a node, deriving size from its footprint and colours from its board. */
-export function mosaicForNode(board: Board, node: BoardNode): MosaicResult {
-  if (!node.image) return { ok: false, error: 'NO IMAGE SET' };
+/**
+ * Build one of a node's two images.
+ *
+ *   face  the WALLPAPER, stretched to the whole footprint.
+ *   logo  the BADGE, a proportional centred square with its aspect preserved.
+ *
+ * Both go through the same dither, the same palette and the same cache; only the box and the fit
+ * differ. Two slots rather than one because they answer different questions: the wallpaper says
+ * what a thing feels like, the logo says what it is, and stretching the second to a 6x4 rectangle
+ * destroys the only property it has.
+ */
+export function mosaicForNode(board: Board, node: BoardNode, slot: 'face' | 'logo' = 'face'): MosaicResult {
   const fp = footprintOf(node);
-  const width = Math.max(16, fp.w * board.grid.tile);
-  const height = Math.max(16, fp.h * board.grid.tile);
-  return buildMosaic({ source: node.image, width, height, theme: board.theme });
+  const tile = board.grid.tile;
+
+  if (slot === 'logo') {
+    if (!node.logo) return { ok: false, error: 'NO LOGO SET' };
+    const box = Math.max(16, logoBoxTiles(fp) * tile);
+    return buildMosaic({ source: node.logo, width: box, height: box, theme: board.theme, fit: 'contain' });
+  }
+
+  if (!node.image) return { ok: false, error: 'NO IMAGE SET' };
+  return buildMosaic({
+    source: node.image,
+    width: Math.max(16, fp.w * tile),
+    height: Math.max(16, fp.h * tile),
+    theme: board.theme,
+    fit: 'fill'
+  });
 }

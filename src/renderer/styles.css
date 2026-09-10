@@ -693,3 +693,12 @@ canvas {
 .ingest-field { color: var(--copper); overflow-wrap: anywhere; }
 .ingest-row .btn { align-self: flex-start; margin-top: var(--gap); }
 .ingest-actions { display: flex; gap: var(--gap); padding-top: calc(2 * var(--gap)); }
+
+/* ---------- footprint: two tile counts and a stepper ---------- */
+
+.footprint-field { display: flex; gap: var(--gap); align-items: flex-end; }
+.footprint-cell { display: flex; flex-direction: column; gap: calc(0.5 * var(--gap)); }
+.footprint-cell span { color: var(--copper); text-transform: uppercase; }
+.footprint-cell .input { width: calc(56 * var(--p)); }
+.footprint-x { color: var(--copper-dark); padding-bottom: calc(2 * var(--p)); }
+.footprint-note { color: var(--copper-dark); text-transform: uppercase; padding-bottom: calc(2 * var(--p)); }

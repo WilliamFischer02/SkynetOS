@@ -411,3 +411,72 @@ primes here too. Elevation is confirmed in main with the blast radius spelled ou
 
 **Why.** Nothing on the board could put you in a shell except an agent chip, and that was
 William's first request.
+
+## 2026-09-10 — The camera stopped being destroyed on every edit
+
+**Symptom, from William:** "re-arranging the board snaps back to the default camera position each
+time a node is moved."
+
+**Cause.** `BoardCanvas`'s init effect was keyed on `[props.board, props.boardId]`. The store
+re-reads the board file after every mutation, so `props.board` is a NEW OBJECT after every edit —
+and the effect therefore destroyed the entire Pixi application and built a new one. Camera to 0,0,
+zoom to 3, every mosaic refetched, the A* router re-run, for a one-tile move.
+
+**Decision.** The application is created once per ROOM (`[props.boardId]`). A second effect calls
+`rebuild(board)` when the board data changes, which clears and repopulates the trace, zone, node,
+note, grid and overlay layers in place. The camera lives in a ref outside both effects and resets
+only when you actually go somewhere else. The substrate is deliberately NOT rebuilt: it is a pure
+function of the grid and the theme seed, and it is the most expensive layer here.
+
+Image mosaics are cached by `source@WxH`, so a rebuild refetches only what actually changed.
+
+## 2026-09-10 — A node moves while you drag it
+
+The ghost outline alone left the component sitting at its old address while a rectangle floated
+around, which reads as a preview rather than a move. The sprite now follows the snapped tile
+position during the gesture, so it steps whole tiles to where you are putting it. Board data is
+untouched until the drop — this is presentation, and the commit is still the command bus with its
+undo entry. An illegal or abandoned drop puts the sprite back where the data says it is.
+
+## 2026-09-10 — A drag that ended off-canvas killed keyboard panning
+
+Found by the smoke run while proving the camera fix: WASD reached the handler and the camera did
+not move.
+
+`pointermove` and `pointerup` were bound to the CANVAS. A gesture released outside it never
+delivered its `pointerup`, so `drag.kind` stayed `'pan'` forever — and the ticker suppresses
+keyboard panning while a drag is live. One drag that happened to end off the canvas silently
+disabled WASD for the rest of the session, with nothing on screen to say why.
+
+Both listeners moved to `window`, plus a `blur` handler that drops held keys and any live drag:
+alt-tabbing away mid-pan delivered the `keyup` to the other window, so the board kept panning by
+itself on return. Same for a drag interrupted by a UAC prompt, which this app raises on purpose.
+
+## 2026-09-10 — Two images per node, and a bevel on everything
+
+**Decision.** `image` is the WALLPAPER (stretched to the whole footprint, `fit: 'fill'`) and `logo`
+is the BADGE (centred, aspect preserved, `fit: 'contain'`, sized by `logoBoxTiles()` at ~60% of the
+shorter side and always a whole number of tiles).
+
+**Why two.** They answer different questions. The wallpaper says what a thing feels like and wants
+the whole area; the logo says what it IS and must stay recognisable, which stretching to a 6x4
+rectangle destroys. The logo's letterbox padding stays transparent so the wallpaper shows through.
+
+**The bevel.** A dithered photograph on a substrate made of the same six colours has no edge — the
+picture bleeds into the board and the component stops reading as an object mounted on it. A 1px
+silk outline, which is what this was, reads as a sticker. `drawBevel()` is an outer copper-dark
+ring plus an inner ring that is silk on the top and left and copper-dark on the bottom and right.
+Two palette colours, whole pixels, no gradient and no alpha. Every component and every badge wears
+one.
+
+## 2026-09-10 — Nodes are scalable, and the cap is per kind
+
+Three paths, because CLAUDE.md's definition of done requires a keyboard route: a corner handle on
+the selected node in Edit Board mode, Shift+arrows, and a W x H field in the editor. All three go
+through `node.update` on the command bus, so scaling snapshots and undoes like any other edit.
+
+The cap is `maxFootprintFor(kind)`: 48 tiles for a component, 512 for a `group.zone`. A single cap
+does not work — MinecraftOS already has zones 26 tiles wide, because a zone is a bracket drawn
+around a cluster and is meant to span a room, while a component is an object you pick out at a
+glance. A first attempt at a flat cap of 24 failed `validate:board` on the existing zones, which is
+the schema doing its job.

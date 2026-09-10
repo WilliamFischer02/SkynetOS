@@ -13,8 +13,8 @@ import { useEffect, useRef, useState } from 'react';
  */
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Sprite, TextureSource } from 'pixi.js';
-import type { Board } from '@shared/types.js';
-import { displayOf, footprintOf, spriteKeyOf } from '@shared/types.js';
+import type { Board, BoardNode, Footprint } from '@shared/types.js';
+import { displayOf, footprintOf, maxFootprintFor, spriteKeyOf } from '@shared/types.js';
 import { FAULT, SILK, WARN, hexToNumber } from '@shared/palette.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import {
@@ -44,7 +44,9 @@ import {
   exceedsThreshold,
   moveTo,
   panTo,
+  resizeTo,
   shouldCommit,
+  shouldCommitResize,
   type DragState
 } from './drag.js';
 import fontUrl from '../../../assets/fonts/DepartureMono-1.500/DepartureMono-Regular.woff2?url';
@@ -53,17 +55,22 @@ import { ensureSilkFont } from './silkscreen.js';
 /** Atlas URL, or null when there is none. M2 points this at assets/atlas/skynet.json. */
 const ATLAS_URL: string | null = null;
 
+/** Side of the corner resize handle, in world px. Two tiles: findable at 2x, not fat at 4x. */
+const HANDLE_PX = 8;
+
 export interface BoardCanvasProps {
   board: Board;
   boardId: string;
   selectedId: string | null;
   targets: Record<string, TargetInfo>;
   focus: boolean;
-  /** Edit Board mode (E): shows the grid and lets nodes be dragged. docs/03 §1. */
+  /** Edit Board mode (E): shows the grid and lets nodes be dragged and resized. docs/03 §1. */
   editMode: boolean;
   onSelect: (nodeId: string | null) => void;
   onActivate: (nodeId: string) => void;
   onMoveNode: (nodeId: string, pos: { x: number; y: number }) => void;
+  /** Commit a new footprint. Same command bus, same undo, as a move. */
+  onResizeNode: (nodeId: string, footprint: Footprint) => void;
   onStatus?: (status: BoardCanvasStatus) => void;
   /** Written every frame so the minimap can track the camera without a React render. */
   cameraRef?: React.RefObject<{ x: number; y: number; zoom: number; viewW: number; viewH: number }>;
@@ -101,6 +108,9 @@ const PAN_KEYS: Record<string, 'up' | 'down' | 'left' | 'right'> = {
 
 interface PanHeld { up: boolean; down: boolean; left: boolean; right: boolean; heldFrames: number }
 
+/** One decoded, dithered image for a node, keyed so a rebuild does not re-fetch what it has. */
+interface ImageCacheEntry { key: string; image: HTMLImageElement | null }
+
 export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,21 +119,63 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
   const live = useRef(props);
   live.current = props;
 
+  /*
+   * ── Why the camera lives out here ─────────────────────────────────────────────────────────────
+   *
+   * This used to be a local inside the init effect, and the effect was keyed on `props.board`.
+   * Every board mutation replaces that object (the store re-reads the file main just wrote), so
+   * moving a single node tore down the entire Pixi application and built a new one — which reset
+   * the camera to 0,0 and the zoom to 3, refetched every mosaic, and re-ran the router.
+   *
+   * The visible symptom was the one William reported: "re-arranging the board snaps back to the
+   * default camera position each time a node is moved."
+   *
+   * So the application is now created once per ROOM, the scene is rebuilt in place when the board
+   * data changes, and the camera survives in a ref across both. It resets when you actually go
+   * somewhere else, which is the only time resetting it is right.
+   */
+  const cameraStore = useRef<Camera>({ x: 0, y: 0, zoom: 3 });
+  const rebuildRef = useRef<((board: Board) => void) | null>(null);
+  const builtRef = useRef<Board | null>(null);
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
 
+    // A different room is a different place: start at its origin. The zoom is a preference about
+    // how you like to read a board, not a property of one, so it carries over.
+    cameraStore.current = { x: 0, y: 0, zoom: cameraStore.current.zoom };
+    builtRef.current = null;
+
     let disposed = false;
     let app: Application | null = null;
     const held: PanHeld = { up: false, down: false, left: false, right: false, heldFrames: 0 };
-    let camera: Camera = { x: 0, y: 0, zoom: 3 };
+
+    /** The board currently drawn. Every handler reads this, never a captured prop. */
+    let board: Board = props.board;
+    let boardPx = boardPixelSize(board.grid);
     let rects: NodeRect[] = [];
     let drag: DragState = NO_DRAG;
-    let overlayLayer: Container | null = null;
+
+    let world: Container | null = null;
+    let substrateLayer: Container | null = null;
+    let traceLayer: Container | null = null;
+    let zoneLayer: Container | null = null;
     let nodeLayer: Container | null = null;
+    let noteLayer: Container | null = null;
     let gridLayer: Container | null = null;
+    let overlayLayer: Container | null = null;
+
     const spriteById = new Map<string, Sprite>();
-    const boardPx = boardPixelSize(props.board.grid);
+    const faces = new Map<string, ImageCacheEntry>();
+    const logos = new Map<string, ImageCacheEntry>();
+    let sprites: SpriteStore | null = null;
+
+    let placeholderCount = 0;
+    let brokenCount = 0;
+    let faceCount = 0;
+    let routedCount = 0;
+    let fallbackCount = 0;
 
     const viewport = (): Viewport => ({ width: app?.renderer.width ?? 0, height: app?.renderer.height ?? 0 });
 
@@ -133,18 +185,64 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
     };
 
+    const nodeById = (id: string | null): BoardNode | undefined =>
+      id ? board.nodes.find((n) => n.id === id) : undefined;
+
+    /**
+     * The corner handle's world rect for a node, or null when it should not be offered.
+     *
+     * Only on the SELECTED node, and only in Edit Board mode. A handle on every node would be
+     * eight hit targets fighting the move gesture on a busy board; a handle on one is a control
+     * you went looking for.
+     */
+    const handleRect = (node: BoardNode): { x: number; y: number; w: number; h: number } | null => {
+      if (!live.current.editMode) return null;
+      if (live.current.selectedId !== node.id) return null;
+      // note.silk is text with no footprint to grab. group.zone deliberately KEEPS its handle:
+      // resizing the bracket around a cluster is exactly what it is for.
+      if (node.kind === 'note.silk') return null;
+      const fp = footprintOf(node);
+      return {
+        x: node.pos.x * TILE + fp.w * TILE - HANDLE_PX,
+        y: node.pos.y * TILE + fp.h * TILE - HANDLE_PX,
+        w: HANDLE_PX,
+        h: HANDLE_PX
+      };
+    };
+
     /* ---------------- keyboard ---------------- */
 
     const onKeyDown = (event: KeyboardEvent) => {
       const el = event.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
 
+      /*
+       * Shift+arrows resize the selection. The keyboard path for scaling, because
+       * CLAUDE.md's definition of done requires one and a corner handle is mouse-only.
+       * Checked BEFORE the pan keys, which share the arrow codes.
+       */
+      if (event.shiftKey && live.current.editMode && live.current.selectedId) {
+        const node = nodeById(live.current.selectedId);
+        const dir = PAN_KEYS[event.code];
+        if (node && dir && node.kind !== 'note.silk') {
+          event.preventDefault();
+          const fp = footprintOf(node);
+          const max = maxFootprintFor(node.kind);
+          const next: Footprint = {
+            w: Math.max(1, Math.min(max, fp.w + (dir === 'right' ? 1 : dir === 'left' ? -1 : 0))),
+            h: Math.max(1, Math.min(max, fp.h + (dir === 'down' ? 1 : dir === 'up' ? -1 : 0)))
+          };
+          if (next.w !== fp.w || next.h !== fp.h) live.current.onResizeNode(node.id, next);
+          return;
+        }
+      }
+
       const dir = PAN_KEYS[event.code];
       if (dir) { held[dir] = true; event.preventDefault(); return; }
 
       if (event.code === 'Digit2' || event.code === 'Digit3' || event.code === 'Digit4') {
         const z = Number(event.code.slice(-1));
-        if (isZoom(z)) camera = { ...camera, zoom: z };
+        if (isZoom(z)) cameraStore.current = { ...cameraStore.current, zoom: z };
         event.preventDefault();
         return;
       }
@@ -155,8 +253,12 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         if (!next) return;
         live.current.onSelect(next);
         const rect = rects.find((r) => r.nodeId === next);
-        if (rect && !isVisible(rect, camera, viewport())) {
-          camera = clampCamera({ ...camera, ...centreOn(rect, camera.zoom, viewport()) }, boardPx, viewport());
+        if (rect && !isVisible(rect, cameraStore.current, viewport())) {
+          cameraStore.current = clampCamera(
+            { ...cameraStore.current, ...centreOn(rect, cameraStore.current.zoom, viewport()) },
+            boardPx,
+            viewport()
+          );
         }
         return;
       }
@@ -174,20 +276,46 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       if (dir) held[dir] = false;
     };
 
+    /**
+     * Losing the window drops everything being held.
+     *
+     * Alt-tab away mid-pan and the `keyup` is delivered to whatever you switched to, not to us —
+     * so the board would keep panning by itself when you came back. Same for a drag interrupted
+     * by a UAC prompt, which this app raises on purpose.
+     */
+    const onBlur = (): void => {
+      held.up = held.down = held.left = held.right = false;
+      held.heldFrames = 0;
+      if (drag.kind === 'move' && drag.nodeId) placeSprite(drag.nodeId);
+      drag = NO_DRAG;
+      if (app) app.canvas.style.cursor = '';
+    };
+
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
       event.preventDefault();
-      camera = { ...camera, zoom: stepZoom(camera.zoom, event.deltaY < 0 ? 1 : -1) };
+      cameraStore.current = {
+        ...cameraStore.current,
+        zoom: stepZoom(cameraStore.current.zoom, event.deltaY < 0 ? 1 : -1)
+      };
     };
 
-    /* ---------------- pointer: pan and move ---------------- */
+    /* ---------------- pointer: pan, move, resize ---------------- */
 
     const onPointerDown = (event: PointerEvent) => {
       if (!app) return;
       const screen = canvasPoint(event);
-      const world = screenToWorld(camera, screen.x, screen.y);
-      const hit = hitTest(rects, world.x, world.y);
-      const node = hit ? props.board.nodes.find((n) => n.id === hit.nodeId) : undefined;
+      const camera = cameraStore.current;
+      const point = screenToWorld(camera, screen.x, screen.y);
+      const hit = hitTest(rects, point.x, point.y);
+      const node = hit ? nodeById(hit.nodeId) : undefined;
+
+      const handle = node ? handleRect(node) : null;
+      const onHandle = Boolean(
+        handle &&
+        point.x >= handle.x && point.x <= handle.x + handle.w &&
+        point.y >= handle.y && point.y <= handle.y + handle.h
+      );
 
       drag = beginDrag({
         button: event.button,
@@ -195,39 +323,88 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         camera,
         hit,
         editMode: live.current.editMode,
-        nodeTile: node ? { x: node.pos.x, y: node.pos.y } : null
+        nodeTile: node ? { x: node.pos.x, y: node.pos.y } : null,
+        nodeFootprint: node ? footprintOf(node) : null,
+        onResizeHandle: onHandle
       });
 
       if (drag.kind !== 'none') {
         // Capture the pointer so a drag that leaves the window still tracks and still ends.
         app.canvas.setPointerCapture(event.pointerId);
-        app.canvas.style.cursor = drag.kind === 'move' ? 'grabbing' : 'move';
+        app.canvas.style.cursor =
+          drag.kind === 'resize' ? 'nwse-resize' : drag.kind === 'move' ? 'grabbing' : 'move';
       }
     };
 
     const onPointerMove = (event: PointerEvent) => {
-      if (drag.kind === 'none' || !app) return;
+      if (!app) return;
       const screen = canvasPoint(event);
+
+      if (drag.kind === 'none') {
+        // Hovering the handle says it is grabbable before you try. Cheap, and it is the only
+        // thing that makes a small target discoverable. Canvas only — this listener is on the
+        // window now, so it also sees moves over the inspector.
+        if (event.target !== app.canvas) return;
+        const node = nodeById(live.current.selectedId);
+        const handle = node ? handleRect(node) : null;
+        if (handle) {
+          const point = screenToWorld(cameraStore.current, screen.x, screen.y);
+          const over =
+            point.x >= handle.x && point.x <= handle.x + handle.w &&
+            point.y >= handle.y && point.y <= handle.y + handle.h;
+          app.canvas.style.cursor = over ? 'nwse-resize' : '';
+        } else if (app.canvas.style.cursor === 'nwse-resize') {
+          app.canvas.style.cursor = '';
+        }
+        return;
+      }
 
       if (!drag.exceeded) {
         if (!exceedsThreshold(drag, screen)) return;
         drag = { ...drag, exceeded: true };
       }
 
+      const camera = cameraStore.current;
+
       if (drag.kind === 'pan') {
-        camera = clampCamera({ ...camera, ...panTo(drag, screen, camera.zoom) }, boardPx, viewport());
+        cameraStore.current = clampCamera({ ...camera, ...panTo(drag, screen, camera.zoom) }, boardPx, viewport());
         return;
       }
 
-      const node = props.board.nodes.find((n) => n.id === drag.nodeId);
+      const node = nodeById(drag.nodeId);
       if (!node) return;
+
+      if (drag.kind === 'resize') {
+        const next = resizeTo(drag, screen, camera.zoom, maxFootprintFor(node.kind));
+        drag = {
+          ...drag,
+          currentFootprint: next,
+          valid: canDrop(node.id, { x: node.pos.x, y: node.pos.y }, next, rects, board.grid)
+        };
+        return;
+      }
+
       const tile = moveTo(drag, screen, camera.zoom);
       const fp = footprintOf(node);
-      drag = {
-        ...drag,
-        currentTile: tile,
-        valid: canDrop(node.id, tile, fp, rects, props.board.grid)
-      };
+      drag = { ...drag, currentTile: tile, valid: canDrop(node.id, tile, fp, rects, board.grid) };
+
+      /*
+       * Move the SPRITE, not just the ghost outline.
+       *
+       * William: "ideally be able to see the node moving unit by unit to where it is being
+       * dragged". The ghost alone left the component sitting at its old address while a rectangle
+       * floated around, which reads as a preview of a move rather than a move. The sprite steps a
+       * whole tile at a time because `moveTo` snaps — so it stays on the grid the whole way and
+       * never lands on a fractional pixel.
+       *
+       * The board data is untouched until the drop. This is presentation; the commit is the
+       * command bus, with its undo entry, exactly as before.
+       */
+      const sprite = spriteById.get(node.id);
+      if (sprite) {
+        sprite.x = tile.x * TILE;
+        sprite.y = tile.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined);
+      }
     };
 
     const endDrag = (event: PointerEvent) => {
@@ -238,11 +415,16 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       // A press that never exceeded the threshold is a click, and a click selects.
       if (!drag.exceeded && event.button === 0) {
         const screen = canvasPoint(event);
-        const world = screenToWorld(camera, screen.x, screen.y);
-        const hit = hitTest(rects, world.x, world.y);
+        const point = screenToWorld(cameraStore.current, screen.x, screen.y);
+        const hit = hitTest(rects, point.x, point.y);
         live.current.onSelect(hit ? hit.nodeId : null);
       } else if (shouldCommit(drag) && drag.nodeId && drag.currentTile) {
         live.current.onMoveNode(drag.nodeId, drag.currentTile);
+      } else if (shouldCommitResize(drag) && drag.nodeId && drag.currentFootprint) {
+        live.current.onResizeNode(drag.nodeId, drag.currentFootprint);
+      } else if (drag.kind === 'move' && drag.nodeId) {
+        // An illegal or abandoned move: put the sprite back where the data still says it is.
+        placeSprite(drag.nodeId);
       }
 
       drag = NO_DRAG;
@@ -251,9 +433,282 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const onDoubleClick = (event: MouseEvent) => {
       if (!app) return;
       const screen = canvasPoint(event);
-      const world = screenToWorld(camera, screen.x, screen.y);
-      const hit = hitTest(rects, world.x, world.y);
+      const point = screenToWorld(cameraStore.current, screen.x, screen.y);
+      const hit = hitTest(rects, point.x, point.y);
       if (hit) live.current.onActivate(hit.nodeId);
+    };
+
+    /* ---------------- drawing ---------------- */
+
+    /** Put a node's sprite where the board data says it belongs. */
+    const placeSprite = (nodeId: string): void => {
+      const node = nodeById(nodeId);
+      const sprite = spriteById.get(nodeId);
+      if (!node || !sprite) return;
+      sprite.x = node.pos.x * TILE;
+      sprite.y = node.pos.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined);
+    };
+
+    /** Redraw one node's texture from whatever images it currently has. */
+    const drawNode = (nodeId: string): void => {
+      const node = nodeById(nodeId);
+      const sprite = spriteById.get(nodeId);
+      if (!node || !sprite || !sprites) return;
+      const fp = footprintOf(node);
+      const show = displayOf(node);
+      sprite.texture = sprites.placeholder({
+        w: fp.w,
+        h: fp.h,
+        designator: show.designator ? node.designator ?? '' : '',
+        name: show.name ? node.name : undefined,
+        kind: node.kind,
+        maskLight: board.theme.maskLight,
+        signal: board.theme.signal,
+        face: show.thumbnail ? faces.get(nodeId)?.image ?? null : null,
+        logo: show.thumbnail ? logos.get(nodeId)?.image ?? null : null
+      });
+      placeSprite(nodeId);
+    };
+
+    /**
+     * Fetch a node's wallpaper and logo, unless the identical ones are already decoded.
+     *
+     * The cache key carries everything that changes the pixels — the source path and the box it
+     * is drawn into — so dragging a node re-renders nothing, while resizing it or repointing it
+     * at another file refetches exactly what changed. Without this, a scene rebuild on every edit
+     * would re-request every mosaic on the board for every keystroke.
+     */
+    const loadImages = (node: BoardNode): void => {
+      const fp = footprintOf(node);
+      const wants: { slot: 'face' | 'logo'; source: string | undefined; store: Map<string, ImageCacheEntry> }[] = [
+        { slot: 'face', source: node.image, store: faces },
+        { slot: 'logo', source: node.logo, store: logos }
+      ];
+
+      for (const { slot, source, store } of wants) {
+        if (!source || !displayOf(node).thumbnail) { store.delete(node.id); continue; }
+        const key = `${source}@${fp.w}x${fp.h}`;
+        if (store.get(node.id)?.key === key) continue;
+        store.set(node.id, { key, image: null });
+
+        void window.skynet['mosaic:forNode'](live.current.boardId, node.id, slot).then(async (result) => {
+          if (disposed) return;
+          if (!result.ok) { console.warn(`[mosaic] ${node.id} ${slot}: ${result.error}`); return; }
+          const img = new Image();
+          img.src = result.dataUrl;
+          await img.decode();
+          if (disposed || store.get(node.id)?.key !== key) return;
+          store.set(node.id, { key, image: img });
+          if (slot === 'face') faceCount++;
+          drawNode(node.id);
+        }).catch((err: unknown) => console.warn(`[mosaic] ${node.id} ${slot} failed`, err));
+      }
+    };
+
+    const clearLayer = (layer: Container | null): void => {
+      layer?.removeChildren().forEach((c) => c.destroy({ children: true }));
+    };
+
+    const buildTraces = (): void => {
+      if (!traceLayer) return;
+      clearLayer(traceLayer);
+
+      /*
+       * A* on the half-grid with every mounted footprint as an obstacle, so a trace goes AROUND a
+       * component instead of through it. Hand-placed waypoints in the board JSON still win, and a
+       * route A* cannot find falls back to the two-bend Z rather than vanishing.
+       */
+      const routed: RoutedEdge[] = [];
+      const rectById = new Map(board.nodes.map((n) => [n.id, nodeRect(n)] as const));
+      const obstacles: RouteObstacle[] = board.nodes
+        .filter((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone')
+        .map((n) => ({ ...nodeRect(n), nodeId: n.id }));
+      const routeGrid = buildRouteGrid(obstacles, boardPx);
+
+      routedCount = 0;
+      fallbackCount = 0;
+      for (const edge of board.edges) {
+        const from = rectById.get(edge.from);
+        const to = rectById.get(edge.to);
+        if (!from || !to) continue;
+
+        let points: Point[] | null = null;
+        if (edge.waypoints?.length) {
+          points = routeOrthogonal(from, to, edge.waypoints, board.grid.tile);
+        } else {
+          const path = routeAStar(
+            { from: { ...from, nodeId: edge.from }, to: { ...to, nodeId: edge.to }, obstacles, boardPx },
+            routeGrid
+          );
+          if (path) { points = attachEndpoints(path, from, to); routedCount++; }
+        }
+        if (!points) {
+          points = routeOrthogonal(from, to, edge.waypoints, board.grid.tile);
+          if (!edge.waypoints?.length) fallbackCount++;
+        }
+
+        routed.push({ edge, points, style: styleFor(edge, board.theme.signal) });
+      }
+      console.info(`[router] ${routedCount} auto-routed, ${fallbackCount} fell back to a direct run`);
+      traceLayer.addChild(buildTraceLayer(routed));
+    };
+
+    const buildNodes = (): void => {
+      if (!nodeLayer || !sprites) return;
+      clearLayer(nodeLayer);
+      spriteById.clear();
+
+      placeholderCount = 0;
+      for (const node of board.nodes) {
+        if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
+        const key = spriteKeyOf(node);
+        if (!sprites.has(key)) placeholderCount++;
+
+        const sprite = new Sprite(sprites.get(key) ?? undefined);
+        sprite.roundPixels = true;
+        nodeLayer.addChild(sprite);
+        spriteById.set(node.id, sprite);
+        drawNode(node.id);
+        loadImages(node);
+      }
+
+      // Drop cached images for nodes that no longer exist, so a long editing session does not
+      // accumulate decoded bitmaps for deleted components.
+      const alive = new Set(board.nodes.map((n) => n.id));
+      for (const store of [faces, logos]) {
+        for (const id of [...store.keys()]) if (!alive.has(id)) store.delete(id);
+      }
+    };
+
+    const buildZones = (): void => {
+      if (!zoneLayer) return;
+      clearLayer(zoneLayer);
+      for (const node of board.nodes) {
+        if (node.kind === 'group.zone') zoneLayer.addChild(buildZone(node, board.theme.signal));
+      }
+    };
+
+    const buildNotes = (): void => {
+      if (!noteLayer) return;
+      clearLayer(noteLayer);
+      for (const node of board.nodes) {
+        if (node.kind !== 'note.silk') continue;
+        const note = buildSilkNote(node);
+        if (note) noteLayer.addChild(note);
+      }
+    };
+
+    const buildGrid = (): void => {
+      if (!gridLayer) return;
+      clearLayer(gridLayer);
+      if (!live.current.editMode) return;
+      // A 1px dot at every tile corner. Dots, not lines: a full grid of lines over the whole
+      // board is louder than the board itself and you cannot see the components any more.
+      const g = new Graphics();
+      for (let ty = 0; ty <= board.grid.height; ty++) {
+        for (let tx = 0; tx <= board.grid.width; tx++) {
+          g.rect(tx * TILE, ty * TILE, 1, 1);
+        }
+      }
+      g.fill({ color: hexToNumber(SILK), alpha: 0.35 });
+      g.roundPixels = true;
+      gridLayer.addChild(g);
+    };
+
+    const rebuildOverlay = (): void => {
+      if (!overlayLayer) return;
+      clearLayer(overlayLayer);
+
+      const { targets, selectedId } = live.current;
+      brokenCount = 0;
+      for (const node of board.nodes) {
+        const info = targets[node.id];
+        if (!info || !isBroken(info)) continue;
+        if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
+        brokenCount++;
+        const color = info.state === 'outside-dev-root' || info.state === 'unset' ? WARN : FAULT;
+        overlayLayer.addChild(buildBrokenOverlay(nodeRect(node), color));
+      }
+
+      const selected = nodeById(selectedId);
+      if (selected) {
+        overlayLayer.addChild(buildSelectionOverlay(nodeRect(selected), board.theme.signal));
+
+        // The resize handle: a filled corner square with a silk edge, on the selected node only.
+        const handle = handleRect(selected);
+        if (handle) {
+          const g = new Graphics();
+          g.rect(handle.x, handle.y, handle.w, handle.h);
+          g.fill({ color: hexToNumber(board.theme.signal) });
+          g.rect(handle.x, handle.y, handle.w, 1);
+          g.rect(handle.x, handle.y, 1, handle.h);
+          g.fill({ color: hexToNumber(SILK) });
+          g.roundPixels = true;
+          overlayLayer.addChild(g);
+        }
+      }
+
+      // Drag ghost: where the node would land, or what size it would become. Signal if legal,
+      // fault if not — same vocabulary as selection, nothing translucent or blurred.
+      const ghostNode = nodeById(drag.nodeId);
+      if (ghostNode && drag.exceeded && (drag.kind === 'move' || drag.kind === 'resize')) {
+        const tile = drag.kind === 'move' && drag.currentTile ? drag.currentTile : ghostNode.pos;
+        const fp = drag.kind === 'resize' && drag.currentFootprint ? drag.currentFootprint : footprintOf(ghostNode);
+        const ghost = {
+          nodeId: ghostNode.id,
+          kind: ghostNode.kind,
+          x: tile.x * TILE,
+          y: tile.y * TILE,
+          w: fp.w * TILE,
+          h: fp.h * TILE
+        };
+        const color = drag.valid ? board.theme.signal : FAULT;
+        const frame = new Graphics();
+        frame.rect(ghost.x, ghost.y, ghost.w, 1);
+        frame.rect(ghost.x, ghost.y + ghost.h - 1, ghost.w, 1);
+        frame.rect(ghost.x, ghost.y, 1, ghost.h);
+        frame.rect(ghost.x + ghost.w - 1, ghost.y, 1, ghost.h);
+        frame.fill({ color: hexToNumber(color) });
+        frame.roundPixels = true;
+        overlayLayer.addChild(frame);
+        overlayLayer.addChild(buildSelectionOverlay(ghost, color));
+      }
+    };
+
+    const applyFocus = (): void => {
+      const { focus, selectedId } = live.current;
+      if (!focus || !selectedId) {
+        for (const sprite of spriteById.values()) sprite.alpha = 1;
+        return;
+      }
+      const related = new Set<string>([selectedId]);
+      for (const edge of board.edges) {
+        if (edge.from === selectedId) related.add(edge.to);
+        if (edge.to === selectedId) related.add(edge.from);
+      }
+      for (const [id, sprite] of spriteById) sprite.alpha = related.has(id) ? 1 : 0.25;
+    };
+
+    /**
+     * Redraw the scene for a new version of the board, in place.
+     *
+     * The substrate is the one layer that is NOT rebuilt: it is a deterministic function of the
+     * grid and the theme seed, it is the most expensive thing here, and nothing an edit can do
+     * changes it unless the room itself changed — in which case the whole application is being
+     * recreated anyway.
+     */
+    const rebuild = (next: Board): void => {
+      board = next;
+      boardPx = boardPixelSize(board.grid);
+      rects = layoutRects(board);
+      buildTraces();
+      buildZones();
+      buildNodes();
+      buildNotes();
+      buildGrid();
+      rebuildOverlay();
+      applyFocus();
+      builtRef.current = next;
     };
 
     /* ---------------- build the scene ---------------- */
@@ -273,7 +728,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           resolution: 1,
           autoDensity: false,
           roundPixels: true,
-          backgroundColor: props.board.theme.maskDark,
+          backgroundColor: board.theme.maskDark,
           resizeTo: host
         });
         if (disposed) { app.destroy(true, { children: true }); return; }
@@ -283,243 +738,37 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         app.canvas.style.display = 'block';
         app.canvas.style.touchAction = 'none';
 
-        const world = new Container();
+        world = new Container();
         app.stage.addChild(world);
 
-        // Layer 0 — substrate.
-        world.addChild(buildSubstrate(
+        // Layer 0 — substrate. Built once; see rebuild().
+        substrateLayer = new Container();
+        substrateLayer.addChild(buildSubstrate(
           {
-            maskDark: props.board.theme.maskDark,
-            maskLight: props.board.theme.maskLight,
-            seed: props.board.theme.substrateSeed ?? 1
+            maskDark: board.theme.maskDark,
+            maskLight: board.theme.maskLight,
+            seed: board.theme.substrateSeed ?? 1
           },
           boardPx
         ));
+        world.addChild(substrateLayer);
 
-        /*
-         * Layer 1 — copper traces, auto-routed.
-         *
-         * A* on the half-grid with every mounted footprint as an obstacle, so a trace goes AROUND
-         * a component instead of through it. Hand-placed waypoints in the board JSON still win,
-         * and a route A* cannot find falls back to the two-bend Z rather than vanishing.
-         */
-        const routed: RoutedEdge[] = [];
-        const rectById = new Map(props.board.nodes.map((n) => [n.id, nodeRect(n)] as const));
-        const obstacles: RouteObstacle[] = props.board.nodes
-          .filter((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone')
-          .map((n) => ({ ...nodeRect(n), nodeId: n.id }));
-        const routeGrid = buildRouteGrid(obstacles, boardPx);
+        // Layers 1-6, in paint order: copper, zones under the components they group, components,
+        // printed notes on top so a label is never buried, then the edit grid and the overlays.
+        traceLayer = new Container(); world.addChild(traceLayer);
+        zoneLayer = new Container(); world.addChild(zoneLayer);
+        nodeLayer = new Container(); world.addChild(nodeLayer);
+        noteLayer = new Container(); world.addChild(noteLayer);
+        gridLayer = new Container(); world.addChild(gridLayer);
+        overlayLayer = new Container(); world.addChild(overlayLayer);
 
-        let routedCount = 0;
-        let fallbackCount = 0;
-        for (const edge of props.board.edges) {
-          const from = rectById.get(edge.from);
-          const to = rectById.get(edge.to);
-          if (!from || !to) continue;
-
-          let points: Point[] | null = null;
-          if (edge.waypoints?.length) {
-            points = routeOrthogonal(from, to, edge.waypoints, props.board.grid.tile);
-          } else {
-            const path = routeAStar(
-              { from: { ...from, nodeId: edge.from }, to: { ...to, nodeId: edge.to }, obstacles, boardPx },
-              routeGrid
-            );
-            if (path) { points = attachEndpoints(path, from, to); routedCount++; }
-          }
-          if (!points) {
-            points = routeOrthogonal(from, to, edge.waypoints, props.board.grid.tile);
-            if (!edge.waypoints?.length) fallbackCount++;
-          }
-
-          routed.push({ edge, points, style: styleFor(edge, props.board.theme.signal) });
-        }
-        console.info(`[router] ${routedCount} auto-routed, ${fallbackCount} fell back to a direct run`);
-        world.addChild(buildTraceLayer(routed));
-
-        // Layer 2 — silkscreen zones, printed under the components they group.
-        const silkLayer = new Container();
-        for (const node of props.board.nodes) {
-          if (node.kind === 'group.zone') silkLayer.addChild(buildZone(node, props.board.theme.signal));
-        }
-        world.addChild(silkLayer);
-
-        // Layer 3 — node sprites.
-        const sprites = new SpriteStore();
+        sprites = new SpriteStore();
         const atlas = await sprites.load(ATLAS_URL);
         if (disposed) { app.destroy(true, { children: true }); return; }
         if (!atlas.loaded) console.info(`[atlas] ${atlas.reason} — every node renders as a placeholder`);
 
-        nodeLayer = new Container();
-        world.addChild(nodeLayer);
-
-        /**
-         * Face images. Each node with an `image` gets its mosaic from main, which downsamples
-         * and dithers it to the room's six colours. Loaded in parallel and drawn as soon as it
-         * arrives, so a slow disk or a large source never blocks the first frame.
-         */
-        let faceCount = 0;
-        const drawNode = (nodeId: string, face: HTMLImageElement | null): void => {
-          const node = props.board.nodes.find((n) => n.id === nodeId);
-          const sprite = spriteById.get(nodeId);
-          if (!node || !sprite) return;
-          const fp = footprintOf(node);
-          const show = displayOf(node);
-          sprite.texture = sprites.placeholder({
-            w: fp.w,
-            h: fp.h,
-            designator: show.designator ? node.designator ?? '' : '',
-            name: show.name ? node.name : undefined,
-            kind: node.kind,
-            maskLight: props.board.theme.maskLight,
-            signal: props.board.theme.signal,
-            face: show.thumbnail ? face : null
-          });
-          sprite.y = node.pos.y * TILE - nameplateOffset(show.name ? node.name : undefined);
-        };
-
-        let placeholderCount = 0;
-        for (const node of props.board.nodes) {
-          if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
-          const fp = footprintOf(node);
-          const show = displayOf(node);
-          const key = spriteKeyOf(node);
-          const texture = sprites.get(key) ?? sprites.placeholder({
-            w: fp.w,
-            h: fp.h,
-            designator: show.designator ? node.designator ?? '' : '',
-            name: show.name ? node.name : undefined,
-            kind: node.kind,
-            maskLight: props.board.theme.maskLight,
-            signal: props.board.theme.signal
-          });
-          if (!sprites.has(key)) placeholderCount++;
-
-          const sprite = new Sprite(texture);
-          sprite.x = node.pos.x * TILE;
-          // The nameplate lives ABOVE the grid position; the footprint itself is unchanged, so
-          // collision, routing and hit-testing all still use the grid the board data describes.
-          sprite.y = node.pos.y * TILE - nameplateOffset(show.name ? node.name : undefined);
-          sprite.roundPixels = true;
-          nodeLayer.addChild(sprite);
-          spriteById.set(node.id, sprite);
-        }
-
-        for (const node of props.board.nodes) {
-          // No image, or the node has its thumbnail switched off: nothing to fetch. The image
-          // stays bound to the node either way — only the drawing of it is off.
-          if (!node.image || !displayOf(node).thumbnail) continue;
-          void window.skynet['mosaic:forNode'](props.boardId, node.id).then(async (result) => {
-            if (disposed) return;
-            if (!result.ok) { console.warn(`[mosaic] ${node.id}: ${result.error}`); return; }
-            const img = new Image();
-            img.src = result.dataUrl;
-            await img.decode();
-            if (disposed) return;
-            faceCount++;
-            drawNode(node.id, img);
-          }).catch((err: unknown) => console.warn(`[mosaic] ${node.id} failed`, err));
-        }
-
-        // Layer 4 — printed notes, on top of components so a label is never buried.
-        const noteLayer = new Container();
-        for (const node of props.board.nodes) {
-          if (node.kind !== 'note.silk') continue;
-          const note = buildSilkNote(node);
-          if (note) noteLayer.addChild(note);
-        }
-        world.addChild(noteLayer);
-
-        // Layer 5 — edit-mode grid, then selection / broken / drag overlays.
-        gridLayer = new Container();
-        world.addChild(gridLayer);
-        overlayLayer = new Container();
-        world.addChild(overlayLayer);
-
-        rects = layoutRects(props.board);
-
-        const buildGrid = (): void => {
-          if (!gridLayer) return;
-          gridLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
-          if (!live.current.editMode) return;
-          // A 1px dot at every tile corner. Dots, not lines: a full grid of lines over the whole
-          // board is louder than the board itself and you cannot see the components any more.
-          const g = new Graphics();
-          for (let ty = 0; ty <= props.board.grid.height; ty++) {
-            for (let tx = 0; tx <= props.board.grid.width; tx++) {
-              g.rect(tx * TILE, ty * TILE, 1, 1);
-            }
-          }
-          g.fill({ color: hexToNumber(SILK), alpha: 0.35 });
-          g.roundPixels = true;
-          gridLayer.addChild(g);
-        };
-
-        const rebuildOverlay = (): void => {
-          if (!overlayLayer) return;
-          overlayLayer.removeChildren().forEach((c) => c.destroy({ children: true }));
-
-          const { targets, selectedId } = live.current;
-          brokenCount = 0;
-          for (const node of props.board.nodes) {
-            const info = targets[node.id];
-            if (!info || !isBroken(info)) continue;
-            if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
-            brokenCount++;
-            const color = info.state === 'outside-dev-root' || info.state === 'unset' ? WARN : FAULT;
-            overlayLayer.addChild(buildBrokenOverlay(nodeRect(node), color));
-          }
-
-          if (selectedId) {
-            const node = props.board.nodes.find((n) => n.id === selectedId);
-            if (node) overlayLayer.addChild(buildSelectionOverlay(nodeRect(node), props.board.theme.signal));
-          }
-
-          // Drag ghost: where the node would land, green if legal, red if not. Corner brackets
-          // and a 1px frame, same vocabulary as selection — nothing translucent or blurred.
-          if (drag.kind === 'move' && drag.exceeded && drag.currentTile && drag.nodeId) {
-            const node = props.board.nodes.find((n) => n.id === drag.nodeId);
-            if (node) {
-              const fp = footprintOf(node);
-              const ghost = {
-                nodeId: node.id,
-                kind: node.kind,
-                x: drag.currentTile.x * TILE,
-                y: drag.currentTile.y * TILE,
-                w: fp.w * TILE,
-                h: fp.h * TILE
-              };
-              const color = drag.valid ? props.board.theme.signal : FAULT;
-              const frame = new Graphics();
-              frame.rect(ghost.x, ghost.y, ghost.w, 1);
-              frame.rect(ghost.x, ghost.y + ghost.h - 1, ghost.w, 1);
-              frame.rect(ghost.x, ghost.y, 1, ghost.h);
-              frame.rect(ghost.x + ghost.w - 1, ghost.y, 1, ghost.h);
-              frame.fill({ color: hexToNumber(color) });
-              frame.roundPixels = true;
-              overlayLayer.addChild(frame);
-              overlayLayer.addChild(buildSelectionOverlay(ghost, color));
-            }
-          }
-        };
-
-        const applyFocus = (): void => {
-          const { focus, selectedId } = live.current;
-          if (!focus || !selectedId) {
-            for (const sprite of spriteById.values()) sprite.alpha = 1;
-            return;
-          }
-          const related = new Set<string>([selectedId]);
-          for (const edge of props.board.edges) {
-            if (edge.from === selectedId) related.add(edge.to);
-            if (edge.to === selectedId) related.add(edge.from);
-          }
-          for (const [id, sprite] of spriteById) sprite.alpha = related.has(id) ? 1 : 0.25;
-        };
-
-        let brokenCount = 0;
-        buildGrid();
-        rebuildOverlay();
+        rebuildRef.current = rebuild;
+        rebuild(live.current.board);
 
         let frames = 0;
         let fpsAccum = 0;
@@ -533,6 +782,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
         app.ticker.add((ticker) => {
           const view = viewport();
+          let camera = cameraStore.current;
 
           // Keyboard panning is suppressed while dragging: two things moving the camera at once
           // makes a drag feel like it is fighting you.
@@ -552,6 +802,19 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               view
             );
           }
+          cameraStore.current = camera;
+
+          /*
+           * The live camera, every frame, on `window`.
+           *
+           * The HUD carries the same numbers but only refreshes every 30 frames, which is fine
+           * for a human and useless for a test — the smoke's camera check read a stale 0,0 for a
+           * camera that had in fact panned, and reported a pass it had not earned. This is the
+           * value itself, with no sampling window in front of it.
+           */
+          (window as unknown as { __skynetCamera?: unknown }).__skynetCamera = {
+            x: Math.round(camera.x), y: Math.round(camera.y), zoom: camera.zoom
+          };
 
           if (live.current.cameraRef?.current) {
             live.current.cameraRef.current.x = camera.x;
@@ -562,19 +825,22 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           }
 
           // The one line that keeps the board from shimmering.
-          const pos = stagePosition(camera);
-          world.x = pos.x;
-          world.y = pos.y;
-          world.scale.set(camera.zoom);
+          if (world) {
+            const pos = stagePosition(camera);
+            world.x = pos.x;
+            world.y = pos.y;
+            world.scale.set(camera.zoom);
+          }
 
           if (live.current.editMode !== lastEditMode) {
             lastEditMode = live.current.editMode;
             buildGrid();
+            rebuildOverlay();
           }
 
           const brokenKey = Object.entries(live.current.targets).map(([id, t]) => `${id}:${t.state}`).join('|');
-          const dragKey = drag.kind === 'move' && drag.exceeded
-            ? `${drag.nodeId}:${drag.currentTile?.x},${drag.currentTile?.y}:${drag.valid}`
+          const dragKey = drag.exceeded && (drag.kind === 'move' || drag.kind === 'resize')
+            ? `${drag.kind}:${drag.nodeId}:${drag.currentTile?.x},${drag.currentTile?.y}:${drag.currentFootprint?.w}x${drag.currentFootprint?.h}:${drag.valid}`
             : '';
           if (live.current.selectedId !== lastSelection || brokenKey !== lastBrokenKey || dragKey !== lastDragKey) {
             lastSelection = live.current.selectedId;
@@ -599,7 +865,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               fitsOnScreen:
                 boardPx.width <= view.width / camera.zoom && boardPx.height <= view.height / camera.zoom,
               devicePixelRatio: window.devicePixelRatio,
-              atlasFrames: sprites.frameCount,
+              atlasFrames: sprites?.frameCount ?? 0,
               placeholderCount,
               brokenCount,
               faceCount,
@@ -610,13 +876,29 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           }
         });
 
+        /*
+         * ── Where these listeners live, and why it matters ────────────────────────────────────
+         *
+         * `pointerdown` is on the CANVAS, because a drag has to start over the board.
+         *
+         * `pointermove` and `pointerup` are on the WINDOW. They used to be on the canvas, and a
+         * gesture that released outside it therefore never delivered its `pointerup` — leaving
+         * `drag.kind` stuck at 'pan' forever. The ticker suppresses keyboard panning while a drag
+         * is live, so the symptom was that WASD silently stopped working after one drag that
+         * happened to end off the canvas, with nothing on screen to say why. Caught by the smoke
+         * run: the keys arrived at the handler and the camera did not move.
+         *
+         * Pointer capture already covered most of this. `window` covers the rest, costs nothing,
+         * and does not depend on capture having been granted.
+         */
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('blur', onBlur);
         host.addEventListener('wheel', onWheel, { passive: false });
         app.canvas.addEventListener('pointerdown', onPointerDown);
-        app.canvas.addEventListener('pointermove', onPointerMove);
-        app.canvas.addEventListener('pointerup', endDrag);
-        app.canvas.addEventListener('pointercancel', endDrag);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', endDrag);
+        window.addEventListener('pointercancel', endDrag);
         app.canvas.addEventListener('dblclick', onDoubleClick);
         // Middle-drag pans, and the browser's default for middle-click is autoscroll.
         app.canvas.addEventListener('auxclick', (e) => e.preventDefault());
@@ -628,19 +910,30 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     return () => {
       disposed = true;
+      rebuildRef.current = null;
+      builtRef.current = null;
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
       host.removeEventListener('wheel', onWheel);
       if (app) {
         app.canvas.removeEventListener('pointerdown', onPointerDown);
-        app.canvas.removeEventListener('pointermove', onPointerMove);
-        app.canvas.removeEventListener('pointerup', endDrag);
-        app.canvas.removeEventListener('pointercancel', endDrag);
         app.canvas.removeEventListener('dblclick', onDoubleClick);
         app.destroy(true, { children: true });
       }
     };
-  }, [props.board, props.boardId]);
+    // The room, and only the room. A board MUTATION rebuilds the scene in place — see the
+    // cameraStore comment above for what keying this on `props.board` used to cost.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.boardId]);
+
+  /** A new version of the board: redraw the scene, keep the application and the camera. */
+  useEffect(() => {
+    if (rebuildRef.current && builtRef.current !== props.board) rebuildRef.current(props.board);
+  }, [props.board]);
 
   if (error) {
     return (

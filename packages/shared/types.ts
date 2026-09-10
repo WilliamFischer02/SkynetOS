@@ -152,11 +152,22 @@ export interface BoardNode {
   relation?: string;
 
   /**
-   * Path to any image on disk. Downsampled to the node's footprint and dithered onto the room's
-   * six palette colours, then drawn as the component's face. The source is never copied or
-   * modified. See src/main/services/mosaic.ts.
+   * The node's WALLPAPER: any image on disk, stretched to fill the whole footprint.
+   *
+   * Downsampled to the footprint and dithered onto the room's six palette colours, then drawn as
+   * the component's face. The source is never copied or modified. See src/main/services/mosaic.ts.
    */
   image?: string;
+
+  /**
+   * The node's LOGO: a smaller image centred on top of the wallpaper, aspect preserved.
+   *
+   * Two images per component, because they do different jobs. The wallpaper says what this thing
+   * FEELS like and fills the footprint; the logo says what it IS and has to stay recognisable,
+   * which means it must not be stretched to a 6x4 rectangle. Sized by `logoBoxTiles` below and
+   * given its own bevel so it reads as a badge sitting on the face rather than part of it.
+   */
+  logo?: string;
 
   /**
    * What this node prints on the board. All three default to ON and are independent, so a node
@@ -247,6 +258,44 @@ export const DEFAULT_FOOTPRINT: Record<NodeKind, Footprint> = {
 
 export function footprintOf(node: Pick<BoardNode, 'kind' | 'footprint'>): Footprint {
   return node.footprint ?? DEFAULT_FOOTPRINT[node.kind] ?? { w: 2, h: 2 };
+}
+
+/**
+ * The largest footprint a node may be scaled to, in tiles.
+ *
+ * Kind-aware, because "how big may this get" is a different question for a thing MOUNTED on the
+ * board than for a thing PRINTED on it. A component is an object you can pick out at a glance and
+ * 48 tiles is already three quarters of the root board; a `group.zone` is a bracket drawn around
+ * a cluster and is supposed to span a room, which is why MinecraftOS has zones 26 tiles wide. A
+ * single cap large enough for the second is no cap at all for the first.
+ */
+export const MAX_FOOTPRINT = 48;
+export const MAX_ZONE_FOOTPRINT = 512;
+
+export function maxFootprintFor(kind: NodeKind): number {
+  return kind === 'group.zone' ? MAX_ZONE_FOOTPRINT : MAX_FOOTPRINT;
+}
+
+/**
+ * Clamp a requested footprint to something drawable. Whole tiles only — a fractional footprint
+ * cannot be represented in board JSON and would put every edge of the component on a half pixel.
+ */
+export function clampFootprint(fp: Footprint, max: number = MAX_FOOTPRINT): Footprint {
+  const clamp = (v: number) => Math.min(max, Math.max(1, Math.round(v)));
+  return { w: clamp(fp.w), h: clamp(fp.h) };
+}
+
+/**
+ * The square, in TILES, that a node's centred logo occupies.
+ *
+ * Proportional rather than fixed, so the badge reads the same on a 3x3 chip and an 8x6 CPU, and
+ * always at least one whole tile so it never lands on a fractional pixel. It is deliberately
+ * smaller than the footprint on both axes: a logo that touches the edges is a wallpaper.
+ */
+export function logoBoxTiles(fp: Footprint): number {
+  const shortest = Math.min(fp.w, fp.h);
+  if (shortest <= 1) return 1;
+  return Math.max(1, Math.min(shortest - 1, Math.floor(shortest * 0.6)));
 }
 
 /**

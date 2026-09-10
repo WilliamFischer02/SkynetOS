@@ -517,6 +517,36 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       return new Map(b.nodes.map((n) => [n.id, `${n.pos.x},${n.pos.y}`]));
     };
 
+    /*
+     * ── The camera must not move when a node does ────────────────────────────────────────────
+     *
+     * William: "as of now re-arranging the board snaps back to the default camera position each
+     * time a node is moved." The cause was BoardCanvas keying its init effect on `props.board`,
+     * so every mutation destroyed and rebuilt the whole Pixi application — camera, zoom, mosaics
+     * and router with it.
+     *
+     * So this pans somewhere deliberately non-default FIRST, and asserts the camera is still
+     * there after the drop. Without the pan the test would pass at 0,0 by accident, which is
+     * exactly the value the bug reset to.
+     */
+    const cameraNow = async (): Promise<string> => {
+      // Read the live value the ticker publishes, not the HUD — see BoardCanvas.
+      const cam = await win.webContents.executeJavaScript(
+        "JSON.stringify(window.__skynetCamera ?? null)"
+      ) as string;
+      const parsed = JSON.parse(cam) as { x: number; y: number } | null;
+      return parsed ? `${parsed.x},${parsed.y}` : '?';
+    };
+
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'd' });
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 's' });
+    await wait(900);
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'd' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 's' });
+    await wait(400);
+    const cameraBefore = await cameraNow();
+    console.log(`[smoke] panned away from the origin: CAM ${cameraBefore}`);
+
     const posBefore = allPos();
     const grabX = 700;
     const grabY = 500;
@@ -538,6 +568,9 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     const moved = [...posBefore.entries()].filter(([id, p]) => posAfter.get(id) !== p);
     console.log(`[smoke] node drag moved ${moved.length} node(s): ${moved.map(([id, p]) => `${id} ${p} -> ${posAfter.get(id)}`).join('; ') || 'NONE'}`);
     await shoot('10-after-node-drag.png');
+
+    const cameraAfter = await cameraNow();
+    console.log(`[smoke] CAMERA HELD ITS POSITION THROUGH A NODE MOVE: ${cameraAfter === cameraBefore} (${cameraBefore} -> ${cameraAfter})`);
 
     const undoneMove = await win.webContents.executeJavaScript(`window.skynet['command:undo']()`) as { ok: boolean };
     await wait(500);

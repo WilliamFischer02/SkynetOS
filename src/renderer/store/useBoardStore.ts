@@ -104,6 +104,11 @@ interface BoardState {
 
   runCommand: (command: Command, label?: string) => Promise<CommandResult>;
   moveNode: (nodeId: string, pos: { x: number; y: number }) => Promise<void>;
+  /**
+   * Change a node's footprint. A `node.update` like any other, so it snapshots, it lands in the
+   * same history, and Ctrl+Z takes it back — scaling is an edit, not a view setting.
+   */
+  resizeNode: (nodeId: string, footprint: { w: number; h: number }) => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   openNode: (nodeId: string) => Promise<void>;
@@ -427,6 +432,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const node = get().board?.nodes.find((n) => n.id === nodeId);
     const label = `move ${node?.designator ?? nodeId} to ${pos.x},${pos.y}`;
     await get().runCommand({ type: 'node.move', boardId: get().boardId, nodeId, pos }, label);
+  },
+
+  resizeNode: async (nodeId, footprint) => {
+    const node = get().board?.nodes.find((n) => n.id === nodeId);
+    const label = `resize ${node?.designator ?? nodeId} to ${footprint.w}x${footprint.h}`;
+    await get().runCommand(
+      { type: 'node.update', boardId: get().boardId, nodeId, patch: { footprint } },
+      label
+    );
   },
 
   undo: async () => {

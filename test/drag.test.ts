@@ -7,7 +7,9 @@ import {
   exceedsThreshold,
   moveTo,
   panTo,
+  resizeTo,
   shouldCommit,
+  shouldCommitResize,
   type DragState
 } from '../src/renderer/board/drag.js';
 import type { NodeRect } from '../src/renderer/board/layout.js';
@@ -189,5 +191,111 @@ describe('shouldCommit', () => {
 
   it('does not commit a pan', () => {
     expect(shouldCommit({ ...base, kind: 'pan' })).toBe(false);
+  });
+});
+
+/*
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ * Scaling a node.
+ *
+ * William: "I want to be able to scale nodes". Three paths, because CLAUDE.md's definition of
+ * done requires a keyboard route and a corner handle is mouse-only: the handle, Shift+arrows,
+ * and the W x H field in the node editor. This covers the gesture; the other two are direct.
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ */
+describe('resize', () => {
+  const startResize = (footprint: { w: number; h: number }): DragState =>
+    beginDrag({
+      button: 0,
+      screen: { x: 100, y: 100 },
+      camera: { x: 0, y: 0, zoom: 2 },
+      hit: { nodeId: 'u1', kind: 'agent.code', x: 64, y: 64, w: 48, h: 48 },
+      editMode: true,
+      nodeTile: { x: 4, y: 4 },
+      nodeFootprint: footprint,
+      onResizeHandle: true
+    });
+
+  it('starts a resize when the press lands on the handle', () => {
+    const state = startResize({ w: 3, h: 3 });
+    expect(state.kind).toBe('resize');
+    expect(state.originFootprint).toEqual({ w: 3, h: 3 });
+  });
+
+  it('still moves when the press lands on the node body', () => {
+    // The handle is drawn on top of the node's own corner, so "inside the node" is true for both
+    // gestures. Only the handle flag separates them.
+    const state = beginDrag({
+      button: 0,
+      screen: { x: 100, y: 100 },
+      camera: { x: 0, y: 0, zoom: 2 },
+      hit: { nodeId: 'u1', kind: 'agent.code', x: 64, y: 64, w: 48, h: 48 },
+      editMode: true,
+      nodeTile: { x: 4, y: 4 },
+      nodeFootprint: { w: 3, h: 3 },
+      onResizeHandle: false
+    });
+    expect(state.kind).toBe('move');
+  });
+
+  it('never resizes outside Edit Board mode, handle or not', () => {
+    const state = beginDrag({
+      button: 0,
+      screen: { x: 100, y: 100 },
+      camera: { x: 0, y: 0, zoom: 2 },
+      hit: { nodeId: 'u1', kind: 'agent.code', x: 64, y: 64, w: 48, h: 48 },
+      editMode: false,
+      nodeTile: { x: 4, y: 4 },
+      nodeFootprint: { w: 3, h: 3 },
+      onResizeHandle: true
+    });
+    expect(state.kind).toBe('pan');
+  });
+
+  it('grows a whole tile at a time, in world units not screen units', () => {
+    // At zoom 2, one tile is 32 screen px. Dragging 64 to the right is +2 tiles, not +64.
+    const state = startResize({ w: 3, h: 3 });
+    expect(resizeTo(state, { x: 164, y: 132 }, 2, 24)).toEqual({ w: 5, h: 4 });
+  });
+
+  it('shrinks when dragged back toward the origin', () => {
+    const state = startResize({ w: 6, h: 4 });
+    expect(resizeTo(state, { x: 36, y: 68 }, 2, 24)).toEqual({ w: 4, h: 3 });
+  });
+
+  it('never goes below 1x1 — a zero-tile component has no face to click', () => {
+    const state = startResize({ w: 2, h: 2 });
+    expect(resizeTo(state, { x: -900, y: -900 }, 2, 24)).toEqual({ w: 1, h: 1 });
+  });
+
+  it('never exceeds the maximum', () => {
+    const state = startResize({ w: 2, h: 2 });
+    expect(resizeTo(state, { x: 9000, y: 9000 }, 2, 24)).toEqual({ w: 24, h: 24 });
+  });
+
+  it('leaves the top-left corner alone, which is what makes it a resize', () => {
+    const state = startResize({ w: 3, h: 3 });
+    expect(state.originTile).toEqual({ x: 4, y: 4 });
+    expect(state.currentTile).toBeNull();
+  });
+
+  it('commits only a resize that changed something and is legal', () => {
+    const base = { ...startResize({ w: 3, h: 3 }), exceeded: true };
+    expect(shouldCommitResize({ ...base, currentFootprint: { w: 3, h: 3 } })).toBe(false);
+    expect(shouldCommitResize({ ...base, currentFootprint: { w: 4, h: 3 } })).toBe(true);
+    expect(shouldCommitResize({ ...base, currentFootprint: { w: 4, h: 3 }, valid: false })).toBe(false);
+    expect(shouldCommitResize({ ...base, exceeded: false, currentFootprint: { w: 4, h: 3 } })).toBe(false);
+  });
+
+  it('refuses a size that would swallow a neighbour', () => {
+    // canDrop is the same gate a move goes through, so an illegal grow turns the ghost red
+    // before the drop rather than failing with a toast after it.
+    const others: NodeRect[] = [
+      { nodeId: 'u1', kind: 'agent.code', x: 64, y: 64, w: 48, h: 48 },
+      { nodeId: 'u2', kind: 'agent.code', x: 128, y: 64, w: 48, h: 48 }
+    ];
+    const grid = { width: 40, height: 40 };
+    expect(canDrop('u1', { x: 4, y: 4 }, { w: 3, h: 3 }, others, grid)).toBe(true);
+    expect(canDrop('u1', { x: 4, y: 4 }, { w: 5, h: 3 }, others, grid)).toBe(false);
   });
 });

@@ -42,14 +42,60 @@ export interface PlaceholderSpec {
   /** The room's signal colour, for the single accent each package is allowed. */
   signal: string;
   /**
-   * A decoded face image, already dithered to the room's six colours by the mosaic service and
-   * already exactly w*16 x h*16 pixels. Drawn as the component body instead of the flat fill.
+   * The WALLPAPER: a decoded image, already dithered to the room's six colours by the mosaic
+   * service and already exactly w*16 x h*16 pixels. Drawn as the component body instead of the
+   * flat fill.
    */
   face?: HTMLImageElement | null;
+  /**
+   * The LOGO: a smaller square badge, centred on the face, already dithered and already exactly
+   * logoBoxTiles(fp)*16 on a side. It keeps its transparency, so the wallpaper shows around it.
+   */
+  logo?: HTMLImageElement | null;
 }
 
 /** Height of the nameplate strip above a package, in px. One line of 11px silkscreen plus edges. */
 export const NAMEPLATE_HEIGHT = 15;
+
+/**
+ * The 2px raised bevel every component and every badge wears.
+ *
+ * The problem it solves: a dithered photograph on a substrate made of the same six colours has no
+ * edge. The picture bleeds into the board and the component stops looking like an object mounted
+ * on it. A 1px silk outline (what this used to be) is not enough either — it reads as a sticker.
+ *
+ * So: an outer ring of copper-dark that separates the component from whatever is behind it, then
+ * an inner ring that is silk along the top and left and copper-dark along the bottom and right.
+ * That is the oldest trick there is for making a rectangle look raised, it costs two palette
+ * colours, and it is exact — every edge is a whole pixel, no gradient, no alpha, nothing that
+ * docs/02 anti-mush would object to.
+ */
+export function drawBevel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  highlight: string = SILK,
+  shadow: string = COPPER_DARK
+): void {
+  if (w < 4 || h < 4) return;
+
+  // Outer ring: separates the component from the substrate.
+  ctx.fillStyle = shadow;
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h);
+  ctx.fillRect(x + w - 1, y, 1, h);
+
+  // Inner ring: light from the top-left, dark to the bottom-right.
+  ctx.fillStyle = highlight;
+  ctx.fillRect(x + 1, y + 1, w - 2, 1);
+  ctx.fillRect(x + 1, y + 1, 1, h - 2);
+  ctx.fillStyle = shadow;
+  ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+  ctx.fillRect(x + w - 2, y + 1, 1, h - 2);
+}
 
 /**
  * How far ABOVE its grid position a node's texture starts, because the nameplate sits there.
@@ -269,7 +315,7 @@ export class SpriteStore {
    */
   placeholder(spec: PlaceholderSpec): Texture {
     const name = (spec.name ?? '').trim().toUpperCase();
-    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.maskLight}:${spec.signal}:${spec.face?.src.length ?? 0}`;
+    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.maskLight}:${spec.signal}:${spec.face?.src.length ?? 0}:${spec.logo?.src.length ?? 0}`;
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 
@@ -309,16 +355,42 @@ export class SpriteStore {
     if (spec.face) {
       // A face image replaces the package body entirely: it is the component's printed face.
       ctx.drawImage(spec.face, 0, plateH, bodyW, bodyH);
-      ctx.fillStyle = SILK;
-      ctx.fillRect(0, plateH, bodyW, 1);
-      ctx.fillRect(0, plateH + bodyH - 1, bodyW, 1);
-      ctx.fillRect(0, plateH, 1, bodyH);
-      ctx.fillRect(bodyW - 1, plateH, 1, bodyH);
+      drawBevel(ctx, 0, plateH, bodyW, bodyH);
+
+      /*
+       * The logo goes ON the wallpaper, centred, with its own bevel.
+       *
+       * Its own bevel and not just a border: without one, two dithered images in the same six
+       * colours sitting on top of each other read as a single noisy texture, and the badge stops
+       * being a badge. The frame is what separates them.
+       */
+      if (spec.logo) {
+        const box = spec.logo.width;
+        const lx = Math.floor((bodyW - box) / 2);
+        const ly = plateH + Math.floor((bodyH - box) / 2);
+        // A mask-light plate behind it, so a logo with transparent padding still reads as a badge
+        // rather than as a hole cut in the wallpaper.
+        ctx.fillStyle = spec.maskLight;
+        ctx.fillRect(lx, ly, box, box);
+        ctx.drawImage(spec.logo, lx, ly, box, box);
+        drawBevel(ctx, lx, ly, box, box);
+      }
     } else {
       drawComponent(
         { ctx, x: 0, y: plateH, w: bodyW, h: bodyH, maskLight: spec.maskLight, signal: spec.signal },
         COMPONENT_STYLE[spec.kind] ?? { silhouette: 'plain', inset: 2 }
       );
+      // A logo is a badge on the component, not on the picture — so it lands on a drawn package
+      // exactly as it lands on a wallpaper.
+      if (spec.logo) {
+        const box = spec.logo.width;
+        const lx = Math.floor((bodyW - box) / 2);
+        const ly = plateH + Math.floor((bodyH - box) / 2);
+        ctx.fillStyle = spec.maskLight;
+        ctx.fillRect(lx, ly, box, box);
+        ctx.drawImage(spec.logo, lx, ly, box, box);
+        drawBevel(ctx, lx, ly, box, box);
+      }
     }
 
     // --- designator, on the package, centred. The name is on the plate; this is the part number.

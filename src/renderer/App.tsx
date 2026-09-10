@@ -46,6 +46,7 @@ export function App(): React.JSX.Element {
   const setMode = useBoardStore((s) => s.setMode);
   const openNode = useBoardStore((s) => s.openNode);
   const moveNode = useBoardStore((s) => s.moveNode);
+  const resizeNode = useBoardStore((s) => s.resizeNode);
   const undo = useBoardStore((s) => s.undo);
   const redo = useBoardStore((s) => s.redo);
   const toggleFocus = useBoardStore((s) => s.toggleFocus);
@@ -191,6 +192,7 @@ export function App(): React.JSX.Element {
         onSelect={select}
         onActivate={(nodeId) => void openNode(nodeId)}
         onMoveNode={(nodeId, pos) => void moveNode(nodeId, pos)}
+        onResizeNode={(nodeId, footprint) => void resizeNode(nodeId, footprint)}
         onStatus={onStatus}
         cameraRef={cameraRef}
         jumpTo={jumpTo}

@@ -95,12 +95,12 @@ const handlers: Handlers = {
 
   'pick:target': (request) => pick(request),
 
-  'mosaic:forNode': (boardId, nodeId) => {
+  'mosaic:forNode': (boardId, nodeId, slot) => {
     const load = loadBoard(boardId);
     if (!load.ok) return { ok: false, error: load.error };
     const node = findNode(load.board, nodeId);
     if (!node) return { ok: false, error: `NO SUCH NODE — "${nodeId}"` };
-    return mosaicForNode(load.board, node);
+    return mosaicForNode(load.board, node, slot ?? 'face');
   },
 
   'session:start': (boardId, nodeId, options) =>

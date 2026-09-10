@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { BoardNode } from '@shared/types.js';
+import { DEFAULT_FOOTPRINT, clampFootprint, footprintOf, maxFootprintFor } from '@shared/types.js';
 import { fieldsFor, isTargetControl, missingRequired, type FieldSpec } from '@shared/node-fields.js';
 import { PRIME_STEPS, isPrimeStepId } from '@shared/prime-steps.js';
 import { TargetField } from './TargetField.js';
@@ -36,6 +37,9 @@ function toDraft(node: BoardNode): Draft {
       draft[field.key] = value === undefined ? defaultBoolean(field) : Boolean(value);
     } else if (field.control === 'tags' || field.control === 'multi' || field.control === 'dir-list') {
       draft[field.key] = Array.isArray(value) ? value.join(', ') : '';
+    } else if (field.control === 'footprint') {
+      const fp = footprintOf(node);
+      draft[field.key] = `${fp.w}x${fp.h}`;
     } else if (field.control === 'json') {
       draft[field.key] = value === undefined ? '' : JSON.stringify(value, null, 2);
     } else {
@@ -108,6 +112,14 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
           continue;
         }
       }
+    } else if (field.control === 'footprint') {
+      const [w, h] = String(raw ?? '').split('x').map((n) => Number.parseInt(n, 10));
+      if (!Number.isInteger(w) || !Number.isInteger(h)) { errors.push(`${field.label} must be two whole numbers`); continue; }
+      const clamped = clampFootprint({ w: w as number, h: h as number }, maxFootprintFor(node.kind));
+      // A footprint equal to the kind's default is stored as `undefined`, so a node that has
+      // never been resized keeps inheriting the default if that default ever changes.
+      const fallback = DEFAULT_FOOTPRINT[node.kind];
+      next = fallback && clamped.w === fallback.w && clamped.h === fallback.h ? undefined : clamped;
     } else if (field.key === 'size') {
       const text = String(raw ?? '').trim();
       next = text ? Number(text) : undefined;
@@ -194,6 +206,13 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                 <option value="">— unset —</option>
                 {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
+            ) : field.control === 'footprint' ? (
+              <FootprintField
+                value={String(value ?? '')}
+                max={maxFootprintFor(node.kind)}
+                disabled={saving}
+                onChange={(v) => set(field.key, v)}
+              />
             ) : field.control === 'multi' ? (
               <div className="multi">
                 {field.options?.map((option) => {
@@ -291,6 +310,53 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
         </div>
       ) : null}
     </form>
+  );
+}
+
+/**
+ * Two tile counts, side by side, with steppers.
+ *
+ * Stored in the draft as `WxH` because the draft is flat strings — the same reason `tags` is a
+ * comma-separated string in there. Parsed and clamped on the way back out.
+ */
+function FootprintField(
+  { value, max, disabled, onChange }:
+  { value: string; max: number; disabled: boolean; onChange: (v: string) => void }
+): React.JSX.Element {
+  const [w, h] = value.split('x').map((n) => Number.parseInt(n, 10) || 1);
+  const set = (nw: number, nh: number) => {
+    const c = clampFootprint({ w: nw, h: nh }, max);
+    onChange(`${c.w}x${c.h}`);
+  };
+  return (
+    <div className="footprint-field">
+      <label className="footprint-cell">
+        <span>W</span>
+        <input
+          className="input"
+          type="number"
+          min={1}
+          max={max}
+          value={w ?? 1}
+          disabled={disabled}
+          onChange={(e) => set(Number(e.target.value), h ?? 1)}
+        />
+      </label>
+      <span className="footprint-x">x</span>
+      <label className="footprint-cell">
+        <span>H</span>
+        <input
+          className="input"
+          type="number"
+          min={1}
+          max={max}
+          value={h ?? 1}
+          disabled={disabled}
+          onChange={(e) => set(w ?? 1, Number(e.target.value))}
+        />
+      </label>
+      <span className="footprint-note">tiles</span>
+    </div>
   );
 }
 

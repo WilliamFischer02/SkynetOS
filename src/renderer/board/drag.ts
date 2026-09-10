@@ -2,12 +2,15 @@
  * Drag state. Pure — no Pixi, no DOM — so test/drag.test.ts can prove the two behaviours the
  * board needs and the rules that keep them from fighting each other.
  *
- * Two gestures, distinguished by what is under the cursor when the button goes down:
+ * Three gestures, distinguished by what is under the cursor when the button goes down:
  *
  *   - **Pan** — left-drag on empty substrate, or middle-drag anywhere. docs/01 §Navigation.
  *   - **Move** — left-drag on a node, and only in Edit Board mode. Browsing a board involves a
  *     lot of clicking, and a click that drifts two pixels must not silently relocate a
  *     component, so moving is gated behind `E`.
+ *   - **Resize** — left-drag on the corner handle of the SELECTED node, in Edit Board mode. The
+ *     handle is small and only exists on one node at a time, which is what keeps it from
+ *     stealing the move gesture; the keyboard path is Shift+arrows.
  *
  * A drag also has to not eat clicks: a press and release with no real movement is a selection,
  * not a zero-distance drag. DRAG_THRESHOLD_PX is what separates them.
@@ -19,7 +22,7 @@ import { TILE } from './camera.js';
 /** Movement below this, in screen pixels, is a click. At 4px a deliberate drag still registers. */
 export const DRAG_THRESHOLD_PX = 4;
 
-export type DragKind = 'none' | 'pan' | 'move';
+export type DragKind = 'none' | 'pan' | 'move' | 'resize';
 
 export interface DragState {
   kind: DragKind;
@@ -27,9 +30,13 @@ export interface DragState {
   originScreen: { x: number; y: number };
   /** Camera position when the drag started, for pan. */
   originCamera: { x: number; y: number };
-  /** The node being moved, and its tile position when the drag started. */
+  /** The node being moved or resized, and its tile position when the drag started. */
   nodeId: string | null;
   originTile: { x: number; y: number } | null;
+  /** The node's footprint when a resize drag started. */
+  originFootprint: { w: number; h: number } | null;
+  /** Current footprint for a resize drag, in whole tiles. */
+  currentFootprint: { w: number; h: number } | null;
   /** True once movement has exceeded the threshold. Until then this is still a click. */
   exceeded: boolean;
   /** Current snapped tile position for the moving node, or null. */
@@ -44,6 +51,8 @@ export const NO_DRAG: DragState = {
   originCamera: { x: 0, y: 0 },
   nodeId: null,
   originTile: null,
+  originFootprint: null,
+  currentFootprint: null,
   exceeded: false,
   currentTile: null,
   valid: true
@@ -59,6 +68,13 @@ export interface BeginDragInput {
   editMode: boolean;
   /** Printed-only kinds are not draggable — they have no footprint to move. */
   nodeTile?: { x: number; y: number } | null;
+  /** The node's footprint, needed to start a resize. */
+  nodeFootprint?: { w: number; h: number } | null;
+  /**
+   * True when the press landed on the selected node's corner resize handle. Decided by the
+   * caller, which is the only place that knows where the handle was actually drawn.
+   */
+  onResizeHandle?: boolean;
 }
 
 export function beginDrag(input: BeginDragInput): DragState {
@@ -74,6 +90,18 @@ export function beginDrag(input: BeginDragInput): DragState {
   if (input.button !== 0) return NO_DRAG;
 
   if (input.editMode && input.hit && input.nodeTile) {
+    // The handle wins over the body: it is drawn on top of the node's bottom-right corner, so a
+    // press there is unambiguously a resize even though it is also inside the node.
+    if (input.onResizeHandle && input.nodeFootprint) {
+      return {
+        ...base,
+        kind: 'resize',
+        nodeId: input.hit.nodeId,
+        originTile: { ...input.nodeTile },
+        originFootprint: { ...input.nodeFootprint },
+        currentFootprint: { ...input.nodeFootprint }
+      };
+    }
     return {
       ...base,
       kind: 'move',
@@ -119,6 +147,38 @@ export function moveTo(
   const dxTiles = Math.round((screen.x - state.originScreen.x) / zoom / TILE);
   const dyTiles = Math.round((screen.y - state.originScreen.y) / zoom / TILE);
   return { x: Math.max(0, origin.x + dxTiles), y: Math.max(0, origin.y + dyTiles) };
+}
+
+/**
+ * Footprint for a resize drag, snapped to whole tiles.
+ *
+ * The node's top-left corner stays put and only the bottom-right follows the cursor, which is
+ * what makes a resize feel like a resize rather than a move with extra steps. Never below 1x1:
+ * a zero-tile component has no face to click and no way back.
+ */
+export function resizeTo(
+  state: DragState,
+  screen: { x: number; y: number },
+  zoom: number,
+  maxTiles: number
+): { w: number; h: number } {
+  const origin = state.originFootprint ?? { w: 1, h: 1 };
+  const dwTiles = Math.round((screen.x - state.originScreen.x) / zoom / TILE);
+  const dhTiles = Math.round((screen.y - state.originScreen.y) / zoom / TILE);
+  return {
+    w: Math.max(1, Math.min(maxTiles, origin.w + dwTiles)),
+    h: Math.max(1, Math.min(maxTiles, origin.h + dhTiles))
+  };
+}
+
+/** Did a resize drag actually change the footprint? */
+export function shouldCommitResize(state: DragState): boolean {
+  if (state.kind !== 'resize' || !state.exceeded || !state.valid) return false;
+  if (!state.originFootprint || !state.currentFootprint) return false;
+  return (
+    state.originFootprint.w !== state.currentFootprint.w ||
+    state.originFootprint.h !== state.currentFootprint.h
+  );
 }
 
 /**

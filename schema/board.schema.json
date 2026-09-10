@@ -75,8 +75,11 @@
         "footprint": {
           "type": "object",
           "additionalProperties": false,
-          "properties": { "w": { "type": "integer", "minimum": 1 }, "h": { "type": "integer", "minimum": 1 } },
-          "description": "In tiles. Defaults per kind if omitted."
+          "properties": {
+            "w": { "type": "integer", "minimum": 1, "maximum": 512 },
+            "h": { "type": "integer", "minimum": 1, "maximum": 512 }
+          },
+          "description": "In tiles. Defaults per kind if omitted. Scalable from the node editor, by dragging the corner handle in Edit Board mode, or with Shift+arrows. The interactive cap is per kind — see maxFootprintFor() in packages/shared/types.ts — because a group.zone is a bracket drawn around a cluster and is meant to span a room, while a component is an object you pick out at a glance."
         },
         "tags": { "type": "array", "items": { "type": "string" } },
         "notes": { "type": "string" },
@@ -155,7 +158,11 @@
 
         "image": {
           "type": "string",
-          "description": "Path to any image on disk. It is downsampled to the node's footprint and dithered onto the room's six palette colours, then drawn as the component's face. The source file is never copied or modified; the mosaic is cached in userData and regenerated when the file changes. If the file moves, the node renders broken like any other unresolved target."
+          "description": "WALLPAPER. Path to any image on disk, stretched to fill the whole footprint, dithered onto the room's six palette colours and drawn as the component's face. The source file is never copied or modified; the mosaic is cached in userData and regenerated when the file changes. If the file moves, the node renders broken like any other unresolved target."
+        },
+        "logo": {
+          "type": "string",
+          "description": "LOGO. A smaller image centred on the face, aspect ratio preserved, with its own bevel so it reads as a badge sitting on the wallpaper. Sized by logoBoxTiles() in packages/shared/types.ts — proportional to the footprint, always a whole number of tiles."
         },
 
         "showDesignator": {

@@ -35,14 +35,15 @@
       "persona": "C:/dev/SkynetOS/codex/personas/persona.md",
       "codexRef": "codex/index.md",
       "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp.",
-      "image": "C:/dev/SkynetOS/assets/sprites/jarvis-sprite.png",
+      "image": "C:/dev/SkynetOS/assets/sprites/SkynetOS-worker.jpg",
       "tags": [
         "ai",
         "manager",
         "projects",
         "creative",
         "jarvis"
-      ]
+      ],
+      "logo": "C:/dev/SkynetOS/assets/sprites/skynet-logo.png"
     },
     {
       "id": "u3_jarvis_hands",
@@ -205,7 +206,8 @@
         "docs/06-ROADMAP.md",
         "docs/DECISIONS.md"
       ],
-      "initialPrompt": "You are the SkynetOS architect. This repo is the board you are looking at: the app renders board/*.json and every node on it is bound to something real on this disk. Hold the seven prime directives in CLAUDE.md as constraints, not suggestions — especially \"bind to reality\" and \"data before pixels\". handoff.md is the state of play; docs/06-ROADMAP.md is what comes next."
+      "initialPrompt": "You are the SkynetOS architect. This repo is the board you are looking at: the app renders board/*.json and every node on it is bound to something real on this disk. Hold the seven prime directives in CLAUDE.md as constraints, not suggestions — especially \"bind to reality\" and \"data before pixels\". handoff.md is the state of play; docs/06-ROADMAP.md is what comes next.",
+      "logo": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg"
     },
     {
       "id": "s1_repo_skynet",

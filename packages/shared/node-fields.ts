@@ -26,6 +26,8 @@ import type { BoardNode, NodeKind } from './types.js';
  *              text would be wrong: the choices are the only legal values.
  *  dir-list    a list of directories, each with its own Browse button and existence check.
  *              Used by `addDirs`, which is how an agent reaches repos outside its own cwd.
+ *  footprint   two tile counts, w and h. The typed path to scaling a node; the corner handle
+ *              and Shift+arrows are the other two.
  *  path-file   a file on disk. Offers Browse (native open dialog) + existence check.
  *  path-dir    a directory on disk. Offers Browse (native folder dialog) + existence check.
  *  glob        a path with a `*` in it. Resolves to the newest match and shows which file won.
@@ -36,7 +38,7 @@ import type { BoardNode, NodeKind } from './types.js';
 export type FieldControl =
   | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags' | 'multi'
   | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json'
-  | 'dir-list';
+  | 'dir-list' | 'footprint';
 
 /** Controls that name something outside the board and therefore need verifying. */
 export const TARGET_CONTROLS = ['path-file', 'path-dir', 'glob', 'url', 'board-file'] as const;
@@ -65,16 +67,27 @@ const COMMON: FieldSpec[] = [
   { key: 'designator', label: 'Designator', control: 'text', placeholder: 'U4', help: 'Reference designator, like a real board. U4, J2, D7. How you refer to this node when talking to an agent.' }
 ];
 
+const IMAGE_FILTERS = [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'ico'] }];
+
 /** On every kind, shown last. */
 const TRAILING: FieldSpec[] = [
   {
-    key: 'image', label: 'Face image', control: 'path-file',
-    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'ico'] }],
-    help: "Any image. It is downsampled to this node's footprint and dithered onto the room's six palette colours, so it reads as part of the board rather than a pasted photo. The file is never copied or modified."
+    key: 'footprint', label: 'Size', control: 'footprint',
+    help: 'Width and height in tiles. Also draggable from the corner handle in Edit Board mode (E), or Shift+arrows on the keyboard. 1 to 24.'
   },
   {
-    key: 'showThumbnail', label: 'Show thumbnail', control: 'boolean',
-    help: 'Draw the face image as the component. Off keeps the drawn package silhouette and leaves the image bound.'
+    key: 'image', label: 'Wallpaper', control: 'path-file',
+    filters: IMAGE_FILTERS,
+    help: "Any image. Stretched to fill the whole footprint and dithered onto the room's six palette colours, so it reads as part of the board rather than a pasted photo. The file is never copied or modified."
+  },
+  {
+    key: 'logo', label: 'Logo', control: 'path-file',
+    filters: IMAGE_FILTERS,
+    help: 'A smaller badge centred on the wallpaper, aspect ratio preserved, with its own bevel. Scales with the footprint. Use a logo with a transparent background and the wallpaper shows around it.'
+  },
+  {
+    key: 'showThumbnail', label: 'Show images', control: 'boolean',
+    help: 'Draw the wallpaper and logo. Off keeps the drawn package silhouette and leaves both images bound to the node.'
   },
   {
     key: 'showDesignator', label: 'Show designator', control: 'boolean',
@@ -217,11 +230,11 @@ export function targetFieldsFor(kind: NodeKind): FieldSpec[] {
 /**
  * Fields that are pickable and verifiable but are NOT what the node points at.
  *
- * `image` is a face, not a target. It needs a Browse button and an existence check like any
- * other path, but clicking a note.silk must not "open" its picture, and the inspector must not
- * report a decorative image as the thing this component is bound to.
+ * `image` and `logo` are faces, not targets. They need a Browse button and an existence check
+ * like any other path, but clicking a note.silk must not "open" its picture, and the inspector
+ * must not report a decorative image as the thing this component is bound to.
  */
-const NON_TARGET_KEYS: readonly (keyof BoardNode)[] = ['image'];
+const NON_TARGET_KEYS: readonly (keyof BoardNode)[] = ['image', 'logo'];
 
 /**
  * The one field that IS this node's target — what a click acts on and what the inspector shows

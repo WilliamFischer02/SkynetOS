@@ -184,8 +184,8 @@ export interface SkynetApi {
   // --- the picker interface ---
   'pick:target': (request: PickRequest) => PickResult;
 
-  // --- node face images ---
-  'mosaic:forNode': (boardId: string, nodeId: string) => MosaicResult;
+  // --- node images: the wallpaper that fills the footprint, and the logo centred on it ---
+  'mosaic:forNode': (boardId: string, nodeId: string, slot?: 'face' | 'logo') => MosaicResult;
 
   // --- artifacts ---
   'artifact:resolve': (boardId: string, nodeId: string) => ArtifactInfo;
