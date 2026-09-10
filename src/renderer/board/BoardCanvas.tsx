@@ -542,6 +542,44 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       sprite.y = node.pos.y * TILE - off.y;
     };
 
+    /**
+     * Everything the placeholder needs to draw one node.
+     *
+     * ── Why this is a function and not three inlined objects ──────────────────────────────────
+     *
+     * It was three: `drawNode`, the pulse-glow ticker, and the text-glow ticker each built their
+     * own spec. They drifted, and the drift was invisible until frames arrived — the glow ticker
+     * did not pass `frame`, `priority`, `nameSize`, `nameStyle` or the room suffix, so every pulse
+     * redrew the node stripped of all of them and the next rebuild put them back. The board
+     * flickered between framed and unframed several times a second, on exactly the nodes that were
+     * glowing, which is why it looked like the frame was leaking across the board.
+     *
+     * A spec assembled in one place cannot disagree with itself. Anything added to a node's
+     * appearance from now on is added here, once.
+     */
+    const specFor = (node: BoardNode, opts: { face?: HTMLImageElement | HTMLCanvasElement | null; textLift?: number } = {}) => {
+      const fp = footprintOf(node);
+      const show = displayOf(node);
+      const lift = opts.textLift ?? 0;
+      return {
+        w: fp.w,
+        h: fp.h,
+        designator: show.designator ? node.designator ?? '' : '',
+        name: show.name ? plateTitle(node) : undefined,
+        kind: node.kind,
+        maskLight: board.theme.maskLight,
+        maskDark: board.theme.maskDark,
+        signal: board.theme.signal,
+        face: show.thumbnail ? (opts.face !== undefined ? opts.face : faces.get(node.id)?.image ?? null) : null,
+        logo: show.logo ? logos.get(node.id)?.image ?? null : null,
+        nameSize: titleSize(node),
+        frame: node.frame,
+        priority: node.priority,
+        nameStyle: nameStyleFor(node, node.textGlow ? lift : 0),
+        suffix: show.name ? roomSuffixFor(node) : null
+      };
+    };
+
     /** Redraw one node's texture from whatever images it currently has. */
     const drawNode = (nodeId: string, textLift = 0): void => {
       const node = nodeById(nodeId);
@@ -570,23 +608,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         sprite.y = node.pos.y * TILE;
         return;
       }
-      sprite.texture = sprites.placeholder({
-        w: fp.w,
-        h: fp.h,
-        designator: show.designator ? node.designator ?? '' : '',
-        name: show.name ? plateTitle(node) : undefined,
-        kind: node.kind,
-        maskLight: board.theme.maskLight,
-        signal: board.theme.signal,
-        face: show.thumbnail ? faces.get(nodeId)?.image ?? null : null,
-        logo: show.logo ? logos.get(nodeId)?.image ?? null : null,
-        nameSize: titleSize(node),
-        frame: node.frame,
-        priority: node.priority,
-        maskDark: board.theme.maskDark,
-        nameStyle: nameStyleFor(node, node.textGlow ? textLift : 0),
-        suffix: show.name ? roomSuffixFor(node) : null
-      });
+      sprite.texture = sprites.placeholder(specFor(node, { textLift }));
       placeSprite(nodeId);
     };
 
@@ -1126,23 +1148,13 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               lastGlowStep = step;
               for (const [nodeId, frames] of glows) {
                 const sprite = spriteById.get(nodeId);
-                const frame = frames[step % frames.length];
-                if (!sprite || !frame || !sprites) continue;
+                const glowFrame = frames[step % frames.length];
+                if (!sprite || !glowFrame || !sprites) continue;
                 const node = nodeById(nodeId);
                 if (!node) continue;
-                const fp = footprintOf(node);
-                const show = displayOf(node);
-                sprite.texture = sprites.placeholder({
-                  w: fp.w,
-                  h: fp.h,
-                  designator: show.designator ? node.designator ?? '' : '',
-                  name: show.name ? node.name : undefined,
-                  kind: node.kind,
-                  maskLight: board.theme.maskLight,
-                  signal: board.theme.signal,
-                  face: frame,
-                  logo: show.logo ? logos.get(nodeId)?.image ?? null : null
-                });
+                // Only the FACE differs from a normal draw. Everything else comes from the one
+                // spec builder, so a pulse can never strip a node of its frame again.
+                sprite.texture = sprites.placeholder(specFor(node, { face: glowFrame }));
               }
             }
           }

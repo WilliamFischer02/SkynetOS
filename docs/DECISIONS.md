@@ -909,3 +909,37 @@ The **"+" box** is a persistent way into that palette while editing. `N` already
 keyboard shortcut is not discoverable and dressing a board means reaching for it repeatedly. It
 lives at the middle of the left edge: bottom-left put it straight through the session dock, whose
 height depends on how many sessions are running, so no fixed offset clears it.
+
+## 2026-09-10 — The frame flicker: three spec builders that drifted
+
+Reported: "applying a frame creates a flickering effect and appears to apply it to all nodes."
+
+Two separate causes, both invisible until frames existed.
+
+**The flicker.** Three places built a node's texture spec — `drawNode`, the pulse-glow ticker and
+the text-glow ticker — and they had drifted. The glow ticker did not pass `frame`, `priority`,
+`nameSize`, `nameStyle` or the room's OS suffix, so every pulse redrew the node stripped of all of
+them and the next rebuild put them back. Several times a second, on exactly the nodes that were
+glowing — which is why it read as the frame leaking across the board rather than as one node
+misbehaving.
+
+**The leak.** The texture cache identified a face and a logo by `src.length`. Two different mosaics
+that happened to encode to the same number of base64 characters produced the same cache key, and
+one node was handed another node's texture — frame, depth and all. A coin-flip bug that would have
+been miserable to chase later. Images are now identified by content: length plus both ends.
+
+**The fix is structural, so the test is too.** `specFor` is the only thing that describes a node's
+appearance, and `test/render-invariants.test.ts` reads the source to enforce that: every
+`sprites.placeholder(` call must be handed `specFor(...)`, and `specFor` must carry every visual
+field. Verified by re-introducing the original bug and watching the guard fail. A unit test cannot
+express "there is only one of these", and that was the actual defect.
+
+The same file now also guards the cache key and the single `PRINTED_KINDS` list — the two other
+places where one rule written down twice has already shipped a bug.
+
+## 2026-09-10 — The "+" box lives in the breadcrumb row
+
+It floated over the board and collided with whatever was beneath it: first the session dock, whose
+height depends on how many sessions are running, then the help bar. There is no fixed offset that
+clears a panel of variable height, so it moved into the breadcrumb row — a strip of chrome that
+already exists, already grows with its content, and is the one place nothing else is drawn into.

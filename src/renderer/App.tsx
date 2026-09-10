@@ -236,29 +236,29 @@ export function App(): React.JSX.Element {
           </span>
         ))}
         {editMode ? <span className="mode-badge">EDIT BOARD</span> : null}
+        {/*
+          * The "+" box. William: "while in board edit mode those / any and all aesthetic
+          * preconstructed assets should be available to add via a '+' box somewhere on screen."
+          *
+          * In the breadcrumb row rather than floating over the board. Floating, it collided with
+          * whatever happened to be under it — the session dock, whose height depends on how many
+          * sessions are running, and then the help bar. This row already exists, already grows
+          * with its content, and is the one strip of chrome nothing else is ever drawn into.
+          */}
+        {editMode ? (
+          <button
+            type="button"
+            className="add-fab"
+            onClick={() => setPaletteOpen(!paletteOpen)}
+            title="Add a component or a board part (N)"
+          >
+            + ADD
+          </button>
+        ) : null}
       </div>
 
       {/* Top-left, under the breadcrumb: what this is costing, measured off disk. */}
       <UsageMeter />
-
-      {/*
-        * The "+" box. William: "while in board edit mode those / any and all aesthetic
-        * preconstructed assets should be available to add via a '+' box somewhere on screen."
-        *
-        * `N` already opened the palette, but a keyboard shortcut is not discoverable and this is a
-        * thing you reach for repeatedly while dressing a board. It only exists in Edit Board mode,
-        * because placing a component is an edit.
-        */}
-      {editMode && !paletteOpen ? (
-        <button
-          type="button"
-          className="add-fab"
-          onClick={() => setPaletteOpen(true)}
-          title="Add a component or a board part (N)"
-        >
-          +
-        </button>
-      ) : null}
 
       <AddPalette />
       <Mailbox />

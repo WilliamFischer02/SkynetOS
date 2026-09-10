@@ -402,14 +402,26 @@ export class SpriteStore {
      * frames of one cycle differ only in their pixels, so keying on anything else would serve
      * frame 0 forever and the pulse would never move.
      */
-    const faceKey = spec.face
-      ? (spec.face as { src?: string; dataset?: DOMStringMap }).src?.length
-        ?? (spec.face as HTMLCanvasElement).dataset?.['glowKey']
-        ?? 'canvas'
-      : 0;
+    /*
+     * Identify an image by its CONTENT, not its length.
+     *
+     * This used to be `src.length`, and two different mosaics that happened to encode to the same
+     * number of base64 characters would produce the same cache key — so one node would silently be
+     * handed another node's texture, frame, depth and all. Sampling both ends plus the length is
+     * effectively collision-free for data URLs and costs a substring rather than a hash of a
+     * hundred kilobytes.
+     */
+    const imageKey = (image: { src?: string; dataset?: DOMStringMap } | null | undefined): string => {
+      if (!image) return '0';
+      const glowKey = (image as HTMLCanvasElement).dataset?.['glowKey'];
+      if (glowKey) return glowKey;
+      const src = image.src ?? '';
+      return `${src.length}|${src.slice(0, 24)}|${src.slice(-24)}`;
+    };
+    const faceKey = imageKey(spec.face as { src?: string; dataset?: DOMStringMap } | null);
     const styleKey = spec.nameStyle ? `${spec.nameStyle.color}|${spec.nameStyle.stroke ?? ''}|${spec.nameStyle.plateFill}|${spec.nameStyle.plateBorder}` : '';
     const suffixKey = spec.suffix ? `${spec.suffix.text}|${spec.suffix.size}|${spec.suffix.color}|${spec.suffix.stroke ?? ''}` : '';
-    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.nameSize ?? 11}:${spec.maskLight}:${spec.signal}:${faceKey}:${spec.logo?.src.length ?? 0}:${styleKey}:${suffixKey}:${spec.frame ?? ''}:${spec.priority ?? 0}`;
+    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.nameSize ?? 11}:${spec.maskLight}:${spec.signal}:${faceKey}:${imageKey(spec.logo)}:${styleKey}:${suffixKey}:${spec.frame ?? ''}:${spec.priority ?? 0}`;
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 
