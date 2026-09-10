@@ -93,6 +93,13 @@ once per ROOM and the scene is rebuilt in place. Dragging moves the sprite itsel
 - **Canonical board JSON** is 2-space, LF, trailing newline. Python's `json.dumps` escapes
   em-dashes; pass `ensure_ascii=False`, or write it with Node.
 
+## Standing context
+
+- **This project is personal and will not be on stream.** William said so directly on
+  2026-09-10. `docs/07-SECURITY.md` §Streaming safety and the `streamMode` setting still exist and
+  still work, but do not spend effort on them, and do not let "it might be on stream" shape a
+  design decision. Full paths in the inspector are fine.
+
 ## Open questions for William
 
 - **What should `tokenBudget` be?** Until it is set, two of the meter's three numbers are blank.
