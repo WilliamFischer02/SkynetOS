@@ -168,6 +168,9 @@ export function Inspector(): React.JSX.Element | null {
                 </>
               ) : (
                 <div className="inspector-actions">
+                  <button type="button" className="btn primary" onClick={() => void startSession(node.id)}>
+                    {node.resume === false ? 'Launch session' : 'Resume conversation'}
+                  </button>
                   <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
                 </div>
               )}

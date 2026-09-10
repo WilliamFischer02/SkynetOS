@@ -103,8 +103,8 @@ const handlers: Handlers = {
     return mosaicForNode(load.board, node);
   },
 
-  'session:start': (boardId, nodeId, force) =>
-    startSession(boardId, nodeOrThrow(boardId, nodeId), { force: force ?? false }),
+  'session:start': (boardId, nodeId, options) =>
+    startSession(boardId, nodeOrThrow(boardId, nodeId), { fresh: options?.fresh ?? false }),
 
   'session:stop': (sessionId) => stopSession(sessionId),
 

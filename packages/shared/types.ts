@@ -117,6 +117,34 @@ export interface BoardNode {
    * modified. See src/main/services/mosaic.ts.
    */
   image?: string;
+
+  /**
+   * What this node prints on the board. All three default to ON and are independent, so a node
+   * can be a thumbnail alone, a designator alone, a title alone, or any combination — which is
+   * how you keep a dense room readable without renaming anything.
+   */
+  showDesignator?: boolean;
+  showName?: boolean;
+  showThumbnail?: boolean;
+}
+
+/** What a node prints on the board, with the defaults applied. */
+export interface NodeDisplay {
+  designator: boolean;
+  name: boolean;
+  thumbnail: boolean;
+}
+
+/**
+ * Resolve a node's display toggles. Absent means ON — a node that has never been touched prints
+ * everything, which is the behaviour every board had before the toggles existed.
+ */
+export function displayOf(node: Pick<BoardNode, 'showDesignator' | 'showName' | 'showThumbnail'>): NodeDisplay {
+  return {
+    designator: node.showDesignator !== false,
+    name: node.showName !== false,
+    thumbnail: node.showThumbnail !== false
+  };
 }
 
 export interface BoardEdge {

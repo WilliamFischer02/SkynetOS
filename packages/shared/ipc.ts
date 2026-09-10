@@ -191,7 +191,14 @@ export interface SkynetApi {
 
   // --- real sessions: the point of the whole board ---
   /** Launch or focus the Claude Code session for an agent.code node. */
-  'session:start': (boardId: string, nodeId: string, force?: boolean) => SessionStartResult;
+  /**
+   * Launch (or focus) an agent.code session.
+   *
+   * `fresh` is what separates the chip's two buttons: without it a click resumes the node's own
+   * conversation, or focuses the session already running for it. With it, the stored conversation
+   * id is ignored, a new one is minted, and the node's initial prompt is sent again.
+   */
+  'session:start': (boardId: string, nodeId: string, options?: { fresh?: boolean }) => SessionStartResult;
   'session:stop': (sessionId: string) => { ok: boolean; error?: string };
   'session:list': () => SessionInfo[];
   /** The resume command for this node, so it can be copied and run by hand. */

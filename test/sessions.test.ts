@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardNode } from '../packages/shared/types.js';
-import { claudeArgs, elevatedCommand, popoutCommand, psQuote, resumeCommandLine } from '../src/main/services/launch-args.js';
+import { claudeArgs, elevatedCommand, popoutCommand, psQuote, resumeCommandLine, wtEscape } from '../src/main/services/launch-args.js';
 
 /**
  * The resume contract.
@@ -28,6 +28,9 @@ const agent = (over: Partial<BoardNode> = {}): BoardNode => ({
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A literal backslash, spelled this way so no editor or patch tool can eat it. */
+const BACKSLASH = String.fromCharCode(92);
+
 describe('claudeArgs — first launch', () => {
   it('assigns a fresh UUID with --session-id', () => {
     const { args, sessionId, resumed } = claudeArgs(agent(), null);
@@ -42,9 +45,12 @@ describe('claudeArgs — first launch', () => {
     expect(claudeArgs(agent(), null).sessionId).not.toBe(claudeArgs(agent(), null).sessionId);
   });
 
-  it('sends the initial prompt', () => {
-    const { args } = claudeArgs(agent({ initialPrompt: 'read CLAUDE.md first' }), null);
-    expect(args).toContain('read CLAUDE.md first');
+  it('sends the initial prompt, but hands it back separately', () => {
+    const { args, initialPrompt } = claudeArgs(agent({ initialPrompt: 'read CLAUDE.md first' }), null);
+    expect(initialPrompt).toBe('read CLAUDE.md first');
+    // It is NEVER placed on the command line — see the semicolon block at the bottom of this
+    // file for why that distinction is load-bearing.
+    expect(args).not.toContain('read CLAUDE.md first');
   });
 });
 
@@ -62,7 +68,8 @@ describe('claudeArgs — subsequent launches', () => {
 
   it('does NOT resend the initial prompt on a resume', () => {
     // Otherwise every reopen re-asks the same question at the top of the conversation.
-    const { args } = claudeArgs(agent({ initialPrompt: 'read CLAUDE.md first' }), prior);
+    const { args, initialPrompt } = claudeArgs(agent({ initialPrompt: 'read CLAUDE.md first' }), prior);
+    expect(initialPrompt).toBeUndefined();
     expect(args).not.toContain('read CLAUDE.md first');
   });
 
@@ -188,5 +195,89 @@ describe('resumeCommandLine', () => {
 
   it('uses backslashes, because it is going into a Windows shell', () => {
     expect(resumeCommandLine('C:/dev/a/b', 'x')).toContain('C:\\dev\\a\\b');
+  });
+});
+
+
+/*
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ * The semicolon bug.
+ *
+ * Symptom, reported from the running app: clicking Launch session on U3 JARVIS-HANDS made
+ * something flicker in the UI and opened no terminal at all.
+ *
+ * Cause: `wt.exe` splits its own command line on `;` to open a second tab. U3's initial prompt
+ * contains "...cannot see this disk; you are how its decisions become real." — wt took the rest
+ * as a second subcommand, could not parse it, and exited 0. `spawn` had succeeded, so SkynetOS
+ * reported LAUNCHED.
+ *
+ * Verified on this machine before writing the fix: a `Set-Content` whose value contained a raw
+ * `;` never ran; the identical command with the semicolon backslash-escaped wrote its file.
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ */
+describe('wtEscape — Windows Terminal eats semicolons', () => {
+  it('escapes a semicolon so wt passes it through instead of splitting on it', () => {
+    expect(wtEscape('see this disk; you are how it works')).toBe(
+      'see this disk' + BACKSLASH + '; you are how it works'
+    );
+  });
+
+  it('escapes every semicolon, not just the first', () => {
+    expect(wtEscape('a;b;c')).toBe('a' + BACKSLASH + ';b' + BACKSLASH + ';c');
+  });
+
+  it('leaves text without a semicolon exactly as it was', () => {
+    expect(wtEscape('C:/dev/SkynetOS')).toBe('C:/dev/SkynetOS');
+  });
+
+  it('does not touch backslashes, or every Windows path through it would break', () => {
+    const p = 'C:' + BACKSLASH + 'dev' + BACKSLASH + 'SkynetOS';
+    expect(wtEscape(p)).toBe(p);
+  });
+});
+
+describe('a prompt never reaches a command line', () => {
+  const prosePrompt =
+    "You act on William's machine: you read and write files; you edit board JSON.";
+
+  it('keeps prose out of the argv entirely', () => {
+    const { args, initialPrompt } = claudeArgs(agent({ initialPrompt: prosePrompt }), null);
+    expect(initialPrompt).toBe(prosePrompt);
+    for (const a of args) expect(a).not.toContain(';');
+  });
+
+  it('reads the prompt from a file instead, when one is staged', () => {
+    const { args } = claudeArgs(agent({ initialPrompt: prosePrompt }), null);
+    const cmd = popoutCommand('C:' + BACKSLASH + 'dev', args, true, 'C:' + BACKSLASH + 'tmp' + BACKSLASH + 'p.txt');
+    const inner = cmd.args[cmd.args.length - 1];
+    expect(inner).toContain('Get-Content -Raw -LiteralPath');
+    expect(inner).not.toContain('William');
+  });
+
+  it('builds an inner command with no semicolon of its own to escape', () => {
+    const { args } = claudeArgs(agent(), null);
+    const cmd = popoutCommand('C:' + BACKSLASH + 'dev', args, true, 'C:' + BACKSLASH + 'tmp' + BACKSLASH + 'p.txt');
+    expect(cmd.args[cmd.args.length - 1]).not.toContain(';');
+  });
+
+  it('escapes a semicolon in the working directory, which is allowed to contain one', () => {
+    const { args } = claudeArgs(agent(), null);
+    const cmd = popoutCommand('C:' + BACKSLASH + 'dev' + BACKSLASH + 'odd;name', args, true);
+    expect(cmd.args[1]).toBe('C:' + BACKSLASH + 'dev' + BACKSLASH + 'odd' + BACKSLASH + ';name');
+  });
+
+  it('does not wt-escape when there is no wt in the way', () => {
+    const { args } = claudeArgs(agent(), null);
+    const cmd = popoutCommand('C:' + BACKSLASH + 'dev', args, false, 'C:' + BACKSLASH + 'tmp' + BACKSLASH + 'p.txt');
+    expect(cmd.file).toBe('pwsh.exe');
+    expect(cmd.args[cmd.args.length - 1]).toContain('Get-Content');
+  });
+
+  it('gives the elevated launcher the same file treatment', () => {
+    const { args } = claudeArgs(agent({ initialPrompt: prosePrompt }), null);
+    const cmd = elevatedCommand('C:' + BACKSLASH + 'dev', args, 'C:' + BACKSLASH + 'tmp' + BACKSLASH + 'p.txt');
+    const joined = cmd.args.join(' ');
+    expect(joined).toContain('Get-Content -Raw -LiteralPath');
+    expect(joined).not.toContain('William');
   });
 });

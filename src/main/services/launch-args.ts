@@ -33,12 +33,44 @@ export function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/**
+ * Escape a value for Windows Terminal's OWN command-line parser, which runs before PowerShell's.
+ *
+ * `wt.exe` splits its command line on `;` to open a second tab. That is not a theory. The U3
+ * JARVIS-HANDS node's initial prompt contained "...cannot see this disk; you are how its
+ * decisions become real." — wt took everything after the semicolon as a second subcommand,
+ * failed to parse it, and exited 0 without opening anything. `spawn` had succeeded, so SkynetOS
+ * cheerfully reported LAUNCHED. Nothing on screen, no error, no clue.
+ *
+ * Backslash-escaping the semicolon is Windows Terminal's documented escape, and it is verified
+ * here to round-trip a literal `;` all the way through to the inner shell.
+ *
+ * Only `;` is escaped. Escaping backslashes as well would corrupt every Windows path that goes
+ * through here, and wt does not treat a lone backslash as special.
+ */
+export function wtEscape(value: string): string {
+  return value.replace(/;/g, '\\;');
+}
+
 export interface ClaudeInvocation {
+  /**
+   * Flags and their values. Never free text — see `initialPrompt`. Everything in here is a UUID,
+   * a model name, or a config path, which is why it is safe on a command line.
+   */
   args: string[];
   /** The conversation id this launch will use, whether newly minted or resumed. */
   sessionId: string;
   /** True when this launch continues an existing conversation rather than starting one. */
   resumed: boolean;
+  /**
+   * The first message to send, present only when this launch STARTS a conversation.
+   *
+   * Deliberately not in `args`. It is arbitrary prose out of board JSON, and prose on a command
+   * line has to survive wt.exe's parser, then PowerShell's parser, then argv splitting — three
+   * chances to be mangled by a semicolon, a quote, an ampersand or a newline. The caller stages
+   * it in a file and the command reads the file. See `popoutCommand`.
+   */
+  initialPrompt?: string;
 }
 
 export function claudeArgs(node: BoardNode, existingSessionId: string | null): ClaudeInvocation {
@@ -54,9 +86,10 @@ export function claudeArgs(node: BoardNode, existingSessionId: string | null): C
 
   // The initial prompt is only meaningful on a conversation that does not exist yet. Sending it
   // on every resume would re-ask the same question at the top of every session.
-  if (node.initialPrompt && !(resume && existingSessionId)) args.push(node.initialPrompt);
+  const fresh = !(resume && existingSessionId);
+  const initialPrompt = node.initialPrompt && fresh ? node.initialPrompt : undefined;
 
-  return { args, sessionId, resumed: Boolean(resume && existingSessionId) };
+  return { args, sessionId, resumed: Boolean(resume && existingSessionId), initialPrompt };
 }
 
 /**
@@ -73,13 +106,29 @@ export function claudeArgs(node: BoardNode, existingSessionId: string | null): C
 export function popoutCommand(
   cwd: string,
   claudeArgv: string[],
-  hasWindowsTerminal: boolean
+  hasWindowsTerminal: boolean,
+  promptFile?: string
 ): { file: string; args: string[] } {
-  const inner = ['claude', ...claudeArgv.map(psQuote)].join(' ');
+  const inner = innerCommand(claudeArgv, promptFile);
   if (hasWindowsTerminal) {
-    return { file: 'wt.exe', args: ['-d', cwd, 'pwsh', '-NoExit', '-Command', inner] };
+    // Everything handed to wt gets escaped, the working directory included — a folder is allowed
+    // to contain a semicolon and would otherwise silently truncate the launch.
+    return { file: 'wt.exe', args: ['-d', wtEscape(cwd), 'pwsh', '-NoExit', '-Command', wtEscape(inner)] };
   }
+  // Plain pwsh has no second parser in front of it, so nothing needs wt escaping here.
   return { file: 'pwsh.exe', args: ['-NoExit', '-Command', inner] };
+}
+
+/**
+ * The PowerShell one-liner that actually runs Claude Code.
+ *
+ * One statement, no `;` of our own — a statement separator here would need escaping for wt on
+ * every single launch, and the whole point of `promptFile` is to stop relying on that.
+ */
+function innerCommand(claudeArgv: string[], promptFile?: string): string {
+  const parts = ['claude', ...claudeArgv.map(psQuote)];
+  if (promptFile) parts.push(`(Get-Content -Raw -LiteralPath ${psQuote(promptFile)})`);
+  return parts.join(' ');
 }
 
 /**
@@ -87,8 +136,12 @@ export function popoutCommand(
  * prompt. SkynetOS itself stays non-elevated and asks Windows to create the elevated child —
  * docs/07: "SkynetOS itself never runs elevated. It launches an elevated child when asked."
  */
-export function elevatedCommand(cwd: string, claudeArgv: string[]): { file: string; args: string[] } {
-  const inner = ['claude', ...claudeArgv.map(psQuote)].join(' ');
+export function elevatedCommand(
+  cwd: string,
+  claudeArgv: string[],
+  promptFile?: string
+): { file: string; args: string[] } {
+  const inner = innerCommand(claudeArgv, promptFile);
   const argumentList = ['-NoExit', '-Command', `Set-Location ${psQuote(cwd)}; ${inner}`]
     .map(psQuote)
     .join(', ');

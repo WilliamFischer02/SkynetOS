@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { NODE_KINDS, type BoardNode, type NodeKind } from '../packages/shared/types.js';
+import { NODE_KINDS, displayOf, type BoardNode, type NodeKind } from '../packages/shared/types.js';
 import {
   fieldsFor,
   isTargetControl,
@@ -145,5 +145,63 @@ describe('missingRequired', () => {
 
   it('treats an empty name as missing', () => {
     expect(missingRequired({ ...base, name: '', cwd: 'C:/dev/x', launch: 'popout' }).map((f) => f.key)).toEqual(['name']);
+  });
+});
+
+
+/*
+ * Per-node display toggles.
+ *
+ * "some I only want to be thumbnail, some only designator, some only title." Three independent
+ * booleans, all defaulting to ON, so a board written before they existed prints exactly what it
+ * printed before.
+ */
+describe('display toggles', () => {
+  it('offers all three on every kind', () => {
+    for (const kind of NODE_KINDS) {
+      const keys = fieldsFor(kind).map((f) => f.key);
+      expect(keys, kind).toContain('showDesignator');
+      expect(keys, kind).toContain('showName');
+      expect(keys, kind).toContain('showThumbnail');
+    }
+  });
+
+  it('offers them as tickers, not text boxes', () => {
+    const fields = fieldsFor('agent.code');
+    for (const key of ['showDesignator', 'showName', 'showThumbnail']) {
+      expect(fields.find((f) => f.key === key)?.control).toBe('boolean');
+    }
+  });
+
+  it('never treats a display toggle as the node target', () => {
+    // targetFieldsFor drives the Browse/Verify UI. A checkbox is not a path.
+    for (const kind of NODE_KINDS) {
+      const targets = targetFieldsFor(kind).map((f) => f.key);
+      expect(targets).not.toContain('showDesignator');
+      expect(targets).not.toContain('showName');
+      expect(targets).not.toContain('showThumbnail');
+    }
+  });
+
+  it('defaults every toggle to ON when the node says nothing', () => {
+    const d = displayOf({});
+    expect(d).toEqual({ designator: true, name: true, thumbnail: true });
+  });
+
+  it('honours each toggle independently', () => {
+    expect(displayOf({ showDesignator: false })).toEqual({ designator: false, name: true, thumbnail: true });
+    expect(displayOf({ showName: false })).toEqual({ designator: true, name: false, thumbnail: true });
+    expect(displayOf({ showThumbnail: false })).toEqual({ designator: true, name: true, thumbnail: false });
+  });
+
+  it('allows a node to print nothing at all', () => {
+    // A pure silhouette. Legal, and the only way to get a board that reads as a picture.
+    expect(displayOf({ showDesignator: false, showName: false, showThumbnail: false }))
+      .toEqual({ designator: false, name: false, thumbnail: false });
+  });
+
+  it('treats an explicit true as ON, not as "unset"', () => {
+    expect(displayOf({ showDesignator: true, showName: true, showThumbnail: true }))
+      .toEqual({ designator: true, name: true, thumbnail: true });
   });
 });

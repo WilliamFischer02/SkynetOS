@@ -4,6 +4,7 @@ import { BrowserWindow, dialog, shell } from 'electron';
 import type { BoardNode } from '@shared/types.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import { resolveNodeTarget } from './target-resolver.js';
+import { openChatWindow } from './chat-window.js';
 import { getSettings } from './settings.js';
 
 /**
@@ -102,6 +103,22 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
   }
 
   if (target.kind === 'url') {
+    /*
+     * A conversation gets its own window; a bookmark gets your browser.
+     *
+     * These used to be the same code path, and the JARVIS chip opened a Firefox tab wedged in
+     * among thirty others — which made the agent feel like a link SkynetOS happened to know
+     * about rather than something that lives on the board. `link.url` still goes to the real
+     * browser, which is what a bookmark is for.
+     */
+    if (node.kind === 'agent.jarvis' || node.kind === 'agent.chat') {
+      const { focused } = openChatWindow(node, resolved);
+      return {
+        ok: true,
+        action: focused ? `focused the ${node.name} window` : `opened ${node.name} in its own window`,
+        target
+      };
+    }
     await shell.openExternal(resolved);
     return { ok: true, action: `opened in browser: ${resolved}`, target };
   }

@@ -7,6 +7,7 @@ import { closeDb, reapDeadSessions } from './services/db.js';
 import { onSessionsChanged, restoreSessions, sweepSessions } from './services/session-manager.js';
 import { onServicesChanged, stopAllServices, sweepServices } from './services/service-runner.js';
 import { onFileChanged, stopWatching } from './services/watchers.js';
+import { closeAllChatWindows } from './services/chat-window.js';
 
 const isDev = !app.isPackaged;
 
@@ -546,6 +547,8 @@ app.whenReady().then(() => {
     // Agent popouts are detached on purpose and outlive us. Services do not: a dev server that
     // survives the app that started it is a port you cannot rebind and a process you cannot find.
     stopAllServices();
+    // A conversation window is ours, not the OS's — it must not outlive the board it belongs to.
+    closeAllChatWindows();
     void stopWatching();
     closeDb();
   });

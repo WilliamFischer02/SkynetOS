@@ -75,7 +75,7 @@ interface BoardState {
   acceptIngest: (suggestion: IngestSuggestion) => Promise<void>;
   cancelIngest: () => void;
   subscribeToProcesses: () => () => void;
-  startSession: (nodeId: string, force?: boolean) => Promise<void>;
+  startSession: (nodeId: string, fresh?: boolean) => Promise<void>;
   stopSession: (sessionId: string) => Promise<void>;
   startService: (nodeId: string) => Promise<void>;
   stopService: (boardId: string, nodeId: string) => Promise<void>;
@@ -329,10 +329,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   cancelIngest: () => set({ pendingIngest: null }),
 
-  startSession: async (nodeId, force) => {
+  startSession: async (nodeId, fresh) => {
     const { boardId, board } = get();
     const node = board?.nodes.find((n) => n.id === nodeId);
-    const result = await window.skynet['session:start'](boardId, nodeId, force ?? false);
+    const result = await window.skynet['session:start'](boardId, nodeId, { fresh: fresh ?? false });
     if (!result.ok) { get().toast('fault', result.error); return; }
     const label = node?.designator ? `${node.designator} ${node.name}` : (node?.name ?? nodeId);
     get().toast('ok', result.focused

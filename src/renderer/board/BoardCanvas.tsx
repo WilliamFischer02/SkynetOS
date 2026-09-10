@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Sprite, TextureSource } from 'pixi.js';
 import type { Board } from '@shared/types.js';
-import { footprintOf, spriteKeyOf } from '@shared/types.js';
+import { displayOf, footprintOf, spriteKeyOf } from '@shared/types.js';
 import { FAULT, SILK, WARN, hexToNumber } from '@shared/palette.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import {
@@ -364,29 +364,31 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           const sprite = spriteById.get(nodeId);
           if (!node || !sprite) return;
           const fp = footprintOf(node);
+          const show = displayOf(node);
           sprite.texture = sprites.placeholder({
             w: fp.w,
             h: fp.h,
-            designator: node.designator ?? '',
-            name: node.name,
+            designator: show.designator ? node.designator ?? '' : '',
+            name: show.name ? node.name : undefined,
             kind: node.kind,
             maskLight: props.board.theme.maskLight,
             signal: props.board.theme.signal,
-            face
+            face: show.thumbnail ? face : null
           });
-          sprite.y = node.pos.y * TILE - nameplateOffset(node.name);
+          sprite.y = node.pos.y * TILE - nameplateOffset(show.name ? node.name : undefined);
         };
 
         let placeholderCount = 0;
         for (const node of props.board.nodes) {
           if (node.kind === 'note.silk' || node.kind === 'group.zone') continue;
           const fp = footprintOf(node);
+          const show = displayOf(node);
           const key = spriteKeyOf(node);
           const texture = sprites.get(key) ?? sprites.placeholder({
             w: fp.w,
             h: fp.h,
-            designator: node.designator ?? '',
-            name: node.name,
+            designator: show.designator ? node.designator ?? '' : '',
+            name: show.name ? node.name : undefined,
             kind: node.kind,
             maskLight: props.board.theme.maskLight,
             signal: props.board.theme.signal
@@ -397,14 +399,16 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           sprite.x = node.pos.x * TILE;
           // The nameplate lives ABOVE the grid position; the footprint itself is unchanged, so
           // collision, routing and hit-testing all still use the grid the board data describes.
-          sprite.y = node.pos.y * TILE - nameplateOffset(node.name);
+          sprite.y = node.pos.y * TILE - nameplateOffset(show.name ? node.name : undefined);
           sprite.roundPixels = true;
           nodeLayer.addChild(sprite);
           spriteById.set(node.id, sprite);
         }
 
         for (const node of props.board.nodes) {
-          if (!node.image) continue;
+          // No image, or the node has its thumbnail switched off: nothing to fetch. The image
+          // stays bound to the node either way — only the drawing of it is off.
+          if (!node.image || !displayOf(node).thumbnail) continue;
           void window.skynet['mosaic:forNode'](props.boardId, node.id).then(async (result) => {
             if (disposed) return;
             if (!result.ok) { console.warn(`[mosaic] ${node.id}: ${result.error}`); return; }

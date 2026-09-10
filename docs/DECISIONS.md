@@ -243,3 +243,65 @@ Append-only. Newest at the bottom. One entry per real decision: what, alternativ
 **Decision:** The node's drawn box extends upward into a single-line nameplate sized to the full name. The designator stays on the package. The FOOTPRINT is unchanged.
 **Rejected:** Wrapping the name across lines (what M1 did); widening the footprint to fit the name.
 **Why:** `THERE COULD BE GIANTS` on a 4-tile drive wrapped to three lines of 6px type and stopped being readable, which was the actual complaint. Widening the footprint was the obvious alternative and is the wrong one: that name needs eight tiles against a four-tile part, so auto-widening would collide with neighbours, fail the validator's overlap rule, and reshuffle a hand-laid board. Extending the texture instead leaves collision, A* routing and hit-testing all working on the grid the board data describes — and a silkscreen label longer than the part it names is exactly what a real board does. `test/component-art.test.ts` pins that the plate is one line high, is the same height for every name, and never pushes a node off the top edge.
+
+## 2026-09-10 — Per-node display toggles
+
+**Decision.** `showDesignator`, `showName` and `showThumbnail` are three independent optional
+booleans on `BoardNode`, all defaulting to ON, resolved through `displayOf()`.
+
+**Alternative rejected:** one `display` enum (`"thumbnail" | "designator" | "title" | "all"`).
+It cannot express "thumbnail plus title, no designator", which is exactly the combination asked
+for. Three booleans are eight states; an enum would have needed all eight names.
+
+**Why absent means ON:** every board file written before today has none of these keys, and must
+keep printing exactly what it printed yesterday. `node.showName !== false` rather than
+`node.showName === true` is what makes that true.
+
+## 2026-09-10 — Windows Terminal eats semicolons, so prompts never touch a command line
+
+**Symptom.** Clicking Launch session on U3 JARVIS-HANDS flickered the UI and opened nothing.
+
+**Cause.** `wt.exe` splits its own command line on `;` to open a second tab. U3's initial prompt
+contains "...cannot see this disk; you are how its decisions become real." wt took the remainder
+as a second subcommand, failed to parse it, and exited 0. `spawn` had succeeded, so SkynetOS
+reported LAUNCHED — a silent failure of exactly the kind `launch-args.ts` was written to avoid,
+in the one place it was not being tested.
+
+**Decision, two parts.**
+1. `wtEscape()` backslash-escapes `;` in everything handed to wt, the working directory included.
+   Verified on this machine: a `Set-Content` with a raw `;` never ran; the same command with `\;`
+   wrote its file.
+2. More importantly, an `initialPrompt` is no longer put on a command line at all. `claudeArgs`
+   returns it separately, `session-manager` writes it to `userData/prompts/<board>.<node>.txt`,
+   and the launch reads it back with `Get-Content -Raw`. Prose from the node editor now passes
+   through zero shell parsers instead of three.
+
+**Alternative rejected:** escaping harder. Semicolons were the character that bit first; quotes,
+ampersands and newlines were all still waiting. A file removes the class of bug, not one member.
+
+**Verified end-to-end** by bundling the shipped `launch-args.ts` with esbuild, staging the real
+U3 prompt, and swapping `claude` for a script that records its argv: three arguments arrive,
+the third being the full 560-character prompt with its semicolon intact.
+
+## 2026-09-10 — "New session (fresh context)" now means it
+
+`startSession`'s `force` flag only skipped the already-running guard; it still passed the stored
+conversation id to `--resume`, so the button labelled "fresh context" reopened the same
+conversation with the same history. Renamed to `fresh`, which ignores the stored id, mints a new
+one, and re-sends the initial prompt. The idle chip gained a separate primary button that says
+"Resume conversation" — the two behaviours are now two buttons with honest labels.
+
+## 2026-09-10 — The JARVIS conversation gets its own window
+
+**Decision.** `agent.jarvis` and `agent.chat` open a dedicated Electron `BrowserWindow` with the
+node's own `partition`, its own title, and its own taskbar entry. `link.url` still goes to the
+system browser, which is what a bookmark is for.
+
+**Why.** `shell.openExternal` appended a tab to Firefox among thirty others. The agent read as a
+link SkynetOS happened to know about rather than something living on the board.
+
+**Security.** Unchanged from docs/07: no preload, no bridge, `sandbox: true`,
+`contextIsolation: true`, `webSecurity: true`. `page-title-updated` is cancelled so the window
+keeps the node's name instead of renaming itself to "Claude". Popups are allowed only as more
+windows of exactly this kind (same partition, https only), because denying them would make OAuth
+sign-in impossible; `will-navigate` refuses any scheme that is not http(s).

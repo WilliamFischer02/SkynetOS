@@ -1,8 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { claudeArgs, elevatedCommand, popoutCommand } from './launch-args.js';
-import { BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import type { BoardNode, LaunchMode } from '@shared/types.js';
 import type { SessionInfo, SessionStartResult } from '@shared/ipc.js';
 import {
@@ -51,6 +52,26 @@ function notify(): void {
   for (const listener of listeners) listener(list);
 }
 
+/**
+ * Stage a node's initial prompt on disk so that it never touches a command line.
+ *
+ * A prompt is prose a human typed into the node editor. It contains apostrophes, dashes and
+ * semicolons today and will contain newlines tomorrow, and every one of those is a metacharacter
+ * to somebody in the chain wt.exe -> pwsh -> claude. Writing it to a file and reading it back
+ * with `Get-Content -Raw` deletes the whole class of problem rather than escaping it one
+ * character at a time. The semicolon story is in launch-args.ts.
+ *
+ * One file per node, overwritten each launch: nothing accumulates, and after a launch that went
+ * wrong the exact text that was sent is sitting on disk to be read.
+ */
+function stagePrompt(boardId: string, nodeId: string, prompt: string): string {
+  const dir = join(app.getPath('userData'), 'prompts');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${boardId}.${nodeId}.txt`.replace(/[^a-zA-Z0-9._-]/g, '_'));
+  writeFileSync(file, prompt, 'utf8');
+  return file;
+}
+
 function hasWindowsTerminal(): boolean {
   const local = process.env['LOCALAPPDATA'];
   return Boolean(local && existsSync(`${local}\\Microsoft\\WindowsApps\\wt.exe`));
@@ -78,14 +99,23 @@ export function sessionForNode(boardId: string, nodeId: string): SessionInfo | u
 export async function startSession(
   boardId: string,
   node: BoardNode,
-  options: { force?: boolean } = {}
+  options: { fresh?: boolean } = {}
 ): Promise<SessionStartResult> {
   if (node.kind !== 'agent.code') {
     return { ok: false, error: `${node.kind} IS NOT A CLAUDE CODE AGENT` };
   }
 
+  /*
+   * `fresh` is the difference between the chip's two buttons, and it used to be a lie.
+   *
+   * The old flag was `force`, which only skipped the already-running guard — it still handed the
+   * stored conversation id to `--resume`, so the button labelled "New session (fresh context)"
+   * reopened the SAME conversation with the same history. Now it means what it says: a new
+   * conversation id, the node's initial prompt sent again, and a second process allowed, because
+   * a DIFFERENT conversation in the same repo is not the collision docs/03 refuses.
+   */
   const existing = sessionForNode(boardId, node.id);
-  if (existing && !options.force) {
+  if (existing && !options.fresh) {
     return { ok: true, session: existing, focused: true, note: 'A SESSION IS ALREADY RUNNING FOR THIS CHIP' };
   }
 
@@ -126,8 +156,9 @@ export async function startSession(
     if (!approved) return { ok: false, error: 'CANCELLED' };
   }
 
-  const claudeSessionId = lastClaudeSessionId(boardId, node.id);
-  const { args, sessionId, resumed } = claudeArgs(node, claudeSessionId);
+  const claudeSessionId = options.fresh ? null : lastClaudeSessionId(boardId, node.id);
+  const { args, sessionId, resumed, initialPrompt } = claudeArgs(node, claudeSessionId);
+  const promptFile = initialPrompt ? stagePrompt(boardId, node.id, initialPrompt) : undefined;
 
   const rowId = randomUUID();
   const startedAt = new Date().toISOString();
@@ -147,8 +178,8 @@ export async function startSession(
 
   try {
     const child = mode === 'popout-elevated'
-      ? spawnElevated(cwd, args)
-      : spawnPopout(cwd, args);
+      ? spawnElevated(cwd, args, promptFile)
+      : spawnPopout(cwd, args, promptFile);
 
     setSessionPid(rowId, child.pid ?? null);
 
@@ -207,8 +238,8 @@ export async function startSession(
   }
 }
 
-function spawnPopout(cwd: string, claudeArgv: string[]): ChildProcess {
-  const { file, args } = popoutCommand(cwd.replace(/\//g, '\\'), claudeArgv, hasWindowsTerminal());
+function spawnPopout(cwd: string, claudeArgv: string[], promptFile?: string): ChildProcess {
+  const { file, args } = popoutCommand(cwd.replace(/\//g, '\\'), claudeArgv, hasWindowsTerminal(), promptFile);
   return spawn(file, args, {
     cwd: cwd.replace(/\//g, '\\'),
     detached: true,
@@ -217,9 +248,9 @@ function spawnPopout(cwd: string, claudeArgv: string[]): ChildProcess {
   });
 }
 
-function spawnElevated(cwd: string, claudeArgv: string[]): ChildProcess {
+function spawnElevated(cwd: string, claudeArgv: string[], promptFile?: string): ChildProcess {
   const windowsCwd = cwd.replace(/\//g, '\\');
-  const { file, args } = elevatedCommand(windowsCwd, claudeArgv);
+  const { file, args } = elevatedCommand(windowsCwd, claudeArgv, promptFile);
   return spawn(file, args, { cwd: windowsCwd, detached: true, stdio: 'ignore', windowsHide: true });
 }
 

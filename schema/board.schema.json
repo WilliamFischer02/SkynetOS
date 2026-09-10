@@ -129,6 +129,22 @@
         "image": {
           "type": "string",
           "description": "Path to any image on disk. It is downsampled to the node's footprint and dithered onto the room's six palette colours, then drawn as the component's face. The source file is never copied or modified; the mosaic is cached in userData and regenerated when the file changes. If the file moves, the node renders broken like any other unresolved target."
+        },
+
+        "showDesignator": {
+          "type": "boolean",
+          "default": true,
+          "description": "Print the reference designator (U4, J2) on the package. Turn it off for a node you want to read as a picture or a title alone."
+        },
+        "showName": {
+          "type": "boolean",
+          "default": true,
+          "description": "Print the name on a nameplate above the package. Turn it off for a node whose thumbnail or designator says enough."
+        },
+        "showThumbnail": {
+          "type": "boolean",
+          "default": true,
+          "description": "Draw the `image` as the component's face. Turn it off to keep the drawn package silhouette while leaving the image bound to the node."
         }
       },
       "allOf": [

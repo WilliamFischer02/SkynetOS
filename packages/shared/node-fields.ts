@@ -66,6 +66,18 @@ const TRAILING: FieldSpec[] = [
     filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'ico'] }],
     help: "Any image. It is downsampled to this node's footprint and dithered onto the room's six palette colours, so it reads as part of the board rather than a pasted photo. The file is never copied or modified."
   },
+  {
+    key: 'showThumbnail', label: 'Show thumbnail', control: 'boolean',
+    help: 'Draw the face image as the component. Off keeps the drawn package silhouette and leaves the image bound.'
+  },
+  {
+    key: 'showDesignator', label: 'Show designator', control: 'boolean',
+    help: 'Print U4 / J2 on the package.'
+  },
+  {
+    key: 'showName', label: 'Show name', control: 'boolean',
+    help: 'Print the name on a nameplate above the package.'
+  },
   { key: 'tags', label: 'Tags', control: 'tags', placeholder: 'minecraft, mods', help: 'Comma separated. Searchable from Ctrl+K.' },
   { key: 'notes', label: 'Notes', control: 'textarea', help: 'Free text. Never rendered on the board.' },
   { key: 'codexRef', label: 'Codex ref', control: 'text', placeholder: 'codex/projects/the-stalker.md', help: 'The markdown file in codex/ that describes this thing.' },
