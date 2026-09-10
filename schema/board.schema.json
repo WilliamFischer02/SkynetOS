@@ -143,7 +143,7 @@
         "pos"
       ],
       "additionalProperties": false,
-      "$strictness": "additionalProperties:false is deliberate and matches $defs/edge. Without it a typo like \"cdw\" instead of \"cwd\" validates clean and the node silently fails to resolve at runtime — the exact class of bug this schema exists to catch. Every field a node may carry is declared below; the allOf branches only add `required`, never new properties, so they do not interact with this.",
+      "$strictness": "additionalProperties:false is deliberate and matches $defs/edge. Without it a typo like \"cdw\" instead of \"cwd\" validates clean and the node silently fails to resolve at runtime — the exact class of bug this schema exists to catch. Every field a node may carry is declared below; the allOf branch below only adds `required` (conditionally, via its provisional gate), never new properties, so it does not interact with this.",
       "properties": {
         "id": {
           "type": "string",
@@ -530,156 +530,175 @@
       },
       "allOf": [
         {
+          "$comment": "A node must declare its target UNLESS it is provisional.\n\nEvery branch below says \"a node of this kind points at something real, so name the thing\" — a store.repo has a path, a link.url has a url, an agent.code has a cwd and a launch. That is prime directive 1 and it stays.\n\nBut `provisional: true` is the board saying, in the one word it has for it, that this node does not point at anything yet: it renders as an unpopulated footprint, a TODO printed on the board, which is a real PCB convention and the whole reason the flag exists. Demanding a target from a node that has openly declared it has none is a contradiction, and it had a cost: services/node-factory.ts creates every new node unbound and provisional by design, so the \"+\" palette could not add a link, a repo, a backdrop, a build or an agent at all. The edit was rejected before it reached the board.\n\nSo the requirement is conditional on the claim. Bind it and it must resolve; mark it a TODO and it must look like one.",
           "if": {
-            "properties": {
-              "kind": {
-                "const": "agent.code"
-              }
+            "not": {
+              "properties": {
+                "provisional": {
+                  "const": true
+                }
+              },
+              "required": [
+                "provisional"
+              ]
             }
           },
           "then": {
-            "required": [
-              "cwd",
-              "launch"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "drive.room"
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "agent.code"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "cwd",
+                    "launch"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "drive.room"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "boardFile",
+                    "engraving"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "file.artifact"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "glob"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "store.repo",
+                        "store.folder",
+                        "file.document",
+                        "file.exe"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "path"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "link.url",
+                        "store.cloud",
+                        "agent.chat",
+                        "agent.jarvis"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "url"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "service.process"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "startCommand",
+                    "cwd"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "task.scheduled"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "schedule",
+                    "action"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "note.silk"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "text"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "decor.image"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "image"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "decor.part"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "part"
+                  ]
+                }
               }
-            }
-          },
-          "then": {
-            "required": [
-              "boardFile",
-              "engraving"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "file.artifact"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "glob"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "enum": [
-                  "store.repo",
-                  "store.folder",
-                  "file.document",
-                  "file.exe"
-                ]
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "path"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "enum": [
-                  "link.url",
-                  "store.cloud",
-                  "agent.chat",
-                  "agent.jarvis"
-                ]
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "url"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "service.process"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "startCommand",
-              "cwd"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "task.scheduled"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "schedule",
-              "action"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "note.silk"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "text"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "decor.image"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "image"
-            ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "decor.part"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "part"
             ]
           }
         }

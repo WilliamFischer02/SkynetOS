@@ -960,3 +960,36 @@ really is click-through) alongside it, so the guard cannot quietly start measuri
 
 Moving the button into the breadcrumb row was still right; the row is the only strip of chrome
 nothing else is drawn into. It just needed the same opt-in the drag badges use.
+
+## 2026-09-10 — `provisional` excuses a node from naming its target
+
+Reported: adding a link node was refused with "EDIT REJECTED — the result would not validate".
+It was not only link nodes. Fourteen of the sixteen kinds the "+" palette offers could not be
+added at all, which is to say the palette had never worked for anything but a note, a bracket and
+a decor part.
+
+Two rules, each right on its own, contradicted each other:
+
+- `services/node-factory.ts` creates a new node UNBOUND and `provisional: true` on purpose. Prime
+  directive 1 says never fabricate a target, so a new repo node points at nothing and says so.
+- `schema/board.schema.json` required every kind to declare its target — a `link.url` has a `url`,
+  a `store.repo` has a `path`, an `agent.code` has a `cwd` and a `launch`.
+
+So the factory produced a node the schema would never accept. The command bus validates before it
+writes, correctly, and every add died there.
+
+The requirement is now conditional on the claim: the whole `allOf` is gated behind "this node has
+not declared itself provisional". Bind a node and it must resolve; mark it a TODO and it must look
+like one. `provisional` is the one word the board has for "nothing is fitted to this footprint
+yet" — demanding a target from a node that has openly declared it has none was the contradiction.
+
+The exemption is deliberately narrow, and `test/new-node.test.ts` is mostly about the narrowness:
+`provisional` excuses a node from its target field and NOTHING else. An unknown property, a kind
+that does not exist, a malformed id are all still refused with the flag set. The other half of
+that test runs the real `makeNode` for every kind in `NODE_KINDS` against the real schema, so a
+kind added later with a new required field is caught here rather than by a user clicking "+".
+
+Rejected: making the factory invent placeholder targets (`url: "https://example.com"`). It would
+have validated and it would have been a lie on the board — the exact thing prime directive 1 is
+there to stop. Also rejected: dropping the target requirements. They are what stops a node that
+silently resolves to nothing.
