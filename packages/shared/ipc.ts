@@ -162,6 +162,8 @@ export interface AppSettingsView {
   reducedMotion: boolean;
   streamMode: boolean;
   confirmAllLaunches: boolean;
+  plan: string | null;
+  tokenBudget: number | null;
 }
 
 /**
@@ -176,6 +178,16 @@ export interface SkynetApi {
   'display:info': () => DisplayInfo;
   'app:version': () => { app: string; electron: string; chrome: string; node: string };
   'settings:read': () => AppSettingsView;
+  /**
+   * Set the plan and/or an exact token budget. The ONLY settings write there is.
+   *
+   * docs/07 keeps settings user-only so the rules deciding what an agent may touch are not
+   * agent-writable. These two grant no access, allow no path and elevate nothing — they scale a
+   * meter — so they are the one thing worth a control instead of a JSON edit. Everything that
+   * does grant something is still file-only. See setUsagePlan in services/settings.ts.
+   */
+  'settings:setPlan': (plan: string | null, tokenBudget: number | null) =>
+    { ok: boolean; error?: string };
 
   // --- target resolution: "does this point at something real?" ---
   'target:resolveNode': (boardId: string, nodeId: string) => NodeStatus;
@@ -303,6 +315,7 @@ export const CHANNELS = [
   'display:info',
   'app:version',
   'settings:read',
+  'settings:setPlan',
   'target:resolveNode',
   'target:resolveBoard',
   'target:verify',

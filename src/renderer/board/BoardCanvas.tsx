@@ -39,6 +39,9 @@ import { SpriteStore, nameplateOffset } from './sprites.js';
 import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
 import { buildRouteGrid, routeAStar, type RouteObstacle } from './router.js';
 import { buildBrokenOverlay, buildSelectionOverlay, buildSilkNote, buildZone } from './silk-layer.js';
+import { measureTextBlock } from './text-plate.js';
+import { roomTitle, suffixSize } from '@shared/room-title.js';
+import { COPPER_DARK, resolveToken } from '@shared/palette.js';
 import { centreOn, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
 import {
   NO_DRAG,
@@ -447,7 +450,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const sprite = spriteById.get(node.id);
       if (sprite) {
         sprite.x = tile.x * TILE;
-        sprite.y = tile.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined);
+        sprite.y = tile.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined, titleSize(node));
       }
     };
 
@@ -484,13 +487,52 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     /* ---------------- drawing ---------------- */
 
+    /**
+     * A room drive prints its STEM plus an auto-appended `OS`. Everything else prints its name.
+     * Tolerant of the seeded boards, which store `MinecraftOS` — `roomStem` strips it either way.
+     */
+    const plateTitle = (node: BoardNode): string =>
+      node.kind === 'drive.room' ? roomTitle(node.name).stem : node.name;
+
+    /**
+     * The title's size. Only a room offers 22 — a component's nameplate at 22 is taller than the
+     * component, and the point of a room title is that it IS a heading.
+     */
+    const titleSize = (node: BoardNode): 11 | 22 =>
+      node.kind === 'drive.room' && node.size === 22 ? 22 : 11;
+
+    /**
+     * The suffix, styled: one size down, in copper-dark by default with a mask-dark outline.
+     *
+     * "a few shades darker, into gray, with a thin black stroke" — the locked palette has no true
+     * grey, so copper-dark is its darker desaturated tone and mask-dark is its near-black. Both
+     * are overridable per node with the ordinary text tokens.
+     */
+    const roomSuffixFor = (node: BoardNode) => {
+      if (node.kind !== 'drive.room') return null;
+      const { suffix } = roomTitle(node.name);
+      return {
+        text: suffix,
+        size: suffixSize(node.size === 22 ? 22 : 11),
+        color: resolveToken(node.textColor === undefined ? 'copper-dark' : node.textColor, board.theme, COPPER_DARK),
+        stroke: resolveToken(node.textStroke === undefined ? 'mask-dark' : node.textStroke, board.theme, board.theme.maskDark)
+      };
+    };
+
+    const nameStyleFor = (node: BoardNode) => ({
+      color: resolveToken(node.textColor, board.theme),
+      stroke: node.textStroke ? resolveToken(node.textStroke, board.theme, COPPER_DARK) : null,
+      plateFill: resolveToken(node.plateColor, board.theme, board.theme.maskLight),
+      plateBorder: resolveToken(node.plateBorder, board.theme, SILK)
+    });
+
     /** Put a node's sprite where the board data says it belongs. */
     const placeSprite = (nodeId: string): void => {
       const node = nodeById(nodeId);
       const sprite = spriteById.get(nodeId);
       if (!node || !sprite) return;
       sprite.x = node.pos.x * TILE;
-      sprite.y = node.pos.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined);
+      sprite.y = node.pos.y * TILE - nameplateOffset(displayOf(node).name ? node.name : undefined, titleSize(node));
     };
 
     /** Redraw one node's texture from whatever images it currently has. */
@@ -525,12 +567,15 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         w: fp.w,
         h: fp.h,
         designator: show.designator ? node.designator ?? '' : '',
-        name: show.name ? node.name : undefined,
+        name: show.name ? plateTitle(node) : undefined,
         kind: node.kind,
         maskLight: board.theme.maskLight,
         signal: board.theme.signal,
         face: show.thumbnail ? faces.get(nodeId)?.image ?? null : null,
-        logo: show.logo ? logos.get(nodeId)?.image ?? null : null
+        logo: show.logo ? logos.get(nodeId)?.image ?? null : null,
+        nameSize: titleSize(node),
+        nameStyle: nameStyleFor(node),
+        suffix: show.name ? roomSuffixFor(node) : null
       });
       placeSprite(nodeId);
     };
@@ -584,6 +629,18 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           drawNode(node.id);
         }).catch((err: unknown) => console.warn(`[mosaic] ${node.id} ${slot} failed`, err));
       }
+    };
+
+    /**
+     * The real on-screen size of a printed text node.
+     *
+     * William: "the bounding boxes of the text node does not expand to fit the text within."
+     * layout.ts is pure so it can be tested, and measuring text needs a canvas — so it takes this
+     * as a callback and falls back to arithmetic when nobody supplies one.
+     */
+    const measureNode = (node: BoardNode): { w: number; h: number } | null => {
+      if (node.kind !== 'note.silk') return null;
+      return measureTextBlock(node, board.theme);
     };
 
     const clearLayer = (layer: Container | null): void => {
@@ -684,13 +741,18 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       }
     };
 
-    const buildNotes = (): void => {
+    /** Text nodes whose glow is on, so the ticker knows which ones to re-render. */
+    let glowingNotes: string[] = [];
+
+    const buildNotes = (glowStep = 0): void => {
       if (!noteLayer) return;
       clearLayer(noteLayer);
+      glowingNotes = [];
       for (const node of board.nodes) {
         if (node.kind !== 'note.silk') continue;
-        const note = buildSilkNote(node);
+        const note = buildSilkNote(node, board.theme, node.textGlow ? glowStep : 0);
         if (note) noteLayer.addChild(note);
+        if (node.textGlow) glowingNotes.push(node.id);
       }
     };
 
@@ -835,7 +897,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const rebuild = (next: Board): void => {
       board = next;
       boardPx = boardPixelSize(board.grid);
-      rects = layoutRects(board, live.current.editMode);
+      rects = layoutRects(board, live.current.editMode, measureNode);
       buildTraces();
       buildZones();
       buildNodes();
@@ -934,6 +996,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         let pulse = 0;
         let lastPulseStep = -1;
         let lastGlowStep = -1;
+        let lastTextGlow = -1;
 
         app.ticker.add((ticker) => {
           const view = viewport();
@@ -1039,6 +1102,20 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             }
           }
 
+          /*
+           * The text pulse. Rebuilding the whole note layer per step is cheap — there are a
+           * handful of text nodes and the glyphs are cached by the silkscreen renderer — and it
+           * keeps one code path for "draw the notes" instead of two that can disagree.
+           */
+          if (glowingNotes.length && !live.current.reducedMotion) {
+            const step = Math.floor(pulse / 12) % 4;
+            const lift = step === 3 ? 1 : step === 0 ? 2 : step === 1 ? 1 : 0;
+            if (lift !== lastTextGlow) {
+              lastTextGlow = lift;
+              buildNotes(lift);
+            }
+          }
+
           if (animated.length && !live.current.reducedMotion) {
             const step = Math.floor(pulse / 30) % 2;
             if (step !== lastPulseStep) {
@@ -1056,7 +1133,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             lastEditMode = live.current.editMode;
             // Printed kinds become click targets in Edit Board mode, so the hit-test set changes
             // with the mode — see layoutRects.
-            rects = layoutRects(board, lastEditMode);
+            rects = layoutRects(board, lastEditMode, measureNode);
             buildGrid();
             rebuildOverlay();
           }

@@ -13,6 +13,7 @@
 
 import { PRIME_STEP_IDS } from './prime-steps.js';
 import { DECOR_PARTS } from './types.js';
+import { PALETTE_TOKENS } from './palette.js';
 import type { BoardNode, NodeKind } from './types.js';
 
 /**
@@ -95,6 +96,34 @@ const TRAILING: FieldSpec[] = [
     help: 'Draw the logo badge centred on the face. Independent of the wallpaper — a badge on a drawn package reads well, and so does a photograph with nothing over it.'
   },
   {
+    key: 'textColor', label: 'Text colour', control: 'select',
+    options: PALETTE_TOKENS,
+    help: "The colour this node's text is printed in. Palette tokens only — signal, mask-dark and mask-light take on whatever the ROOM's are, so a note keeps its room's accent when you look at it there."
+  },
+  {
+    key: 'textStroke', label: 'Text outline', control: 'select',
+    options: PALETTE_TOKENS,
+    help: 'A one-pixel outline stamped around every glyph. Use mask-dark for a near-black edge that keeps text readable over a busy backdrop. Leave unset for none.'
+  },
+  {
+    key: 'textPlate', label: 'Text plate', control: 'boolean',
+    help: 'Print the text on a rounded pixel box that sizes itself to the text. What keeps a legend readable where the board is busy — over traces, over a backdrop, under couriers.'
+  },
+  {
+    key: 'plateColor', label: 'Plate fill', control: 'select',
+    options: PALETTE_TOKENS,
+    help: "The plate's fill colour. Defaults to the room's mask-dark."
+  },
+  {
+    key: 'plateBorder', label: 'Plate border', control: 'select',
+    options: PALETTE_TOKENS,
+    help: "The plate's 1px border. Defaults to copper-dark."
+  },
+  {
+    key: 'textGlow', label: 'Text glow', control: 'boolean',
+    help: "Pulse the text brighter and back along the room's colour ramp. The same effect as the wallpaper pulse, applied to type. Stops under reduced motion."
+  },
+  {
     key: 'pulseGlow', label: 'Pulse glow', control: 'boolean',
     help: "Energy flowing outward from the centre of the wallpaper. A shift along the room's own brightness ramp rather than a translucent glow, so it stays exactly six colours and perfectly crisp. Needs a wallpaper; stops under reduced motion."
   },
@@ -169,7 +198,11 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
   'drive.room': [
     { key: 'boardFile', label: 'Board file', control: 'board-file', required: true, placeholder: 'minecraftos/room.board.json', help: 'The nested board this drive descends into, relative to board/.' },
     { key: 'engraving', label: 'Engraving', control: 'text', required: true, placeholder: 'MINECRAFTOS', help: 'Printed on the shield can. Uppercase, A-Z 0-9 and . _ - only, max 20.' },
-    { key: 'relation', label: 'Related room', control: 'text', placeholder: 'gameos', help: 'A board id. Shares that room\'s signal colour to show the two are connected.' }
+    { key: 'relation', label: 'Related room', control: 'text', placeholder: 'gameos', help: 'A board id. Shares that room\'s signal colour to show the two are connected.' },
+    {
+      key: 'size', label: 'Title size', control: 'select', options: ['11', '22'],
+      help: 'Departure Mono is pixel-exact at 11 and 22 only — there is no size in between, and a fractional one would be blurred. At 22 the auto-appended OS drops to 11 and is genuinely half the title; at 11 it stays 11 and reads as subordinate by colour and outline alone.'
+    }
   ],
   'store.repo': [
     { key: 'path', label: 'Repository path', control: 'path-dir', required: true, placeholder: 'C:/dev/TheStalker' },

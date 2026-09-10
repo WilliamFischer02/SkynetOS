@@ -5,11 +5,12 @@ import { DEFAULT_FOOTPRINT, isDecorPart } from '@shared/types.js';
 import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
-import { getSettings } from './services/settings.js';
+import { getSettings, setUsagePlan } from './services/settings.js';
 import { lastClaudeSessionId } from './services/db.js';
 import { resumeCommandLine } from './services/launch-args.js';
 import { mosaicForNode } from './services/mosaic.js';
-import { readUsage, usageRoutes } from './services/usage.js';
+import { clearUsageCache, readUsage, usageRoutes } from './services/usage.js';
+import { isPlanId } from '@shared/plans.js';
 import { archiveMail, listMail, sendMail } from './services/mailbox.js';
 import {
   listSessions,
@@ -80,8 +81,22 @@ const handlers: Handlers = {
       devRoots: s.devRoots,
       reducedMotion: s.reducedMotion,
       streamMode: s.streamMode,
-      confirmAllLaunches: s.confirmAllLaunches
+      confirmAllLaunches: s.confirmAllLaunches,
+      plan: s.plan,
+      tokenBudget: s.tokenBudget
     };
+  },
+
+  'settings:setPlan': (plan, tokenBudget) => {
+    const result = setUsagePlan(
+      plan !== null && isPlanId(plan) ? plan : null,
+      tokenBudget
+    );
+    // The usage cache holds per-window scans; the budget does not affect them, but the window
+    // length can change with a settings reload, so it is cleared rather than left to go subtly
+    // stale.
+    if (result.ok) clearUsageCache();
+    return result;
   },
 
   'target:resolveNode': (boardId, nodeId) => ({

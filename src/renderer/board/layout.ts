@@ -55,9 +55,14 @@ function printedTextRect(node: BoardNode): { w: number; h: number } {
   };
 }
 
-export function nodeRect(node: BoardNode): NodeRect {
+/** Measures a node's real drawn size. Supplied by the renderer, which has a canvas. */
+export type MeasureNode = (node: BoardNode) => { w: number; h: number } | null;
+
+export function nodeRect(node: BoardNode, measure?: MeasureNode): NodeRect {
   if (node.kind === 'note.silk' && !node.footprint) {
-    const box = printedTextRect(node);
+    // Measured when the caller can measure, estimated when it cannot. The estimate is only ever
+    // seen by tests and by code paths with no canvas; on screen the grab box is exact.
+    const box = measure?.(node) ?? printedTextRect(node);
     return {
       nodeId: node.id,
       kind: node.kind,
@@ -83,10 +88,10 @@ export function nodeRect(node: BoardNode): NodeRect {
  *
  * `includePrinted` is Edit Board mode. See PRINTED_ONLY for why it is not simply always on.
  */
-export function layoutRects(board: Board, includePrinted = false): NodeRect[] {
+export function layoutRects(board: Board, includePrinted = false, measure?: MeasureNode): NodeRect[] {
   return board.nodes
     .filter((n) => includePrinted || !PRINTED_ONLY.has(n.kind))
-    .map(nodeRect);
+    .map((n) => nodeRect(n, measure));
 }
 
 function contains(rect: NodeRect, x: number, y: number): boolean {

@@ -35,6 +35,8 @@ export interface PlaceholderSpec {
   designator: string;
   /** The node's name. Printed on a nameplate above the package, always on ONE line. */
   name?: string;
+  /** Title size. 11 or 22 — the only two this pixel font is exact at. */
+  nameSize?: 11 | 22;
   /** The node kind, which decides the package silhouette. See component-art.ts. */
   kind: NodeKind;
   /** The current room's mask-light. Stands in for @mask-light until the M2 palette shader lands. */
@@ -52,10 +54,38 @@ export interface PlaceholderSpec {
    * logoBoxTiles(fp)*16 on a side. It keeps its transparency, so the wallpaper shows around it.
    */
   logo?: HTMLImageElement | null;
+  /**
+   * How the nameplate is printed: colour, outline, plate. Resolved from the node's own tokens
+   * against the room's theme, so a title styled `signal` is the room's accent wherever it is.
+   */
+  nameStyle?: NameplateStyle;
+  /**
+   * The auto-appended room suffix — `OS` — drawn smaller and darker after the title.
+   *
+   * A `drive.room` stores the STEM (`Minecraft`) and the board prints `MinecraftOS`. The suffix is
+   * not editable because it is not data; it is a convention. See packages/shared/room-title.ts,
+   * which also explains why it is not the 75% size that was asked for.
+   */
+  suffix?: { text: string; size: 11 | 22; color: string; stroke: string | null } | null;
 }
 
-/** Height of the nameplate strip above a package, in px. One line of 11px silkscreen plus edges. */
+/** The resolved styling for a nameplate, from the node's palette tokens. */
+export interface NameplateStyle {
+  color: string;
+  stroke: string | null;
+  plateFill: string;
+  plateBorder: string;
+}
+
+/** Height of the nameplate strip above a package, in px. One line of silkscreen plus edges. */
 export const NAMEPLATE_HEIGHT = 15;
+
+/** The taller strip a 22px title needs. Same edges, twice the type. */
+export const NAMEPLATE_HEIGHT_22 = 27;
+
+export function nameplateHeight(size: 11 | 22): number {
+  return size === 22 ? NAMEPLATE_HEIGHT_22 : NAMEPLATE_HEIGHT;
+}
 
 /**
  * The 2px raised bevel every component and every badge wears.
@@ -102,8 +132,8 @@ export function drawBevel(
  * The renderer needs this to place the sprite; the footprint itself is unchanged, so collisions,
  * routing and hit-testing all still work on the grid the board data describes.
  */
-export function nameplateOffset(name: string | undefined): number {
-  return name && name.trim() ? NAMEPLATE_HEIGHT : 0;
+export function nameplateOffset(name: string | undefined, size: 11 | 22 = 11): number {
+  return name && name.trim() ? nameplateHeight(size) : 0;
 }
 
 /**
@@ -354,16 +384,28 @@ export class SpriteStore {
         ?? (spec.face as HTMLCanvasElement).dataset?.['glowKey']
         ?? 'canvas'
       : 0;
-    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.maskLight}:${spec.signal}:${faceKey}:${spec.logo?.src.length ?? 0}`;
+    const styleKey = spec.nameStyle ? `${spec.nameStyle.color}|${spec.nameStyle.stroke ?? ''}|${spec.nameStyle.plateFill}|${spec.nameStyle.plateBorder}` : '';
+    const suffixKey = spec.suffix ? `${spec.suffix.text}|${spec.suffix.size}|${spec.suffix.color}|${spec.suffix.stroke ?? ''}` : '';
+    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.nameSize ?? 11}:${spec.maskLight}:${spec.signal}:${faceKey}:${spec.logo?.src.length ?? 0}:${styleKey}:${suffixKey}`;
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 
     const bodyW = Math.max(TILE, spec.w * TILE);
     const bodyH = Math.max(TILE, spec.h * TILE);
 
-    const plate = name ? renderSilkText(name, 11, SILK) : null;
-    const plateH = plate ? NAMEPLATE_HEIGHT : 0;
-    const plateW = plate ? plate.width + 6 : 0;
+    const nameSize = spec.nameSize === 22 ? 22 : 11;
+    const nameColor = spec.nameStyle?.color ?? SILK;
+    const plate = name ? renderSilkText(name, nameSize, nameColor) : null;
+    /*
+     * The room suffix, drawn after the title at one size down and in its own colour. `drive.room`
+     * nodes store `Minecraft` and the board prints `MinecraftOS` — see shared/room-title.ts.
+     */
+    const suffixText = spec.suffix ? renderSilkText(spec.suffix.text, spec.suffix.size, spec.suffix.color) : null;
+    const suffixOutline = spec.suffix?.stroke
+      ? renderSilkText(spec.suffix.text, spec.suffix.size, spec.suffix.stroke)
+      : null;
+    const plateH = plate ? nameplateHeight(nameSize) : 0;
+    const plateW = plate ? plate.width + (suffixText ? suffixText.width + 1 : 0) + 6 : 0;
 
     const width = Math.max(bodyW, plateW);
     const height = bodyH + plateH;
@@ -377,14 +419,35 @@ export class SpriteStore {
 
     // --- nameplate, above the package, one line, whatever the name's length ---
     if (plate) {
-      ctx.fillStyle = spec.maskLight;
+      ctx.fillStyle = spec.nameStyle?.plateFill ?? spec.maskLight;
       ctx.fillRect(0, 0, plateW, plateH - 2);
-      ctx.fillStyle = SILK;
+      ctx.fillStyle = spec.nameStyle?.plateBorder ?? SILK;
       ctx.fillRect(0, 0, plateW, 1);
       ctx.fillRect(0, plateH - 3, plateW, 1);
       ctx.fillRect(0, 0, 1, plateH - 2);
       ctx.fillRect(plateW - 1, 0, 1, plateH - 2);
-      ctx.drawImage(plate.canvas, 3, Math.floor((plateH - 2 - plate.height) / 2));
+      const nameY = Math.floor((plateH - 2 - plate.height) / 2);
+      if (spec.nameStyle?.stroke) {
+        // Same eight-way stamp as a text node's outline. Whole pixels only; see text-plate.ts.
+        const outline = renderSilkText(name, nameSize, spec.nameStyle.stroke);
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          ctx.drawImage(outline.canvas, 3 + (dx as number), nameY + (dy as number));
+        }
+      }
+      ctx.drawImage(plate.canvas, 3, nameY);
+
+      if (suffixText) {
+        // Baseline-aligned, not top-aligned: a smaller suffix hung from the top of the strip
+        // would float above the title instead of sitting on the same line as it.
+        const suffixY = nameY + plate.height - suffixText.height;
+        const suffixX = 3 + plate.width + 1;
+        if (suffixOutline) {
+          for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+            ctx.drawImage(suffixOutline.canvas, suffixX + (dx as number), suffixY + (dy as number));
+          }
+        }
+        ctx.drawImage(suffixText.canvas, suffixX, suffixY);
+      }
       // A short stem down to the package, so the plate reads as belonging to it.
       ctx.fillStyle = COPPER_DARK;
       ctx.fillRect(Math.min(plateW, bodyW) >> 1, plateH - 3, 1, 3);

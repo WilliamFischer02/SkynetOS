@@ -105,7 +105,7 @@
       "id": "d1_minecraftos",
       "designator": "D1",
       "kind": "drive.room",
-      "name": "MinecraftOS",
+      "name": "Minecraft",
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
@@ -122,13 +122,14 @@
         "streaming"
       ],
       "image": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg",
-      "showDesignator": false
+      "showDesignator": false,
+      "size": 22
     },
     {
       "id": "d2_deductionos",
       "designator": "D2",
       "kind": "drive.room",
-      "name": "DeductionOS",
+      "name": "Deduction",
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
@@ -144,13 +145,14 @@
         "observation",
         "memory"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/deduction-bg.jpg"
+      "image": "C:/dev/SkynetOS/assets/sprites/deduction-bg.jpg",
+      "size": 22
     },
     {
       "id": "d3_storyos",
       "designator": "D3",
       "kind": "drive.room",
-      "name": "StoryOS",
+      "name": "Story",
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
@@ -166,13 +168,14 @@
         "novel",
         "screenplay"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/writing-cover.jpg"
+      "image": "C:/dev/SkynetOS/assets/sprites/writing-cover.jpg",
+      "size": 22
     },
     {
       "id": "d4_gameos",
       "designator": "D4",
       "kind": "drive.room",
-      "name": "GameOS",
+      "name": "Game",
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
@@ -188,7 +191,8 @@
         "engine",
         "handheld"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg"
+      "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
+      "size": 22
     },
     {
       "id": "u2_agent_skynet",
@@ -275,7 +279,10 @@
         "y": 1
       },
       "text": "SKYNETOS  REV A  //  GOOB ENTERTAINMENT CO.",
-      "size": 11
+      "size": 11,
+      "textColor": "signal",
+      "textGlow": true,
+      "textStroke": "mask-dark"
     },
     {
       "id": "n2_jarvis_label",
@@ -290,7 +297,12 @@
       "footprint": {
         "w": 1,
         "h": 1
-      }
+      },
+      "textPlate": true,
+      "plateColor": "mask-dark",
+      "plateBorder": "copper",
+      "textColor": "silk",
+      "textStroke": "mask-dark"
     },
     {
       "id": "j1_github",

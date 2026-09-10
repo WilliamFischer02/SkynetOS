@@ -102,6 +102,38 @@ export function getSettings(): Settings {
   return cached;
 }
 
+/**
+ * Write the two usage-metering settings, and ONLY those two.
+ *
+ * docs/07: "Modify settings, allowlists, or elevation policy — Never. Settings are user-only." That
+ * rule exists so the thing deciding what an agent may touch is not itself agent-writable, and it
+ * is why there has never been a `settings:write` channel.
+ *
+ * This does not weaken it. `plan` and `tokenBudget` decide how a meter is SCALED. They grant no
+ * access, allow no path, and elevate nothing — every field that does (devRoots,
+ * confirmAllLaunches) is untouched here and remains editable only by opening the file. A general
+ * settings writer would have been the wrong shape; this is a control for one display preference
+ * that a user should not have to edit JSON to set.
+ */
+export function setUsagePlan(plan: PlanId | null, tokenBudget: number | null): { ok: boolean; error?: string } {
+  const current = getSettings();
+  const next: Settings = {
+    ...current,
+    plan: plan !== null && isPlanId(plan) ? plan : null,
+    tokenBudget: tokenBudget !== null && Number.isFinite(tokenBudget) && tokenBudget > 0
+      ? Math.round(tokenBudget)
+      : null
+  };
+  try {
+    mkdirSync(app.getPath('userData'), { recursive: true });
+    writeFileSync(settingsFile(), JSON.stringify(next, null, 2) + '\n', 'utf8');
+    cached = next;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `COULD NOT WRITE ${settingsFile()} — ${(err as Error).message}` };
+  }
+}
+
 /** Forget the cache so the next read picks up a hand-edited file. */
 export function reloadSettings(): Settings {
   cached = null;

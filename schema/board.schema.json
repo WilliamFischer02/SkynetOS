@@ -440,6 +440,72 @@
           "type": "boolean",
           "default": false,
           "description": "Animate the wallpaper as a wave of energy travelling outward from the node's centre. A palette shift along the room's own six-colour brightness ramp, not a translucent glow — see src/renderer/board/glow.ts. Costs one set of precomputed frames per image; off under reducedMotion."
+        },
+        "textColor": {
+          "enum": [
+            "silk",
+            "copper",
+            "copper-dark",
+            "signal",
+            "mask-light",
+            "mask-dark",
+            "ok",
+            "warn",
+            "fault"
+          ],
+          "description": "Colour of this node's printed text. A palette token, never a hex string — signal/mask-dark/mask-light mean something different in every room, and a hex value can be off-palette."
+        },
+        "textStroke": {
+          "enum": [
+            "silk",
+            "copper",
+            "copper-dark",
+            "signal",
+            "mask-light",
+            "mask-dark",
+            "ok",
+            "warn",
+            "fault"
+          ],
+          "description": "A 1px outline stamped around every glyph, in this token. Omit for none."
+        },
+        "textPlate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Print the text on a plate: a filled box with a 1px border and its corner pixels omitted, sized to the text. Keeps a legend readable where the board is busy."
+        },
+        "plateColor": {
+          "enum": [
+            "silk",
+            "copper",
+            "copper-dark",
+            "signal",
+            "mask-light",
+            "mask-dark",
+            "ok",
+            "warn",
+            "fault"
+          ],
+          "description": "The plate's fill. Defaults to the room's mask-dark."
+        },
+        "plateBorder": {
+          "enum": [
+            "silk",
+            "copper",
+            "copper-dark",
+            "signal",
+            "mask-light",
+            "mask-dark",
+            "ok",
+            "warn",
+            "fault"
+          ],
+          "description": "The plate's border. Defaults to copper-dark."
+        },
+        "textGlow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pulse the text brighter and back along the room's own colour ramp. Off under reducedMotion."
         }
       },
       "allOf": [

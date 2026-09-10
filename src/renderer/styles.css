@@ -35,7 +35,15 @@
    * prime-step list, and at 360 every one of those wrapped. A wider rail is fewer lines, not more
    * chrome — and the board reclaims the whole width the moment nothing is selected.
    */
-  --inspector-width: calc(440 * var(--p));
+  --inspector-width: calc(520 * var(--p));
+  /*
+   * The rail's own type scale, a step above the board's silkscreen.
+   *
+   * The HUD and the board are read at a glance; the inspector is READ. 11px is right for a
+   * component label three tiles wide and too small for a paragraph of help text and a column of
+   * paths — so the rail runs a size up and everything inside it inherits.
+   */
+  --f-rail: calc(13px * var(--ui-scale));
 
   /* SKYNET root theme. M2 swaps these per room alongside the palette shader. */
   --mask-dark: #0e1a14;
@@ -315,6 +323,8 @@ canvas {
 /* ---------- inspector ---------- */
 
 .inspector {
+  font-size: var(--f-rail);
+  line-height: calc(17 * var(--p));
   position: absolute;
   top: 0;
   right: 0;
@@ -407,7 +417,7 @@ canvas {
 .editor { display: flex; flex-direction: column; gap: calc(2.5 * var(--gap)); }
 .editor-head { display: flex; justify-content: space-between; color: var(--copper-dark); text-transform: uppercase; }
 
-.field { display: flex; flex-direction: column; gap: calc(0.75 * var(--gap)); }
+.field { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: var(--gap); }
 .field-label { display: flex; align-items: baseline; cursor: help; }
 .field-label { color: var(--copper); text-transform: uppercase; }
 .field-label .req { color: var(--fault); }
@@ -1097,3 +1107,83 @@ canvas {
 }
 
 .part-name { text-transform: uppercase; font-size: calc(var(--f) * 0.9); text-align: center; }
+
+/* ---------- room name: an editable stem with a fixed suffix ---------- */
+
+.room-name { display: flex; align-items: stretch; }
+.room-name .input { flex: 1 1 auto; min-width: 0; }
+
+/*
+ * The suffix is deliberately styled to look like part of the field but not like an input: it is
+ * appended by the board, not typed, and a control you can click into but not change is worse than
+ * one that plainly is not a control.
+ */
+.room-suffix {
+  display: flex;
+  align-items: center;
+  padding: 0 calc(2 * var(--gap));
+  color: var(--copper-dark);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+  border-left: 0;
+  cursor: help;
+  user-select: none;
+}
+
+/* ---------- plan dialog ---------- */
+
+.plan-dialog {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 2 * var(--gap));
+  width: calc(360 * var(--p));
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--gap));
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+}
+
+.plan-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  color: var(--copper);
+  text-transform: uppercase;
+  padding-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+.plan-head .btn.tiny { margin-left: auto; }
+
+.plan-note { margin: 0; color: var(--silk); }
+.plan-form { display: flex; flex-direction: column; gap: var(--gap); }
+
+.plan-reading { color: var(--copper-dark); }
+.plan-reading.ok { color: var(--signal); }
+.plan-reading code { color: var(--copper); }
+
+.plan-choices { display: flex; flex-direction: column; gap: var(--gap); }
+.plan-choices .btn { display: flex; align-items: baseline; gap: var(--gap); }
+.plan-budget { margin-left: auto; color: var(--copper-dark); }
+.plan-match { color: var(--signal); text-transform: none; }
+
+.plan-calibration { display: flex; flex-direction: column; gap: var(--gap); }
+.plan-foot { color: var(--copper-dark); border-top: var(--p) solid var(--copper-dark); padding-top: var(--gap); }
+
+/* SET A PLAN is a control, so it looks like one. */
+.usage-unset.link {
+  font: inherit;
+  color: var(--warn);
+  background: none;
+  border: 0;
+  border-bottom: var(--p) dashed var(--warn);
+  padding: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.usage-unset.link:hover { color: var(--signal); border-bottom-color: var(--signal); }
+.usage-plan[role="button"] { cursor: pointer; }
+.usage-plan[role="button"]:hover { color: var(--signal); border-color: var(--signal); }

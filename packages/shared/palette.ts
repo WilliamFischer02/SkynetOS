@@ -95,3 +95,70 @@ export function hexToRgb(hex: string): [number, number, number] {
 export function hexToNumber(hex: string): number {
   return parseInt(hex.slice(1), 16);
 }
+
+/* ────────────────────────── naming a colour from board JSON ────────────────────────── */
+
+/**
+ * The colours a board file is allowed to name.
+ *
+ * Board JSON says `"textColor": "signal"`, never `"#7FE0B0"`. Two reasons, and the second is the
+ * one that matters:
+ *
+ *   1. A hex string in a board file is a colour that can be off-palette, and docs/02 treats an
+ *      off-palette pixel as a crash-severity bug. A token cannot be.
+ *   2. `signal`, `mask-dark` and `mask-light` MEAN something different in every room. A note that
+ *      says "signal" stays the room's own accent when its board is opened in MinecraftOS; a note
+ *      that said `#7FE0B0` would carry SkynetOS's green into a room that is not green.
+ */
+export const PALETTE_TOKENS = [
+  'silk', 'copper', 'copper-dark', 'signal', 'mask-light', 'mask-dark', 'ok', 'warn', 'fault'
+] as const;
+export type PaletteToken = (typeof PALETTE_TOKENS)[number];
+
+export function isPaletteToken(value: string): value is PaletteToken {
+  return (PALETTE_TOKENS as readonly string[]).includes(value);
+}
+
+/** Resolve a token against a room's theme. Anything unrecognised falls back to silk. */
+export function resolveToken(
+  token: string | undefined,
+  theme: { maskDark: string; maskLight: string; signal: string },
+  fallback: string = SILK
+): string {
+  switch (token) {
+    case 'silk': return SILK;
+    case 'copper': return COPPER;
+    case 'copper-dark': return COPPER_DARK;
+    case 'signal': return theme.signal;
+    case 'mask-light': return theme.maskLight;
+    case 'mask-dark': return theme.maskDark;
+    case 'ok': return OK;
+    case 'warn': return WARN;
+    case 'fault': return FAULT;
+    default: return fallback;
+  }
+}
+
+/**
+ * The room's six colours ordered dark to light — the ramp everything else brightens along.
+ *
+ * One definition, used by the mosaic dither in main, the pulse glow in the renderer, and the text
+ * glow. They have to agree exactly: a shift computed against a different ordering maps a pixel to
+ * a colour the dither never intended, and the image changes hue instead of brightening.
+ */
+export function themeRampHex(theme: { maskDark: string; maskLight: string; signal: string }): string[] {
+  const luma = (hex: string): number => {
+    const [r, g, b] = hexToRgb(hex);
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  };
+  return [theme.maskDark, theme.maskLight, COPPER_DARK, COPPER, theme.signal, SILK]
+    .sort((a, b) => luma(a) - luma(b));
+}
+
+/** One rung brighter along the room's ramp. Saturates at silk. */
+export function brighten(hex: string, steps: number, theme: { maskDark: string; maskLight: string; signal: string }): string {
+  const ramp = themeRampHex(theme);
+  const i = ramp.indexOf(hex);
+  if (i === -1) return hex;
+  return ramp[Math.min(ramp.length - 1, Math.max(0, i + steps))] ?? hex;
+}

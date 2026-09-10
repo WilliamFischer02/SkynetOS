@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { UsageSummary } from '@shared/usage.js';
 import { formatDuration, formatTokens, fraction, readout, weightedTokens } from '@shared/usage.js';
 import { PLAN_SPECS, planFromPeak, type PlanId } from '@shared/plans.js';
+import { PlanDialog } from './PlanDialog.js';
 
 /**
  * The usage meter, top-left, always on.
@@ -41,14 +42,19 @@ function Bar({ fill, level, unknown }: { fill: number; level: string; unknown?: 
 }
 
 export function UsageMeter(): React.JSX.Element | null {
+  // Held so the dialog can force an immediate re-read after it writes, instead of leaving the
+  // meter showing the old budget for up to twenty seconds.
+  const refreshRef = useRef<() => void>(() => undefined);
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     let live = true;
     const pull = () => {
       void window.skynet['usage:summary']().then((next) => { if (live) setSummary(next); });
     };
+    refreshRef.current = pull;
     pull();
     // Usage moves on the scale of minutes, and a scan touches every conversation file on disk.
     // Polling this faster would cost more than the freshness is worth.
@@ -108,6 +114,10 @@ export function UsageMeter(): React.JSX.Element | null {
         <span className="usage-window">{summary.windowHours}H</span>
         {plan ? (
           <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); setAsking(true); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setAsking(true); } }}
             className={summary.budgetSource === 'plan' ? 'usage-plan est' : 'usage-plan'}
             title={
               summary.budgetSource === 'plan'
@@ -134,7 +144,16 @@ export function UsageMeter(): React.JSX.Element | null {
           <span className="meter-label">POOL LEFT</span>
           <span className="meter-value">
             {remainingTokens === null
-              ? <span className="usage-unset">SET A PLAN</span>
+              ? (
+                <button
+                  type="button"
+                  className="usage-unset link"
+                  onClick={() => setAsking(true)}
+                  title="SkynetOS cannot read your subscription allowance — nothing local reports it. Tell it which plan you are on and this becomes a real number."
+                >
+                  SET A PLAN
+                </button>
+              )
               : <>{formatTokens(remainingTokens)}<span className="meter-unit"> of {formatTokens(budget as number)}</span></>}
           </span>
         </div>
@@ -152,6 +171,15 @@ export function UsageMeter(): React.JSX.Element | null {
         </div>
         <Bar fill={timeFill} level={level(timeFill, true)} unknown={remainingHours === null} />
       </div>
+
+      {asking ? (
+        <PlanDialog
+          peakWindowTokens={summary.peakWindowTokens}
+          windowHours={summary.windowHours}
+          onClose={() => setAsking(false)}
+          onSaved={() => refreshRef.current()}
+        />
+      ) : null}
 
       {open ? (
         <div className="usage-drawer">
@@ -183,10 +211,9 @@ export function UsageMeter(): React.JSX.Element | null {
                   : <>Not close enough to any plan&apos;s estimate to say which. An account that has never come near its limit has not revealed it.</>
               ) : <>No history yet.</>}
             </p>
-            <p className="usage-note dim">
-              Set <code>&quot;plan&quot;: &quot;max-20x&quot;</code> or an exact <code>&quot;tokenBudget&quot;</code> in
-              %APPDATA%/SkynetOS/settings.json. A number always wins over a plan estimate.
-            </p>
+            <button type="button" className="btn" onClick={() => setAsking(true)}>
+              {summary.plan ? 'Change plan…' : 'Set my plan…'}
+            </button>
           </div>
 
           <div className="usage-foot">

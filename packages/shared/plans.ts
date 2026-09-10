@@ -149,3 +149,57 @@ export function planFromPeak(peakWindowTokens: number): PlanId | null {
   // More than 2.5x away from every plan means it matches none of them convincingly.
   return bestRatio <= Math.log(2.5) ? best : null;
 }
+
+/**
+ * Parse a plan out of whatever a person types.
+ *
+ * William asked for a prompt he can "input their plan into and it automatically parses the data
+ * from there", so this accepts the shapes people actually write: `Max 20x`, `max20`, `20x`,
+ * `claude max 20`, `pro`, `Claude Pro`. It also accepts a bare token count — `96000000`, `96M` —
+ * because "what my plan is" and "how many tokens I get" are the same question answered two ways.
+ *
+ * Returns what it understood AND what it did not, so the dialog can say "I read that as Max 20x"
+ * rather than silently picking something.
+ */
+export interface ParsedPlan {
+  plan: PlanId | null;
+  tokenBudget: number | null;
+  /** How the input was understood, for the dialog to echo back. */
+  reading: string;
+}
+
+export function parsePlanInput(raw: string): ParsedPlan {
+  const text = raw.trim().toLowerCase();
+  if (!text) return { plan: null, tokenBudget: null, reading: 'nothing — the meter will ask again' };
+
+  // An explicit token count wins: it is the least ambiguous thing anyone can type.
+  const tokens = /^([\d.,]+)\s*([kmb])?\s*(tokens?)?$/.exec(text);
+  if (tokens) {
+    const value = Number.parseFloat((tokens[1] ?? '').replace(/,/g, ''));
+    if (Number.isFinite(value) && value > 0) {
+      const scale = tokens[2] === 'b' ? 1e9 : tokens[2] === 'm' ? 1e6 : tokens[2] === 'k' ? 1e3 : 1;
+      const budget = Math.round(value * scale);
+      return { plan: 'custom', tokenBudget: budget, reading: `an exact budget of ${budget.toLocaleString()} weighted tokens per window` };
+    }
+  }
+
+  // "20x", "max 20", "max20x", "claude max 20x"
+  const multiple = /(\d+)\s*x?/.exec(text);
+  const mentionsMax = text.includes('max');
+  if (mentionsMax && multiple) {
+    const n = Number.parseInt(multiple[1] ?? '', 10);
+    if (n >= 15) return { plan: 'max-20x', tokenBudget: null, reading: 'Max 20x' };
+    if (n >= 3) return { plan: 'max-5x', tokenBudget: null, reading: 'Max 5x' };
+  }
+  if (mentionsMax) return { plan: 'max-20x', tokenBudget: null, reading: 'Max — assuming 20x, change it below if not' };
+  if (text.includes('pro')) return { plan: 'pro', tokenBudget: null, reading: 'Pro' };
+  if (text.includes('free')) return { plan: 'free', tokenBudget: null, reading: 'Free' };
+  if (multiple) {
+    const n = Number.parseInt(multiple[1] ?? '', 10);
+    if (n >= 15) return { plan: 'max-20x', tokenBudget: null, reading: 'Max 20x' };
+    if (n >= 3) return { plan: 'max-5x', tokenBudget: null, reading: 'Max 5x' };
+    if (n === 1) return { plan: 'pro', tokenBudget: null, reading: 'Pro' };
+  }
+
+  return { plan: null, tokenBudget: null, reading: `could not read "${raw.trim()}" — pick one below` };
+}

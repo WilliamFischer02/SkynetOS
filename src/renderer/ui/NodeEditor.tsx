@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { BoardNode } from '@shared/types.js';
 import { DEFAULT_FOOTPRINT, clampFootprint, footprintOf, maxFootprintFor } from '@shared/types.js';
+import { ROOM_SUFFIX, roomStem } from '@shared/room-title.js';
 import { fieldsFor, isTargetControl, missingRequired, type FieldSpec } from '@shared/node-fields.js';
 import { PRIME_STEPS, isPrimeStepId } from '@shared/prime-steps.js';
 import { TargetField } from './TargetField.js';
@@ -40,6 +41,13 @@ function toDraft(node: BoardNode): Draft {
     } else if (field.control === 'footprint') {
       const fp = footprintOf(node);
       draft[field.key] = `${fp.w}x${fp.h}`;
+    } else if (field.key === 'name' && node.kind === 'drive.room') {
+      /*
+       * A room's name field edits the STEM only. The board appends `OS` at draw time, so a title
+       * cannot end up as `MinecraftOSOS` and the suffix cannot be deleted by accident.
+       * `roomStem` is tolerant of the seeded boards, which stored the full `MinecraftOS`.
+       */
+      draft[field.key] = roomStem(String(value ?? ''));
     } else if (field.control === 'json') {
       draft[field.key] = value === undefined ? '' : JSON.stringify(value, null, 2);
     } else {
@@ -124,6 +132,11 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
     } else if (field.key === 'size') {
       const text = String(raw ?? '').trim();
       next = text ? Number(text) : undefined;
+    } else if (field.key === 'name' && node.kind === 'drive.room') {
+      // Stored without the suffix, whatever was typed. Someone who types "MinecraftOS" out of
+      // habit gets "Minecraft" stored and "MinecraftOS" drawn, which is what they meant.
+      const stem = roomStem(String(raw ?? ''));
+      next = stem ? stem : undefined;
     } else {
       const text = String(raw ?? '');
       next = text.trim() ? text.trim() : undefined;
@@ -195,7 +208,26 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
               {field.help ? <span className="field-hint" aria-hidden="true">?</span> : null}
             </label>
 
-            {field.control === 'boolean' ? (
+            {field.key === 'name' && node.kind === 'drive.room' ? (
+              <div className="room-name">
+                <input
+                  id={`f-${String(field.key)}`}
+                  className="input"
+                  type="text"
+                  spellCheck={false}
+                  value={String(value ?? '')}
+                  placeholder="Minecraft"
+                  disabled={saving}
+                  onChange={(e) => set(field.key, e.target.value)}
+                />
+                <span
+                  className="room-suffix"
+                  title="Appended automatically to every room title, and drawn one size down in copper-dark with a near-black outline. Not editable — it is a convention, not data."
+                >
+                  {ROOM_SUFFIX}
+                </span>
+              </div>
+            ) : field.control === 'boolean' ? (
               <label className="checkline">
                 <input
                   id={`f-${String(field.key)}`}

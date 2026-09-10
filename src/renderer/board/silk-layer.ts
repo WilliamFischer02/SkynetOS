@@ -8,19 +8,29 @@
  */
 
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
-import type { BoardNode } from '@shared/types.js';
+import type { BoardNode, BoardTheme } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
 import { SILK, hexToNumber, signalOf } from '@shared/palette.js';
 import { TILE } from './camera.js';
-import { renderSilkText, type SilkSize } from './silkscreen.js';
+import { renderSilkText } from './silkscreen.js';
+import { renderTextBlock, styleForNode } from './text-plate.js';
 
-/** One line of engraved text at a tile position. */
-export function buildSilkNote(node: BoardNode): Sprite | null {
-  const text = node.text?.trim();
+/**
+ * A block of engraved text at a tile position.
+ *
+ * Multi-line, and styled by the node: colour, a 1px outline, and an optional plate that sizes
+ * itself to the text. `glowStep` shifts the colour up the room's ramp for the text pulse.
+ *
+ * It used to be one line in silk, always, with no box — which is why `U1 - PRIMARY JURISDICTION`
+ * was unreadable wherever a trace or a backdrop ran under it.
+ */
+export function buildSilkNote(node: BoardNode, theme: BoardTheme, glowStep = 0): Sprite | null {
+  const text = (node.text ?? '').trim();
   if (!text) return null;
-  const size: SilkSize = node.size === 22 ? 22 : 11;
-  const rendered = renderSilkText(text, size, SILK);
-  const sprite = new Sprite(Texture.from(rendered.canvas));
+  const block = renderTextBlock(text, styleForNode(node, theme), theme, glowStep);
+  if (!block) return null;
+
+  const sprite = new Sprite(Texture.from(block.canvas));
   sprite.texture.source.scaleMode = 'nearest';
   sprite.x = node.pos.x * TILE;
   sprite.y = node.pos.y * TILE;

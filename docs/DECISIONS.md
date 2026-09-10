@@ -762,3 +762,65 @@ with WASD and with a drag, so the wheel had no job and did nothing when turned �
 broken, not as reserved. Plain wheel now zooms, anchored on the cursor rather than the viewport
 centre, which is the difference between magnifying a map and being thrown across one. Ctrl still
 works.
+
+## 2026-09-10 — Text is styleable, and a legend can sit on a plate
+
+Four things William asked for at once, all of them about type.
+
+**A plate.** `U1 — PRIMARY JURISDICTION: ALL` was printed straight onto the substrate, so it
+collided with traces, backdrops and couriers and became unreadable exactly where the board was
+busiest. `textPlate` draws a box behind it, measured from the rendered text every time — so it
+"adjusts to text length" by construction rather than by anyone maintaining a width. "Rounded" at
+1:1 means omitting the four corner pixels and stepping the border in by one; anything smoother is
+anti-aliasing.
+
+**A real bounding box.** A text node's hit box was arithmetic — characters times an assumed
+advance — so it never matched what was drawn. `layoutRects` now takes an optional measurement
+callback; the renderer passes one, and tests (which have no canvas) keep the estimate. Measured on
+screen, estimated only where measuring is impossible.
+
+**Colour, outline, glow.** `textColor`, `textStroke`, `textGlow`, plus `plateColor` and
+`plateBorder`. Every one is a palette TOKEN, never a hex string — partly because a hex value can be
+off-palette, but mainly because `signal`, `mask-dark` and `mask-light` mean something different in
+every room. A note styled `signal` keeps its own room's accent; one that said `#7FE0B0` would carry
+SkynetOS's green into a room that is not green.
+
+The outline is the glyphs stamped eight times, one pixel out in each direction, in the stroke
+colour. Crude and exact — `strokeText` and `shadowBlur` both anti-alias. The glow is the same
+palette shift the wallpaper pulse uses.
+
+## 2026-09-10 — Rooms store a stem; the board appends OS
+
+`drive.room` nodes now store `Minecraft` and the board prints `MinecraftOS`. The name field edits
+the stem only, so a title cannot become `MinecraftOSOS` and the suffix cannot be deleted by
+accident. `roomStem` is tolerant of the seeded boards, which stored the full name, so the migration
+happens by touching a node.
+
+**The part that could not be built as asked.** William wanted the `OS` at "about 75%" of the title.
+Departure Mono is a pixel font and is exact at 11px and 22px only (docs/02); 75% of 11 is 8.25,
+which means scaling a bitmap by a fraction — the precise thing anti-mush treats as crash-severity.
+The suffix therefore steps down to the next exact size, and `size` became offerable on a room so
+that step can exist: at a 22px title the OS is 11px and genuinely half; at 11 it stays 11 and reads
+as subordinate by colour and outline alone. The five root-board rooms were set to 22.
+
+"A few shades darker, into gray" is `copper-dark` with a `mask-dark` outline — the locked palette
+has no true grey, and adding one would change `MAX_COLORS_PER_FRAME`. Both are overridable per node
+with the ordinary text tokens.
+
+## 2026-09-10 — One settings write, and only one
+
+William: "the 'SET A PLAN' text should be clickable and open up a dialogue prompt."
+
+docs/07 says settings are user-only and there has deliberately never been a `settings:write`
+channel — so that the rules deciding what an agent may touch are not themselves agent-writable.
+
+`settings:setPlan` does not weaken that. It writes exactly two keys, `plan` and `tokenBudget`, and
+nothing else: they decide how a METER is SCALED, grant no access, allow no path and elevate
+nothing. Every field that does grant something — `devRoots`, `confirmAllLaunches` — is untouched
+and still requires opening the file. A general settings writer would have been the wrong shape.
+
+The dialog's primary control is free text, parsed: `Max 20x`, `max20`, `20x`, `Claude Pro`, or a
+bare `96M` if you would rather state the budget. It echoes back what it understood BEFORE you
+commit, and says so plainly when it understood nothing rather than picking something. It also
+offers the account's own measured peak as a budget, which is the one figure that is not an estimate
+at all.

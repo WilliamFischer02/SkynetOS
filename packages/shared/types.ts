@@ -6,6 +6,7 @@
  * the other changes in the same commit, or the "data before pixels" rule is already broken.
  */
 
+import type { PaletteToken } from './palette.js';
 import type { PrimeStepId } from './prime-steps.js';
 
 export type Hex = `#${string}`;
@@ -211,6 +212,35 @@ export interface BoardNode {
   showName?: boolean;
   showThumbnail?: boolean;
   showLogo?: boolean;
+
+  /* ── how this node's text is printed ────────────────────────────────────────────────────── */
+
+  /**
+   * Colour of the node's printed text — its `note.silk` body, or its nameplate.
+   *
+   * A palette TOKEN, never a hex string. `signal`, `mask-dark` and `mask-light` mean something
+   * different in every room, so a note that says "signal" keeps its room's own accent; one that
+   * said `#7FE0B0` would carry SkynetOS's green into a room that is not green. See palette.ts.
+   */
+  textColor?: PaletteToken;
+
+  /** A 1px outline stamped around every glyph, in this token's colour. Absent means none. */
+  textStroke?: PaletteToken;
+
+  /**
+   * Print the text on a plate: a filled box with a 1px border and its corner pixels omitted,
+   * sized to the text every time it is drawn. What keeps a legend readable where the board is
+   * busy — over traces, over a backdrop, under couriers.
+   */
+  textPlate?: boolean;
+  plateColor?: PaletteToken;
+  plateBorder?: PaletteToken;
+
+  /**
+   * Pulse the text brighter and back along the room's own colour ramp. The text equivalent of
+   * `pulseGlow`, and a palette shift for the same reason — docs/02 has no room for a halo.
+   */
+  textGlow?: boolean;
 
   /**
    * Animate the wallpaper as a wave of energy travelling outward from the node's centre.
