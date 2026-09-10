@@ -4,7 +4,7 @@ Rewritten at the end of every session. This is what the next agent reads first, 
 
 **Last session:** the launch was fixed — it had never worked — then a large feature pass.
 **Milestones done:** M0–M4, plus most of what M5 was going to be (usage telemetry, animation).
-**`npm run verify` is green: 400 tests.**
+**`npm run verify` is green: 450 tests.**
 
 ---
 
@@ -38,7 +38,22 @@ conversation id.
 after every mutation — so moving one node rebuilt the entire Pixi application. The app is now built
 once per ROOM and the scene is rebuilt in place. Dragging moves the sprite itself, not just a ghost.
 
-### 3. Everything else
+### 3. The art pipeline is finally on
+
+`ATLAS_URL` is wired and the atlas loads — 26 frames, all cut from the Kenney 1-bit sheet by
+`npm run assets:bake` and recoloured to the locked palette. `decor.part` is 21 pieces of board
+furniture (vias, screws, junctions, grilles, pad arrays, fiducials, five pulsing LEDs), placeable
+from the `N` palette, which shows each one's ACTUAL baked sprite rather than a redrawing of it.
+
+Two things had to change to get there, both worth knowing:
+- The baker now always writes an atlas. Vite's `?url` resolves at BUILD time and `assets/atlas` is
+  git-ignored, so a missing file was a build failure rather than a graceful degrade.
+- The atlas PNG is imported too. An emitted asset lives at a hashed path, so deriving its URL from
+  `meta.image` produced "The source image cannot be decoded" in the built app while dev worked.
+- The baker no longer skips a sprite in silence. A `source` missing its `type` baked nothing and
+  said nothing.
+
+### 4. Everything else
 
 - **Priming and briefings.** `prelaunch` (allowlisted ids, never shell strings), `briefing`,
   `readOnLaunch`, `addDirs` -> `claude --add-dir`.
@@ -107,3 +122,34 @@ once per ROOM and the scene is rebuilt in place. Dragging moves the sprite itsel
   works. Delete it, repoint it, or move it.
 - **M5 proper.** Heat, occupants, the activity feed and alerts are still unbuilt; telemetry and
   animation arrived early via the usage meter and the couriers.
+
+---
+
+## Added after the first handoff was written (same session)
+
+- **`showLogo`** splits from `showThumbnail`, so a badge can sit on a drawn package.
+- **Usage meter**: a bar per value, a `plan` setting, and a clickable dialog that parses free text
+  (`Max 20x`, `96M`). The Max-20x figure is calibrated from this machine's own 96.1M peak window;
+  see `docs/DECISIONS.md`. `settings:setPlan` is the ONLY settings write and touches exactly two
+  keys — do not widen it.
+- **`decor.image`** backdrops and **`decor.part`** furniture, both printed kinds.
+- **`pulseGlow`** on any node with a wallpaper, and **`textGlow`** on type. Both are palette shifts
+  along the room's own ramp, not translucent halos.
+- **The wheel zooms**, anchored on the cursor.
+- **Text plates**, `textColor` / `textStroke`, and a measured bounding box for text nodes.
+- **Rooms store a stem**; the board appends `OS` one size down and darker.
+- **`PRINTED_KINDS` is one shared list.** It used to be five copies of a predicate and adding a
+  kind meant finding all five. Add to the list, not to a condition.
+
+## Still not done
+
+- **A tilesheet-CELL palette.** `N` now shows 21 baked parts, which is most of the way there, but
+  picking an arbitrary cell and turning it into a sprite is still a manifest edit plus a bake.
+  `docs/09-ASSET-CATALOGUE.md` is the inventory; `tools/sheet-contact.mjs` is how you read
+  coordinates off a sheet without guessing.
+- **The component keys are still placeholders.** 12 of them. `component.chip_dip.idle` and friends
+  have no atlas entry, so every mounted node is still a drawn silhouette. The pipeline that would
+  fix that now demonstrably works — `decor.*` proves it end to end.
+- **The `@theme` key swap.** `@mask-dark` / `@mask-light` / `@signal` bake as reserved magenta and
+  the renderer does not swap them, so no sprite may use one yet. Needed before any sprite can take
+  a room's colour.
