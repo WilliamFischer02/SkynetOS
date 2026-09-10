@@ -99,8 +99,18 @@ describe('target controls', () => {
   });
 
   it('gives the kinds that point at nothing no primary target', () => {
-    for (const kind of ['note.silk', 'monitor.system'] as NodeKind[]) {
+    for (const kind of ['note.silk', 'monitor.system', 'group.zone', 'task.scheduled'] as NodeKind[]) {
       expect(primaryTargetField(kind)).toBeUndefined();
+    }
+  });
+
+  it("never treats the face image as a node's target", () => {
+    // `image` is pickable and verifiable like any path, but it is decoration. Clicking a
+    // note.silk must not "open" its picture, and the inspector must not report a decorative
+    // image as the thing the component is bound to.
+    for (const kind of NODE_KINDS) {
+      expect(primaryTargetField(kind)?.key).not.toBe('image');
+      expect(targetFieldsFor(kind).some((f) => f.key === 'image')).toBe(true);
     }
   });
 

@@ -139,7 +139,7 @@ export function Inspector(): React.JSX.Element | null {
             >
               {openLabel(node)}
             </button>
-            <button type="button" className="btn" onClick={() => beginEdit(node.id)}>Edit node (E)</button>
+            <button type="button" className="btn" onClick={() => beginEdit(node.id)}>Edit node (F2)</button>
           </div>
 
           <dl className="facts">

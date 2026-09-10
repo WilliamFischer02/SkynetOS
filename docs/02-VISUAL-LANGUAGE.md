@@ -74,6 +74,32 @@ Two things that follow directly from this and affect how you build the renderer:
 - **Theme keys.** Sprites bake three reserved key colors — `#FF00CC` (mask-dark), `#FF0099` (mask-light), `#FF00FF` (signal) — which a 3-entry exact-match palette shader swaps for the current room's theme at draw time. One atlas serves every room. The swap is exact-match only: no blending, no tinting math, no interpolation.
 - **Placeholders.** Any sprite key with no manifest entry draws as a flat `@mask-light` rectangle at the node's footprint with its reference designator in silkscreen. M0–M4 are built and usable with zero finished art. Never a broken-image icon, never a crash.
 
+### Node face images
+
+*(Added 2026-09-09.)* Any node may carry an `image`: a path to any picture on disk. It is not
+pasted onto the board — it is **re-drawn in the board's own material**.
+
+`src/main/services/mosaic.ts` downsamples it to the node's exact footprint, reduces it to a
+luminance ramp, and dithers it onto the room's six palette colours with a 4×4 Bayer matrix. The
+six are the room's `mask-dark`, `mask-light`, `copper-dark`, `copper`, `signal` and `silk`, sorted
+dark to light — which *is* the ramp. The result satisfies every anti-mush rule by construction:
+six exact palette colours, binary alpha, integer dimensions, dither instead of blur. It reads as
+a screen-printed component marking rather than a sticker.
+
+Verified: with two face images on screen, a colour census of the rendered board found **7 unique
+colours, every one an exact `skynet.gpl` entry**, with no intermediate values.
+
+The source file is never copied or modified. The board stores only the path, so it stays small
+and diffable, and a moved image renders the node broken like any other unresolved target. The
+mosaic is cached in `%APPDATA%/SkynetOS/thumbs/` keyed by path, mtime, size, footprint and theme —
+so the same picture in MinecraftOS and StoryOS are two different mosaics, and editing the source
+regenerates it.
+
+Reference designators are printed **with the node's name**: `U1 JARVIS`, not `U1`. The label wraps
+on spaces, after hyphens, and at camelCase boundaries, so `TruthQuestRetro` prints as
+`S1 TRUTH / QUEST / RETRO` on a 4×3 drive rather than being dropped. When nothing fits, the
+designator is what survives — it is how you refer to the node when talking to an agent.
+
 ## Grid & sizes
 
 - Base tile: **16×16 px** at 1x. All art authored at 1x.
@@ -135,6 +161,23 @@ These exist because the number one failure mode of a project like this is art th
 7. **No rotation off 90°.** Sprites rotate only in 90° steps. Diagonals are pre-drawn, never rotated.
 8. **Text is bitmap.** Departure Mono at 11/22px, or a Pixi BitmapFont. No sub-pixel antialiasing (`-webkit-font-smoothing: none`).
 9. **The window is not fractionally scaled.** On launch, read `screen.getPrimaryDisplay().scaleFactor` and call `webContents.setZoomFactor(1 / scaleFactor)`. Electron computes the renderer's `devicePixelRatio` as `osScaleFactor × zoomFactor`, so this drives it to exactly **1**: one CSS pixel becomes one device pixel and every integer camera zoom is exact at any OS scaling. Re-apply on the window's `moved` event, because a second monitor can have a different scale factor. Log the values.
+
+   > **Consequence for the DOM chrome, added 2026-09-09.** Forcing `devicePixelRatio` to 1 means
+   > one CSS pixel is one *device* pixel, so on a 200% display all the HTML chrome came out at
+   > half its intended physical size — 11px silkscreen rendered 11 device pixels tall instead of
+   > 22. Correct, and unreadable. The chrome therefore carries its own **integer** scale
+   > (`--ui-scale`, set from the same OS scale factor the board cancels); every chrome dimension
+   > is a whole multiple of it and every font size a whole multiple of 11px.
+   >
+   > Rule 8's `-webkit-font-smoothing: none` is also a **no-op on Windows** — Chromium renders
+   > text through DirectWrite and ignores it. A screenshot census found real LCD colour fringes
+   > in the HUD. The working controls are the Chromium switches `--disable-lcd-text` and
+   > `--disable-font-subpixel-positioning`, set in `src/main/index.ts` before any window exists.
+   > After that: **zero colour fringes** anywhere, measured. Glyph edges in the chrome still
+   > carry greyscale antialias blends, which the browser's text stack owns and we do not — so
+   > the palette-purity guarantee is scoped to the **canvas**, where it is verified pixel by
+   > pixel. Board silkscreen is thresholded to binary alpha in `renderSilkText` precisely so it
+   > never depends on any of this.
 
    > **Corrected 2026-09-09 (M0).** This rule used to say "snap to the nearest workable integer" zoom. That is not always possible: at Windows' 125%, `1.25 × N` is a whole number only for N ∈ {4, 8, 12}, so zoom 2 and zoom 3 — two of the three documented zoom levels — have no workable snap at all. Cancelling the OS scale instead of constraining the zoom fixes every scale factor with one line. Confirmed in the M0 smoke capture: on this machine, at OS scaling **200%**, `devicePixelRatio` reads 1 and the rendered board contains exactly four colours, all exact palette entries, at zoom 2x, 3x and 4x.
 10. **Screenshot diff test.** A Playwright test renders a fixture board and pixel-diffs it against a golden PNG at 0% tolerance. Any accidental filter or resample breaks it loudly.

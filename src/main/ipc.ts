@@ -5,6 +5,7 @@ import { findNode, listBoards, loadBoard } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
 import { getSettings } from './services/settings.js';
+import { mosaicForNode } from './services/mosaic.js';
 import { openTarget } from './services/shell-opener.js';
 import { resolveNodeTarget, resolveValue } from './services/target-resolver.js';
 
@@ -72,6 +73,14 @@ const handlers: Handlers = {
   'target:verify': (control, value, context) => resolveValue(control, value, context as BoardNode | undefined),
 
   'pick:target': (request) => pick(request),
+
+  'mosaic:forNode': (boardId, nodeId) => {
+    const load = loadBoard(boardId);
+    if (!load.ok) return { ok: false, error: load.error };
+    const node = findNode(load.board, nodeId);
+    if (!node) return { ok: false, error: `NO SUCH NODE — "${nodeId}"` };
+    return mosaicForNode(load.board, node);
+  },
 
   'node:open': async (boardId, nodeId) => {
     const result = await openTarget(nodeOrThrow(boardId, nodeId));

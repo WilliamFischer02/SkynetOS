@@ -124,6 +124,11 @@
         "relation": {
           "type": "string",
           "description": "A board id. On a group.zone, draws the zone outline in that board's signal colour, marking this cluster as related to that room. Colour only — no behaviour."
+        },
+
+        "image": {
+          "type": "string",
+          "description": "Path to any image on disk. It is downsampled to the node's footprint and dithered onto the room's six palette colours, then drawn as the component's face. The source file is never copied or modified; the mosaic is cached in userData and regenerated when the file changes. If the file moves, the node renders broken like any other unresolved target."
         }
       },
       "allOf": [

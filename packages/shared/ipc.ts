@@ -60,6 +60,14 @@ export interface OpenTargetResult {
   error?: string;
 }
 
+/**
+ * A node's face image, downsampled and dithered onto the room's six palette colours.
+ * See src/main/services/mosaic.ts.
+ */
+export type MosaicResult =
+  | { ok: true; dataUrl: string; width: number; height: number; source: string; cached: boolean }
+  | { ok: false; error: string };
+
 export interface AppSettingsView {
   devRoots: string[];
   reducedMotion: boolean;
@@ -87,6 +95,9 @@ export interface SkynetApi {
   // --- the picker interface ---
   'pick:target': (request: PickRequest) => PickResult;
 
+  // --- node face images ---
+  'mosaic:forNode': (boardId: string, nodeId: string) => MosaicResult;
+
   // --- act ---
   'node:open': (boardId: string, nodeId: string) => OpenTargetResult;
 
@@ -111,6 +122,7 @@ export const CHANNELS = [
   'target:resolveBoard',
   'target:verify',
   'pick:target',
+  'mosaic:forNode',
   'node:open',
   'command:apply',
   'command:undo',

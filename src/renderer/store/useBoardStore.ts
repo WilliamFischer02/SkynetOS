@@ -50,6 +50,7 @@ interface BoardState {
   toggleFocus: () => void;
 
   runCommand: (command: Command, label?: string) => Promise<CommandResult>;
+  moveNode: (nodeId: string, pos: { x: number; y: number }) => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   openNode: (nodeId: string) => Promise<void>;
@@ -111,9 +112,21 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     editingId: state.editingId && state.editingId !== nodeId ? null : state.editingId
   })),
 
-  setMode: (mode) => set({ mode, editingId: mode === 'view' ? null : get().editingId }),
+  /**
+   * Edit Board mode (E): the grid overlay and draggable components. Independent of whether a
+   * node's field form is open — leaving it does NOT close the form, because the two are
+   * different operations on different things.
+   */
+  setMode: (mode) => set({ mode }),
 
-  beginEdit: (nodeId) => set({ mode: 'edit', selectedId: nodeId, editingId: nodeId }),
+  /**
+   * Open the field form for a node (F2). Deliberately does NOT touch `mode`.
+   *
+   * It used to set mode:'edit', which meant opening a form silently made every component on the
+   * board draggable — so a click that drifted a few pixels could relocate a component you were
+   * only trying to read. Two different meanings of "edit" sharing one flag.
+   */
+  beginEdit: (nodeId) => set({ selectedId: nodeId, editingId: nodeId }),
 
   cancelEdit: () => set({ editingId: null }),
 
@@ -146,6 +159,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       get().toast('ok', `${label ?? command.type} — ${result.changed.map((c) => c.path).join(', ')}`);
     }
     return result;
+  },
+
+  moveNode: async (nodeId, pos) => {
+    const node = get().board?.nodes.find((n) => n.id === nodeId);
+    const label = `move ${node?.designator ?? nodeId} to ${pos.x},${pos.y}`;
+    await get().runCommand({ type: 'node.move', boardId: get().boardId, nodeId, pos }, label);
   },
 
   undo: async () => {

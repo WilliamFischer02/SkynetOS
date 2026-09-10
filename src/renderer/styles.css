@@ -3,9 +3,35 @@
  * no blur, no bloom, no drop shadows, no sub-pixel antialiasing, no fractional sizes,
  * no border-radius. Flat fills and 1px borders — a real board has no gradients on it.
  * docs/02-VISUAL-LANGUAGE.md §Anti-mush.
+ *
+ * SCALE
+ * -----
+ * Main forces devicePixelRatio to 1 so the board is pixel-exact at any OS scaling (anti-mush
+ * rule 9). The side effect: one CSS pixel is one DEVICE pixel, so on a 200% display all of this
+ * came out half its intended physical size — 11px silkscreen rendered 11 device pixels tall
+ * instead of 22, i.e. correct and unreadable.
+ *
+ * So the chrome carries its own integer scale, set on :root from the same OS scale factor the
+ * board cancels (see uiScaleFor in App.tsx). Every dimension below is a whole multiple of --p,
+ * and every font size a whole multiple of 11px, so at any scale a 1px border is still a whole
+ * number of device pixels and Departure Mono is still on one of its exact sizes.
+ *
+ * Rule for editing this file: no bare px values except inside a calc() multiplied by --ui-scale.
  */
 
 :root {
+  --ui-scale: 1;
+
+  /* One device pixel at the current chrome scale. Everything spatial is a multiple of this. */
+  --p: calc(1px * var(--ui-scale));
+  /* Departure Mono is pixel-perfect only at multiples of 11. */
+  --f: calc(11px * var(--ui-scale));
+  --f2: calc(22px * var(--ui-scale));
+
+  --gap: calc(4 * var(--p));
+  --pad: calc(6 * var(--p));
+  --inspector-width: calc(360 * var(--p));
+
   /* SKYNET root theme. M2 swaps these per room alongside the palette shader. */
   --mask-dark: #0e1a14;
   --mask-light: #16261d;
@@ -16,16 +42,31 @@
   --ok: #57c25a;
   --warn: #e0a22e;
   --fault: #d2453b;
-
-  --inspector-width: 380px;
 }
 
 * {
   box-sizing: border-box;
-  /* Anti-mush rule 8: no sub-pixel antialiasing anywhere in the stack. */
-  -webkit-font-smoothing: none;
-  font-smooth: never;
   border-radius: 0;
+
+  /*
+   * Anti-mush rule 8: no SUB-PIXEL antialiasing.
+   *
+   * `none` is what the rule literally says, but on Windows Chromium renders text through
+   * DirectWrite and ignores it — a screenshot census found two off-palette colours,
+   * rgb(142,132,46) and rgb(224,132,27), in the HUD text. Those are LCD colour fringes: red and
+   * green subpixels lit unevenly along glyph edges. Exactly what the rule exists to forbid.
+   *
+   * `antialiased` forces GREYSCALE antialiasing, which removes the colour fringing. Glyph edges
+   * still carry intermediate greys, so DOM chrome text is not palette-pure and cannot be — it
+   * is rendered by the browser's text stack, not by us.
+   *
+   * The purity guarantee is therefore scoped to the CANVAS, which is where the board lives and
+   * where it is verified: the rendered board area is exact palette entries with no intermediate
+   * values at every zoom. Board silkscreen goes through renderSilkText, which thresholds the
+   * alpha to binary and forces one exact colour precisely so it does not depend on this.
+   */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 html,
@@ -40,8 +81,9 @@ body,
 }
 
 body {
-  /* 11px only. Departure Mono is pixel-perfect at multiples of 11 and nowhere else. */
-  font: 11px "Departure Mono", ui-monospace, monospace;
+  font-family: "Departure Mono", ui-monospace, monospace;
+  font-size: var(--f);
+  line-height: calc(13 * var(--p));
   letter-spacing: 0;
   user-select: none;
   cursor: default;
@@ -67,7 +109,7 @@ canvas {
 
 /* The inspector overlays the canvas rather than shrinking it. Resizing the viewport mid-edit
    re-clamps the camera and slides the board under the component you are editing, which is a
-   worse problem than the panel covering the right-hand third. Pan with WASD instead. */
+   worse problem than the panel covering the right-hand third. Drag or WASD to pan instead. */
 
 /* ---------- silkscreen chrome ---------- */
 
@@ -76,21 +118,53 @@ canvas {
 .help {
   position: absolute;
   z-index: 10;
-  padding: 4px 8px;
+  padding: var(--gap) calc(2 * var(--gap));
   background: var(--mask-dark);
-  border: 1px solid var(--copper-dark);
+  border: var(--p) solid var(--copper-dark);
   color: var(--silk);
   text-transform: uppercase;
   pointer-events: none;
 }
 
-.breadcrumb { top: 8px; left: 8px; border-color: var(--copper); color: var(--signal); }
-.hud { top: 8px; right: calc(var(--inspector-width) + 8px); display: flex; gap: 12px; flex-wrap: wrap; max-width: 60vw; }
-.help { bottom: 8px; left: 8px; color: var(--copper); }
+.breadcrumb {
+  top: calc(2 * var(--gap));
+  left: calc(2 * var(--gap));
+  border-color: var(--copper);
+  color: var(--signal);
+  display: flex;
+  gap: calc(2 * var(--gap));
+  align-items: center;
+}
 
-.hud .warn, .warntext { color: var(--warn); }
+.mode-badge {
+  padding: 0 var(--gap);
+  background: var(--signal);
+  color: var(--mask-dark);
+}
+
+.hud {
+  top: calc(2 * var(--gap));
+  right: calc(var(--inspector-width) + 2 * var(--gap));
+  display: flex;
+  gap: calc(3 * var(--gap));
+  flex-wrap: wrap;
+  max-width: 55vw;
+}
+
+.help {
+  bottom: calc(2 * var(--gap));
+  left: calc(2 * var(--gap));
+  color: var(--copper);
+  max-width: 70vw;
+}
+
+.hud .warn,
+.warntext { color: var(--warn); }
 .hud .fault-text { color: var(--fault); }
 .hud .ok-text { color: var(--ok); }
+
+/* Edit Board mode is a distinct state and should look like one. */
+.app.edit-mode .board-host { outline: calc(2 * var(--p)) solid var(--signal); outline-offset: calc(-2 * var(--p)); }
 
 /* ---------- boot / fault screens ---------- */
 
@@ -100,9 +174,9 @@ canvas {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: calc(2 * var(--gap));
   height: 100%;
-  padding: 24px;
+  padding: calc(6 * var(--gap));
   text-align: center;
   text-transform: uppercase;
 }
@@ -112,31 +186,33 @@ canvas {
 
 .problem-list {
   margin: 0;
-  padding: 8px 12px;
-  max-width: 900px;
+  padding: calc(2 * var(--gap)) calc(3 * var(--gap));
+  max-width: calc(900 * var(--p));
   max-height: 40vh;
   overflow: auto;
   list-style: none;
-  border: 1px solid var(--fault);
+  border: var(--p) solid var(--fault);
   color: var(--warn);
   text-align: left;
   text-transform: none;
 }
-.problem-list li { padding: 2px 0; }
+
+.problem-list li { padding: calc(0.5 * var(--gap)) 0; }
 
 /* ---------- buttons ---------- */
 
 .btn {
   font: inherit;
   text-transform: uppercase;
-  padding: 4px 8px;
+  padding: var(--gap) calc(2 * var(--gap));
   background: var(--mask-light);
   color: var(--silk);
-  border: 1px solid var(--copper-dark);
+  border: var(--p) solid var(--copper-dark);
   cursor: pointer;
 }
+
 .btn:hover:not(:disabled) { border-color: var(--copper); color: var(--signal); }
-.btn:focus-visible { outline: 1px solid var(--signal); outline-offset: 1px; }
+.btn:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
 .btn:disabled { color: var(--copper-dark); cursor: not-allowed; }
 .btn.primary { border-color: var(--copper); }
 .btn.primary:hover:not(:disabled) { background: var(--copper-dark); color: var(--silk); }
@@ -154,94 +230,116 @@ canvas {
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
+  gap: calc(2 * var(--gap));
+  padding: calc(2 * var(--gap));
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--mask-dark);
-  border-left: 1px solid var(--copper);
+  border-left: var(--p) solid var(--copper);
 }
 
 .inspector-empty {
-  margin-top: 40px;
+  margin-top: calc(10 * var(--gap));
   text-align: center;
   color: var(--copper-dark);
   text-transform: uppercase;
 }
-.inspector-empty .dim { color: var(--copper-dark); }
 
-.inspector-head { border-bottom: 1px solid var(--copper-dark); padding-bottom: 6px; }
-.inspector-title { display: flex; gap: 8px; align-items: baseline; }
+.inspector-head { border-bottom: var(--p) solid var(--copper-dark); padding-bottom: var(--gap); }
+.inspector-title { display: flex; gap: calc(2 * var(--gap)); align-items: baseline; flex-wrap: wrap; }
+
 .desig {
-  padding: 1px 4px;
-  border: 1px solid var(--copper);
+  padding: 0 var(--gap);
+  border: var(--p) solid var(--copper);
   color: var(--copper);
 }
-.nodename { font-size: 22px; line-height: 22px; color: var(--silk); text-transform: uppercase; }
-.inspector-kind { color: var(--copper-dark); text-transform: uppercase; margin-top: 4px; }
+
+.nodename { font-size: var(--f2); line-height: var(--f2); color: var(--silk); text-transform: uppercase; }
+.inspector-kind { color: var(--copper-dark); text-transform: uppercase; margin-top: var(--gap); }
 
 /* target state block */
-.state { padding: 6px 8px; border: 1px solid var(--copper-dark); }
+.state { padding: var(--pad); border: var(--p) solid var(--copper-dark); }
 .state.ok { border-color: var(--ok); color: var(--ok); }
 .state.warn { border-color: var(--warn); color: var(--warn); }
 .state.fault { border-color: var(--fault); color: var(--fault); }
 .state.dim { border-color: var(--copper-dark); color: var(--copper-dark); }
 .state-line { text-transform: uppercase; }
-.state-path,
-.state-detail { color: var(--silk); margin-top: 4px; overflow-wrap: anywhere; }
-.state-detail { color: inherit; }
-.state-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; color: var(--copper); text-transform: uppercase; }
+.state-path { color: var(--silk); margin-top: var(--gap); overflow-wrap: anywhere; }
+.state-detail { margin-top: var(--gap); overflow-wrap: anywhere; }
+.state-meta {
+  display: flex;
+  gap: calc(2 * var(--gap));
+  flex-wrap: wrap;
+  margin-top: var(--gap);
+  color: var(--copper);
+  text-transform: uppercase;
+}
 
-.inspector-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.inspector-actions { display: flex; gap: calc(1.5 * var(--gap)); flex-wrap: wrap; }
 
-.facts { display: grid; grid-template-columns: 112px 1fr; gap: 3px 8px; margin: 0; }
+.facts {
+  display: grid;
+  grid-template-columns: calc(104 * var(--p)) 1fr;
+  gap: calc(0.75 * var(--gap)) calc(2 * var(--gap));
+  margin: 0;
+}
+
 .facts dt { color: var(--copper-dark); text-transform: uppercase; }
 .facts dd { margin: 0; color: var(--silk); }
 .facts dd.wrap { overflow-wrap: anywhere; }
 
 .notes {
-  padding: 6px 8px;
-  border: 1px solid var(--copper-dark);
+  padding: var(--pad);
+  border: var(--p) solid var(--copper-dark);
   color: var(--copper);
   white-space: pre-wrap;
 }
 
-.section-head { color: var(--copper-dark); text-transform: uppercase; border-bottom: 1px solid var(--copper-dark); padding-bottom: 2px; margin-bottom: 4px; }
-.traces-list .dim { color: var(--copper-dark); }
-.trace-row { display: flex; gap: 8px; align-items: baseline; }
-.trace-row .tk { color: var(--copper); text-transform: uppercase; min-width: 84px; }
+.section-head {
+  color: var(--copper-dark);
+  text-transform: uppercase;
+  border-bottom: var(--p) solid var(--copper-dark);
+  padding-bottom: calc(0.5 * var(--gap));
+  margin-bottom: var(--gap);
+}
+
+.traces-list .dim,
+.inspector-empty .dim { color: var(--copper-dark); }
+.trace-row { display: flex; gap: calc(2 * var(--gap)); align-items: baseline; }
+.trace-row .tk { color: var(--copper); text-transform: uppercase; min-width: calc(78 * var(--p)); }
 .trace-row .rel { color: var(--signal); text-transform: uppercase; }
 
 /* ---------- editor form ---------- */
 
-.editor { display: flex; flex-direction: column; gap: 10px; }
+.editor { display: flex; flex-direction: column; gap: calc(2.5 * var(--gap)); }
 .editor-head { display: flex; justify-content: space-between; color: var(--copper-dark); text-transform: uppercase; }
 
-.field { display: flex; flex-direction: column; gap: 3px; }
+.field { display: flex; flex-direction: column; gap: calc(0.75 * var(--gap)); }
 .field-label { color: var(--copper); text-transform: uppercase; }
 .field-label .req { color: var(--fault); }
-.field-row { display: flex; gap: 4px; align-items: stretch; flex-wrap: wrap; }
-.field-row .input { flex: 1 1 160px; min-width: 0; }
+.field-row { display: flex; gap: var(--gap); align-items: stretch; flex-wrap: wrap; }
+.field-row .input { flex: 1 1 calc(150 * var(--p)); min-width: 0; }
 
 .input {
   font: inherit;
-  padding: 4px 6px;
+  padding: var(--gap) calc(1.5 * var(--gap));
   background: var(--mask-light);
   color: var(--silk);
-  border: 1px solid var(--copper-dark);
+  border: var(--p) solid var(--copper-dark);
   min-width: 0;
 }
+
 .input:focus { outline: none; border-color: var(--signal); }
 .input.bad { border-color: var(--fault); }
 .input.area { resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
 
-.checkline { display: flex; gap: 6px; align-items: center; color: var(--silk); text-transform: uppercase; }
-.checkline input { accent-color: var(--signal); }
+.checkline { display: flex; gap: calc(1.5 * var(--gap)); align-items: center; color: var(--silk); text-transform: uppercase; }
+.checkline input { accent-color: var(--signal); width: calc(11 * var(--p)); height: calc(11 * var(--p)); }
 
 .field-help { color: var(--copper-dark); }
 .field-note { color: var(--warn); }
 
-.verdict { display: flex; flex-direction: column; gap: 2px; }
+.verdict { display: flex; flex-direction: column; gap: calc(0.5 * var(--gap)); }
 .verdict-tag { text-transform: uppercase; }
 .verdict-detail { color: var(--silk); overflow-wrap: anywhere; }
 .verdict.ok .verdict-tag { color: var(--ok); }
@@ -252,17 +350,22 @@ canvas {
 .verdict .dim { color: var(--copper-dark); }
 
 .editor-problems {
-  padding: 6px 8px;
-  border: 1px solid var(--fault);
+  padding: var(--pad);
+  border: var(--p) solid var(--fault);
   color: var(--fault);
   text-transform: uppercase;
 }
 
-.editor-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.editor-actions { display: flex; gap: calc(1.5 * var(--gap)); flex-wrap: wrap; }
 
-.editor-diff { border: 1px solid var(--copper-dark); padding: 6px 8px; }
-.editor-diff-head { color: var(--copper-dark); text-transform: uppercase; margin-bottom: 4px; }
-.editor-diff-row { display: grid; grid-template-columns: 90px 1fr 12px 1fr; gap: 6px; align-items: baseline; }
+.editor-diff { border: var(--p) solid var(--copper-dark); padding: var(--pad); }
+.editor-diff-head { color: var(--copper-dark); text-transform: uppercase; margin-bottom: var(--gap); }
+.editor-diff-row {
+  display: grid;
+  grid-template-columns: calc(84 * var(--p)) 1fr calc(12 * var(--p)) 1fr;
+  gap: calc(1.5 * var(--gap));
+  align-items: baseline;
+}
 .editor-diff-row .k { color: var(--copper); }
 .editor-diff-row .before { color: var(--copper-dark); overflow-wrap: anywhere; }
 .editor-diff-row .arrow { color: var(--copper); }
@@ -272,23 +375,25 @@ canvas {
 
 .toasts {
   position: absolute;
-  bottom: 8px;
-  right: calc(var(--inspector-width) + 8px);
+  bottom: calc(2 * var(--gap));
+  right: calc(var(--inspector-width) + 2 * var(--gap));
   z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--gap);
   align-items: flex-end;
-  max-width: 50vw;
+  max-width: 45vw;
   pointer-events: none;
 }
+
 .toast {
-  padding: 4px 8px;
+  padding: var(--gap) calc(2 * var(--gap));
   background: var(--mask-dark);
-  border: 1px solid var(--copper-dark);
+  border: var(--p) solid var(--copper-dark);
   color: var(--silk);
   overflow-wrap: anywhere;
 }
+
 .toast.ok { border-color: var(--ok); }
 .toast.warn { border-color: var(--warn); color: var(--warn); }
 .toast.fault { border-color: var(--fault); color: var(--fault); white-space: pre-wrap; }

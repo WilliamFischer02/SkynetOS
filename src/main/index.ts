@@ -6,6 +6,28 @@ import { boardRoot, pruneSnapshots } from './services/board-store.js';
 
 const isDev = !app.isPackaged;
 
+/*
+ * Kill Chromium's LCD subpixel text rendering, before anything creates a window.
+ *
+ * docs/02 anti-mush rule 8 forbids sub-pixel antialiasing. The CSS lever for it,
+ * `-webkit-font-smoothing: none`, is a no-op on Windows — Chromium renders text through
+ * DirectWrite and ignores it. A colour census of a screenshot proved it: the HUD text contained
+ * rgb(224,132,27) and rgb(148,196,214), which are red/green subpixel fringes on glyph edges, not
+ * blends of any two palette colours.
+ *
+ * These two switches are the real controls. `disable-lcd-text` forces greyscale antialiasing so
+ * there is no colour fringing at all, and `disable-font-subpixel-positioning` makes glyphs land
+ * on whole pixels instead of fractional ones, which is what a pixel font needs to stay crisp.
+ *
+ * Glyph edges in the DOM chrome still carry intermediate greys — that is what antialiasing is,
+ * and the browser's text stack is not ours to replace. The palette-purity guarantee is scoped
+ * to the canvas, where the board lives and where it is verified pixel by pixel. Board silkscreen
+ * goes through renderSilkText, which thresholds alpha to binary and forces one exact palette
+ * colour, precisely so it does not depend on any of this.
+ */
+app.commandLine.appendSwitch('disable-lcd-text');
+app.commandLine.appendSwitch('disable-font-subpixel-positioning');
+
 /**
  * Anti-mush rule 9: the window must not be fractionally scaled.
  *
@@ -96,6 +118,16 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   mkdirSync(outDir, { recursive: true });
 
+  /*
+   * COORDINATE GOTCHA, learned the hard way: sendInputEvent takes DIP coordinates, but the
+   * renderer's CSS pixels are DIP / zoomFactor. Main sets zoomFactor = 1/scaleFactor to force
+   * devicePixelRatio to 1, so on this 200% display one DIP is TWO renderer CSS pixels. A grab at
+   * DIP 192 lands at CSS 384, which at board zoom 3 is world pixel 128 — tile 8, not the tile 4
+   * a naive reading predicts. That mismatch made an earlier version of this test grab a
+   * different node than it named and report a failure that was not real. Never derive a grab
+   * coordinate from an assumed camera position: snapshot the data, gesture, read back what
+   * actually changed.
+   */
   const shoot = async (name: string) => {
     const image = await win.webContents.capturePage();
     const file = join(outDir, name);
@@ -130,6 +162,29 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     await wait(400);
     await shoot('04-zoom-2x.png');
 
+    /*
+     * Drag the substrate to pan — the gesture, not the keyboard shortcut.
+     *
+     * At 4x deliberately. The root board is 64x40 tiles = 1024x640 world px, so at 2x it is
+     * SMALLER than this viewport and clampCamera centres it: panning at 2x is impossible by
+     * design and a drag test there proves nothing. The first version of this test ran at 2x and
+     * reported a broken drag that was not broken.
+     */
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '4' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '4' });
+    await wait(400);
+    await shoot('05a-before-drag-4x.png');
+
+    // Drag the substrate. Left button down, a real sequence of moves, then up.
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: 900, y: 700, button: 'left', clickCount: 1 });
+    for (let i = 1; i <= 12; i++) {
+      win.webContents.sendInputEvent({ type: 'mouseMove', x: 900 - i * 14, y: 700 - i * 6, button: 'left' });
+      await wait(25);
+    }
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: 900 - 12 * 14, y: 700 - 12 * 6, button: 'left', clickCount: 1 });
+    await wait(350);
+    await shoot('05b-after-drag-4x.png');
+
     // Tab to the first node and open the inspector on it, so the capture proves selection,
     // target resolution and the edit interface actually render — not just the substrate.
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '3' });
@@ -141,12 +196,91 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       await wait(150);
     }
     await wait(500);
-    await shoot('05-selected-inspector.png');
+    await shoot('06-selected-inspector.png');
+
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'F2' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'F2' });
+    await wait(1200);
+    await shoot('07-node-editor.png');
+
+    // Close the form again so the next steps are not typing into an input.
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await wait(200);
+
+    /*
+     * Prove NODE DRAGGING commits a move. Enter Edit Board mode, grab a component, drag it two
+     * tiles, drop it, and read the position back out of the board file. This is the other half
+     * of "click and drag": panning moves the camera, this moves the data.
+     */
+    const { readFileSync: readNow } = await import('node:fs');
+    const boardPath = join(boardRoot(), 'root.board.json');
+    const posOf = (id: string) => {
+      const b = JSON.parse(readNow(boardPath, 'utf8')) as { nodes: { id: string; pos: { x: number; y: number } }[] };
+      return b.nodes.find((n) => n.id === id)?.pos;
+    };
+
+    // Zoom to 3x, then drag the board hard down-right so the camera CLAMPS to 0,0. That makes
+    // every node's screen position derivable as tile * 16 * zoom, with no assumptions about
+    // where a previous step left the camera. Dragging right moves the camera left; see panTo.
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '3' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '3' });
+    await wait(300);
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: 400, y: 400, button: 'left', clickCount: 1 });
+    for (let i = 1; i <= 20; i++) {
+      win.webContents.sendInputEvent({ type: 'mouseMove', x: 400 + i * 100, y: 400 + i * 60, button: 'left' });
+      await wait(15);
+    }
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: 2400, y: 1300, button: 'left', clickCount: 1 });
+    await wait(400);
 
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'e' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'e' });
-    await wait(1200);
-    await shoot('06-node-editor.png');
+    await wait(400);
+    await shoot('08-edit-board-mode.png');
+
+    /*
+     * Assumption-free: snapshot every node position, drag from the middle of the viewport,
+     * then report which node actually moved and by how much. An earlier version of this test
+     * computed a grab coordinate from an assumed camera position, grabbed a different node than
+     * it named, and would have reported a false failure.
+     */
+    const allPos = () => {
+      const b = JSON.parse(readNow(boardPath, 'utf8')) as { nodes: { id: string; pos: { x: number; y: number } }[] };
+      return new Map(b.nodes.map((n) => [n.id, `${n.pos.x},${n.pos.y}`]));
+    };
+
+    const posBefore = allPos();
+    const grabX = 700;
+    const grabY = 500;
+    const whatIsThere = await win.webContents.executeJavaScript(
+      "document.querySelector('.inspector .nodename')?.textContent ?? '(nothing)'"
+    ) as string;
+    void whatIsThere;
+
+    win.webContents.sendInputEvent({ type: 'mouseDown', x: grabX, y: grabY, button: 'left', clickCount: 1 });
+    for (let i = 1; i <= 10; i++) {
+      win.webContents.sendInputEvent({ type: 'mouseMove', x: grabX + i * 10, y: grabY + i * 5, button: 'left' });
+      await wait(30);
+    }
+    await shoot('09-drag-ghost.png');
+    win.webContents.sendInputEvent({ type: 'mouseUp', x: grabX + 100, y: grabY + 50, button: 'left', clickCount: 1 });
+    await wait(800);
+
+    const posAfter = allPos();
+    const moved = [...posBefore.entries()].filter(([id, p]) => posAfter.get(id) !== p);
+    console.log(`[smoke] node drag moved ${moved.length} node(s): ${moved.map(([id, p]) => `${id} ${p} -> ${posAfter.get(id)}`).join('; ') || 'NONE'}`);
+    await shoot('10-after-node-drag.png');
+
+    const undoneMove = await win.webContents.executeJavaScript(`window.skynet['command:undo']()`) as { ok: boolean };
+    await wait(500);
+    const posRestored = allPos();
+    const stillMoved = [...posBefore.entries()].filter(([id, p]) => posRestored.get(id) !== p);
+    console.log(`[smoke] node drag undo: ok=${undoneMove.ok} every node back at origin=${stillMoved.length === 0}`);
+
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'e' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'e' });
+    await wait(200);
 
     // --- prove the edit path end to end, through the real IPC bridge and the real command bus.
     // Screenshots show that the form renders; this shows that saving it changes the file on

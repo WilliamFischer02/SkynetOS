@@ -110,6 +110,13 @@ export interface BoardNode {
    * cluster as related to it. Colour only — no behaviour. See palette.signalOf.
    */
   relation?: string;
+
+  /**
+   * Path to any image on disk. Downsampled to the node's footprint and dithered onto the room's
+   * six palette colours, then drawn as the component's face. The source is never copied or
+   * modified. See src/main/services/mosaic.ts.
+   */
+  image?: string;
 }
 
 export interface BoardEdge {

@@ -61,6 +61,11 @@ const COMMON: FieldSpec[] = [
 
 /** On every kind, shown last. */
 const TRAILING: FieldSpec[] = [
+  {
+    key: 'image', label: 'Face image', control: 'path-file',
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'ico'] }],
+    help: "Any image. It is downsampled to this node's footprint and dithered onto the room's six palette colours, so it reads as part of the board rather than a pasted photo. The file is never copied or modified."
+  },
   { key: 'tags', label: 'Tags', control: 'tags', placeholder: 'minecraft, mods', help: 'Comma separated. Searchable from Ctrl+K.' },
   { key: 'notes', label: 'Notes', control: 'textarea', help: 'Free text. Never rendered on the board.' },
   { key: 'codexRef', label: 'Codex ref', control: 'text', placeholder: 'codex/projects/the-stalker.md', help: 'The markdown file in codex/ that describes this thing.' },
@@ -161,12 +166,21 @@ export function targetFieldsFor(kind: NodeKind): FieldSpec[] {
 }
 
 /**
+ * Fields that are pickable and verifiable but are NOT what the node points at.
+ *
+ * `image` is a face, not a target. It needs a Browse button and an existence check like any
+ * other path, but clicking a note.silk must not "open" its picture, and the inspector must not
+ * report a decorative image as the thing this component is bound to.
+ */
+const NON_TARGET_KEYS: readonly (keyof BoardNode)[] = ['image'];
+
+/**
  * The one field that IS this node's target — what a click acts on and what the inspector shows
  * as "resolved". Returns undefined for kinds that point at nothing (note.silk, group.zone,
  * monitor.system, task.scheduled).
  */
 export function primaryTargetField(kind: NodeKind): FieldSpec | undefined {
-  const fields = targetFieldsFor(kind);
+  const fields = targetFieldsFor(kind).filter((f) => !NON_TARGET_KEYS.includes(f.key));
   return fields.find((f) => f.required) ?? fields[0];
 }
 

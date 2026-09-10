@@ -3,6 +3,23 @@ import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
 import { Inspector } from './ui/Inspector.js';
 import { useBoardStore } from './store/useBoardStore.js';
 
+/**
+ * The DOM chrome's scale.
+ *
+ * Main forces `devicePixelRatio` to 1 so the board is pixel-exact at any OS scaling (docs/02
+ * anti-mush rule 9). The side effect is that every CSS pixel is one *device* pixel, so on a
+ * display at 200% the chrome came out half the physical size it should be — 11px silkscreen type
+ * rendered 11 device pixels tall instead of 22. Correct, and unreadable.
+ *
+ * So the chrome gets its own integer scale, taken from the same scale factor the board cancels.
+ * Integer only, and every chrome dimension is a multiple of `--p`, so a 1px border stays a whole
+ * number of device pixels and Departure Mono stays on a multiple of 11 — pixel-perfect at 11, 22
+ * and 33 and nowhere in between.
+ */
+function uiScaleFor(scaleFactor: number): number {
+  return Math.min(3, Math.max(1, Math.round(scaleFactor)));
+}
+
 export function App(): React.JSX.Element {
   const load = useBoardStore((s) => s.load);
   const board = useBoardStore((s) => s.board);
@@ -12,18 +29,33 @@ export function App(): React.JSX.Element {
   const history = useBoardStore((s) => s.history);
   const toasts = useBoardStore((s) => s.toasts);
   const focus = useBoardStore((s) => s.focus);
+  const mode = useBoardStore((s) => s.mode);
   const loadBoard = useBoardStore((s) => s.loadBoard);
   const select = useBoardStore((s) => s.select);
   const beginEdit = useBoardStore((s) => s.beginEdit);
+  const setMode = useBoardStore((s) => s.setMode);
   const openNode = useBoardStore((s) => s.openNode);
+  const moveNode = useBoardStore((s) => s.moveNode);
   const undo = useBoardStore((s) => s.undo);
   const redo = useBoardStore((s) => s.redo);
   const toggleFocus = useBoardStore((s) => s.toggleFocus);
 
   const [status, setStatus] = useState<BoardCanvasStatus | null>(null);
+  const [uiScale, setUiScale] = useState(1);
   const onStatus = useCallback((next: BoardCanvasStatus) => setStatus(next), []);
 
   useEffect(() => { void loadBoard('root'); }, [loadBoard]);
+
+  useEffect(() => {
+    void window.skynet['display:info']().then((info) => {
+      const scale = uiScaleFor(info.scaleFactor);
+      setUiScale(scale);
+      document.documentElement.style.setProperty('--ui-scale', String(scale));
+      console.info(`[ui] OS scaleFactor ${info.scaleFactor} -> chrome scale ${scale}x (silkscreen at ${11 * scale}px)`);
+    });
+  }, []);
+
+  const editMode = mode === 'edit';
 
   /**
    * Global shortcuts. Ctrl+Z / Ctrl+Y go through main's command bus, so they undo an agent's
@@ -39,13 +71,17 @@ export function App(): React.JSX.Element {
         event.preventDefault(); void redo(); return;
       }
       if (inForm) return;
-      if (event.code === 'KeyE' && selectedId) { event.preventDefault(); beginEdit(selectedId); return; }
+
+      // E is Edit Board mode, per docs/03 §1 — the grid overlay and draggable components.
+      // Editing the selected node's FIELDS is F2, which keeps the two meanings of "edit" apart.
+      if (event.code === 'KeyE') { event.preventDefault(); setMode(editMode ? 'view' : 'edit'); return; }
+      if (event.code === 'F2' && selectedId) { event.preventDefault(); beginEdit(selectedId); return; }
       if (event.code === 'KeyF') { event.preventDefault(); toggleFocus(); return; }
       if (event.code === 'KeyR') { event.preventDefault(); void loadBoard(boardId); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selectedId, beginEdit, toggleFocus, loadBoard, boardId]);
+  }, [undo, redo, selectedId, beginEdit, setMode, editMode, toggleFocus, loadBoard, boardId]);
 
   if (!load) return <div className="boot">READING BOARD…</div>;
 
@@ -70,27 +106,35 @@ export function App(): React.JSX.Element {
   if (!board) return <div className="boot">READING BOARD…</div>;
 
   return (
-    <div className="app">
+    <div className={editMode ? 'app edit-mode' : 'app'}>
       <BoardCanvas
         board={board}
+        boardId={boardId}
         selectedId={selectedId}
         targets={targets}
         focus={focus}
+        editMode={editMode}
         onSelect={select}
         onActivate={(nodeId) => void openNode(nodeId)}
+        onMoveNode={(nodeId, pos) => void moveNode(nodeId, pos)}
         onStatus={onStatus}
       />
 
-      <div className="breadcrumb">{(board.engraving ?? board.name).toUpperCase()}</div>
+      <div className="breadcrumb">
+        {(board.engraving ?? board.name).toUpperCase()}
+        {editMode ? <span className="mode-badge">EDIT BOARD</span> : null}
+      </div>
 
       <div className="hud">
         {status ? (
           <>
             <span>ZOOM {status.zoom}X</span>
             <span>CAM {status.cameraX},{status.cameraY}</span>
-            <span>DPR {status.devicePixelRatio}</span>
+            <span>DPR {status.devicePixelRatio} · UI {uiScale}X</span>
             <span>{status.fps} FPS</span>
             <span>{board.nodes.length} NODES · {board.edges.length} TRACES</span>
+            {status.fitsOnScreen ? <span className="warn">WHOLE BOARD VISIBLE — NOTHING TO PAN</span> : null}
+            {status.faceCount > 0 ? <span className="ok-text">{status.faceCount} FACE{status.faceCount === 1 ? '' : 'S'}</span> : null}
             {status.brokenCount > 0 ? <span className="fault-text">{status.brokenCount} BROKEN</span> : <span className="ok-text">ALL BOUND</span>}
             <span className={status.atlasFrames === 0 ? 'warn' : undefined}>
               ATLAS {status.atlasFrames} · {status.placeholderCount} PLACEHOLDER
@@ -104,9 +148,11 @@ export function App(): React.JSX.Element {
       <Inspector />
 
       <div className="help">
-        WASD PAN · 2 3 4 ZOOM · TAB CYCLE · SPACE ACTIVATE · E EDIT · F FOCUS{focus ? ' (ON)' : ''} · R RELOAD
+        {editMode
+          ? 'DRAG A COMPONENT TO MOVE IT · DRAG THE SUBSTRATE TO PAN · E LEAVE EDIT BOARD'
+          : 'DRAG TO PAN · WASD PAN · 2 3 4 ZOOM · TAB CYCLE · SPACE ACTIVATE · E EDIT BOARD · F2 EDIT NODE'}
+        {focus ? ' · FOCUS ON' : ''}
         {history.canUndo ? ` · CTRL+Z UNDO ${history.undoLabel?.toUpperCase() ?? ''}` : ''}
-        {history.canRedo ? ' · CTRL+Y REDO' : ''}
       </div>
 
       <div className="toasts">

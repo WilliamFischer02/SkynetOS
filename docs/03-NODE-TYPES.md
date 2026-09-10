@@ -99,6 +99,29 @@ Traces that leave the room terminate in a **via** with the destination room's en
 These fill the gaps. Each is small; together they're the difference between a demo and a program you'll actually open every day.
 
 1. **Edit Board mode (`E`)** — grid overlay, component palette drawer, drag to place, snap to 16px, live collision check against footprints, inspector for the selected node's fields, `Ctrl+Z/Y` undo stack, and a diff preview before writing the JSON. Traces are drawn by dragging from one node's pad to another's; the router does the rest.
+
+   **Built 2026-09-09: the grid overlay, dragging, snapping and collision checking.** Still to
+   come: the palette drawer and trace drawing.
+
+   Two drag gestures, distinguished by what is under the cursor:
+   - **Pan** — left-drag on empty substrate, or middle-drag anywhere, in either mode.
+   - **Move** — left-drag on a component, **only in Edit Board mode**. Browsing a board involves
+     a lot of clicking and a click that drifts two pixels must never relocate a component, so
+     moving is gated behind `E`. Below a 4px threshold a press is a click, not a drag.
+
+   The ghost shows where the component would land, in the room's signal colour when the drop is
+   legal and `fault` when it is not — off the board edge or overlapping another footprint, which
+   are exactly what the schema and the command bus would reject. On release the move goes through
+   the command bus as a `node.move`, so it is validated, snapshotted and `Ctrl+Z`-undoable like
+   every other mutation.
+
+   **`E` and `F2` are different operations.** `E` toggles Edit Board mode; `F2` opens the selected
+   node's field form. They used to share one flag, which meant opening a form silently made every
+   component draggable.
+
+   When the whole board fits on screen the camera is centred and panning correctly does nothing —
+   the HUD says `WHOLE BOARD VISIBLE — NOTHING TO PAN`, because a gesture that does nothing for a
+   good reason is indistinguishable from a broken one.
 2. **Node wizard** — placing a node opens a 3-field form, then *verifies the target exists* before committing. You can't place a broken node by accident, only intentionally (with a `provisional: true` flag that renders it as an unpopulated footprint — a real PCB convention, and a great TODO marker).
 
    **Built 2026-09-09, ahead of M6, as the target picker + node editor.** The pieces that exist now:
