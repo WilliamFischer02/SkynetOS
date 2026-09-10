@@ -223,3 +223,23 @@ Append-only. Newest at the bottom. One entry per real decision: what, alternativ
 **Decision:** `classify()` turns a `.jar` in a recognised build directory into a `file.artifact` with `glob`, `exclude` and a `versionPattern`, and says why in the wizard.
 **Rejected:** Creating a `file.exe`/`file.document` pinned to the exact dropped path.
 **Why:** The next build produces a different filename and a pinned node would immediately render broken — which is the entire reason `file.artifact` exists as a kind. Ingestion is also only ever a *suggestion*: docs/03 §2 says you cannot place a broken node by accident, so the wizard shows the kind, the fields and the reason, and accepting goes through the same command bus with the same validation and the same undo as any other edit.
+
+## 2026-09-10 — The inspector hides when nothing is selected
+**Decision:** `Inspector` returns null with no selection, and the chrome that dodges it (HUD, minimap, toasts) reclaims the space via a `--dodge` variable driven by an `inspector-open` class.
+**Rejected:** Keeping an empty "NOTHING SELECTED" card.
+**Why:** It covered the right third of the board permanently in order to say nothing, and it was worst exactly when it hurt most — panning right, where the part of the map you are heading toward is the part hidden. The help bar already says how to select something.
+
+## 2026-09-10 — Per-kind component silhouettes, drawn rather than kitbashed
+**Decision:** `src/renderer/board/component-art.ts` draws a distinct package per node kind — DIP, QFP, CPU, drive, M.2 module, EPROM, switch, cartridge, jack, regulator, crystal, PSU — from the locked palette.
+**Rejected:** Kitbashing them from the vendor sheets; leaving every node an identical rectangle.
+**Why:** A board of identical boxes has to be read one node at a time; a real board is legible at a glance because the packages differ. The vendor packs cannot supply these — `assets/vendor/` is a roguelike pack with no circuit components in it at all, which is recorded in that pack's SOURCE.md, and docs/05 is explicit that a labelled rectangle beats a bad kitbash. What the project does have is the component vocabulary in docs/02, and drawing it straight from the palette is both honest and exact.
+
+## 2026-09-10 — Copper is an edge colour, not a surface colour
+**Decision:** Package bodies are mask-light; copper appears only as outlines, pads, legs and connector fingers. `outline()` is the workhorse, not a filled rect.
+**Rejected:** The first version of the silhouettes, which used copper-dark fills for shield cans, label plates and gauges.
+**Why:** It shipped to a screenshot and looked wrong immediately: every component came out a brown slab and the board read worse than the plain rectangles it replaced. An M.2 shield can filled at `inset 3` covers essentially the whole module. docs/02 already says what copper is for — "traces, pads, pin legs, connector fingers" — and every one of those is an edge or a small detail. Re-verified after the fix: 9 colours on screen, all exact `skynet.gpl` entries, zero blends, zero fringes.
+
+## 2026-09-10 — Long names go on a nameplate above the package, never wrapped
+**Decision:** The node's drawn box extends upward into a single-line nameplate sized to the full name. The designator stays on the package. The FOOTPRINT is unchanged.
+**Rejected:** Wrapping the name across lines (what M1 did); widening the footprint to fit the name.
+**Why:** `THERE COULD BE GIANTS` on a 4-tile drive wrapped to three lines of 6px type and stopped being readable, which was the actual complaint. Widening the footprint was the obvious alternative and is the wrong one: that name needs eight tiles against a four-tile part, so auto-widening would collide with neighbours, fail the validator's overlap rule, and reshuffle a hand-laid board. Extending the texture instead leaves collision, A* routing and hit-testing all working on the grid the board data describes — and a silkscreen label longer than the part it names is exactly what a real board does. `test/component-art.test.ts` pins that the plate is one line high, is the same height for every name, and never pushes a node off the top edge.

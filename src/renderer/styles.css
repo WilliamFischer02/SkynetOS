@@ -142,9 +142,16 @@ canvas {
   color: var(--mask-dark);
 }
 
+/*
+ * The chrome dodges the inspector only while it is open. `--dodge` is 0 when nothing is
+ * selected, so the HUD, the minimap and the toasts all reclaim the right-hand side.
+ */
+.app { --dodge: calc(2 * var(--gap)); }
+.app.inspector-open { --dodge: calc(var(--inspector-width) + 2 * var(--gap)); }
+
 .hud {
   top: calc(2 * var(--gap));
-  right: calc(var(--inspector-width) + 2 * var(--gap));
+  right: var(--dodge);
   display: flex;
   gap: calc(3 * var(--gap));
   flex-wrap: wrap;
@@ -377,7 +384,7 @@ canvas {
   position: absolute;
   /* Above the minimap, which owns the bottom-right corner. */
   bottom: calc(34 * var(--gap));
-  right: calc(var(--inspector-width) + 2 * var(--gap));
+  right: var(--dodge);
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -417,7 +424,7 @@ canvas {
 .minimap {
   position: absolute;
   bottom: calc(2 * var(--gap));
-  right: calc(var(--inspector-width) + 2 * var(--gap));
+  right: var(--dodge);
   z-index: 15;
   padding: var(--gap);
   background: var(--mask-dark);

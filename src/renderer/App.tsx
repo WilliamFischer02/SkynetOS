@@ -171,7 +171,13 @@ export function App(): React.JSX.Element {
 
   return (
     <div
-      className={editMode ? 'app edit-mode' : 'app'}
+      className={[
+        'app',
+        editMode ? 'edit-mode' : '',
+        // Drives the chrome offsets in styles.css: everything that dodges the inspector
+        // reclaims that space the moment nothing is selected.
+        selectedId ? 'inspector-open' : ''
+      ].filter(Boolean).join(' ')}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >

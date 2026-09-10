@@ -32,7 +32,7 @@ import {
 } from './camera.js';
 import { buildSubstrate } from './substrate.js';
 import type { Point } from './traces.js';
-import { SpriteStore } from './sprites.js';
+import { SpriteStore, nameplateOffset } from './sprites.js';
 import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
 import { buildRouteGrid, routeAStar, type RouteObstacle } from './router.js';
 import { buildBrokenOverlay, buildSelectionOverlay, buildSilkNote, buildZone } from './silk-layer.js';
@@ -369,9 +369,12 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             h: fp.h,
             designator: node.designator ?? '',
             name: node.name,
+            kind: node.kind,
             maskLight: props.board.theme.maskLight,
+            signal: props.board.theme.signal,
             face
           });
+          sprite.y = node.pos.y * TILE - nameplateOffset(node.name);
         };
 
         let placeholderCount = 0;
@@ -384,13 +387,17 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             h: fp.h,
             designator: node.designator ?? '',
             name: node.name,
-            maskLight: props.board.theme.maskLight
+            kind: node.kind,
+            maskLight: props.board.theme.maskLight,
+            signal: props.board.theme.signal
           });
           if (!sprites.has(key)) placeholderCount++;
 
           const sprite = new Sprite(texture);
           sprite.x = node.pos.x * TILE;
-          sprite.y = node.pos.y * TILE;
+          // The nameplate lives ABOVE the grid position; the footprint itself is unchanged, so
+          // collision, routing and hit-testing all still use the grid the board data describes.
+          sprite.y = node.pos.y * TILE - nameplateOffset(node.name);
           sprite.roundPixels = true;
           nodeLayer.addChild(sprite);
           spriteById.set(node.id, sprite);

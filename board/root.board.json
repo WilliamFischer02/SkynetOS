@@ -30,11 +30,12 @@
         "w": 8,
         "h": 6
       },
-      "url": "https://claude.ai/project/REPLACE_WITH_JARVIS_PROJECT_ID",
+      "url": "https://claude.ai/share/5ce623ac-0e22-4f5f-83c7-08ff9581c1fb",
       "partition": "persist:jarvis",
-      "persona": "codex/persona.md",
+      "persona": "C:/dev/SkynetOS/codex/personas/persona.md",
       "codexRef": "codex/index.md",
-      "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp."
+      "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp.",
+      "image": "C:/dev/SkynetOS/assets/sprites/jarvis-sprite.png"
     },
     {
       "id": "u3_jarvis_hands",

@@ -9,6 +9,7 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 
 ## Meta
 - `persona.md` — who JARVIS is and how it behaves.
+- `personas/jarvis-voice.md` — how JARVIS sounds and what he knows. Read with persona.md.
 - `JARVIS-SETUP.md` — how JARVIS is launched, which surface is which, and what the two bodies can
   and cannot each do. Read once; it is setup, not standing context.
 - `board-map.md` — auto-generated room/node inventory. Regenerate with `board_read`. NOT WRITTEN YET.
@@ -25,6 +26,7 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/there-could-be-giants.md` — Kaiju-scale giants, ships to the Goobtropolis server. ACTIVE.
 - `projects/time-served.md` — Server-side stats HUD (days/time/deaths), modid timeserved. RUNNING IN PROD.
 - `projects/goobtropolis.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE.
+- `projects/LociBook.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.

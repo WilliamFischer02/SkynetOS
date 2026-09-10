@@ -54,16 +54,13 @@ export function Inspector(): React.JSX.Element | null {
 
   const node = selectedId ? board.nodes.find((n) => n.id === selectedId) : undefined;
 
-  if (!node) {
-    return (
-      <aside className="inspector">
-        <div className="inspector-empty">
-          <p>NOTHING SELECTED</p>
-          <p className="dim">CLICK A COMPONENT, OR TAB THROUGH THEM</p>
-        </div>
-      </aside>
-    );
-  }
+  /*
+   * Nothing selected means no panel at all. It used to render an empty "NOTHING SELECTED" card,
+   * which meant a third of the board was permanently hidden behind a panel that had nothing to
+   * say — worst when panning, because the part of the map you were panning toward was the part
+   * covered up. The help bar already tells you how to select something.
+   */
+  if (!node) return null;
 
   const target = targets[node.id];
   const fp = footprintOf(node);

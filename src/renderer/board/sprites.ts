@@ -12,8 +12,10 @@
 
 import { Texture, TextureSource, Rectangle } from 'pixi.js';
 import { COPPER_DARK, SILK } from '@shared/palette.js';
+import type { NodeKind } from '@shared/types.js';
 import { TILE } from './camera.js';
 import { renderSilkText, measureSilkText } from './silkscreen.js';
+import { COMPONENT_STYLE, drawComponent } from './component-art.js';
 
 export interface AtlasFrame {
   frame: { x: number; y: number; w: number; h: number };
@@ -31,15 +33,31 @@ export interface PlaceholderSpec {
   h: number;
   /** The reference designator printed on it — U4, J2, D7. */
   designator: string;
-  /** The node's name, printed beside the designator: `U1 JARVIS`. */
+  /** The node's name. Printed on a nameplate above the package, always on ONE line. */
   name?: string;
+  /** The node kind, which decides the package silhouette. See component-art.ts. */
+  kind: NodeKind;
   /** The current room's mask-light. Stands in for @mask-light until the M2 palette shader lands. */
   maskLight: string;
+  /** The room's signal colour, for the single accent each package is allowed. */
+  signal: string;
   /**
    * A decoded face image, already dithered to the room's six colours by the mosaic service and
    * already exactly w*16 x h*16 pixels. Drawn as the component body instead of the flat fill.
    */
   face?: HTMLImageElement | null;
+}
+
+/** Height of the nameplate strip above a package, in px. One line of 11px silkscreen plus edges. */
+export const NAMEPLATE_HEIGHT = 15;
+
+/**
+ * How far ABOVE its grid position a node's texture starts, because the nameplate sits there.
+ * The renderer needs this to place the sprite; the footprint itself is unchanged, so collisions,
+ * routing and hit-testing all still work on the grid the board data describes.
+ */
+export function nameplateOffset(name: string | undefined): number {
+  return name && name.trim() ? NAMEPLATE_HEIGHT : 0;
 }
 
 /**
@@ -229,71 +247,90 @@ export class SpriteStore {
    * inner bevel — both already in the tri-tone, both already sanctioned for "component outlines"
    * by docs/02. Total colours: 3. Well inside the 6-colour budget.
    */
+  /**
+   * A node's drawn component: the package, plus a nameplate carrying its full name on ONE line.
+   *
+   * Two problems this solves, both reported from looking at the board:
+   *
+   * 1. **Everything looked the same.** Every node was an identical rectangle with different text
+   *    in it, so the board was a wall of boxes you had to read one at a time. Now the package
+   *    silhouette differs per kind — a DIP has pin legs, a drive has a platter and a label plate,
+   *    a cartridge has connector fingers — and you can tell what something is without reading it.
+   *    See component-art.ts.
+   *
+   * 2. **Names wrapped and became unreadable.** `THERE COULD BE GIANTS` on a 4-tile drive wrapped
+   *    across three lines of 6px type. The name now goes on a nameplate ABOVE the package, sized
+   *    to the text, never wrapped — which is how a real board prints a silkscreen label that is
+   *    longer than the part it belongs to.
+   *
+   * The nameplate extends the texture, NOT the footprint. Collision, routing and hit-testing all
+   * still work on the grid the board data describes, so nothing about the layout, the schema or
+   * the validator changes — the label is printed on the board, the way `note.silk` is.
+   */
   placeholder(spec: PlaceholderSpec): Texture {
-    const key = `${spec.w}x${spec.h}:${spec.designator}:${spec.name ?? ''}:${spec.maskLight}:${spec.face?.src.length ?? 0}`;
+    const name = (spec.name ?? '').trim().toUpperCase();
+    const key = `${spec.kind}:${spec.w}x${spec.h}:${spec.designator}:${name}:${spec.maskLight}:${spec.signal}:${spec.face?.src.length ?? 0}`;
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 
-    const width = Math.max(TILE, spec.w * TILE);
-    const height = Math.max(TILE, spec.h * TILE);
+    const bodyW = Math.max(TILE, spec.w * TILE);
+    const bodyH = Math.max(TILE, spec.h * TILE);
+
+    const plate = name ? renderSilkText(name, 11, SILK) : null;
+    const plateH = plate ? NAMEPLATE_HEIGHT : 0;
+    const plateW = plate ? plate.width + 6 : 0;
+
+    const width = Math.max(bodyW, plateW);
+    const height = bodyH + plateH;
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('2D canvas context unavailable — cannot draw placeholder sprite');
+    if (!ctx) throw new Error('2D canvas context unavailable — cannot draw component sprite');
     ctx.imageSmoothingEnabled = false;
 
-    // Body: the face image if the node has one, otherwise a flat mask-light fill.
-    // The face arrives already dithered to the room's six colours and already at exactly this
-    // size, so it is a straight 1:1 blit — no scaling, no resampling, nothing to smooth.
-    if (spec.face) {
-      ctx.drawImage(spec.face, 0, 0, width, height);
-    } else {
+    // --- nameplate, above the package, one line, whatever the name's length ---
+    if (plate) {
       ctx.fillStyle = spec.maskLight;
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, plateW, plateH - 2);
+      ctx.fillStyle = SILK;
+      ctx.fillRect(0, 0, plateW, 1);
+      ctx.fillRect(0, plateH - 3, plateW, 1);
+      ctx.fillRect(0, 0, 1, plateH - 2);
+      ctx.fillRect(plateW - 1, 0, 1, plateH - 2);
+      ctx.drawImage(plate.canvas, 3, Math.floor((plateH - 2 - plate.height) / 2));
+      // A short stem down to the package, so the plate reads as belonging to it.
+      ctx.fillStyle = COPPER_DARK;
+      ctx.fillRect(Math.min(plateW, bodyW) >> 1, plateH - 3, 1, 3);
     }
 
-    // 1px silkscreen outline, drawn as four fills so it lands on exact pixel boundaries.
-    // A 1px strokeRect straddles the boundary and produces two half-lit rows.
-    ctx.fillStyle = SILK;
-    ctx.fillRect(0, 0, width, 1);
-    ctx.fillRect(0, height - 1, width, 1);
-    ctx.fillRect(0, 0, 1, height);
-    ctx.fillRect(width - 1, 0, 1, height);
+    // --- the package itself ---
+    if (spec.face) {
+      // A face image replaces the package body entirely: it is the component's printed face.
+      ctx.drawImage(spec.face, 0, plateH, bodyW, bodyH);
+      ctx.fillStyle = SILK;
+      ctx.fillRect(0, plateH, bodyW, 1);
+      ctx.fillRect(0, plateH + bodyH - 1, bodyW, 1);
+      ctx.fillRect(0, plateH, 1, bodyH);
+      ctx.fillRect(bodyW - 1, plateH, 1, bodyH);
+    } else {
+      drawComponent(
+        { ctx, x: 0, y: plateH, w: bodyW, h: bodyH, maskLight: spec.maskLight, signal: spec.signal },
+        COMPONENT_STYLE[spec.kind] ?? { silhouette: 'plain', inset: 2 }
+      );
+    }
 
-    // Copper-dark inner bevel on the bottom/right, the way a real component casts on the mask.
-    ctx.fillStyle = COPPER_DARK;
-    ctx.fillRect(1, height - 2, width - 2, 1);
-    ctx.fillRect(width - 2, 1, 1, height - 2);
-
-    // Label: `U1 JARVIS` where it fits, falling back through two lines to designator-only.
-    const layout = layoutLabel(
-      spec.designator,
-      spec.name,
-      width,
-      height,
-      (text) => measureSilkText(text, 11)
-    );
-
-    if (layout.lines.length) {
-      const rendered = layout.lines.map((line) => renderSilkText(line, 11, SILK));
-      const gap = 1;
-      const totalH = rendered.reduce((sum, r) => sum + r.height, 0) + gap * (rendered.length - 1);
-      let ty = Math.floor((height - totalH) / 2);
-
-      for (const line of rendered) {
-        const tx = Math.floor((width - line.width) / 2);
-        // Over a face image the silkscreen needs a ground to stay readable, the way a real
-        // component's printed marking sits on a cleared patch of the package. One flat rect,
-        // no shadow, no outline glow.
-        if (spec.face) {
-          ctx.fillStyle = spec.maskLight;
-          ctx.fillRect(tx - 2, ty, line.width + 4, line.height);
-        }
-        ctx.drawImage(line.canvas, tx, ty);
-        ty += line.height + gap;
-      }
+    // --- designator, on the package, centred. The name is on the plate; this is the part number.
+    const desig = spec.designator.trim().toUpperCase();
+    if (desig && measureSilkText(desig, 11) <= bodyW - 6 && bodyH >= 16) {
+      const rendered = renderSilkText(desig, 11, SILK);
+      const tx = Math.floor((bodyW - rendered.width) / 2);
+      const ty = plateH + Math.floor((bodyH - rendered.height) / 2);
+      // Clear a patch behind it, the way a real package leaves bare plastic for its marking.
+      ctx.fillStyle = spec.maskLight;
+      ctx.fillRect(tx - 2, ty - 1, rendered.width + 4, rendered.height + 2);
+      ctx.drawImage(rendered.canvas, tx, ty);
     }
 
     const texture = Texture.from(canvas);
