@@ -24,6 +24,23 @@ export interface Settings {
   undoDepth: number;
   /** Days to keep board/.snapshots/. */
   snapshotRetentionDays: number;
+
+  /**
+   * The rolling window the usage meter reports over, in hours. 5 matches the shape of Claude's
+   * own rate-limit window and is short enough that "tokens per hour" describes what you are
+   * doing now rather than what you did on Tuesday.
+   */
+  usageWindowHours: number;
+
+  /**
+   * Weighted tokens you consider one window's worth. Null until you set one.
+   *
+   * There is no file on this disk and no local API that says how much of a subscription is left,
+   * so SkynetOS cannot know it. Prime directive 1 forbids inventing it: with this unset the meter
+   * shows the real rate and says SET A BUDGET where the allowance would go, rather than printing
+   * a confident fiction. Weighted means cache reads count at a tenth — see packages/shared/usage.ts.
+   */
+  tokenBudget: number | null;
 }
 
 const DEFAULTS: Settings = {
@@ -32,7 +49,9 @@ const DEFAULTS: Settings = {
   reducedMotion: false,
   streamMode: false,
   undoDepth: 200,
-  snapshotRetentionDays: 30
+  snapshotRetentionDays: 30,
+  usageWindowHours: 5,
+  tokenBudget: null
 };
 
 let cached: Settings | null = null;

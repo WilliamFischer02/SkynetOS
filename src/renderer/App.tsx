@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
 import { Inspector } from './ui/Inspector.js';
 import { Iris } from './ui/Iris.js';
+import { UsageMeter } from './ui/UsageMeter.js';
 import { Minimap } from './ui/Minimap.js';
 import { SessionDock } from './ui/SessionDock.js';
 import { DragBadges } from './ui/DragBadges.js';
@@ -47,6 +48,8 @@ export function App(): React.JSX.Element {
   const openNode = useBoardStore((s) => s.openNode);
   const moveNode = useBoardStore((s) => s.moveNode);
   const resizeNode = useBoardStore((s) => s.resizeNode);
+  const usageRoutes = useBoardStore((s) => s.usageRoutes);
+  const refreshUsageRoutes = useBoardStore((s) => s.refreshUsageRoutes);
   const undo = useBoardStore((s) => s.undo);
   const redo = useBoardStore((s) => s.redo);
   const toggleFocus = useBoardStore((s) => s.toggleFocus);
@@ -67,6 +70,16 @@ export function App(): React.JSX.Element {
   // Live session and service state is pushed from main; the dock must never poll.
   const subscribeToProcesses = useBoardStore((s) => s.subscribeToProcesses);
   useEffect(() => subscribeToProcesses(), [subscribeToProcesses]);
+
+  /*
+   * Usage drives the couriers, and usage moves on the scale of minutes — a scan reads every
+   * conversation file on this disk. Polling it per frame would cost more than the freshness is
+   * worth, so this is deliberately slow and deliberately not tied to the render loop.
+   */
+  useEffect(() => {
+    const timer = setInterval(() => { void refreshUsageRoutes(); }, 30_000);
+    return () => clearInterval(timer);
+  }, [refreshUsageRoutes]);
 
   useEffect(() => {
     void window.skynet['display:info']().then((info) => {
@@ -193,6 +206,7 @@ export function App(): React.JSX.Element {
         onActivate={(nodeId) => void openNode(nodeId)}
         onMoveNode={(nodeId, pos) => void moveNode(nodeId, pos)}
         onResizeNode={(nodeId, footprint) => void resizeNode(nodeId, footprint)}
+        usageRoutes={usageRoutes}
         onStatus={onStatus}
         cameraRef={cameraRef}
         jumpTo={jumpTo}
@@ -208,6 +222,9 @@ export function App(): React.JSX.Element {
         {editMode ? <span className="mode-badge">EDIT BOARD</span> : null}
       </div>
 
+      {/* Top-left, under the breadcrumb: what this is costing, measured off disk. */}
+      <UsageMeter />
+
       <div className="hud">
         {status ? (
           <>
@@ -218,6 +235,7 @@ export function App(): React.JSX.Element {
             <span>{board.nodes.length} NODES · {board.edges.length} TRACES</span>
             {status.fitsOnScreen ? <span className="warn">WHOLE BOARD VISIBLE — NOTHING TO PAN</span> : null}
             {status.faceCount > 0 ? <span className="ok-text">{status.faceCount} FACE{status.faceCount === 1 ? '' : 'S'}</span> : null}
+            {status.courierCount > 0 ? <span className="ok-text" title="Couriers walking. One robot per packet, in proportion to real Claude usage per project.">{status.courierCount} COURIER{status.courierCount === 1 ? '' : 'S'}</span> : null}
             {liveSessionCount > 0 ? <span className="ok-text">{liveSessionCount} LIVE</span> : null}
             {staleCount > 0 ? <span className="warn">{staleCount} STALE</span> : null}
             <span className={status.fallbackCount > 0 ? 'warn' : undefined}>

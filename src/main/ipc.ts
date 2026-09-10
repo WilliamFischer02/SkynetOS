@@ -8,6 +8,7 @@ import { getSettings } from './services/settings.js';
 import { lastClaudeSessionId } from './services/db.js';
 import { resumeCommandLine } from './services/launch-args.js';
 import { mosaicForNode } from './services/mosaic.js';
+import { readUsage, usageRoutes } from './services/usage.js';
 import {
   listSessions,
   startSession,
@@ -102,6 +103,10 @@ const handlers: Handlers = {
     if (!node) return { ok: false, error: `NO SUCH NODE — "${nodeId}"` };
     return mosaicForNode(load.board, node, slot ?? 'face');
   },
+
+  'usage:summary': () => readUsage(),
+
+  'usage:routes': (boardId) => usageRoutes(boardId),
 
   'session:start': (boardId, nodeId, options) =>
     startSession(boardId, nodeOrThrow(boardId, nodeId), { fresh: options?.fresh ?? false }),

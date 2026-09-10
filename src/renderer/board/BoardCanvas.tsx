@@ -31,6 +31,7 @@ import {
   TILE
 } from './camera.js';
 import { buildSubstrate } from './substrate.js';
+import { CourierLayer, courierColor, courierSource, type CourierRoute } from './couriers.js';
 import type { Point } from './traces.js';
 import { SpriteStore, nameplateOffset } from './sprites.js';
 import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
@@ -76,6 +77,13 @@ export interface BoardCanvasProps {
   cameraRef?: React.RefObject<{ x: number; y: number; zoom: number; viewW: number; viewH: number }>;
   /** Bumped by the minimap to ask the camera to centre somewhere. */
   jumpTo?: { x: number; y: number; seq: number } | null;
+  /**
+   * Per-node share of real Claude usage. Drives the couriers — the little robots that carry
+   * packets to whichever node is actually consuming tokens. Empty means nothing walks.
+   */
+  usageRoutes?: { nodeId: string; share: number }[];
+  /** docs/02: state must survive without animation. With this on, no couriers walk at all. */
+  reducedMotion?: boolean;
 }
 
 export interface BoardCanvasStatus {
@@ -96,6 +104,8 @@ export interface BoardCanvasStatus {
   /** How many traces the A* router handled, and how many fell back to the dumb Z-route. */
   routedCount: number;
   fallbackCount: number;
+  /** Couriers walking right now, so the layer is never a mystery. */
+  courierCount: number;
   fps: number;
 }
 
@@ -165,6 +175,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let noteLayer: Container | null = null;
     let gridLayer: Container | null = null;
     let overlayLayer: Container | null = null;
+    let couriers: CourierLayer | null = null;
 
     const spriteById = new Map<string, Sprite>();
     const faces = new Map<string, ImageCacheEntry>();
@@ -675,6 +686,45 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       }
     };
 
+    /**
+     * Turn per-node usage shares into walkable routes.
+     *
+     * The source is the JARVIS head when the board has one — the packets are its errands, and it
+     * is the node with jurisdiction over everything. Inside a room there is no head, so they come
+     * in from the nearest edge: work arriving from outside.
+     */
+    const buildCourierRoutes = (): void => {
+      if (!couriers) return;
+      const shares = live.current.usageRoutes ?? [];
+      if (!shares.length) { couriers.setRoutes([]); return; }
+
+      const head = board.nodes.find((n) => n.kind === 'agent.jarvis');
+      const headPoint = head
+        ? (() => {
+            const fp = footprintOf(head);
+            return { x: head.pos.x * TILE + (fp.w * TILE) / 2, y: head.pos.y * TILE + (fp.h * TILE) / 2 };
+          })()
+        : null;
+
+      const routes: CourierRoute[] = [];
+      for (const share of shares) {
+        const node = nodeById(share.nodeId);
+        if (!node || share.share <= 0) continue;
+        // A head does not send packets to itself.
+        if (head && node.id === head.id) continue;
+        const fp = footprintOf(node);
+        const to = { x: node.pos.x * TILE + (fp.w * TILE) / 2, y: node.pos.y * TILE + (fp.h * TILE) / 2 };
+        routes.push({
+          nodeId: node.id,
+          from: courierSource(headPoint, to, boardPx),
+          to,
+          share: share.share,
+          color: courierColor(node.id)
+        });
+      }
+      couriers.setRoutes(routes);
+    };
+
     const applyFocus = (): void => {
       const { focus, selectedId } = live.current;
       if (!focus || !selectedId) {
@@ -708,6 +758,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       buildGrid();
       rebuildOverlay();
       applyFocus();
+      buildCourierRoutes();
       builtRef.current = next;
     };
 
@@ -758,6 +809,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         traceLayer = new Container(); world.addChild(traceLayer);
         zoneLayer = new Container(); world.addChild(zoneLayer);
         nodeLayer = new Container(); world.addChild(nodeLayer);
+        couriers = new CourierLayer(); world.addChild(couriers.container);
         noteLayer = new Container(); world.addChild(noteLayer);
         gridLayer = new Container(); world.addChild(gridLayer);
         overlayLayer = new Container(); world.addChild(overlayLayer);
@@ -779,6 +831,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         let lastEditMode = live.current.editMode;
         let lastDragKey = '';
         let lastJumpSeq = live.current.jumpTo?.seq ?? 0;
+        let lastRouteKey = '';
 
         app.ticker.add((ticker) => {
           const view = viewport();
@@ -832,6 +885,21 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             world.scale.set(camera.zoom);
           }
 
+          /*
+           * Couriers. Routes are rebuilt only when the shares actually change — usage is polled
+           * every 20 seconds and a rebuild allocates, so doing it per frame would be pure waste.
+           *
+           * They stop entirely in Edit Board mode as well as under reduced motion: it is hard
+           * enough to drop a component on the right tile without eight robots walking over it.
+           */
+          const routeKey = (live.current.usageRoutes ?? [])
+            .map((r) => `${r.nodeId}:${r.share.toFixed(3)}`).join('|');
+          if (routeKey !== lastRouteKey) {
+            lastRouteKey = routeKey;
+            buildCourierRoutes();
+          }
+          couriers?.tick(live.current.reducedMotion || live.current.editMode ? 0 : 1);
+
           if (live.current.editMode !== lastEditMode) {
             lastEditMode = live.current.editMode;
             buildGrid();
@@ -871,6 +939,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               faceCount,
               routedCount,
               fallbackCount,
+              courierCount: couriers?.count ?? 0,
               fps
             });
           }
@@ -919,6 +988,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       window.removeEventListener('pointerup', endDrag);
       window.removeEventListener('pointercancel', endDrag);
       host.removeEventListener('wheel', onWheel);
+      couriers?.destroy();
+      couriers = null;
       if (app) {
         app.canvas.removeEventListener('pointerdown', onPointerDown);
         app.canvas.removeEventListener('dblclick', onDoubleClick);

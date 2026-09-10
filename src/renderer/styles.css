@@ -702,3 +702,77 @@ canvas {
 .footprint-cell .input { width: calc(56 * var(--p)); }
 .footprint-x { color: var(--copper-dark); padding-bottom: calc(2 * var(--p)); }
 .footprint-note { color: var(--copper-dark); text-transform: uppercase; padding-bottom: calc(2 * var(--p)); }
+
+/* ---------- usage meter: top-left, always on ---------- */
+
+.usage-meter {
+  position: absolute;
+  top: calc(9 * var(--gap));
+  left: calc(2 * var(--gap));
+  z-index: 30;
+  min-width: calc(210 * var(--p));
+  padding: var(--gap);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+  /* The same hard 2px drop the buttons wear, so the meter reads as mounted on the board. */
+  box-shadow: calc(2 * var(--p)) calc(2 * var(--p)) 0 0 rgba(0, 0, 0, 0.5);
+}
+
+.usage-meter.ok { border-color: var(--copper); }
+.usage-meter.warn { border-color: var(--warn); }
+.usage-meter.fault { border-color: var(--fault); }
+
+.usage-head {
+  display: flex;
+  gap: var(--gap);
+  align-items: baseline;
+  width: 100%;
+  font: inherit;
+  text-transform: uppercase;
+  color: var(--copper);
+  background: none;
+  border: 0;
+  padding: 0 0 var(--gap) 0;
+  cursor: pointer;
+}
+
+.usage-head:hover { color: var(--signal); }
+.usage-window { color: var(--copper-dark); }
+.usage-toggle { margin-left: auto; color: var(--copper-dark); }
+
+.usage-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 calc(2 * var(--gap));
+  margin: 0;
+}
+
+.usage-rows dt { color: var(--copper-dark); text-transform: uppercase; }
+.usage-rows dd { margin: 0; text-align: right; color: var(--silk); }
+.usage-unit { color: var(--copper-dark); }
+.usage-unset { color: var(--warn); }
+.usage-error { color: var(--fault); overflow-wrap: anywhere; }
+
+/* Ten whole cells. Never a partial one — a fractional cell edge is a sub-pixel edge. */
+.usage-bar { display: flex; gap: var(--p); margin-top: var(--gap); }
+.usage-bar .cell {
+  flex: 1 1 0;
+  height: calc(5 * var(--p));
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+}
+.usage-meter.ok .usage-bar .cell.on { background: var(--signal); border-color: var(--signal); }
+.usage-meter.warn .usage-bar .cell.on { background: var(--warn); border-color: var(--warn); }
+.usage-meter.fault .usage-bar .cell.on { background: var(--fault); border-color: var(--fault); }
+
+.usage-projects {
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: var(--p) solid var(--copper-dark);
+}
+.usage-projects-head { color: var(--copper); text-transform: uppercase; margin-bottom: calc(0.5 * var(--gap)); }
+.usage-project { display: flex; gap: var(--gap); align-items: baseline; }
+.up-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-tokens { color: var(--signal); }
+.up-msgs { color: var(--copper-dark); }
+.usage-foot { margin-top: var(--gap); color: var(--copper-dark); text-transform: uppercase; }

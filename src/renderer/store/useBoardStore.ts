@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Board, BoardNode } from '@shared/types.js';
 import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js';
 import type { ArtifactInfo, BoardLoad, IngestSuggestion, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
+import type { UsageRoute } from '@shared/usage.js';
 import type { TargetInfo } from '@shared/targets.js';
 
 /**
@@ -69,6 +70,13 @@ interface BoardState {
   /** Resolved build outputs by node id: filename, version, and whether it is behind its source. */
   artifacts: Record<string, ArtifactInfo>;
   refreshArtifacts: () => Promise<void>;
+  /**
+   * Per-node share of real Claude usage on the board you are looking at. Drives the couriers.
+   * Refreshed on a slow timer — usage moves on the scale of minutes and a scan reads every
+   * conversation file on disk.
+   */
+  usageRoutes: UsageRoute[];
+  refreshUsageRoutes: () => Promise<void>;
   /** Pending drop-in suggestions awaiting confirmation in the wizard. */
   pendingIngest: { suggestions: IngestSuggestion[]; pos: { x: number; y: number } } | null;
   offerIngest: (paths: string[], pos: { x: number; y: number }) => Promise<void>;
@@ -142,6 +150,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   sessions: [],
   services: [],
   artifacts: {},
+  usageRoutes: [],
   pendingIngest: null,
 
   loadBoard: async (boardId) => {
@@ -169,6 +178,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       set({ targets: byNodeId(statuses), history });
       // Artifacts and watchers follow the board you are actually looking at.
       void get().refreshArtifacts();
+      void get().refreshUsageRoutes();
       void window.skynet['watch:board'](boardId);
     }
   },
@@ -207,6 +217,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       transition: 'opening'
     });
     void get().refreshArtifacts();
+    void get().refreshUsageRoutes();
     void window.skynet['watch:board'](load.board.id);
   },
 
@@ -240,6 +251,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       transition: 'opening'
     });
     void get().refreshArtifacts();
+    void get().refreshUsageRoutes();
     void window.skynet['watch:board'](parent.boardId);
   },
 
@@ -303,6 +315,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
 
     return () => { offSessions(); offServices(); offFiles(); };
+  },
+
+  refreshUsageRoutes: async () => {
+    const { boardId, board } = get();
+    if (!board) return;
+    const routes = await window.skynet['usage:routes'](boardId);
+    // Guard against a room change that landed while the scan was running: routes for the board
+    // you just left would send couriers to node ids that are not here.
+    if (get().boardId !== boardId) return;
+    set({ usageRoutes: routes });
   },
 
   refreshArtifacts: async () => {

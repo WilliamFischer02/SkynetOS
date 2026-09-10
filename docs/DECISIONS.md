@@ -480,3 +480,58 @@ does not work — MinecraftOS already has zones 26 tiles wide, because a zone is
 around a cluster and is meant to span a room, while a component is an object you pick out at a
 glance. A first attempt at a flat cap of 24 failed `validate:board` on the existing zones, which is
 the schema doing its job.
+
+## 2026-09-10 — The usage meter measures, and says so when it cannot
+
+**Decision.** Three values, top-left, always on: RATE, POOL LEFT, TIME LEFT. The rate is measured
+from `~/.claude/projects/**/*.jsonl`, where Claude Code records a real `usage` object and a real
+timestamp on every assistant message. POOL LEFT and TIME LEFT are `null` — rendered as
+"SET A BUDGET" — until the user puts a `tokenBudget` in settings.json.
+
+**Why the pool is not guessed.** How much of a subscription is left is not on this disk and no
+local API reports it. Prime directive 1: a meter that invents an allowance is worse than one that
+admits it does not know, because you would plan around the invented number.
+
+**Weighting.** Cache reads count at a tenth. SkynetOS's own project directory holds 445M cache-read
+tokens against 1.6M output; counted at par, every figure becomes a cache-read figure wearing a
+usage label, and the couriers would walk in proportion to conversation LENGTH rather than to work
+done. It is deliberately not dollars — pricing changes and a stale money number is worse than an
+honest relative one.
+
+**Cost.** 3.4 billion tokens across eight projects in files up to 22 MB. Only lines containing
+`"usage"` or `"cost-state"` are parsed at all (a string test is orders of magnitude cheaper than
+`JSON.parse`), results are cached against each directory's newest mtime and file count, and the
+window start is rounded to a minute so a moving boundary does not invalidate every scan.
+
+## 2026-09-10 — Couriers: the board shows where the tokens went
+
+**Decision.** Little robots carry packets from the JARVIS head to whichever node is consuming
+Claude, in proportion to real measured usage. Each destination has its own deterministic colour
+derived from its node id. They walk orthogonally on whole pixels, one axis at a time, and
+glitch-dissolve on arrival — four frames of whole pixels punched out on a fixed pattern, not an
+alpha fade, because docs/02 forbids partial alpha.
+
+**Attribution.** A `drive.room` stands in for everything inside it, resolved by reading the child
+board (depth-limited, so a cycle in user-editable data degrades to "no couriers" rather than a
+stack overflow). A project claimed by several nodes has its share SPLIT between them — otherwise a
+repo that appears both as a `store.repo` and inside a room drive would generate twice the traffic
+it earned, and the board would be lying about exactly the proportions this feature exists to show.
+
+**What does not get couriers.** Anything with no working directory and no conversation. A
+`link.url` is a bookmark, not a consumer.
+
+**Off switches.** No couriers under `reducedMotion` (docs/02: state must survive without
+animation) and none in Edit Board mode — it is hard enough to drop a component on the right tile
+without eight robots walking over it. Routes are rebuilt only when the shares change, not per
+frame. Capped at 90 on screen; past that it is noise, not information.
+
+**Source.** The JARVIS head on the root board, because the packets are its errands. Inside a room
+there is no head, so they enter from the nearest edge — work arriving from outside, which is what
+William described.
+
+## 2026-09-10 — Renderer errors reach the smoke log
+
+A React hooks violation (an effect added after an early return) rendered a completely blank window,
+and the smoke capture saved a screenshot of an empty board with no hint of why: the error existed
+only in a devtools window a headless run never opens. `console-message` now forwards anything that
+is not `info`, so a capture that produces a blank frame also produces the reason.

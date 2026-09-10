@@ -15,6 +15,7 @@ import type { CommandRequest, CommandResult, HistoryStatus } from './commands.js
 import type { FieldControl } from './node-fields.js';
 import type { TargetInfo } from './targets.js';
 import type { Board, BoardNode, Footprint, LaunchMode, NodeKind } from './types.js';
+import type { UsageRoute, UsageSummary } from './usage.js';
 
 /** What a board file's load attempt produced. A failure is data, not an exception. */
 export type BoardLoad =
@@ -187,6 +188,21 @@ export interface SkynetApi {
   // --- node images: the wallpaper that fills the footprint, and the logo centred on it ---
   'mosaic:forNode': (boardId: string, nodeId: string, slot?: 'face' | 'logo') => MosaicResult;
 
+  /**
+   * Real Claude usage, read off this machine's own conversation files.
+   *
+   * Drives the meter in the top-left corner and the couriers that carry packets across the board.
+   * See packages/shared/usage.ts for what is measured and what is deliberately left null.
+   */
+  'usage:summary': () => UsageSummary;
+  /**
+   * The same usage, attributed to the nodes of one board.
+   *
+   * A room drive stands in for everything inside it, so the root board shows where the week
+   * actually went without descending. Drives the couriers.
+   */
+  'usage:routes': (boardId: string) => UsageRoute[];
+
   // --- artifacts ---
   'artifact:resolve': (boardId: string, nodeId: string) => ArtifactInfo;
   'artifact:resolveBoard': (boardId: string) => ArtifactInfo[];
@@ -260,6 +276,8 @@ export const CHANNELS = [
   'target:verify',
   'pick:target',
   'mosaic:forNode',
+  'usage:summary',
+  'usage:routes',
   'artifact:resolve',
   'artifact:resolveBoard',
   'drag:startFile',

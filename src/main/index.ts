@@ -687,8 +687,18 @@ app.whenReady().then(() => {
     // Renderer console output goes to the renderer's own devtools, which a headless capture run
     // never opens. Forwarding the lines we care about is how the smoke log can show that the
     // router actually re-ran after a node moved, rather than asserting that it must have.
+    /*
+     * Renderer console -> smoke log.
+     *
+     * Errors are forwarded unconditionally, not just the tagged lines. A React hooks violation
+     * introduced while wiring the usage meter rendered a completely blank window, and the capture
+     * dutifully saved a screenshot of an empty board with no hint of why — the error existed only
+     * in a devtools window a headless run never opens.
+     */
     win.webContents.on('console-message', (event) => {
-      if (/^\[(router|atlas|ui|mosaic)\]/.test(event.message)) console.log(`[renderer] ${event.message}`);
+      if (/^\[(router|atlas|ui|mosaic)\]/.test(event.message) || String(event.level) !== 'info') {
+        console.log(`[renderer:${String(event.level)}] ${event.message}`);
+      }
     });
     win.once('ready-to-show', () => void runSmokeCapture(win, smokeDir));
   }
