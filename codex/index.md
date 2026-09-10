@@ -9,7 +9,15 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 
 ## Meta
 - `persona.md` — who JARVIS is and how it behaves.
-- `board-map.md` — auto-generated room/node inventory. Regenerate with `board_read`.
+- `JARVIS-SETUP.md` — how JARVIS is launched, which surface is which, and what the two bodies can
+  and cannot each do. Read once; it is setup, not standing context.
+- `board-map.md` — auto-generated room/node inventory. Regenerate with `board_read`. NOT WRITTEN YET.
+
+> **The project files below do not exist yet.** `codex/projects/` is empty. Every line in this
+> index is a promise about a file, and an index line with no file behind it is worse than no line
+> — JARVIS will cite it as though it read something. Write the two or three projects you are
+> actually working on, and delete the rest of these lines until they are real.
+> Template and instructions: `JARVIS-SETUP.md` § Step 1.
 
 ## Projects — MinecraftOS
 - `projects/the-stalker.md` — Fabric 26.2 adaptive hunter mod, Challenge #1. ACTIVE.

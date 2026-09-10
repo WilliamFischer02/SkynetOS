@@ -37,6 +37,31 @@
       "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp."
     },
     {
+      "id": "u3_jarvis_hands",
+      "designator": "U3",
+      "kind": "agent.code",
+      "name": "JARVIS-HANDS",
+      "pos": {
+        "x": 38,
+        "y": 17
+      },
+      "footprint": {
+        "w": 3,
+        "h": 3
+      },
+      "cwd": "C:/dev/SkynetOS",
+      "launch": "popout",
+      "resume": true,
+      "initialPrompt": "You are the Hands of JARVIS for SkynetOS. Read CLAUDE.md, then codex/persona.md, then codex/index.md before anything else. You act on William's machine: you read and write files, run commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and plans but cannot see this disk; you are how its decisions become real. Follow docs/07-SECURITY.md as a hard boundary: never delete files, force-push, or remove a board node without explicit approval in that exact exchange. End every session with a CODEX PATCH and a HANDOFF block.",
+      "persona": "codex/persona.md",
+      "codexRef": "codex/index.md",
+      "tags": [
+        "jarvis",
+        "hands"
+      ],
+      "notes": "The Hands of JARVIS. The Face (U1) thinks and cannot see this disk; this chip is how its decisions become real. Same identity, same codex, same persona."
+    },
+    {
       "id": "d1_minecraftos",
       "designator": "D1",
       "kind": "drive.room",
@@ -281,6 +306,13 @@
       "to": "t1_nightly",
       "kind": "depends",
       "width": 2
+    },
+    {
+      "id": "e8",
+      "from": "u1_jarvis",
+      "to": "u3_jarvis_hands",
+      "kind": "supervises",
+      "width": 3
     }
   ]
 }
