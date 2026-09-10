@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Board } from '../packages/shared/types.js';
 import { parseVersion, producerOf, producerRepo } from '../src/main/services/artifacts.js';
 import { classify, suggestionToNode } from '../src/main/services/ingest.js';
@@ -121,13 +122,41 @@ describe('watchTargetsFor', () => {
 });
 
 describe('classify — drop-in ingestion', () => {
+  /*
+   * A real fixture on disk, not a path from one developer's machine.
+   *
+   * The first version of this test classified `C:/dev/TheStalker/build/libs/thestalker-0.1.0.jar`
+   * — which exists on William's machine and nowhere else. It passed locally and failed on a clean
+   * CI runner with "expected null not to be null", because `classify` correctly returns null for
+   * a path that does not exist. The test was the thing that was wrong. It now builds the shape it
+   * needs in a temp directory, so it asserts on the classification RULE rather than on whose
+   * machine it is running on.
+   */
+  // `fixtureRoot`, not `root` — the module already has a `root` holding the root BOARD, and
+  // shadowing it inside one describe block is the kind of thing that reads fine and confuses
+  // whoever adds the next test here.
+  let fixtureRoot = '';
+  let libs = '';
+  let jar = '';
+
+  beforeAll(() => {
+    fixtureRoot = mkdtempSync(join(tmpdir(), 'skynet-ingest-'));
+    libs = join(fixtureRoot, 'SomeMod', 'build', 'libs').replace(/\\/g, '/');
+    mkdirSync(libs, { recursive: true });
+    jar = `${libs}/somemod-0.1.0.jar`;
+    writeFileSync(jar, 'not really a jar');
+    writeFileSync(`${libs}/somemod-0.1.0-sources.jar`, 'nor is this');
+  });
+
+  afterAll(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+
   it('turns a jar in build/libs into a GLOB, not a pinned filename', () => {
     // The whole reason file.artifact exists: the next build has a different filename, and a
     // pinned node would immediately render broken.
-    const s = classify('C:/dev/TheStalker/build/libs/thestalker-0.1.0.jar');
+    const s = classify(jar);
     expect(s).not.toBeNull();
     expect(s!.kind).toBe('file.artifact');
-    expect(s!.fields.glob).toBe('C:/dev/TheStalker/build/libs/*.jar');
+    expect(s!.fields.glob).toBe(`${libs}/*.jar`);
     expect(s!.fields.exclude).toContain('*-sources.jar');
     expect(s!.reason).toContain('newest build');
   });
