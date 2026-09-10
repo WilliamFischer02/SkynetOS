@@ -943,3 +943,20 @@ It floated over the board and collided with whatever was beneath it: first the s
 height depends on how many sessions are running, then the help bar. There is no fixed offset that
 clears a panel of variable height, so it moved into the breadcrumb row — a strip of chrome that
 already exists, already grows with its content, and is the one place nothing else is drawn into.
+
+## 2026-09-10 — A control inside click-through chrome has to opt back in
+
+Reported: "the add button is not clickable for some reason."
+
+`.breadcrumb`, `.hud` and `.help` are all `pointer-events: none`, deliberately — they are mostly
+text, they sit over the board, and a strip of text that swallows a drag meant for the canvas is
+worse than one that overlaps it. The cost is that any real CONTROL placed inside one inherits it
+and silently stops working: it renders, it highlights on hover, and clicking does nothing at all.
+`.drag-badge` had already hit this and opted back in; `.add-fab` was written without knowing that.
+
+Nothing catches it at runtime — a button that receives no events raises no error — so
+`test/render-invariants.test.ts` checks the CSS instead, and asserts the premise (that the chrome
+really is click-through) alongside it, so the guard cannot quietly start measuring nothing.
+
+Moving the button into the breadcrumb row was still right; the row is the only strip of chrome
+nothing else is drawn into. It just needed the same opt-in the drag badges use.

@@ -34,7 +34,8 @@
       "showDesignator": false,
       "notes": "decor.image: a picture drawn behind everything, resizable like any other node. Delete it, repoint it, or drag it wherever you like — it never collides and never steals a click while you are browsing.",
       "pulseGlow": true,
-      "frame": "dip"
+      "frame": "dip",
+      "priority": 5
     },
     {
       "id": "u1_jarvis",
@@ -64,7 +65,7 @@
         "h": 6
       },
       "frame": "quad",
-      "priority": 3
+      "priority": 5
     },
     {
       "id": "u3_jarvis_hands",
@@ -72,7 +73,7 @@
       "kind": "agent.code",
       "name": "JARVIS-PRIME",
       "pos": {
-        "x": 42,
+        "x": 45,
         "y": 15
       },
       "cwd": "C:/dev",
@@ -111,7 +112,7 @@
       "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg",
       "pulseGlow": true,
       "frame": "castellated",
-      "priority": 2
+      "priority": 5
     },
     {
       "id": "d1_minecraftos",
@@ -121,7 +122,7 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 18,
+        "x": 16,
         "y": 14
       },
       "footprint": {
@@ -147,7 +148,7 @@
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
-        "x": 25,
+        "x": 23,
         "y": 7
       },
       "tags": [
@@ -169,7 +170,7 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 20,
+        "x": 19,
         "y": 23
       },
       "tags": [
@@ -192,7 +193,7 @@
       "boardFile": "gameos/room.board.json",
       "pos": {
         "x": 27,
-        "y": 29
+        "y": 30
       },
       "tags": [
         "truthquestretro",
@@ -211,15 +212,15 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 42,
-        "y": 24
+        "x": 44,
+        "y": 25
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
       "resume": true,
       "notes": "The agent that builds and maintains this program.",
       "codexRef": "codex/projects/skynetos.md",
-      "image": "C:/dev/SkynetOS/assets/sprites/SkynetOS-worker.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/circuit-board-garden-stockcake.jpg",
       "showDesignator": false,
       "prelaunch": [
         "claude",
@@ -235,10 +236,14 @@
         "docs/DECISIONS.md"
       ],
       "initialPrompt": "You are the SkynetOS architect. This repo is the board you are looking at: the app renders board/*.json and every node on it is bound to something real on this disk. Hold the seven prime directives in CLAUDE.md as constraints, not suggestions — especially \"bind to reality\" and \"data before pixels\". handoff.md is the state of play; docs/06-ROADMAP.md is what comes next.",
-      "logo": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg",
-      "showLogo": false,
+      "logo": "C:/dev/SkynetOS/assets/sprites/SkynetOS-worker.jpg",
+      "showLogo": true,
       "frame": "dip",
-      "priority": 1
+      "priority": 1,
+      "footprint": {
+        "w": 6,
+        "h": 5
+      }
     },
     {
       "id": "s1_repo_skynet",
@@ -246,8 +251,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 37,
-        "y": 30
+        "x": 39,
+        "y": 32
       },
       "footprint": {
         "w": 4,
@@ -324,8 +329,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 45,
-        "y": 30
+        "x": 47,
+        "y": 33
       },
       "footprint": {
         "w": 3,

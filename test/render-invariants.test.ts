@@ -95,3 +95,38 @@ describe('printed kinds are defined once', () => {
     }
   });
 });
+
+/**
+ * ── Controls inside click-through chrome ─────────────────────────────────────────────────────
+ *
+ * Reported: "the add button is not clickable for some reason."
+ *
+ * `.breadcrumb`, `.hud` and `.help` are all `pointer-events: none`, deliberately — they are
+ * mostly text, they sit over the board, and a strip of text that swallows drags meant for the
+ * canvas is worse than one that overlaps them. The cost is that any real CONTROL placed inside
+ * one inherits it and silently stops working: it renders, it highlights on hover in devtools, and
+ * clicking does nothing at all.
+ *
+ * There is no way to catch that at runtime — a button that receives no events raises no error —
+ * so it is caught here instead.
+ */
+describe('a control inside click-through chrome opts back in', () => {
+  const css = readFileSync(join(ROOT, 'src/renderer/styles.css'), 'utf8');
+
+  /** The rule block for a selector, up to its closing brace. */
+  const blockFor = (selector: string): string => {
+    const at = css.indexOf(`${selector} {`);
+    if (at === -1) return '';
+    return css.slice(at, css.indexOf('}', at));
+  };
+
+  it('still makes the chrome itself click-through', () => {
+    // If this ever stops being true the guard below is measuring nothing, so assert the premise.
+    expect(blockFor('.help')).toContain('pointer-events: none');
+  });
+
+  it.each(['.add-fab', '.drag-badge'])('%s is clickable', (selector) => {
+    expect(blockFor(selector), `${selector} lives inside click-through chrome and never receives a click`)
+      .toContain('pointer-events: auto');
+  });
+});

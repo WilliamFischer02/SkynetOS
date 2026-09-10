@@ -1197,6 +1197,15 @@ canvas {
  * such problem.
  */
 .add-fab {
+  /*
+   * THE reason this button did nothing when clicked.
+   *
+   * `.breadcrumb`, `.hud` and `.help` are all `pointer-events: none` so the chrome never eats a
+   * click meant for the board underneath — most of the time they are text, and a strip of text
+   * that swallows drags is worse than one that overlaps them. A control placed inside any of them
+   * has to opt back in, exactly as `.drag-badge` does.
+   */
+  pointer-events: auto;
   font: inherit;
   text-transform: uppercase;
   margin-left: var(--gap);
