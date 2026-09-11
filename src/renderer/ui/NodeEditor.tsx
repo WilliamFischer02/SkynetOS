@@ -38,6 +38,8 @@ function toDraft(node: BoardNode): Draft {
       draft[field.key] = value === undefined ? defaultBoolean(field) : Boolean(value);
     } else if (field.control === 'tags' || field.control === 'multi' || field.control === 'dir-list') {
       draft[field.key] = Array.isArray(value) ? value.join(', ') : '';
+    } else if (field.control === 'percent') {
+      draft[field.key] = String(value ?? 100);
     } else if (field.control === 'rotation' || field.control === 'priority') {
       draft[field.key] = String(value ?? 0);
     } else if (field.control === 'footprint') {
@@ -123,6 +125,13 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
           continue;
         }
       }
+    } else if (field.control === 'percent') {
+      const percent = Number.parseInt(String(raw ?? '100'), 10);
+      // 100 is the default, so it is stored as absent — a board full of `"logoScale": 100` says
+      // nothing and reads as though something was configured.
+      next = Number.isInteger(percent) && percent !== 100
+        ? Math.min(300, Math.max(10, percent))
+        : undefined;
     } else if (field.control === 'rotation') {
       const degrees = Number.parseInt(String(raw ?? '0'), 10);
       // 0 is upright and is the default, so it is stored as absent. A board file full of
@@ -261,6 +270,29 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                 <option value="">— unset —</option>
                 {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
+            ) : field.control === 'percent' ? (
+              <div className="percent-field">
+                <input
+                  id={`f-${String(field.key)}`}
+                  type="range"
+                  min={10}
+                  max={300}
+                  step={5}
+                  value={Number(value ?? 100)}
+                  disabled={saving}
+                  onChange={(e) => set(field.key, e.target.value)}
+                />
+                <span className="percent-value">{Number(value ?? 100)}%</span>
+                <button
+                  type="button"
+                  className="percent-reset"
+                  disabled={saving || Number(value ?? 100) === 100}
+                  onClick={() => set(field.key, '100')}
+                  title="Back to the size the footprint suggests"
+                >
+                  RESET
+                </button>
+              </div>
             ) : field.control === 'rotation' ? (
               <div className="rotation-field" role="group" aria-label="Rotation">
                 {[0, 90, 180, 270].map((degrees) => (

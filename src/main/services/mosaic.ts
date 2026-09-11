@@ -157,11 +157,16 @@ export interface MosaicRequest {
    *
    *   fill     stretch to the exact box. Right for a WALLPAPER: the face is the footprint, and
    *            letterboxing it would leave dead bands of mask colour that read as a bug.
+   *   tight    scale to fit INSIDE the box, preserve aspect, and output at THAT size — no
+   *            padding at all, so the result is the picture's own shape. Right for a LOGO: the
+   *            renderer draws a plate behind the badge, and a square plate behind a 16:9 picture
+   *            is two dark bands that read as black bars rastered into the image. Cropping the
+   *            box to the picture removes them at the source instead of hiding them.
    *   contain  scale to fit, preserve aspect, centre, leave the rest transparent. Right for a
    *            LOGO: a squashed logo stops being recognisable, which is the only thing a logo is
    *            for. The padding stays transparent so the wallpaper shows through around it.
    */
-  fit?: 'fill' | 'contain';
+  fit?: 'fill' | 'contain' | 'tight';
 }
 
 
@@ -200,6 +205,19 @@ export function rotateRgba(
   return { data: turned, width: outW, height: outH };
 }
 
+
+/**
+ * A PNG's pixel dimensions, from its IHDR chunk. Null if it does not look like a PNG.
+ *
+ * Eight bytes at a fixed offset, big-endian, after the 8-byte signature and the 8-byte chunk
+ * header. Cheaper and more certain than decoding.
+ */
+function pngSize(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes.length < 24) return null;
+  if (bytes.readUInt32BE(0) !== 0x89504e47) return null;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
 export function buildMosaic(request: MosaicRequest): MosaicResult {
   const { theme } = request;
   const rotation = request.rotation ?? 0;
@@ -211,6 +229,13 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   const width = rotation === 90 || rotation === 270 ? request.height : request.width;
   const height = rotation === 90 || rotation === 270 ? request.width : request.height;
   const fit = request.fit ?? 'fill';
+  /*
+   * What actually comes out. Only `tight` changes it — the others fill the requested box exactly.
+   * Declared here because the dither, the rotation and the encode all need the REAL size, and
+   * using `width`/`height` for a tight fit would pad the very bands this exists to remove.
+   */
+  let outW = width;
+  let outH = height;
   const file = expandPath(request.source);
 
   if (!file) return { ok: false, error: 'NO IMAGE SET' };
@@ -229,11 +254,24 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   const cached = join(thumbDir(), `${key}.png`);
 
   if (existsSync(cached)) {
+    const bytes = readFileSync(cached);
+    /*
+     * Report what the FILE is, not what was asked for.
+     *
+     * A `tight` fit deliberately returns something other than the requested box — that is the
+     * whole point of it — so echoing the request here made every cached logo claim to be square
+     * and the renderer drew it square. The bars came back on the second load and nowhere else,
+     * which is the worst kind of bug to be handed.
+     *
+     * A PNG's IHDR puts width and height at bytes 16-23, big-endian. Reading eight bytes beats
+     * decoding the image or trusting a number from somewhere else.
+     */
+    const real = pngSize(bytes);
     return {
       ok: true,
-      dataUrl: `data:image/png;base64,${readFileSync(cached).toString('base64')}`,
-      width,
-      height,
+      dataUrl: `data:image/png;base64,${bytes.toString('base64')}`,
+      width: real?.width ?? width,
+      height: real?.height ?? height,
       source: file,
       cached: true
     };
@@ -245,7 +283,17 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   }
 
   let bitmap: Buffer;
-  if (fit === 'contain') {
+  if (fit === 'tight') {
+    /*
+     * The box is a MAXIMUM, not a shape. Scale the source to fit inside it and emit exactly that,
+     * so there is nothing to pad and nothing for a plate to show around.
+     */
+    const size = source.getSize();
+    const scale = Math.min(width / Math.max(1, size.width), height / Math.max(1, size.height));
+    outW = Math.max(1, Math.round(size.width * scale));
+    outH = Math.max(1, Math.round(size.height * scale));
+    bitmap = source.resize({ width: outW, height: outH, quality: 'good' }).toBitmap();
+  } else if (fit === 'contain') {
     /*
      * Scale to fit inside the box, then centre it on a transparent field.
      *
@@ -277,10 +325,10 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
     }
   }
 
-  const dithered = ditherToRamp(bitmap, width, height, ramp);
+  const dithered = ditherToRamp(bitmap, outW, outH, ramp);
   // Turn AFTER dithering: the dither is an ordered pattern locked to the pixel grid, and rotating
   // the source first would rotate the grid with it.
-  const turned = rotateRgba(dithered, width, height, rotation);
+  const turned = rotateRgba(dithered, outW, outH, rotation);
   const png = nativeImage
     .createFromBitmap(rgbaToBgra(turned.data), { width: turned.width, height: turned.height })
     .toPNG();
@@ -320,8 +368,25 @@ export function mosaicForNode(board: Board, node: BoardNode, slot: 'face' | 'log
 
   if (slot === 'logo') {
     if (!node.logo) return { ok: false, error: 'NO LOGO SET' };
-    const box = Math.max(16, logoBoxTiles(fp) * tile);
-    return buildMosaic({ source: node.logo, width: box, height: box, theme: board.theme, fit: 'contain' });
+    /*
+     * The footprint suggests a size; `logoScale` adjusts it. The box is a bound on BOTH axes and
+     * `tight` fits the picture inside it without padding, so a wide logo comes out wide and a tall
+     * one comes out tall — there is no square to letterbox into.
+     */
+    const suggested = Math.max(16, logoBoxTiles(fp) * tile);
+    const percent = Math.min(300, Math.max(10, node.logoScale ?? 100));
+    const box = Math.max(8, Math.round((suggested * percent) / 100));
+    // Never larger than the node it sits on: a badge that overflows its own component is not a
+    // badge. The face is the footprint, less a two-pixel bevel on each side.
+    const limitW = Math.max(8, fp.w * tile - 4);
+    const limitH = Math.max(8, fp.h * tile - 4);
+    return buildMosaic({
+      source: node.logo,
+      width: Math.min(box, limitW),
+      height: Math.min(box, limitH),
+      theme: board.theme,
+      fit: 'tight'
+    });
   }
 
   if (!node.image) return { ok: false, error: 'NO IMAGE SET' };

@@ -7,7 +7,7 @@ import { startControlServer, stopControlServer } from './services/control-server
 import { writeMcpConfig } from './services/mcp-config.js';
 import { dispatchMail } from './services/mail-dispatch.js';
 import { getSettings } from './services/settings.js';
-import { boardRoot, pruneSnapshots } from './services/board-store.js';
+import { boardRoot, loadBoard, pruneSnapshots } from './services/board-store.js';
 import { closeDb, reapDeadSessions } from './services/db.js';
 import { onSessionsChanged, restoreSessions, sweepSessions } from './services/session-manager.js';
 import { onServicesChanged, stopAllServices, sweepServices } from './services/service-runner.js';
@@ -1180,6 +1180,30 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     const attached = await ranWith('attached  ', false);
     const detachedRan = await ranWith('detached  ', true);
     console.log(`[smoke] A CONSOLE HELPER RUNS ONLY WHEN NOT DETACHED: ${attached && !detachedRan}`);
+
+    /*
+     * ── Logos keep their own shape ───────────────────────────────────────────────────────────
+     *
+     * Reported: "make it so that icons crop to the input image size so it doesn't raster black
+     * bars into the logo images." Six of the seven logos on these boards are JPEGs with no alpha,
+     * at aspects from 0.8 to 1.83, and every one was being letterboxed into a SQUARE box with a
+     * mask-light plate painted under the padding. Mask-light is #16261D — black bars, to anyone
+     * looking at the board.
+     *
+     * The mosaic is the right place to check it: if its output is square for a 785x980 source, the
+     * bars are still there whatever the renderer does.
+     */
+    const { mosaicForNode: mosaicOne } = await import('./services/mosaic.js');
+    const rootForLogos = loadBoard('root');
+    if (rootForLogos.ok) {
+      for (const n of rootForLogos.board.nodes.filter((x) => x.logo)) {
+        const m = mosaicOne(rootForLogos.board, n, 'logo');
+        const name = (n.logo ?? '').split('/').pop();
+        if (!m.ok) { console.log(`[smoke] logo ${n.id}: ${m.error}`); continue; }
+        const square = m.width === m.height;
+        console.log(`[smoke] logo ${String(name).padEnd(24)} -> ${m.width}x${m.height}${square ? '  (square source)' : '  KEPT ITS SHAPE'}`);
+      }
+    }
 
     console.log('[smoke] done');
   } catch (err) {

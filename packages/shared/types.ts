@@ -184,6 +184,15 @@ export interface BoardNode {
    * ~6e-17, which is enough to resample every pixel.
    */
   rotation?: Rotation;
+  /**
+   * How big the logo badge is, as a percentage of its default box. 10-300, default 100.
+   *
+   * The default box is derived from the footprint (`logoBoxTiles`), which is a reasonable guess and
+   * nothing more — a wordmark wants to be wide and small, a character portrait wants to be big.
+   * This is the dial for that, and it scales the box the image is FITTED INTO, so the aspect ratio
+   * is never touched.
+   */
+  logoScale?: number;
 
   // file.exe
   args?: string[];

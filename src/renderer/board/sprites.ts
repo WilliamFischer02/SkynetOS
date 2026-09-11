@@ -90,6 +90,50 @@ export interface PlaceholderSpec {
   suffix?: { text: string; size: 11 | 22; color: string; stroke: string | null } | null;
 }
 
+
+/**
+ * The logo badge, centred on a component, at the picture's OWN shape.
+ *
+ * ── The black bars ───────────────────────────────────────────────────────────────────────────
+ *
+ * This used to read `const box = spec.logo.width` and use it for both axes — plate, image and
+ * bevel all square. The mosaic obligingly letterboxed every logo into a square with transparent
+ * padding, and then the plate was painted UNDER that padding in mask-light.
+ *
+ * Mask-light is `#16261D`. Two bands of it above and below a 1.74:1 cover image are, to anyone
+ * looking at the board, black bars rastered into the logo. William: "make it so that icons crop to
+ * the input image size so it doesn't raster black bars into the logo images."
+ *
+ * Six of the seven logos on his boards are JPEGs with no alpha channel at aspects from 0.8 to
+ * 1.83, so every one of them had them.
+ *
+ * The mosaic now emits a `tight` fit — the picture's own shape, no padding — and this uses both
+ * dimensions. The plate stays, because a logo WITH transparency still needs something behind it to
+ * read as a badge rather than a hole cut in the wallpaper; it is just no longer bigger than the
+ * thing it is backing.
+ */
+function drawLogo(
+  ctx: CanvasRenderingContext2D,
+  logo: HTMLImageElement,
+  bodyX: number,
+  bodyY: number,
+  bodyW: number,
+  bodyH: number,
+  maskLight: string
+): void {
+  const w = logo.width;
+  const h = logo.height;
+  if (w < 1 || h < 1) return;
+
+  const lx = bodyX + Math.floor((bodyW - w) / 2);
+  const ly = bodyY + Math.floor((bodyH - h) / 2);
+
+  ctx.fillStyle = maskLight;
+  ctx.fillRect(lx, ly, w, h);
+  ctx.drawImage(logo, lx, ly, w, h);
+  drawBevel(ctx, lx, ly, w, h);
+}
+
 /** The resolved styling for a nameplate, from the node's palette tokens. */
 export interface NameplateStyle {
   color: string;
@@ -611,17 +655,7 @@ export class SpriteStore {
        * colours sitting on top of each other read as a single noisy texture, and the badge stops
        * being a badge. The frame is what separates them.
        */
-      if (spec.logo) {
-        const box = spec.logo.width;
-        const lx = bodyX + Math.floor((bodyW - box) / 2);
-        const ly = bodyY + Math.floor((bodyH - box) / 2);
-        // A mask-light plate behind it, so a logo with transparent padding still reads as a badge
-        // rather than as a hole cut in the wallpaper.
-        ctx.fillStyle = spec.maskLight;
-        ctx.fillRect(lx, ly, box, box);
-        ctx.drawImage(spec.logo, lx, ly, box, box);
-        drawBevel(ctx, lx, ly, box, box);
-      }
+      if (spec.logo) drawLogo(ctx, spec.logo, bodyX, bodyY, bodyW, bodyH, spec.maskLight);
     } else {
       drawComponent(
         { ctx, x: bodyX, y: bodyY, w: bodyW, h: bodyH, maskLight: spec.maskLight, signal: spec.signal },
@@ -629,15 +663,7 @@ export class SpriteStore {
       );
       // A logo is a badge on the component, not on the picture — so it lands on a drawn package
       // exactly as it lands on a wallpaper.
-      if (spec.logo) {
-        const box = spec.logo.width;
-        const lx = bodyX + Math.floor((bodyW - box) / 2);
-        const ly = bodyY + Math.floor((bodyH - box) / 2);
-        ctx.fillStyle = spec.maskLight;
-        ctx.fillRect(lx, ly, box, box);
-        ctx.drawImage(spec.logo, lx, ly, box, box);
-        drawBevel(ctx, lx, ly, box, box);
-      }
+      if (spec.logo) drawLogo(ctx, spec.logo, bodyX, bodyY, bodyW, bodyH, spec.maskLight);
     }
 
     // --- designator, on the package, centred. The name is on the plate; this is the part number.

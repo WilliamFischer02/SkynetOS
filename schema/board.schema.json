@@ -542,6 +542,13 @@
           ],
           "default": 0,
           "description": "decor.part and decor.image only: quarter-turn rotation, clockwise. Quarter turns only \u2014 any other angle would resample the pixels, which docs/02 Anti-mush forbids."
+        },
+        "logoScale": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 300,
+          "default": 100,
+          "description": "Logo badge size as a percentage of the default box derived from the footprint. Scales the box the image is fitted into; the aspect ratio is preserved."
         }
       },
       "allOf": [

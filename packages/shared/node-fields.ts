@@ -43,7 +43,7 @@ import type { BoardNode, NodeKind } from './types.js';
 export type FieldControl =
   | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags' | 'multi'
   | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json'
-  | 'dir-list' | 'footprint' | 'priority' | 'rotation';
+  | 'dir-list' | 'footprint' | 'priority' | 'rotation' | 'percent';
 
 /** Controls that name something outside the board and therefore need verifying. */
 export const TARGET_CONTROLS = ['path-file', 'path-dir', 'glob', 'url', 'board-file'] as const;
@@ -97,7 +97,11 @@ const TRAILING: FieldSpec[] = [
   {
     key: 'logo', label: 'Logo', control: 'path-file',
     filters: IMAGE_FILTERS,
-    help: 'A smaller badge centred on the wallpaper, aspect ratio preserved, with its own bevel. Scales with the footprint. Use a logo with a transparent background and the wallpaper shows around it.'
+    help: 'A smaller badge centred on the wallpaper, cropped to the shape of the image itself so a wide logo stays wide. Use one with a transparent background and the wallpaper shows around it.'
+  },
+  {
+    key: 'logoScale', label: 'Logo size', control: 'percent',
+    help: 'How big the badge is, as a percentage of the size the footprint suggests. The shape never changes — this scales the box the image is fitted into.'
   },
   {
     key: 'showThumbnail', label: 'Show wallpaper', control: 'boolean',

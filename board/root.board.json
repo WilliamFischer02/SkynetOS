@@ -578,7 +578,7 @@
         "h": 3
       },
       "path": "C:\\dev\\SkynetOS\\assets\\Shortcuts\\minecraft.lnk",
-      "elevated": true,
+      "elevated": false,
       "image": "C:/dev/SkynetOS/assets/sprites/mc-images.jpg",
       "showLogo": false,
       "frame": "castellated",
@@ -794,7 +794,7 @@
       },
       "path": "C:/dev/TruthQuestRetro/build/win-debug/bin/Debug/player.exe",
       "cwd": "C:/dev/TruthQuestRetro",
-      "elevated": true,
+      "elevated": false,
       "priority": 1,
       "pulseGlow": true,
       "showDesignator": false,

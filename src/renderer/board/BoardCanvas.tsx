@@ -795,7 +795,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         // The rotation is part of the key. Without it, turning a backdrop would leave the old
         // mosaic in the cache and nothing would happen — the same shape as the pulse-glow
         // checkbox that did nothing because its work sat inside a fetch that was being skipped.
-        const key = `${source}@${fp.w}x${fp.h}r${node.rotation ?? 0}`;
+        // Everything that changes the pixels is in the key: the file, the box it is drawn into,
+        // the rotation, and the logo's own scale. Leave one out and the setting appears to do
+        // nothing, because the cached image is returned unchanged — see the pulse-glow checkbox.
+        const key = `${source}@${fp.w}x${fp.h}r${node.rotation ?? 0}s${node.logoScale ?? 100}`;
         if (store.get(node.id)?.key === key) continue;
         store.set(node.id, { key, image: null });
 

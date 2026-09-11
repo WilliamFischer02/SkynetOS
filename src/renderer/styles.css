@@ -524,6 +524,39 @@ canvas {
    A deep room path truncates from the left instead. */
 .breadcrumb { max-width: 26vw; overflow: hidden; white-space: nowrap; }
 
+/* ---------- percent slider ---------- */
+
+.percent-field {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.percent-field input[type="range"] { flex: 1; }
+
+.percent-value {
+  min-width: calc(44 * var(--p));
+  text-align: right;
+  color: var(--copper);
+  font-size: var(--f-rail);
+}
+
+.percent-reset {
+  pointer-events: auto;
+  appearance: none;
+  background: transparent;
+  border: var(--p) solid var(--copper-dark);
+  color: var(--silk);
+  font: inherit;
+  font-size: var(--f);
+  line-height: 1;
+  padding: calc(3 * var(--p)) calc(5 * var(--p));
+  cursor: pointer;
+}
+
+.percent-reset:hover:not(:disabled) { background: var(--copper); color: var(--mask-dark); }
+.percent-reset:disabled { opacity: 0.4; cursor: default; }
+
 /* ---------- rotation ---------- */
 
 /*
