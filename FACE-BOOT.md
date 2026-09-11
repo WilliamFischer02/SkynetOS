@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T05:51:32.330Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T05:58:31.122Z on WF_LAPTOPMAIN.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -137,17 +137,17 @@ Beyond those I have a shell, git and the filesystem under `C:/dev`. Send tasks, 
 
 ## 3. Board truth
 
-Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may differ.
+Resolved against the disk of WF_LAPTOPMAIN at bake time. Another machine may differ.
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
 | SkynetOS Mainboard (`root`) | `board/root.board.json` | 42 | 22 | 0 | 15 |
 | DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 14 | 8 | 8 | 1 |
 | GameOS (`gameos`) | `board/gameos/room.board.json` | 13 | 10 | 8 | 1 |
-| MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 27 | 15 | 9 | 3 |
+| MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 27 | 15 | 7 | 3 |
 | StoryOS (`storyos`) | `board/storyos/room.board.json` | 10 | 7 | 7 | 0 |
 
-### Unresolved targets (32)
+### Unresolved targets (30)
 
 - `deductionos` / U1 THE OBSERVER (`u1_observer`, agent.chat): **INVALID** `https://claude.ai/project/REPLACE_WITH_OBSERVER_PROJECT_ID`
 - `deductionos` / F1 The Observer's Curriculum (`f1_curriculum`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md`
@@ -165,8 +165,6 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `gameos` / E2 Open Forge (`e2_forge`, file.exe): **MISSING** `C:/dev/TruthQuestRetro/build/Release/Forge.exe`
 - `gameos` / D1 Handheld (`d1_handheld`, drive.room): **MISSING** `C:/dev/SkynetOS/board/gameos/handheld/room.board.json`
 - `gameos` / F1 TQR design doc (`f1_design`, file.document): **MISSING** `C:/dev/TruthQuestRetro/docs/design.md`
-- `minecraftos` / A1 thestalker.jar (`a1_jar_stalker`, file.artifact): **MISSING** `C:/dev/TheStalker/build/libs/*.jar`
-- `minecraftos` / A2 pacekeeper.jar (`a2_jar_pace`, file.artifact): **MISSING** `C:/dev/PaceKeeper/build/libs/*.jar`
 - `minecraftos` / U4 CC-TIMESERVED (`u4_agent_time`, agent.code): **MISSING** `C:/dev/TimeServed`
 - `minecraftos` / S4 TimeServed (`s4_repo_time`, store.repo): **MISSING** `C:/dev/TimeServed`
 - `minecraftos` / A4 timeserved.jar (`a4_jar_time`, file.artifact): **MISSING** `C:/dev/TimeServed/build/libs/*.jar`
