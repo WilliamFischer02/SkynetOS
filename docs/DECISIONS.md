@@ -1344,3 +1344,53 @@ remains — the actual PowerShell code — contains exactly one statement and no
 characters. Verified by swapping in a naive quoter and watching it fail. Counting occurrences of
 "Start-Process" would have been the wrong test: an injected one appears in the command string
 precisely because it is safely inside the quoted path.
+
+## 2026-09-10 — The atlas never reached the GPU
+
+Reported: "i tried loading one of the visual parts in and its an empty box - nothing rendered."
+
+Not one baked sprite had ever appeared. Every via, screw, LED, grille, fiducial and pad array on
+every board had been invisible since the atlas landed, and nothing anywhere said so.
+
+    this.atlasSource = new TextureSource({ resource: image, scaleMode: 'nearest' });
+
+Pixi v8 picks its GPU uploader from `source.uploadMethodId`. `ImageSource` sets it to `'image'`;
+the base `TextureSource` leaves it `'unknown'`, and an unknown source is never uploaded. So the
+texture was entirely valid on the JS side — right dimensions, right frame rectangle,
+`visible: true`, `alpha: 1`, positioned exactly where it belonged — with no pixels on the GPU.
+
+That is why it took so long to find. Every signal the app had reported health:
+
+    sprites.has('decor.via')   true
+    texture.width              16
+    frameCountFor              1
+    HUD                        ATLAS 26 · 20 PLACEHOLDER
+
+and the atlas PNG itself was provably fine — a pixel census of all 26 cells showed every one
+populated, `decor.fiducial#0` with 48 silk pixels, `decor.via#0` with 72 copper. The JSON loaded,
+the image decoded, the frames were correct, the sprites were placed. The one thing nobody had
+checked was whether the source could be UPLOADED, because nothing in the API suggests that
+constructing a texture source can succeed at being useless.
+
+Proven by cropping the same 90x90 region of the same board before and after: bare substrate, then
+a 3x3 copper pad array.
+
+Two guards, because a unit test cannot see a GPU:
+
+- **Runtime.** `load()` now reads `uploadMethodId` and refuses a source it cannot upload, with a
+  reason naming the fix. Loading the JSON and getting the image onto the GPU are two different
+  successes, and only the first was ever reported.
+- **Structural.** `test/render-invariants.test.ts` requires `new ImageSource(` and forbids
+  `new TextureSource(`. As a TYPE the base class is correct — the field is declared
+  `TextureSource | null`. As a constructor it is the bug.
+
+### And a stale test came out with it
+
+`test/labels.test.ts` asserted, against the live board files, that every node's full name fits on
+its FACE. Names have not been drawn on faces for a long time — they go on a nameplate above the
+package, on one line, never wrapped, precisely because a wrapped name on a 4-tile package was
+unreadable. `layoutLabel` had exactly one caller left: that test.
+
+It failed the moment a node was named "launcher.exe" on a 4x4 footprint, blocking the build over a
+label nobody would ever see. The test is gone and `layoutLabel` is marked superseded. A test that
+asserts on board data is a test that breaks when William edits his board, and the board is his.

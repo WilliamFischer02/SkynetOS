@@ -181,3 +181,43 @@ describe('the minimap fits its corner, whatever the board', () => {
     expect(fitScale({ width: 512, height: 512 })).toBe(1);
   });
 });
+
+/**
+ * ── The atlas has to reach the GPU ───────────────────────────────────────────────────────────
+ *
+ * Reported: "i tried loading one of the visual parts in and its an empty box - nothing rendered."
+ *
+ * The atlas source was built with `new TextureSource({ resource: image })` — the BASE class. Pixi
+ * v8 chooses its GPU uploader from `source.uploadMethodId`: `ImageSource` sets it to `'image'`,
+ * and the base class leaves it `'unknown'`, which is never uploaded. The result is a texture that
+ * is entirely valid on the JS side — right dimensions, right frame, `visible: true`, `alpha: 1`,
+ * positioned exactly where it belongs — with no pixels on the GPU.
+ *
+ * So every baked sprite rendered as nothing, and every diagnostic said it was healthy:
+ * `sprites.has('decor.via')` was true, `texture.width` was 16, and the HUD read ATLAS 26. Vias,
+ * screws, LEDs, grilles and pad arrays had never once appeared on the board.
+ *
+ * No unit test can catch this — it needs a GPU — so it is guarded twice: structurally here, and at
+ * runtime in `load()`, which now refuses a source it cannot upload instead of reporting success.
+ */
+describe('the atlas is built from a source Pixi can upload', () => {
+  const sprites = read('src/renderer/board/sprites.ts');
+
+  it('constructs the atlas source with ImageSource', () => {
+    expect(sprites, 'the atlas source must be an ImageSource').toContain('new ImageSource(');
+  });
+
+  it('never constructs the base TextureSource', () => {
+    // As a TYPE it is fine — the field is declared `TextureSource | null`. As a constructor it is
+    // the bug: the base class has no uploader.
+    expect(sprites, 'new TextureSource() produces a texture with no pixels on the GPU')
+      .not.toMatch(/new\s+TextureSource\s*\(/);
+  });
+
+  it('verifies at runtime that the source is uploadable', () => {
+    // Loading the JSON and getting the image onto the GPU are two different successes. Only the
+    // first one used to be reported, which is why the failure was invisible for so long.
+    expect(sprites).toContain('uploadMethodId');
+    expect(sprites).toMatch(/uploadMethod !== 'image'/);
+  });
+});

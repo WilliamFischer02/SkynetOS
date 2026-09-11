@@ -151,8 +151,8 @@
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
-        "x": 87,
-        "y": 47
+        "x": 89,
+        "y": 46
       },
       "tags": [
         "learning",
@@ -215,7 +215,7 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 108,
+        "x": 109,
         "y": 65
       },
       "cwd": "C:/dev/SkynetOS",
@@ -255,7 +255,7 @@
       "name": "SkynetOS",
       "pos": {
         "x": 103,
-        "y": 72
+        "y": 73
       },
       "footprint": {
         "w": 4,
@@ -280,8 +280,8 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 99,
-        "y": 47
+        "x": 108,
+        "y": 45
       },
       "footprint": {
         "w": 4,
@@ -332,8 +332,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 111,
-        "y": 72
+        "x": 112,
+        "y": 73
       },
       "footprint": {
         "w": 3,
@@ -382,8 +382,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 110,
-        "y": 62
+        "x": 109,
+        "y": 74
       },
       "part": "via",
       "showName": false,
@@ -418,12 +418,16 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 99,
-        "y": 54
+        "x": 109,
+        "y": 74
       },
       "part": "screw",
       "showName": false,
-      "showDesignator": false
+      "showDesignator": false,
+      "footprint": {
+        "w": 2,
+        "h": 1
+      }
     },
     {
       "id": "p_screw_2",
@@ -490,22 +494,10 @@
       "kind": "decor.part",
       "name": "LED IDLE",
       "pos": {
-        "x": 102,
-        "y": 65
+        "x": 103,
+        "y": 67
       },
       "part": "led_idle",
-      "showName": false,
-      "showDesignator": false
-    },
-    {
-      "id": "p_fid_1",
-      "kind": "decor.part",
-      "name": "FIDUCIAL",
-      "pos": {
-        "x": 98,
-        "y": 53
-      },
-      "part": "fiducial",
       "showName": false,
       "showDesignator": false
     },
@@ -526,20 +518,24 @@
       "kind": "decor.part",
       "name": "GRILLE",
       "pos": {
-        "x": 108,
-        "y": 55
+        "x": 106,
+        "y": 57
       },
       "part": "grille",
       "showName": false,
-      "showDesignator": false
+      "showDesignator": false,
+      "footprint": {
+        "w": 2,
+        "h": 2
+      }
     },
     {
       "id": "p_pads",
       "kind": "decor.part",
       "name": "PADS",
       "pos": {
-        "x": 108,
-        "y": 63
+        "x": 106,
+        "y": 67
       },
       "part": "pads",
       "showName": false,
@@ -550,8 +546,8 @@
       "kind": "decor.part",
       "name": "CAP",
       "pos": {
-        "x": 104,
-        "y": 68
+        "x": 102,
+        "y": 67
       },
       "part": "cap",
       "showName": false,
@@ -574,8 +570,8 @@
       "kind": "link.url",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 80,
-        "y": 69
+        "x": 72,
+        "y": 64
       },
       "designator": "J2",
       "provisional": true,
@@ -597,13 +593,55 @@
     {
       "id": "f_new_program",
       "kind": "file.exe",
-      "name": "NEW PROGRAM",
+      "name": "launcher.exe",
       "pos": {
-        "x": 74,
+        "x": 73,
         "y": 54
       },
       "designator": "F1",
-      "provisional": true
+      "provisional": true,
+      "footprint": {
+        "w": 3,
+        "h": 3
+      },
+      "path": "C:\\dev\\SkynetOS\\assets\\Shortcuts\\minecraft.lnk",
+      "elevated": true,
+      "image": "C:/dev/SkynetOS/assets/sprites/mc-images.jpg",
+      "showLogo": false,
+      "frame": "castellated",
+      "priority": 1,
+      "showDesignator": false
+    },
+    {
+      "id": "m_monitor",
+      "kind": "monitor.system",
+      "name": "MONITOR",
+      "pos": {
+        "x": 100,
+        "y": 44
+      },
+      "designator": "M2",
+      "footprint": {
+        "w": 7,
+        "h": 7
+      }
+    },
+    {
+      "id": "u_new_conversation",
+      "kind": "agent.chat",
+      "name": "MC MIND PALACE",
+      "pos": {
+        "x": 81,
+        "y": 46
+      },
+      "designator": "U4",
+      "provisional": true,
+      "url": "https://claude.ai/chat/33d12658-01ab-4b26-b5cb-97fe1f14c5ea",
+      "image": "C:/dev/SkynetOS/assets/sprites/jonathan-dulcahn-dodd-scary-mansion.jpg",
+      "showLogo": false,
+      "frame": "bga",
+      "priority": 1,
+      "showDesignator": false
     }
   ],
   "edges": [
@@ -676,6 +714,24 @@
     {
       "id": "e10",
       "from": "f_new_program",
+      "to": "d1_minecraftos",
+      "kind": "reads"
+    },
+    {
+      "id": "e11",
+      "from": "m_monitor",
+      "to": "m1_psu",
+      "kind": "reads"
+    },
+    {
+      "id": "e12",
+      "from": "u_new_conversation",
+      "to": "d2_deductionos",
+      "kind": "reads"
+    },
+    {
+      "id": "e13",
+      "from": "u_new_conversation",
       "to": "d1_minecraftos",
       "kind": "reads"
     }

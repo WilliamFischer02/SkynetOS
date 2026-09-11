@@ -10,7 +10,7 @@
  * Missing art is never a crash and never a broken-image icon.
  */
 
-import { Texture, TextureSource, Rectangle } from 'pixi.js';
+import { ImageSource, Texture, Rectangle, type TextureSource } from 'pixi.js';
 import { COPPER_DARK, SILK } from '@shared/palette.js';
 import type { NodeKind } from '@shared/types.js';
 import { TILE } from './camera.js';
@@ -160,10 +160,21 @@ export function textureOffset(
 }
 
 /**
- * How a node's label is laid out on its face. Pure so test/labels.test.ts can prove that every
- * footprint in the seeded boards gets a readable label and that nothing silently vanishes.
+ * ── SUPERSEDED. Nothing calls this. ──────────────────────────────────────────────────────────
  *
- * The rule, in order of preference:
+ * How a node's label used to be laid out ON ITS FACE. Names now go on a NAMEPLATE above the
+ * package, on one line, never wrapped — see `placeholder` — because a wrapped name on a 4-tile
+ * package was unreadable, which is the whole reason the nameplate exists.
+ *
+ * `layoutLabel` below is kept because on-face print is a plausible option for a future kind (a
+ * silkscreened panel, say) and the wrapping rules took real work to get right. But it is dead: the
+ * only thing that ever called it was `test/labels.test.ts`, which has been removed. That test
+ * asserted, against the live board files, that every node's full name fits on its face — a
+ * property of a code path the renderer no longer runs, so it failed the moment a node was named
+ * "launcher.exe" on a 4x4 footprint and blocked the build for a label nobody was ever going to
+ * see. Do not reinstate that test against board data; the board is William's to edit.
+ *
+ * The rule it implements, in order of preference:
  *   1. `U1 JARVIS` on one line — what you actually want to read.
  *   2. `U1` on its own line, then the name wrapped across as many lines as fit.
  *   3. `U1` alone, if the name cannot be made to fit at all.
@@ -297,13 +308,57 @@ export class SpriteStore {
       await image.decode();
 
       this.atlas = data;
-      this.atlasSource = new TextureSource({
+      /*
+       * `ImageSource`, NOT the `TextureSource` base class.
+       *
+       * ── Why this distinction is load-bearing ──────────────────────────────────────────────
+       *
+       * Pixi v8 picks its GPU uploader from `source.uploadMethodId`. `ImageSource` sets it to
+       * `'image'`; the base `TextureSource` leaves it `'unknown'`, and an unknown source is never
+       * uploaded. Constructing the base class with an HTMLImageElement resource therefore produces
+       * a texture that is entirely valid on the JS side — correct dimensions, correct frame
+       * rectangles, `visible: true`, `alpha: 1`, positioned exactly where it should be — and has
+       * no pixels on the GPU at all.
+       *
+       * So every atlas sprite rendered as nothing, and every diagnostic said it was fine. That is
+       * what "I tried loading one of the visual parts in and its an empty box" was: the vias, the
+       * screws, the LEDs and every other baked part had never once appeared, while
+       * `sprites.has(key)` answered true, `texture.width` answered 16, and the HUD cheerfully
+       * reported ATLAS 26.
+       *
+       * The atlas JSON loading and the atlas IMAGE reaching the GPU are two different successes.
+       * Only the first one was ever checked.
+       */
+      this.atlasSource = new ImageSource({
         resource: image,
         // Anti-mush rule 5. Set per-source as well as globally — a source created after the
         // global default is read would otherwise silently come up linear.
         scaleMode: 'nearest',
         autoGenerateMipmaps: false
       });
+      /*
+       * Check the source can actually be UPLOADED, not just that it was constructed.
+       *
+       * This is the check whose absence cost a fortnight of "the atlas is fine, look, ATLAS 26".
+       * Loading the JSON and getting the image onto the GPU are two different successes, and every
+       * signal the app had — `has(key)`, `texture.width`, `frameCount`, the HUD — reported only
+       * the first. A source Pixi cannot upload renders as nothing at all, silently, while every
+       * sprite claims to be 16x16 and visible.
+       *
+       * `uploadMethodId` is how Pixi's renderer picks an uploader; 'unknown' means there is none.
+       * Reporting it here makes the failure loud in the one place anyone would look.
+       */
+      const uploadMethod = (this.atlasSource as unknown as { uploadMethodId?: string }).uploadMethodId;
+      if (uploadMethod !== 'image') {
+        this.atlasSource = null;
+        return {
+          loaded: false,
+          frames: 0,
+          reason: `atlas source is not uploadable (uploadMethodId "${uploadMethod ?? 'undefined'}") — ` +
+            'every sprite would render as nothing. Construct it with ImageSource, not TextureSource.'
+        };
+      }
+
       return { loaded: true, frames: Object.keys(data.frames).length };
     } catch (err) {
       return { loaded: false, frames: 0, reason: `atlas load failed: ${(err as Error).message}` };
