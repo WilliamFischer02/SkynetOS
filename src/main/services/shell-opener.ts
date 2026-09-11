@@ -135,7 +135,9 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
       const proceed = await confirm(
         'Launch this program?',
         `${node.designator ? node.designator + ' — ' : ''}${node.name}`,
-        `${resolved}\n${target.sizeBytes !== undefined ? `${(target.sizeBytes / 1024).toFixed(0)} KB · ` : ''}${node.args?.length ? `args: ${node.args.join(' ')}` : 'no arguments'}\n\nSkynetOS is not elevated, and neither is this.`,
+        // An alias has no size worth reporting — the reparse buffer's 93 bytes describes nothing a
+        // person cares about, and "0 KB" next to a launch button reads as a corrupt file.
+        `${resolved}\n${target.alias ? 'Windows app · ' : target.sizeBytes ? `${(target.sizeBytes / 1024).toFixed(0)} KB · ` : ''}${node.args?.length ? `args: ${node.args.join(' ')}` : 'no arguments'}\n\nSkynetOS is not elevated, and neither is this.`,
         'Launch'
       );
       if (!proceed) return { ok: false, action: 'cancelled by user', target };

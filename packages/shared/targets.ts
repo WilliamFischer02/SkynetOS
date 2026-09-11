@@ -40,6 +40,15 @@ export interface TargetInfo {
   matchCount?: number;
   /** For a glob with a versionPattern: the captured version label. */
   versionLabel?: string;
+  /**
+   * A Windows App Execution Alias — a Store app's launcher stub.
+   *
+   * Real, launchable, and NOT readable: `stat` throws EACCES on one, which is why `existsSync`
+   * used to report every Store app as missing. `sizeBytes` and `mtimeMs` are 0 for these because
+   * the reparse buffer's byte count is not the size of anything a person cares about, and putting
+   * it in a launch dialog would be a confident lie. See services/which.ts.
+   */
+  alias?: true;
 }
 
 export const OK_STATES: readonly TargetState[] = ['ok', 'none'];

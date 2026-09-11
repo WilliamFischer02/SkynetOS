@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { lstatSync, readdirSync, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 
 /**
@@ -72,4 +72,73 @@ export function hasExecutable(name: string): boolean {
 /** Forget cached resolutions. For tests, and for a PATH that changed under a running app. */
 export function clearWhichCache(): void {
   cache.clear();
+}
+
+/**
+ * ── The other half of the same bug ───────────────────────────────────────────────────────────
+ *
+ * `which()` above fixed "is Windows Terminal installed". This fixes the mirror image: "is the
+ * thing this node points at real", asked of a path the user typed or picked.
+ *
+ * `services/target-resolver.ts` asked it with `existsSync`, which is the one test that LIES about
+ * an App Execution Alias. Measured on this machine, for
+ * `%LOCALAPPDATA%/Microsoft/WindowsApps/wt.exe`:
+ *
+ *     existsSync        false     <- stat under the covers
+ *     statSync          THROWS EACCES
+ *     lstatSync         ok, size 93, isSymbolicLink
+ *     accessSync(X_OK)  ok
+ *     readdirSync       lists it
+ *
+ * So a `file.exe` node pointed at Notepad, Paint, Terminal or any other Store app rendered as
+ * TARGET NOT FOUND — a broken footprint on the board for a program that launches perfectly. That
+ * reads exactly like a permissions problem, which is how it ends up costing someone an afternoon
+ * granting themselves Full Control over `C:\Program Files\WindowsApps`. It is not one: nothing is
+ * being denied. An APPEXECLINK reparse point has no file content to open, and only `CreateProcess`
+ * knows how to follow it.
+ */
+
+/** Does this path exist — including things `stat` refuses to follow? */
+export function pathExists(absPath: string): boolean {
+  try {
+    lstatSync(absPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface PathInfo {
+  kind: 'file' | 'directory';
+  sizeBytes: number;
+  mtimeMs: number;
+  /**
+   * A Windows App Execution Alias: launchable, but not readable and not stat-able.
+   *
+   * Detected by the only signature that is actually specific — `stat` fails where `lstat`
+   * succeeds. An ordinary symlink resolves under `stat` to the file it points at, so it never
+   * lands here; a dangling one fails both.
+   */
+  alias?: true;
+}
+
+/**
+ * What is at this path, or null if nothing is.
+ *
+ * Falls back to `lstat` when `stat` throws, which is what makes an alias visible at all. Size and
+ * mtime are reported as 0 for one: the reparse buffer's 93 bytes is not the size of anything a
+ * person cares about, and showing it in a launch dialog would be a confident lie.
+ */
+export function pathInfo(absPath: string): PathInfo | null {
+  try {
+    const s = statSync(absPath);
+    return { kind: s.isDirectory() ? 'directory' : 'file', sizeBytes: s.size, mtimeMs: s.mtimeMs };
+  } catch {
+    try {
+      lstatSync(absPath);
+      return { kind: 'file', sizeBytes: 0, mtimeMs: 0, alias: true };
+    } catch {
+      return null;
+    }
+  }
 }

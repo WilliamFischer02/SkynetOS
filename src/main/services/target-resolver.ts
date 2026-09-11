@@ -1,4 +1,5 @@
-import { existsSync, statSync, globSync } from 'node:fs';
+import { existsSync, globSync } from 'node:fs';
+import { pathExists, pathInfo, type PathInfo } from './which.js';
 import { isAbsolute, join, normalize, resolve as resolvePath, dirname, basename } from 'node:path';
 import { app } from 'electron';
 import type { BoardNode } from '@shared/types.js';
@@ -32,13 +33,15 @@ export function isInsideTrustedRoot(absPath: string): boolean {
   return trustedRoots().some((root) => target === root || target.startsWith(root + '/'));
 }
 
-function statInfo(absPath: string): { kind: 'file' | 'directory'; sizeBytes: number; mtimeMs: number } | null {
-  try {
-    const s = statSync(absPath);
-    return { kind: s.isDirectory() ? 'directory' : 'file', sizeBytes: s.size, mtimeMs: s.mtimeMs };
-  } catch {
-    return null;
-  }
+/**
+ * What is at this path.
+ *
+ * Delegates to `services/which.ts`, which knows the thing this file kept getting wrong: `stat`
+ * throws EACCES on a Windows App Execution Alias, so every Store app — Notepad, Paint, Terminal,
+ * PowerShell — resolved as missing and drew a broken footprint for a program that launches fine.
+ */
+function statInfo(absPath: string): PathInfo | null {
+  return pathInfo(absPath);
 }
 
 function resolveFsTarget(raw: string, expect: 'file' | 'directory' | 'either'): TargetInfo {
@@ -56,7 +59,9 @@ function resolveFsTarget(raw: string, expect: 'file' | 'directory' | 'either'): 
   }
 
   const abs = normalize(expanded).replace(/\\/g, '/');
-  if (!existsSync(abs)) {
+  // `pathExists`, not `existsSync`: the latter is stat under the covers, and stat is exactly what
+  // an App Execution Alias refuses. See the note at the foot of services/which.ts.
+  if (!pathExists(abs)) {
     return { state: 'missing', raw, resolved: abs, detail: `TARGET NOT FOUND — ${abs}` };
   }
   const info = statInfo(abs);

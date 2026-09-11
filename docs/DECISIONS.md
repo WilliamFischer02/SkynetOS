@@ -1253,3 +1253,51 @@ The smoke now selects a node, grabs its handle, drags, and reads the footprint b
 both that the resize committed and that `window.__skynetWire` lit nothing on the handle. A unit
 test can prove the geometry; only this proves the four gestures — pan, move, resize, wire — still
 coexist on one canvas.
+
+## 2026-09-10 — `existsSync` lies about Store apps, in a second place
+
+William asked which user or group to grant access to so SkynetOS could open apps in his
+WindowsApps folder. The answer is none, and the question was a symptom.
+
+Measured on this machine, for `%LOCALAPPDATA%/Microsoft/WindowsApps/wt.exe`:
+
+    existsSync        false     <- stat under the covers
+    statSync          THROWS EACCES
+    lstatSync         ok, size 93, isSymbolicLink
+    accessSync(X_OK)  ok
+    readdirSync       lists it
+    spawn(path)       status 0
+
+An App Execution Alias is a zero-length reparse point tagged APPEXECLINK. Nothing is being denied
+— there is no file content to open, and only `CreateProcess` knows how to follow one. No ACL
+change can affect any of the above, which is why granting a user Full Control over
+`C:\Program Files\WindowsApps` does nothing except weaken a folder Windows protects for servicing.
+(He had already granted it. That ACE is not a default.)
+
+`services/which.ts` was written for exactly this rock, from the other direction — "is Windows
+Terminal installed" answered `false` on a machine where it was, and the whole launch path fell over
+behind it. What that fix missed was the mirror image: `services/target-resolver.ts` asks "is the
+thing this node points at real", and asked it with `existsSync`. So a `file.exe` node pointed at
+Notepad, Paint, Terminal or PowerShell rendered as TARGET NOT FOUND — a broken footprint for a
+program that launches perfectly, and a symptom that reads exactly like a permissions problem.
+
+`pathExists` and `pathInfo` now live in which.ts alongside `which`, because that file already owns
+the truth about Windows executables and splitting it would guarantee a third instance. `pathInfo`
+falls back to `lstat` when `stat` throws and flags the result `alias: true` — detected by the only
+signature that is actually specific, stat failing where lstat succeeds. An ordinary symlink
+resolves under stat to the file it points at, so it never lands there; a dangling one fails both.
+
+Size and mtime are reported as **0** for an alias rather than the reparse buffer's 93 bytes. The
+launch dialog says "Windows app ·" where it used to say a size: 93 bytes is not the size of
+Notepad, and "0 KB" beside a Launch button reads as a corrupt file.
+
+`test/windows-aliases.test.ts` asserts the PREMISE first — that `existsSync` still returns false
+for a real alias on this machine. Without that, the rest of the file would quietly pass on a
+machine where aliases behaved differently, and the fix could be reverted with nothing noticing.
+
+**Not done:** 31 of the installed packages are reachable by alias and cover everything worth
+putting on a board (Paint, Notepad, Terminal, PowerShell, Teams, Outlook, Files, Store, Snipping
+Tool, Python, winget). The rest — Calculator, Photos, Clock among the user-facing ones — have no
+alias at all and can only be launched as `shell:AppsFolder\<PackageFamilyName>!<AppId>` via
+explorer. That needs a target kind, a resolver branch and a picker, so it is offered rather than
+assumed.
