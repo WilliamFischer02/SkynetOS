@@ -4,6 +4,7 @@ import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js'
 import type { ArtifactInfo, BoardLoad, IngestSuggestion, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
 import type { UsageRoute } from '@shared/usage.js';
 import type { TargetInfo } from '@shared/targets.js';
+import { freeEdgeId, guessEdgeKind } from '../board/ports.js';
 
 /**
  * Small, boring UI preferences that outlive a reload.
@@ -167,6 +168,15 @@ interface BoardState {
    * same history, and Ctrl+Z takes it back — scaling is an edit, not a view setting.
    */
   resizeNode: (nodeId: string, footprint: { w: number; h: number }) => Promise<void>;
+  /**
+   * Draw a trace between two nodes.
+   *
+   * The edge stores two node IDS and no coordinates: the router works out the copper every time
+   * the board is built, so a trace follows its endpoints when they move, resize or change shape.
+   * That is what "these wires stay dynamically attached" means, and it is why nothing here has to
+   * remember where the wire was drawn.
+   */
+  connectNodes: (from: string, to: string) => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   openNode: (nodeId: string) => Promise<void>;
@@ -536,6 +546,25 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     await get().runCommand(
       { type: 'node.update', boardId: get().boardId, nodeId, patch: { footprint } },
       label
+    );
+  },
+
+  connectNodes: async (from, to) => {
+    const board = get().board;
+    if (!board) return;
+
+    const fromNode = board.nodes.find((n) => n.id === from);
+    const toNode = board.nodes.find((n) => n.id === to);
+    if (!fromNode || !toNode) { get().toast('fault', 'ONE END OF THAT TRACE IS NOT ON THIS BOARD'); return; }
+
+    const kind = guessEdgeKind(fromNode.kind, toNode.kind);
+    await get().runCommand(
+      {
+        type: 'edge.create',
+        boardId: get().boardId,
+        edge: { id: freeEdgeId(board.edges), from, to, kind }
+      },
+      `trace ${fromNode.designator ?? from} -> ${toNode.designator ?? to} (${kind})`
     );
   },
 

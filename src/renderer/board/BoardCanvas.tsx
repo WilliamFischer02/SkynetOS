@@ -43,6 +43,7 @@ import { measureTextBlock } from './text-plate.js';
 import { roomTitle, suffixSize } from '@shared/room-title.js';
 import { COPPER_DARK, SILK as SILK_HEX, brighten, resolveToken } from '@shared/palette.js';
 import { centreOn, contentBounds, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
+import { portAt, wireRefusal, type Port, type WiringState } from './ports.js';
 import {
   NO_DRAG,
   beginDrag,
@@ -98,6 +99,15 @@ export interface BoardCanvasProps {
   usageRoutes?: { nodeId: string; share: number }[];
   /** docs/02: state must survive without animation. With this on, no couriers walk at all. */
   reducedMotion?: boolean;
+  /**
+   * Create a trace between two nodes, drawn by hand on the board.
+   *
+   * Goes to the same command bus as every other mutation — schema-validated, snapshotted,
+   * undoable — which is why the canvas asks for it rather than writing an edge itself.
+   */
+  onConnect?: (from: string, to: string) => void;
+  /** Say something to the user. Used when a wire is refused, so a dead click explains itself. */
+  onToast?: (text: string, level: 'ok' | 'warn' | 'fault') => void;
 }
 
 export interface BoardCanvasStatus {
@@ -180,6 +190,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let boardPx = boardPixelSize(board.grid);
     let rects: NodeRect[] = [];
     let drag: DragState = NO_DRAG;
+
+    /*
+     * ── Wiring ────────────────────────────────────────────────────────────────────────────────
+     *
+     * Click a node's edge to start a trace, click another node's edge to finish it. Not a drag:
+     * the two ends can be far apart on a board this size, and a click-move-click lets you pan and
+     * zoom in between. Escape, a right click, or clicking empty substrate abandons it.
+     *
+     * `hoverPort` is what the cursor is over; `wiring` is what has been started. Both live here
+     * rather than in React state because they change on pointermove and the overlay redraws in the
+     * ticker — pushing that through a render would be the same mistake the minimap avoids.
+     */
+    let hoverPort: Port | null = null;
+    let wiring: WiringState | null = null;
+    /** Cursor in world pixels, for the rubber band. */
+    let wirePoint = { x: 0, y: 0 };
+    let wireRefused: string | null = null;
 
     let world: Container | null = null;
     let substrateLayer: Container | null = null;
@@ -303,7 +330,18 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         return;
       }
 
-      if (event.code === 'Escape') live.current.onSelect(null);
+      if (event.code === 'Escape') {
+        // A half-drawn wire is the more urgent thing to cancel: Escape also leaves a room, and
+        // leaving the room because you changed your mind about a trace would be a bad trade.
+        if (wiring) {
+          wiring = null;
+          rebuildOverlay();
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        live.current.onSelect(null);
+      }
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
@@ -350,11 +388,58 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     /* ---------------- pointer: pan, move, resize ---------------- */
 
+    /**
+     * How close the cursor has to be to an edge to mean it, in WORLD pixels.
+     *
+     * Divided by zoom so the target is a constant number of screen pixels however far in you are.
+     * A fixed world tolerance would be a 24-pixel-wide target at 4x and a 6-pixel one at 2x.
+     */
+    const portTolerance = (): number => 7 / cameraStore.current.zoom;
+
     const onPointerDown = (event: PointerEvent) => {
       if (!app) return;
       const screen = canvasPoint(event);
       const camera = cameraStore.current;
       const point = screenToWorld(camera, screen.x, screen.y);
+
+      /*
+       * Wiring takes precedence over every other gesture, but only in Edit Board mode and only
+       * when the cursor is actually on an edge. Browsing a board involves a lot of clicking near
+       * components, and a click that starts a trace by accident would be worse than no feature.
+       */
+      if (live.current.editMode && event.button === 0) {
+        const port = portAt(rects, point.x, point.y, portTolerance());
+
+        if (wiring && port) {
+          const refusal = wireRefusal(wiring.from, port, board.edges);
+          if (refusal) {
+            wireRefused = refusal;
+            live.current.onToast?.(refusal, 'warn');
+          } else {
+            void commitWire(wiring.from, port);
+            wiring = null;
+          }
+          rebuildOverlay();
+          return;
+        }
+
+        if (port) {
+          wiring = { from: port };
+          wireRefused = null;
+          wirePoint = point;
+          rebuildOverlay();
+          return;
+        }
+
+        if (wiring) {
+          // Clicking open substrate abandons it. An in-progress wire that survives a click
+          // somewhere else is a wire you have to fight to get rid of.
+          wiring = null;
+          rebuildOverlay();
+          return;
+        }
+      }
+
       const hit = hitTest(rects, point.x, point.y);
       const node = hit ? nodeById(hit.nodeId) : undefined;
 
@@ -392,9 +477,36 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       }
     };
 
+    /** Hand a finished wire to the command bus. */
+    const commitWire = (from: Port, to: Port): void => {
+      live.current.onConnect?.(from.nodeId, to.nodeId);
+    };
+
     const onPointerMove = (event: PointerEvent) => {
       if (!app) return;
       const screen = canvasPoint(event);
+
+      /*
+       * Port hovering. Only in Edit Board mode, and only when no drag is under way — a glowing dot
+       * appearing while you are dragging a component would be noise pointing at a gesture you
+       * cannot start.
+       */
+      if (live.current.editMode && drag.kind === 'none') {
+        const point = screenToWorld(cameraStore.current, screen.x, screen.y);
+        const port = portAt(rects, point.x, point.y, portTolerance());
+        const changed =
+          port?.nodeId !== hoverPort?.nodeId ||
+          port?.side !== hoverPort?.side ||
+          (wiring !== null && (point.x !== wirePoint.x || point.y !== wirePoint.y));
+        hoverPort = port;
+        wirePoint = point;
+        if (port) app.canvas.style.cursor = 'crosshair';
+        else if (app.canvas.style.cursor === 'crosshair') app.canvas.style.cursor = '';
+        if (changed) rebuildOverlay();
+      } else if (hoverPort) {
+        hoverPort = null;
+        rebuildOverlay();
+      }
 
       if (drag.kind === 'none') {
         // Hovering the handle says it is grabbable before you try. Cheap, and it is the only
@@ -900,6 +1012,76 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         overlayLayer.addChild(frame);
         overlayLayer.addChild(buildSelectionOverlay(ghost, color));
       }
+
+      /*
+       * ── Wiring ──────────────────────────────────────────────────────────────────────────────
+       *
+       * A dot on the hovered edge, and a rubber band from the started end to the cursor.
+       *
+       * Both are drawn with filled rects rather than strokes or circles. A 1px stroke straddles
+       * the pixel boundary and a circle at this size is a smear — docs/02 §Anti-mush. A "glowing"
+       * dot is therefore three concentric squares in the theme ramp, which is what a glow looks
+       * like when you only have whole pixels to say it with.
+       */
+      /*
+       * The live wiring state on `window`, for the smoke harness.
+       *
+       * Same reasoning as `__skynetCamera`: a test that computes where a port OUGHT to be is
+       * testing its own arithmetic, and when the two disagree it reports a failure that is not
+       * real. This is where the port actually is, according to the code that draws it.
+       */
+      (window as unknown as { __skynetWire?: unknown }).__skynetWire = {
+        hover: hoverPort ? { nodeId: hoverPort.nodeId, side: hoverPort.side, x: hoverPort.x, y: hoverPort.y } : null,
+        wiring: wiring ? wiring.from.nodeId : null,
+        refused: wireRefused
+      };
+
+      if (live.current.editMode) {
+        const drawPort = (port: Port, lit: boolean): void => {
+          const g = new Graphics();
+          const x = Math.round(port.x);
+          const y = Math.round(port.y);
+          if (lit) {
+            g.rect(x - 3, y - 3, 6, 6);
+            g.fill({ color: hexToNumber(board.theme.maskDark) });
+          }
+          g.rect(x - 2, y - 2, 4, 4);
+          g.fill({ color: hexToNumber(board.theme.signal) });
+          g.rect(x - 1, y - 1, 2, 2);
+          g.fill({ color: hexToNumber(SILK) });
+          g.roundPixels = true;
+          overlayLayer!.addChild(g);
+        };
+
+        // The end already chosen stays lit, so it is obvious which wire is being drawn.
+        if (wiring) drawPort(wiring.from, true);
+        if (hoverPort && (!wiring || hoverPort.nodeId !== wiring.from.nodeId)) drawPort(hoverPort, true);
+
+        if (wiring) {
+          /*
+           * The rubber band. Snapped to the hovered port when there is one, so the moment before
+           * the click looks exactly like the trace that is about to exist.
+           *
+           * Drawn as an L, horizontal then vertical, because that is what the router will actually
+           * lay down — a diagonal preview followed by a right-angled trace would be a preview that
+           * lies. Fault red when the target would be refused.
+           */
+          const end = hoverPort ?? { x: wirePoint.x, y: wirePoint.y };
+          const refusal = hoverPort ? wireRefusal(wiring.from, hoverPort, board.edges) : null;
+          const colour = refusal ? FAULT : board.theme.signal;
+
+          const g = new Graphics();
+          const x0 = Math.round(wiring.from.x);
+          const y0 = Math.round(wiring.from.y);
+          const x1 = Math.round(end.x);
+          const y1 = Math.round(end.y);
+          g.rect(Math.min(x0, x1), y0, Math.abs(x1 - x0) + 1, 1);
+          g.rect(x1, Math.min(y0, y1), 1, Math.abs(y1 - y0) + 1);
+          g.fill({ color: hexToNumber(colour) });
+          g.roundPixels = true;
+          overlayLayer.addChild(g);
+        }
+      }
     };
 
     /**
@@ -1230,6 +1412,11 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             // Printed kinds become click targets in Edit Board mode, so the hit-test set changes
             // with the mode — see layoutRects.
             rects = layoutRects(board, lastEditMode, measureNode);
+            // Leaving Edit Board mode abandons a half-drawn wire. It cannot be finished outside
+            // the mode, and a rubber band left hanging over a board you are only browsing is a
+            // gesture you have no way to cancel.
+            wiring = null;
+            hoverPort = null;
             buildGrid();
             rebuildOverlay();
           }

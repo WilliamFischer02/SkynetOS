@@ -50,6 +50,8 @@ export function App(): React.JSX.Element {
   const openNode = useBoardStore((s) => s.openNode);
   const moveNode = useBoardStore((s) => s.moveNode);
   const resizeNode = useBoardStore((s) => s.resizeNode);
+  const connectNodes = useBoardStore((s) => s.connectNodes);
+  const toast = useBoardStore((s) => s.toast);
   const usageRoutes = useBoardStore((s) => s.usageRoutes);
   const paletteOpen = useBoardStore((s) => s.paletteOpen);
   const setPaletteOpen = useBoardStore((s) => s.setPaletteOpen);
@@ -222,6 +224,8 @@ export function App(): React.JSX.Element {
         onActivate={(nodeId) => void openNode(nodeId)}
         onMoveNode={(nodeId, pos) => void moveNode(nodeId, pos)}
         onResizeNode={(nodeId, footprint) => void resizeNode(nodeId, footprint)}
+        onConnect={(from, to) => void connectNodes(from, to)}
+        onToast={(text, level) => toast(level, text)}
         usageRoutes={usageRoutes}
         onStatus={onStatus}
         cameraRef={cameraRef}
@@ -299,7 +303,7 @@ export function App(): React.JSX.Element {
 
       <div className="help">
         {editMode
-          ? 'DRAG A COMPONENT TO MOVE IT · DRAG THE SUBSTRATE TO PAN · E LEAVE EDIT BOARD'
+          ? 'DRAG A COMPONENT TO MOVE IT · CLICK TWO NODE EDGES TO WIRE THEM · DRAG THE SUBSTRATE TO PAN · E LEAVE EDIT BOARD'
           : 'DRAG TO PAN · WASD PAN · 2 3 4 ZOOM · TAB CYCLE · SPACE ACTIVATE · E EDIT BOARD · F2 EDIT NODE'}
         {stack.length > 1 ? ' · BACKSPACE UP A ROOM' : ''}
         {focus ? ' · FOCUS ON' : ''}

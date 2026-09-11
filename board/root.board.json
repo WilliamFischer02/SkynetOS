@@ -125,7 +125,7 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 80,
+        "x": 81,
         "y": 54
       },
       "footprint": {
@@ -333,7 +333,7 @@
       "name": "GitHub",
       "pos": {
         "x": 111,
-        "y": 73
+        "y": 72
       },
       "footprint": {
         "w": 3,
@@ -568,6 +568,42 @@
       "part": "junction",
       "showName": false,
       "showDesignator": false
+    },
+    {
+      "id": "j_new_link",
+      "kind": "link.url",
+      "name": "DIRTY PLUSH",
+      "pos": {
+        "x": 80,
+        "y": 69
+      },
+      "designator": "J2",
+      "provisional": true,
+      "url": "https://dirty-plush.vercel.app/",
+      "image": "C:/dev/SkynetOS/assets/sprites/dirty-plush.jpg",
+      "footprint": {
+        "w": 9,
+        "h": 5
+      },
+      "showLogo": false,
+      "frame": "tabs",
+      "priority": 1,
+      "textStroke": "mask-dark",
+      "textPlate": true,
+      "plateColor": "mask-dark",
+      "showDesignator": false,
+      "plateBorder": "ok"
+    },
+    {
+      "id": "f_new_program",
+      "kind": "file.exe",
+      "name": "NEW PROGRAM",
+      "pos": {
+        "x": 76,
+        "y": 55
+      },
+      "designator": "F1",
+      "provisional": true
     }
   ],
   "edges": [
@@ -630,6 +666,12 @@
       "to": "u3_jarvis_hands",
       "kind": "supervises",
       "width": 3
+    },
+    {
+      "id": "e9",
+      "from": "j_new_link",
+      "to": "d3_storyos",
+      "kind": "reads"
     }
   ]
 }

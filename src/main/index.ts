@@ -777,6 +777,144 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     console.log(`[smoke] board unchanged by blocked delete: ${readFileSync(boardFile, 'utf8') === afterUndo}`);
 
     /*
+     * ── Drawing a trace by hand ──────────────────────────────────────────────────────────────
+     *
+     * Click one node's edge, click another's, and a trace exists. This drives it the way a mouse
+     * does — two real PointerEvents on the canvas at coordinates derived from the live camera —
+     * and then reads the board file to see whether an edge actually landed.
+     *
+     * Back into Edit Board mode first: wiring is gated behind it, because browsing a board
+     * involves a lot of clicking near components and a click that starts a trace by accident
+     * would be worse than no feature at all.
+     */
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'e' });
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'e' });
+    await wait(400);
+    const inEditMode = await win.webContents.executeJavaScript(
+      `Boolean(document.querySelector('.add-fab')) || /EDIT BOARD/.test(document.body.textContent ?? '')`
+    ) as boolean;
+    console.log(`[smoke] back in edit mode for the wire test: ${inEditMode}`);
+    const wireBoard = JSON.parse(readNow(boardPath, 'utf8')) as {
+      nodes: { id: string; kind: string; pos: { x: number; y: number }; footprint?: { w: number; h: number } }[];
+      edges: { id: string; from: string; to: string }[];
+    };
+    const edgesBefore = wireBoard.edges.length;
+
+    const edgePortsOf = (id: string) => {
+      const node = wireBoard.nodes.find((n) => n.id === id);
+      if (!node) return null;
+      const fp = node.footprint ?? DEFAULT_FOOTPRINT[node.kind as NodeKind] ?? { w: 2, h: 2 };
+      // The middle of the TOP edge, in world pixels — where ports.ts puts the dot.
+      return { wx: (node.pos.x + fp.w / 2) * 16, wy: node.pos.y * 16 };
+    };
+
+    // Two nodes the root board does not already connect, so the wire is a new one.
+    const connected = new Set(wireBoard.edges.map((e) => `${e.from}|${e.to}`));
+    const candidates = wireBoard.nodes.filter(
+      (n) => !n.kind.startsWith('decor.') && n.kind !== 'note.silk' && n.kind !== 'group.zone'
+    );
+    const pair = candidates.flatMap((a) =>
+      candidates
+        .filter((b) => b.id !== a.id && !connected.has(`${a.id}|${b.id}`) && !connected.has(`${b.id}|${a.id}`))
+        .map((b) => [a, b] as const)
+    );
+
+    const wired = await win.webContents.executeJavaScript(`
+      (async () => {
+        const cam = window.__skynetCamera;
+        const canvas = document.querySelector('canvas');
+        if (!cam || !canvas) return JSON.stringify({ error: 'no camera or canvas' });
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const ev = (type, x, y, target) => target.dispatchEvent(new PointerEvent(type, {
+          pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+          clientX: x, clientY: y, bubbles: true, cancelable: true
+        }));
+        const toScreen = (wx, wy) => ({ x: Math.round((wx - cam.x) * cam.zoom), y: Math.round((wy - cam.y) * cam.zoom) });
+        const onScreen = (p) => p.x > 4 && p.y > 4 && p.x < window.innerWidth - 4 && p.y < window.innerHeight - 4;
+
+        /*
+         * Hover first, and believe the RENDERER about what lit up.
+         *
+         * Computing where a port ought to be and clicking there tests the harness's arithmetic,
+         * not the feature — and when the two disagree the harness reports a failure that is not
+         * real. It did: it aimed at a node's old position and concluded wiring was broken.
+         * window.__skynetWire is where the port actually is, according to the code that draws it.
+         */
+        const probe = async (wx, wy) => {
+          const p = toScreen(wx, wy);
+          if (!onScreen(p)) return null;
+          if (document.elementFromPoint(p.x, p.y)?.tagName !== 'CANVAS') return null;
+          ev('pointermove', p.x, p.y, window);
+          await wait(30);
+          const lit = window.__skynetWire?.hover;
+          return lit ? { screen: p, port: lit } : null;
+        };
+
+        const ports = ${JSON.stringify(Object.fromEntries(candidates.map((n) => [n.id, edgePortsOf(n.id)])))};
+        const tried = [];
+        let first = null;
+
+        for (const [id, port] of Object.entries(ports)) {
+          if (!port) continue;
+          const found = await probe(port.wx, port.wy);
+          if (!found) { tried.push(id); continue; }
+          if (!first) { first = found; continue; }
+          // A second, different node. Draw between them.
+          if (found.port.nodeId === first.port.nodeId) continue;
+
+          ev('pointermove', first.screen.x, first.screen.y, window);
+          await wait(20);
+          ev('pointerdown', first.screen.x, first.screen.y, canvas);
+          ev('pointerup', first.screen.x, first.screen.y, window);
+          await wait(20);
+          ev('pointermove', found.screen.x, found.screen.y, window);
+          await wait(20);
+          ev('pointerdown', found.screen.x, found.screen.y, canvas);
+          ev('pointerup', found.screen.x, found.screen.y, window);
+          return JSON.stringify({ from: first.port.nodeId, to: found.port.nodeId });
+        }
+        return JSON.stringify({ error: 'fewer than two ports lit anywhere on screen', tried: tried.length });
+      })()
+    `) as string;
+
+    const attempt = JSON.parse(wired) as { from?: string; to?: string; error?: string };
+
+    /*
+     * Poll, do not sleep.
+     *
+     * A fixed wait was 700ms and the round trip — IPC, command bus, schema validation, snapshot,
+     * disk write — sometimes took longer. The harness then read the OLD edge count, reported a
+     * failure the app had not committed, and skipped its own cleanup because the count had not
+     * changed. So a passing feature looked broken AND left a stray trace in William's board file.
+     * Waiting for the thing to happen is both more honest and faster when it happens quickly.
+     */
+    const edgeCount = (): number => (JSON.parse(readNow(boardPath, 'utf8')) as { edges: unknown[] }).edges.length;
+    let edgesAfter = edgesBefore;
+    for (let i = 0; i < 30 && edgesAfter === edgesBefore; i++) {
+      await wait(100);
+      edgesAfter = edgeCount();
+    }
+
+    console.log(`[smoke] wire attempt: ${attempt.error ?? `${attempt.from} -> ${attempt.to}`}`);
+    console.log(`[smoke] A TRACE WAS DRAWN BY HAND: ${edgesAfter === edgesBefore + 1} (${edgesBefore} -> ${edgesAfter} traces)`);
+    await shoot('14-wire-drawn.png');
+
+    /*
+     * Put the board back. This harness runs against the REAL board/ in development, so anything it
+     * creates and does not remove is a component William finds on his board tomorrow with no idea
+     * where it came from.
+     */
+    if (edgesAfter > edgesBefore) {
+      await win.webContents.executeJavaScript(`window.skynet['command:undo']()`);
+      let edgesUndone = edgesAfter;
+      for (let i = 0; i < 20 && edgesUndone !== edgesBefore; i++) {
+        await wait(100);
+        edgesUndone = edgeCount();
+      }
+      console.log(`[smoke] and undone, leaving the board as it was: ${edgesUndone === edgesBefore}`);
+    }
+
+    /*
      * ── JARVIS Prime's tool surface, end to end ──────────────────────────────────────────────
      *
      * Spawns the REAL tools/skynet-mcp.mjs the way Claude Code will, pointed at the REAL control

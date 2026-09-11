@@ -1167,3 +1167,56 @@ Preferences live in localStorage, not settings.json. They are how the window is 
 the app is allowed to do, and docs/07 keeps settings.json user-only with no write channel on
 purpose. Every read is in a try/catch because storage throws outright in some contexts and a
 thrown preference must not cost the board.
+
+## 2026-09-10 — Wiring: click two node edges to draw a trace
+
+William: "when in board edit mode add the ability to connect (generate) a wire between any two
+nodes; hovering over one of the four edges of a node shows a glowing dot and when clicked starts a
+wire, then clicking the edge of a different node connects / ends the wire. These wires stay
+dynamically attached / adaptable."
+
+The last part needed no work and is the reason the rest is small: a `BoardEdge` stores two NODE IDS
+and no coordinates at all. The router lays the copper every time the board is built, so a trace
+already followed its endpoints through a move, a resize or a change of footprint. There was nothing
+to keep in step — only a gesture to add.
+
+**Click-click, not drag.** The two ends of a trace can be far apart on a 192-tile board, and a
+click-move-click lets you pan and zoom in between. A drag would have limited you to what fits on
+one screen.
+
+**Hit-tested against the whole edge, snapped to the midpoint.** Requiring the cursor to find a
+four-pixel dot would make the feature undiscoverable — you would have to already know the dots were
+there to hover one. Hovering anywhere along the top of a chip is an unambiguous way of saying "the
+top", so that is what it means.
+
+**Gated behind Edit Board mode.** Browsing a board involves a lot of clicking near components, and
+a click that starts a trace by accident would be worse than no feature.
+
+**Refusals say why.** A wire to the node it came from, or a second wire between an already-connected
+pair, toasts the reason. The duplicate case is not about validity — two traces between the same
+pair render on top of each other, so the board would look unchanged and the click would seem to
+have failed. A gesture that silently does nothing is indistinguishable from a broken one, which is
+a lesson this codebase has already paid for twice.
+
+**The relationship is guessed, not asked.** Drawing a wire should not open a dialog asking which of
+six words you meant. An agent to a repo reads it; a repo to an artifact produces it. The inspector
+changes it in one click when the guess is wrong.
+
+Backdrops and board furniture are not wirable — a trace to the picture behind the board means
+nothing, and the router would draw it anyway. Notes and zones are: a bracket with a trace to the
+agent that owns it is a real statement about the board.
+
+### And the harness learned to stop guessing
+
+The smoke test for this failed twice for reasons that were not the feature.
+
+First it computed where a port ought to be from the board file and clicked there. The renderer had
+the node somewhere else, so it clicked bare substrate and reported wiring broken. It now HOVERS
+first and reads `window.__skynetWire` — where the port actually is, according to the code that
+draws it — exactly as the camera check reads `__skynetCamera` rather than recomputing it.
+
+Second, it read the board file 700ms after the click. The round trip through IPC, the command bus,
+schema validation, a snapshot and a disk write sometimes takes longer, so it read the old edge
+count, reported a failure the app had not committed, and then skipped its own cleanup because the
+count had not changed — leaving a stray trace in the real board file. It now polls for the change
+and always undoes what it drew. A harness that runs against real data has to put it back.
