@@ -524,6 +524,53 @@ canvas {
    A deep room path truncates from the left instead. */
 .breadcrumb { max-width: 26vw; overflow: hidden; white-space: nowrap; }
 
+/* ---------- rotation ---------- */
+
+/*
+ * Four buttons, not a dropdown. The value has exactly four states, the arrow on each one points
+ * where the asset will actually face, and picking a rotation is a thing you do repeatedly while
+ * dressing a board — a select would hide three of the four options behind a click every time.
+ */
+.rotation-field {
+  display: flex;
+  gap: var(--gap);
+}
+
+.rotation-field .rot {
+  pointer-events: auto;
+  appearance: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--p));
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+  color: var(--silk);
+  font: inherit;
+  font-size: var(--f-rail);
+  line-height: 1;
+  padding: calc(5 * var(--p)) 0;
+  cursor: pointer;
+}
+
+.rotation-field .rot .rot-deg {
+  font-size: var(--f);
+  color: var(--copper);
+}
+
+.rotation-field .rot:hover { border-color: var(--copper); }
+
+.rotation-field .rot.on {
+  background: var(--copper);
+  border-color: var(--silk);
+  color: var(--mask-dark);
+}
+
+.rotation-field .rot.on .rot-deg { color: var(--mask-dark); }
+
+.rotation-field .rot:active { transform: translate(var(--p), var(--p)); }
+
 /* ---------- minimap ---------- */
 
 /*

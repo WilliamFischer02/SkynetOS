@@ -153,6 +153,17 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     console.log(`[smoke] devicePixelRatio = ${String(dpr)} (must be 1 for pixel purity)`);
 
     await shoot('01-initial-3x.png');
+    /*
+     * The camera the first capture was taken at.
+     *
+     * Cropping a screenshot to inspect one component needs this, and computing it by hand means
+     * reimplementing `contentBounds` outside the renderer and getting it wrong every time the
+     * board changes shape. The renderer already publishes the live value; printing it turns every
+     * later crop from arithmetic into a lookup.
+     */
+    console.log(`[smoke] 01-initial camera: ${await win.webContents.executeJavaScript(
+      "(() => { const c = window.__skynetCamera; return c ? c.x + ',' + c.y + ' @' + c.zoom + 'x' : '(none)'; })()"
+    ) as string}`);
 
     // Hold D. sendInputEvent goes through the same path as a real key, so this exercises the
     // actual listener rather than poking the camera directly.

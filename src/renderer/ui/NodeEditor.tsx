@@ -38,7 +38,7 @@ function toDraft(node: BoardNode): Draft {
       draft[field.key] = value === undefined ? defaultBoolean(field) : Boolean(value);
     } else if (field.control === 'tags' || field.control === 'multi' || field.control === 'dir-list') {
       draft[field.key] = Array.isArray(value) ? value.join(', ') : '';
-    } else if (field.control === 'priority') {
+    } else if (field.control === 'rotation' || field.control === 'priority') {
       draft[field.key] = String(value ?? 0);
     } else if (field.control === 'footprint') {
       const fp = footprintOf(node);
@@ -123,6 +123,11 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
           continue;
         }
       }
+    } else if (field.control === 'rotation') {
+      const degrees = Number.parseInt(String(raw ?? '0'), 10);
+      // 0 is upright and is the default, so it is stored as absent. A board file full of
+      // `"rotation": 0` says nothing and reads as though something was configured.
+      next = degrees === 90 || degrees === 180 || degrees === 270 ? degrees : undefined;
     } else if (field.control === 'priority') {
       const level = Number.parseInt(String(raw ?? '0'), 10);
       // 0 is flat and is the default, so it is stored as absent rather than as a zero — a board
@@ -256,6 +261,27 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                 <option value="">— unset —</option>
                 {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
+            ) : field.control === 'rotation' ? (
+              <div className="rotation-field" role="group" aria-label="Rotation">
+                {[0, 90, 180, 270].map((degrees) => (
+                  <button
+                    key={degrees}
+                    type="button"
+                    className={Number(value ?? 0) === degrees ? 'rot on' : 'rot'}
+                    disabled={saving}
+                    onClick={() => set(field.key, String(degrees))}
+                    title={`${degrees} degrees clockwise`}
+                  >
+                    {/*
+                      * An arrow that actually points where the asset will face, rather than a
+                      * number you have to translate. The glyphs are quarter turns of one another,
+                      * which is exactly what the control does.
+                      */}
+                    <span aria-hidden="true">{['↑', '→', '↓', '←'][degrees / 90]}</span>
+                    <span className="rot-deg">{degrees}°</span>
+                  </button>
+                ))}
+              </div>
             ) : field.control === 'priority' ? (
               <div className="priority-field">
                 <input

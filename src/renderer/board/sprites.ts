@@ -10,13 +10,27 @@
  * Missing art is never a crash and never a broken-image icon.
  */
 
-import { ImageSource, Texture, Rectangle, type TextureSource } from 'pixi.js';
+import { groupD8, ImageSource, Texture, Rectangle, type TextureSource } from 'pixi.js';
 import { COPPER_DARK, SILK } from '@shared/palette.js';
-import type { NodeKind } from '@shared/types.js';
+import type { NodeKind, Rotation } from '@shared/types.js';
+
 import { TILE } from './camera.js';
 import { renderSilkText, measureSilkText } from './silkscreen.js';
 import { COMPONENT_STYLE, depthOffset, drawComponent, drawDepth, drawFrame, frameMargin } from './component-art.js';
 import type { NodeFrame } from '@shared/frames.js';
+
+/**
+ * Degrees clockwise -> the groupD8 constant Pixi uses for a texture's own rotation.
+ *
+ * groupD8's even values are the four quarter turns. `E` is upright; `S`, `W`, `N` are 90, 180 and
+ * 270 clockwise, named for where the sprite's "up" ends up pointing.
+ */
+const ROTATE_BY_DEGREES: Record<number, number> = {
+  0: groupD8.E,
+  90: groupD8.S,
+  180: groupD8.W,
+  270: groupD8.N
+};
 
 export interface AtlasFrame {
   frame: { x: number; y: number; w: number; h: number };
@@ -396,8 +410,23 @@ export class SpriteStore {
    * The real texture for a key, or null. Callers that get null draw a placeholder — they must
    * never fall back to some other key's art, which would be a quiet lie about what is on screen.
    */
-  get(key: string, frame = 0): Texture | null {
-    const cacheKey = `${key}#${frame}`;
+  /**
+   * The real texture for a key, optionally turned by a quarter.
+   *
+   * ── Why rotation happens HERE and not on the sprite ───────────────────────────────────────
+   *
+   * `sprite.rotation = Math.PI / 2` looks equivalent and is not. The float is off by about 6e-17,
+   * so the transform is not quite a right angle, every pixel lands fractionally off its grid, and
+   * the renderer resamples the lot — one blurred component on a board where docs/02 §Anti-mush
+   * treats a single soft pixel as a crash-severity bug.
+   *
+   * Pixi carries a `rotate` field on the texture itself, the one texture packers use to store a
+   * sprite sideways. It is applied in UV space as a permutation of the four corners — exact, with
+   * no matrix and no resampling. `groupD8`'s even values are the quarter turns: 0, 2, 4, 6.
+   */
+  get(key: string, frame = 0, rotation?: Rotation): Texture | null {
+    const turn = ROTATE_BY_DEGREES[rotation ?? 0] ?? 0;
+    const cacheKey = turn === 0 ? `${key}#${frame}` : `${key}#${frame}@${rotation}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
@@ -405,7 +434,10 @@ export class SpriteStore {
       this.missing.add(key);
       return null;
     }
-    const entry = this.atlas.frames[cacheKey] ?? this.atlas.frames[key];
+    // The frame lookup always uses the UNROTATED key: a turn is a property of this texture, not a
+    // different cell in the atlas.
+    const frameKey = `${key}#${frame}`;
+    const entry = this.atlas.frames[frameKey] ?? this.atlas.frames[key];
     if (!entry) {
       this.missing.add(key);
       return null;
@@ -413,7 +445,8 @@ export class SpriteStore {
 
     const texture = new Texture({
       source: this.atlasSource,
-      frame: new Rectangle(entry.frame.x, entry.frame.y, entry.frame.w, entry.frame.h)
+      frame: new Rectangle(entry.frame.x, entry.frame.y, entry.frame.w, entry.frame.h),
+      ...(turn ? { rotate: turn } : {})
     });
     this.cache.set(cacheKey, texture);
     return texture;

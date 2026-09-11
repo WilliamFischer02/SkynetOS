@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { app, nativeImage } from 'electron';
 import type { Board, BoardNode, BoardTheme } from '@shared/types.js';
-import { footprintOf, logoBoxTiles } from '@shared/types.js';
+import { footprintOf, logoBoxTiles, type Rotation } from '@shared/types.js';
 import { COPPER, COPPER_DARK, SILK, hexToRgb } from '@shared/palette.js';
 import type { MosaicResult } from '@shared/ipc.js';
 import { expandPath } from './target-resolver.js';
@@ -146,6 +146,13 @@ export interface MosaicRequest {
   height: number;
   theme: BoardTheme;
   /**
+   * Quarter turn, clockwise, baked into the pixels.
+   *
+   * Done here rather than in the renderer so the result still fills the requested box exactly: at
+   * 90 and 270 the axes swap, so the source is rendered at the swapped size and turned back.
+   */
+  rotation?: Rotation;
+  /**
    * How the source is fitted into that box.
    *
    *   fill     stretch to the exact box. Right for a WALLPAPER: the face is the footprint, and
@@ -157,8 +164,52 @@ export interface MosaicRequest {
   fit?: 'fill' | 'contain';
 }
 
+
+/**
+ * Turn an RGBA buffer by a quarter, exactly.
+ *
+ * A permutation of whole pixels — every output pixel is some input pixel, byte for byte. Nothing is
+ * averaged, interpolated or resampled, which is what makes it legal under docs/02 §Anti-mush where
+ * an arbitrary angle would not be.
+ *
+ * At 90 and 270 the dimensions swap, so the caller asks for the SOURCE box and receives the turned
+ * one. Doing it here rather than in the renderer means a rotated backdrop still fills its footprint
+ * exactly instead of being letterboxed into a box of the wrong shape.
+ */
+export function rotateRgba(
+  data: Buffer,
+  width: number,
+  height: number,
+  degrees: Rotation
+): { data: Buffer; width: number; height: number } {
+  if (degrees === 0) return { data, width, height };
+
+  const turned = Buffer.allocUnsafe(data.length);
+  const outW = degrees === 180 ? width : height;
+  const outH = degrees === 180 ? height : width;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const from = (y * width + x) * 4;
+      // Clockwise. At 90 the left column becomes the top row.
+      const ox = degrees === 90 ? outW - 1 - y : degrees === 180 ? width - 1 - x : y;
+      const oy = degrees === 90 ? x : degrees === 180 ? height - 1 - y : outH - 1 - x;
+      data.copy(turned, (oy * outW + ox) * 4, from, from + 4);
+    }
+  }
+  return { data: turned, width: outW, height: outH };
+}
+
 export function buildMosaic(request: MosaicRequest): MosaicResult {
-  const { width, height, theme } = request;
+  const { theme } = request;
+  const rotation = request.rotation ?? 0;
+  /*
+   * Render at the SOURCE box and turn it into the requested one. A quarter turn swaps the axes, so
+   * a 12x8 backdrop rotated 90 degrees has to be drawn 8x12 first — otherwise the turn produces an
+   * 8x12 picture for a 12x8 hole and the board letterboxes it.
+   */
+  const width = rotation === 90 || rotation === 270 ? request.height : request.width;
+  const height = rotation === 90 || rotation === 270 ? request.width : request.height;
   const fit = request.fit ?? 'fill';
   const file = expandPath(request.source);
 
@@ -174,7 +225,7 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   }
 
   const ramp = themeRamp(theme);
-  const key = cacheKey(file, stat.mtimeMs, stat.size, width, height, ramp, fit);
+  const key = cacheKey(file, stat.mtimeMs, stat.size, width, height, ramp, `${fit}r${rotation}`);
   const cached = join(thumbDir(), `${key}.png`);
 
   if (existsSync(cached)) {
@@ -227,7 +278,12 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   }
 
   const dithered = ditherToRamp(bitmap, width, height, ramp);
-  const png = nativeImage.createFromBitmap(rgbaToBgra(dithered), { width, height }).toPNG();
+  // Turn AFTER dithering: the dither is an ordered pattern locked to the pixel grid, and rotating
+  // the source first would rotate the grid with it.
+  const turned = rotateRgba(dithered, width, height, rotation);
+  const png = nativeImage
+    .createFromBitmap(rgbaToBgra(turned.data), { width: turned.width, height: turned.height })
+    .toPNG();
 
   try {
     mkdirSync(thumbDir(), { recursive: true });
@@ -240,8 +296,8 @@ export function buildMosaic(request: MosaicRequest): MosaicResult {
   return {
     ok: true,
     dataUrl: `data:image/png;base64,${png.toString('base64')}`,
-    width,
-    height,
+    width: turned.width,
+    height: turned.height,
     source: file,
     cached: false
   };
@@ -274,6 +330,7 @@ export function mosaicForNode(board: Board, node: BoardNode, slot: 'face' | 'log
     width: Math.max(16, fp.w * tile),
     height: Math.max(16, fp.h * tile),
     theme: board.theme,
-    fit: 'fill'
+    fit: 'fill',
+    ...(node.rotation ? { rotation: node.rotation } : {})
   });
 }

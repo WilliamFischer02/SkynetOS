@@ -283,3 +283,49 @@ describe('the board paints back to front in one fixed order', () => {
     expect(order[order.length - 1]).toBe('overlayLayer');
   });
 });
+
+/**
+ * ── A quarter turn must not go through a transform ───────────────────────────────────────────
+ *
+ * `sprite.rotation = Math.PI / 2` looks equivalent to turning a texture and is not. The float is
+ * off by about 6e-17, so the transform is not quite a right angle, every pixel lands fractionally
+ * off its grid, and the renderer resamples the lot — one blurred component on a board where
+ * docs/02 §Anti-mush treats a single soft pixel as a crash-severity bug.
+ *
+ * Pixi carries a `rotate` field on the texture itself, applied in UV space as a permutation of the
+ * four corners. Exact, no matrix, no resampling. Verifying the OUTPUT needs a GPU, so what is
+ * checked here is that the exact mechanism is the one being used.
+ */
+describe('aesthetic assets turn without resampling', () => {
+  const sprites = read('src/renderer/board/sprites.ts');
+  const canvas = read('src/renderer/board/BoardCanvas.tsx');
+
+  it('turns a tile through the texture, not the sprite transform', () => {
+    expect(sprites, 'rotation must use groupD8 on the texture').toContain('groupD8');
+    expect(canvas, 'a sprite transform rotation would resample every pixel')
+      .not.toMatch(/sprite\.rotation\s*=/);
+  });
+
+  it('maps only the four quarter turns', () => {
+    const table = sprites.slice(sprites.indexOf('const ROTATE_BY_DEGREES'), sprites.indexOf('};', sprites.indexOf('const ROTATE_BY_DEGREES')));
+    for (const degrees of ['0:', '90:', '180:', '270:']) expect(table).toContain(degrees);
+    // 45 would have to resample. There is no sharp 45-degree pixel turn.
+    expect(table).not.toContain('45');
+  });
+
+  it('carries the rotation through the animation ticker', () => {
+    /*
+     * The LED parts re-fetch a texture every pulse. If the ticker dropped the rotation, an angled
+     * LED would snap upright twelve times a second — the same shape as the frame flicker, and for
+     * exactly the same reason: one value assembled in two places.
+     */
+    expect(canvas).toMatch(/animated\.push\(\{[^}]*rotation/);
+    expect(canvas).toMatch(/get\(entry\.key,[^)]*entry\.rotation\)/);
+  });
+
+  it('keys the backdrop cache on rotation', () => {
+    // Otherwise turning a backdrop leaves the old mosaic in the cache and nothing happens — the
+    // shape of the pulse-glow checkbox that did nothing.
+    expect(canvas).toMatch(/const key = `\$\{source\}@\$\{fp\.w\}x\$\{fp\.h\}r\$\{node\.rotation/);
+  });
+});

@@ -43,7 +43,7 @@ import type { BoardNode, NodeKind } from './types.js';
 export type FieldControl =
   | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags' | 'multi'
   | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json'
-  | 'dir-list' | 'footprint' | 'priority';
+  | 'dir-list' | 'footprint' | 'priority' | 'rotation';
 
 /** Controls that name something outside the board and therefore need verifying. */
 export const TARGET_CONTROLS = ['path-file', 'path-dir', 'glob', 'url', 'board-file'] as const;
@@ -193,6 +193,11 @@ const OPEN_WITH_DOCUMENT: FieldSpec = {
   help: 'What a click does. For an online document, default and browser open it in your browser; office hands it to desktop Word/Excel/PowerPoint, which needs a direct link to the file (one ending in .docx), not a share link.'
 };
 
+const ROTATION_FIELD: FieldSpec = {
+  key: 'rotation', label: 'Rotation', control: 'rotation',
+  help: 'Quarter turns only. Any other angle would resample the pixels and be the one blurred thing on the board.'
+};
+
 const BY_KIND: Record<NodeKind, FieldSpec[]> = {
   'agent.code': [
     { key: 'cwd', label: 'Working directory', control: 'path-dir', required: true, placeholder: 'C:/dev/TheStalker', help: 'The repo the Claude Code session opens in. This is the session\'s whole world.' },
@@ -309,13 +314,14 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
    * second copy would be two controls bound to the same key, which is a form that can disagree
    * with itself. `fieldsFor` promotes the shared field to required for this kind instead.
    */
-  'decor.image': [],
+  'decor.image': [ROTATION_FIELD],
   'decor.part': [
     {
       key: 'part', label: 'Part', control: 'select', required: true,
       options: DECOR_PARTS,
       help: 'Which piece of board furniture. Each is one cell of a real tilesheet, recoloured to the locked palette by the bake pipeline. The led_* parts pulse.'
-    }
+    },
+    ROTATION_FIELD
   ]
 };
 

@@ -532,6 +532,16 @@
           "type": "boolean",
           "default": false,
           "description": "file.exe only: ask Windows to start this program as administrator. Opt in per node; a UAC prompt appears on every launch. SkynetOS itself never runs elevated \u2014 it asks Windows to start an elevated child. See docs/07-SECURITY.md."
+        },
+        "rotation": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ],
+          "default": 0,
+          "description": "decor.part and decor.image only: quarter-turn rotation, clockwise. Quarter turns only \u2014 any other angle would resample the pixels, which docs/02 Anti-mush forbids."
         }
       },
       "allOf": [

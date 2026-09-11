@@ -1513,3 +1513,48 @@ Rejected: a per-node `trusted` field, for the same reason — anything in board 
 the thing it would be protecting against. Rejected: dropping the out-of-root prompt entirely; the
 sanctioned way to stop being asked about a whole location is `devRoots` in settings.json, which no
 agent can write, and the dialog now says so.
+
+## 2026-09-10 — Aesthetic assets rotate, in quarter turns only
+
+William: "aesthetic tiles / visual assets need to be able to be rotated."
+
+Quarter turns and nothing between. An arbitrary angle resamples every pixel, and docs/02
+§Anti-mush treats one soft pixel as a crash-severity bug. A quarter turn is a pure permutation —
+every output pixel IS some input pixel, byte for byte — so it is exact. It is also what board
+furniture actually wants: an elbow, a tee, a ribbon and a grille all have an orientation and no
+use for any angle in between.
+
+**Not `sprite.rotation`.** The obvious implementation is a transform, and it is wrong.
+`Math.PI / 2` is off by about 6e-17, so the matrix is not quite a right angle, every pixel lands
+fractionally off its grid, and the renderer resamples the lot. Instead:
+
+- **Tiles** (`decor.part`) turn through the atlas texture's own `rotate` field — the one texture
+  packers use to store a sprite sideways. Pixi applies it in UV space as a permutation of the four
+  corners: no matrix, no resampling. `groupD8`'s even values are the quarter turns.
+- **Backdrops** (`decor.image`) are baked turned by the mosaic service, which already owns the
+  pixels. Rotation happens AFTER the dither, because the dither is an ordered pattern locked to the
+  pixel grid and turning the source first would turn the grid with it. At 90 and 270 the axes swap,
+  so the source is rendered at the swapped box and turned back — otherwise a 12x8 backdrop rotated
+  a quarter would be an 8x12 picture in a 12x8 hole, and the board would letterbox it.
+
+Two things that would have been silent bugs, both the shape of ones already paid for here:
+
+- The animated-part ticker re-fetches a texture every pulse. Without the rotation travelling in the
+  `animated` entry, an angled LED would snap upright twelve times a second — the frame flicker
+  again, one value assembled in two places.
+- The renderer's mosaic cache is keyed on source and footprint. Without rotation in the key,
+  turning a backdrop would leave the old mosaic in place and nothing would happen — the pulse-glow
+  checkbox that did nothing, again.
+
+The control is four buttons rather than a dropdown: the value has exactly four states, the arrow on
+each points where the asset will face, and it is a thing you reach for repeatedly while dressing a
+board.
+
+Verified on the GPU, not just in unit tests, because this project has already shipped a texture
+that was valid in every JS property and invisible on screen. Four copies of one asymmetric part,
+one per turn, rendered and cropped out of the capture: Γ L J ¬, each a clean quarter turn of the
+next, with the diagonal step pattern crisp in all four.
+
+The smoke now also prints the camera its first capture was taken at. Cropping a screenshot to
+inspect one component otherwise means reimplementing `contentBounds` outside the renderer and
+getting it wrong every time the board changes shape.

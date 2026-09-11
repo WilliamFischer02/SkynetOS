@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Sprite, TextureSource } from 'pixi.js';
 import type { Board, BoardNode, Footprint } from '@shared/types.js';
-import { displayOf, footprintOf, isPrinted, maxFootprintFor, spriteKeyOf } from '@shared/types.js';
+import { displayOf, footprintOf, isPrinted, maxFootprintFor, spriteKeyOf, type Rotation } from '@shared/types.js';
 import { FAULT, SILK, WARN, hexToNumber } from '@shared/palette.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import {
@@ -222,7 +222,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const spriteById = new Map<string, Sprite>();
     /** Decor parts whose atlas key has more than one frame — the LEDs. */
-    const animated: { nodeId: string; key: string; frames: number }[] = [];
+    const animated: { nodeId: string; key: string; frames: number; rotation: Rotation | undefined }[] = [];
     /**
      * Precomputed pulse-glow cycles, per node. Built once from the decoded wallpaper and cycled;
      * recomputing a 320x224 backdrop's palette shift every frame would be millions of pixel
@@ -758,7 +758,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        */
       if (node.kind === 'decor.part') {
         const key = spriteKeyOf(node);
-        const texture = sprites.get(key, 0);
+        const texture = sprites.get(key, 0, node.rotation);
         if (texture) {
           sprite.texture = texture;
           sprite.scale.set(Math.max(1, Math.min(fp.w, fp.h)));
@@ -792,7 +792,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         // only the drawing of it is off — so turning it back on costs a cached mosaic read.
         const wanted = slot === 'face' ? show.thumbnail : show.logo;
         if (!source || !wanted) { store.delete(node.id); continue; }
-        const key = `${source}@${fp.w}x${fp.h}`;
+        // The rotation is part of the key. Without it, turning a backdrop would leave the old
+        // mosaic in the cache and nothing would happen — the same shape as the pulse-glow
+        // checkbox that did nothing because its work sat inside a fetch that was being skipped.
+        const key = `${source}@${fp.w}x${fp.h}r${node.rotation ?? 0}`;
         if (store.get(node.id)?.key === key) continue;
         store.set(node.id, { key, image: null });
 
@@ -919,7 +922,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
         if (node.kind === 'decor.part') {
           const frames = sprites.frameCountFor(key);
-          if (frames > 1) animated.push({ nodeId: node.id, key, frames });
+          // The rotation travels WITH the entry. Without it the ticker would re-fetch an
+          // unrotated texture every pulse and an angled LED would snap upright twelve times a
+          // second — the same shape as the frame flicker, for the same reason.
+          if (frames > 1) animated.push({ nodeId: node.id, key, frames, rotation: node.rotation });
         }
         if (node.textGlow && displayOf(node).name) glowingPlates.push(node.id);
       }
@@ -1453,7 +1459,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               lastPulseStep = step;
               for (const entry of animated) {
                 const sprite = spriteById.get(entry.nodeId);
-                const texture = sprites?.get(entry.key, step % entry.frames);
+                const texture = sprites?.get(entry.key, step % entry.frames, entry.rotation);
                 if (sprite && texture) sprite.texture = texture;
               }
             }

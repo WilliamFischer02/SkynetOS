@@ -42,6 +42,21 @@ export type EdgeKind = (typeof EDGE_KINDS)[number];
  * The `led_*` parts carry a two-frame pulse, which is the only thing on the board that moves for
  * its own sake. They stop under reducedMotion like everything else.
  */
+/**
+ * How far an aesthetic asset is turned, in degrees clockwise.
+ *
+ * Quarter turns ONLY. An arbitrary angle would resample the pixels and produce the one blurred
+ * thing on the board, which docs/02 §Anti-mush treats as a crash-severity bug. A quarter turn is a
+ * pure permutation of whole pixels — it is exact, and it is also what board furniture wants: an
+ * elbow, a tee, a ribbon and a grille all have an orientation and no need for any angle between.
+ */
+export const ROTATIONS = [0, 90, 180, 270] as const;
+export type Rotation = (typeof ROTATIONS)[number];
+
+export function isRotation(value: unknown): value is Rotation {
+  return (ROTATIONS as readonly unknown[]).includes(value);
+}
+
 export const DECOR_PARTS = [
   'via', 'screw', 'testpoint',
   'junction', 'elbow', 'tee', 'junction_thin', 'elbow_thin',
@@ -159,6 +174,16 @@ export interface BoardNode {
   glob?: string;
   exclude?: string[];
   versionPattern?: string;
+
+  /**
+   * Quarter-turn rotation for an aesthetic asset — `decor.part` and `decor.image`.
+   *
+   * Applied where the pixels are made, never by rotating a sprite's transform: a part turns in UV
+   * space through the atlas texture's own `rotate`, and a backdrop is baked turned by the mosaic
+   * service. Both are exact. A transform rotation by `Math.PI / 2` is not — the float is off by
+   * ~6e-17, which is enough to resample every pixel.
+   */
+  rotation?: Rotation;
 
   // file.exe
   args?: string[];
