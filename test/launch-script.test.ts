@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildLaunchScript, elevatedProgramArgv } from '../src/main/services/launch-script.js';
 import { DEFAULT_PRIME, PRIME_STEPS, normalisePrime, primeStepsFor } from '../packages/shared/prime-steps.js';
@@ -286,5 +288,51 @@ describe('elevatedProgramArgv', () => {
     expect(code, 'a semicolon escaped the quotes').not.toContain(';');
     expect(code, 'a subexpression escaped the quotes').not.toContain('$(');
     expect(code, 'a comment escaped the quotes').not.toContain('#');
+  });
+});
+
+/**
+ * ── `detached` is not a free choice ──────────────────────────────────────────────────────────
+ *
+ * Reported: "trying to launch a program still does nothing - it shows a message but nothing
+ * happens."
+ *
+ * The elevated launch spawned `powershell.exe` with `detached: true, stdio: 'ignore'`. On Windows
+ * `detached` sets DETACHED_PROCESS, so the child gets no console — and Electron main is a
+ * GUI-subsystem process with none to inherit. A console application started that way does not run.
+ * Measured from inside main with a marker file:
+ *
+ *     detached: true,  stdio: 'ignore'   ->  nothing
+ *     detached: true,  stdio: 'pipe'     ->  nothing
+ *     detached: false, stdio: 'pipe'     ->  WORKS
+ *     detached: false, stdio: 'ignore'   ->  WORKS
+ *
+ * `stdio: 'ignore'` then made sure nobody ever saw a failure. The rule that came out of it:
+ * detach a GUI launcher that must outlive us (`wt.exe`), never a console helper that must simply
+ * run (`powershell.exe`).
+ */
+describe('console helpers are not launched detached', () => {
+  const opener = readFileSync(join(process.cwd(), 'src/main/services/shell-opener.ts'), 'utf8');
+  const terminal = readFileSync(join(process.cwd(), 'src/main/services/terminal.ts'), 'utf8');
+
+  it('spawns the elevated helper attached', () => {
+    const fn = opener.slice(opener.indexOf('async function launchElevated'), opener.indexOf('function trustedByUser'));
+    expect(fn).toContain('detached: false');
+    expect(fn, 'a detached console helper never runs').not.toContain('detached: true');
+  });
+
+  it('captures what the elevated helper said', () => {
+    // stdio: 'ignore' is what turned "Windows refused to elevate this" into silence.
+    const fn = opener.slice(opener.indexOf('async function launchElevated'), opener.indexOf('function trustedByUser'));
+    expect(fn).toContain("'pipe'");
+    expect(fn).toContain('stderr');
+  });
+
+  it('detaches the terminal launcher only when it is a GUI app', () => {
+    // wt.exe makes its own window and must outlive us. The elevated PowerShell must not be
+    // detached at all, and both go through the same spawn.
+    expect(terminal).toContain('const guiLauncher');
+    expect(terminal).toContain('detached: guiLauncher');
+    expect(terminal).toContain('if (guiLauncher) child.unref();');
   });
 });

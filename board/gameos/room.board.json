@@ -38,7 +38,7 @@
       "name": "CC-TQR-ENGINE",
       "pos": {
         "x": 60,
-        "y": 41
+        "y": 40
       },
       "footprint": {
         "w": 3,
@@ -74,7 +74,7 @@
       "kind": "store.repo",
       "name": "TruthQuestRetro",
       "pos": {
-        "x": 68,
+        "x": 70,
         "y": 41
       },
       "footprint": {

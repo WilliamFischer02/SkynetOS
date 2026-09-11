@@ -151,9 +151,24 @@ export async function openTerminal(request: TerminalRequest): Promise<TerminalRe
   let child: ChildProcess;
   let spawnError: string | null = null;
   try {
+    /*
+     * `detached` depends on WHAT is being launched, and getting it wrong is silent.
+     *
+     * On Windows `detached: true` sets DETACHED_PROCESS: the child gets no console. Electron main
+     * is a GUI-subsystem process with none of its own to inherit, so a CONSOLE application started
+     * this way does not run at all — measured from inside main, `powershell.exe` with a command
+     * that writes a marker file produced nothing detached and worked immediately when not.
+     *
+     * `wt.exe` is fine detached because it is a GUI application that makes its own window and must
+     * outlive us. The elevated helper is the opposite: a console PowerShell that asks the
+     * Application Information service to start the program and then exits. It does not need to
+     * outlive us — the elevated program is a child of that service, not of ours — and it cannot
+     * run detached. That mismatch is why "launch as administrator" showed a dialog and did nothing.
+     */
+    const guiLauncher = file.toLowerCase() === 'wt.exe';
     child = spawn(file, args, {
       cwd,
-      detached: true,
+      detached: guiLauncher,
       stdio: 'ignore',
       windowsHide: request.elevated
     });
@@ -167,7 +182,7 @@ export async function openTerminal(request: TerminalRequest): Promise<TerminalRe
       console.error(`[terminal] ${file} failed to start:`, err);
     });
     console.log(`[terminal] ${file} ${args.map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`);
-    child.unref();
+    if (guiLauncher) child.unref();
   } catch (err) {
     return {
       ok: false,

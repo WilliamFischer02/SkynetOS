@@ -80,22 +80,75 @@ function openInVSCode(absPath: string): { ok: boolean; error?: string } {
 }
 
 /**
- * Launch a program elevated.
+ * Launch a program elevated, and find out whether it actually happened.
  *
- * The argv is built by `services/launch-script.ts`, where the other pure command builders live and
- * where it can be tested without spawning anything. See `elevatedProgramArgv` for why this goes
- * through PowerShell rather than through `spawn` options.
+ * ── Why `detached: false` ─────────────────────────────────────────────────────────────────────
  *
- * The pid this returns belongs to the PowerShell that made the REQUEST, not to the program.
- * PowerShell exits as soon as the request is placed, so reporting it as the program's pid would be
- * a lie with a very short shelf life — which is why the caller does not print it.
+ * This is the bug that made "launch as administrator" show a dialog and then do nothing at all.
+ * Measured from inside Electron main, spawning `powershell.exe` with a command that writes a
+ * marker file:
+ *
+ *     detached: true,  stdio: 'ignore'   ->  nothing
+ *     detached: true,  stdio: 'pipe'     ->  nothing
+ *     detached: false, stdio: 'pipe'     ->  WORKS
+ *     detached: false, stdio: 'ignore'   ->  WORKS
+ *
+ * `detached` is the whole difference. On Windows it sets DETACHED_PROCESS, which gives the child
+ * no console — and Electron main, being a GUI-subsystem process, has none of its own to inherit.
+ * A console application with no console does not run. `stdio: 'ignore'` then guaranteed nobody
+ * would ever find out.
+ *
+ * Not detaching costs nothing here. PowerShell is a courier: it asks the Application Information
+ * service to start the program and exits. The elevated program is a child of that service, not of
+ * ours, so it outlives SkynetOS either way.
+ *
+ * ── Why it waits ──────────────────────────────────────────────────────────────────────────────
+ *
+ * Because the answer is worth having. UAC is modal, so PowerShell does not return until the user
+ * has said yes or no, and its exit code and stderr carry the outcome: consent refused, or a
+ * program Windows will not elevate at all — a Store app, for instance, which cannot run as
+ * administrator by design. Reporting "asked Windows to launch it" and walking away turns every one
+ * of those into the silence this function just spent a day being.
  */
-function spawnElevated(exePath: string, args: string[], cwd: string): ReturnType<typeof spawn> {
+async function launchElevated(exePath: string, args: string[], cwd: string): Promise<{ ok: boolean; error?: string }> {
   const invocation = elevatedProgramArgv(exePath, args, cwd);
-  return spawn(invocation.file, invocation.args, {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true
+
+  return await new Promise((resolve) => {
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(invocation.file, invocation.args, {
+        // See above. This must not be detached.
+        detached: false,
+        stdio: ['ignore', 'ignore', 'pipe'],
+        windowsHide: true
+      });
+    } catch (err) {
+      resolve({ ok: false, error: (err as Error).message });
+      return;
+    }
+
+    let stderr = '';
+    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+    child.on('error', (err) => resolve({ ok: false, error: err.message }));
+
+    /*
+     * A cap, in case the UAC prompt is left sitting on screen. Reporting "it was requested" after
+     * two minutes of no answer is honest; blocking the click forever is not.
+     */
+    const cap = setTimeout(() => resolve({ ok: true }), 120_000);
+    if (typeof cap.unref === 'function') cap.unref();
+
+    child.on('exit', (code) => {
+      clearTimeout(cap);
+      if (code === 0) { resolve({ ok: true }); return; }
+      const reason = stderr.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join(' ');
+      resolve({
+        ok: false,
+        error: reason || `THE ELEVATED LAUNCH WAS REFUSED (powershell exit ${code ?? '?'}) — ` +
+          'either UAC was declined, or Windows will not elevate this program. Packaged Store apps ' +
+          'cannot run as administrator at all.'
+      });
+    });
   });
 }
 
@@ -298,14 +351,11 @@ export async function openTarget(
     }
 
     if (elevated) {
-      try {
-        spawnElevated(resolved, node.args ?? [], node.cwd ?? dirname(resolved)).unref();
-        // The pid would be PowerShell's, not the program's — see elevatedProgramArgv. Printing it
-        // would be a number belonging to a process that has already exited.
-        return { ok: true, action: `asked Windows to launch ${resolved} elevated (UAC)`, target };
-      } catch (err) {
-        return { ok: false, action: 'launch failed', target, error: (err as Error).message };
-      }
+      const result = await launchElevated(resolved, node.args ?? [], node.cwd ?? dirname(resolved));
+      // No pid: it would be PowerShell's, not the program's, and PowerShell has already exited.
+      return result.ok
+        ? { ok: true, action: `launched ${resolved} as administrator`, target }
+        : { ok: false, action: 'elevated launch failed', target, ...(result.error ? { error: result.error } : {}) };
     }
 
     return await launchProgram(resolved, node, target);

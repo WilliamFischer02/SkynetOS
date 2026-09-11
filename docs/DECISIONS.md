@@ -1558,3 +1558,48 @@ next, with the diagonal step pattern crisp in all four.
 The smoke now also prints the camera its first capture was taken at. Cropping a screenshot to
 inspect one component otherwise means reimplementing `contentBounds` outside the renderer and
 getting it wrong every time the board changes shape.
+
+## 2026-09-10 — `detached: true` is why "run as administrator" did nothing
+
+Reported: "trying to launch a program still does nothing - it shows a message but nothing happens."
+
+The `.lnk` fix earlier today was real and works. This was a second, independent bug sitting behind
+it, and it only showed up once William ticked **Run as administrator** on his nodes.
+
+The elevated path spawned `powershell.exe` with `detached: true, stdio: 'ignore'`. Measured from
+inside Electron main, with a command that writes a marker file:
+
+    detached: true,  stdio: 'ignore'   ->  nothing
+    detached: true,  stdio: 'pipe'     ->  nothing
+    detached: false, stdio: 'pipe'     ->  WORKS
+    detached: false, stdio: 'ignore'   ->  WORKS
+
+`detached` is the whole difference. On Windows it sets DETACHED_PROCESS: the child gets no console,
+and Electron main — a GUI-subsystem process — has none of its own to inherit. A console application
+started that way does not run. `stdio: 'ignore'` then guaranteed nobody would ever find out, which
+is why the dialog appeared and the silence that followed looked like the program's fault.
+
+This is the same rock the launch path hit in the very first session ("Electron main has no console,
+so spawning a console app from it detached opened no window at all"), approached from a different
+direction. The conclusion drawn then — route through `cmd /c start` — does **not** work either:
+measured here, `cmd /c start powershell.exe` detached also produced nothing. The rule that actually
+holds is about the child, not the route:
+
+> Detach a GUI launcher that must outlive us. Never detach a console helper that must simply run.
+
+`wt.exe` is the first kind: it makes its own window and has to survive the app closing. The elevated
+PowerShell is the second: a courier that asks the Application Information service to start the
+program and exits. It does not need to outlive us — the elevated program is a child of that service,
+not of ours — and it cannot run detached. `services/terminal.ts` now decides per launcher;
+`shell-opener.ts` never detaches.
+
+**And it waits now.** UAC is modal, so PowerShell does not return until the user has answered, and
+its exit code and stderr carry the outcome: consent refused, or a program Windows will not elevate
+at all — a packaged Store app, for instance, which cannot run as administrator by design. Reporting
+"asked Windows to launch it" and walking away turned every one of those into silence. There is a
+two-minute cap for a prompt left sitting on screen, because blocking a click forever is worse than
+an optimistic message.
+
+Guarded twice: `test/launch-script.test.ts` pins the flags and the GUI-vs-console rule, and the
+smoke asserts the PREMISE from inside main — attached runs, detached does not. If Windows ever
+changes that, the smoke says so rather than leaving a `detached: false` with nothing to justify it.

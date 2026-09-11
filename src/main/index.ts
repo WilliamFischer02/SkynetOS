@@ -1137,6 +1137,50 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       console.log('[smoke] .lnk launch: could not create the probe shortcut');
     }
 
+    /*
+     * ── Can Electron main spawn PowerShell at all? ───────────────────────────────────────────
+     *
+     * The elevated launch path is `spawn('powershell.exe', ..., { detached, stdio: 'ignore' })`,
+     * and this project has been bitten before by exactly that shape: Electron main is a
+     * GUI-subsystem process with no console, and spawning a console app from it detached once
+     * opened nothing at all, silently. `stdio: 'ignore'` means a failure there is invisible.
+     *
+     * This runs the same spawn with a command that writes a marker file, and NO `-Verb RunAs`, so
+     * it isolates "can we run PowerShell" from "can we elevate" without raising a UAC prompt in a
+     * headless capture.
+     */
+    /*
+     * ── A console helper must not be detached ────────────────────────────────────────────────
+     *
+     * The bug behind "launch as administrator shows a message and nothing happens". On Windows
+     * `detached: true` sets DETACHED_PROCESS, the child gets no console, and Electron main — a
+     * GUI-subsystem process — has none to inherit. A console application started that way does not
+     * run, and `stdio: 'ignore'` guarantees nobody finds out.
+     *
+     * This proves the premise from inside main, where it actually matters, using a marker file and
+     * no UAC prompt. If `detached: true` ever starts working, this says so rather than leaving a
+     * defensive `detached: false` in the launch path with nothing to justify it.
+     */
+    const { spawn: spawnPs } = await import('node:child_process');
+    const psMarker = (flag: string) => `Set-Content -Path '${flag}' -Value 'ran'`;
+
+    const ranWith = async (label: string, detached: boolean): Promise<boolean> => {
+      const flag = join(tmpdir(), `skynet-ps-${detached ? 'det' : 'att'}.txt`);
+      try { rmNow(flag, { force: true }); } catch { /* nothing to remove */ }
+      const c = spawnPs('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psMarker(flag)],
+        { detached, stdio: 'ignore', windowsHide: true });
+      if (detached) c.unref();
+      for (let n = 0; n < 40 && !existsNow(flag); n++) await wait(100);
+      const ran = existsNow(flag);
+      try { rmNow(flag, { force: true }); } catch { /* leave it */ }
+      console.log(`[smoke]   powershell ${label}: ${ran ? 'ran' : 'DID NOT RUN'}`);
+      return ran;
+    };
+
+    const attached = await ranWith('attached  ', false);
+    const detachedRan = await ranWith('detached  ', true);
+    console.log(`[smoke] A CONSOLE HELPER RUNS ONLY WHEN NOT DETACHED: ${attached && !detachedRan}`);
+
     console.log('[smoke] done');
   } catch (err) {
     console.error('[smoke] FAILED', err);
