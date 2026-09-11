@@ -993,3 +993,64 @@ Rejected: making the factory invent placeholder targets (`url: "https://example.
 have validated and it would have been a lie on the board — the exact thing prime directive 1 is
 there to stop. Also rejected: dropping the target requirements. They are what stops a node that
 silently resolves to nothing.
+
+## 2026-09-10 — Boards are tripled, and the camera opens on the content
+
+William: "the board viewport should be able to go even farther out on the edges, and triple the
+board size so there's more space to work with, also the room sizes."
+
+Three changes, and the second two only became necessary because of the first.
+
+**Tripled, and re-centred.** Setting width/height to 3x and stopping would leave everything
+already placed jammed into the top-left ninth with eight ninths of empty board attached. So every
+node moved by exactly one board-width and one board-height, which puts the old extent dead centre:
+every relative position, cluster and bracket preserved to the tile, new room on all four sides.
+(The offset is exactly the old dimension — (3w - w) / 2 = w.)
+
+**The pan margin is half a viewport, not eight tiles.** `PAN_MARGIN` existed to answer "I cannot
+bring a node near the edge to the middle of the screen to work on it", and eight tiles never
+actually answered it: centring a node in the board's CORNER needs the camera at minus half a
+viewport, about sixty tiles at zoom 2 on a wide monitor. The margin was seven times too small for
+its own stated purpose, and on a 192-tile board it was 4% of the width. Half the visible extent is
+exactly the amount that makes the promise true at every zoom on every screen, and it is
+self-limiting — at the extreme the board's edge is at the middle of the screen, so half the view
+is always still board. `PAN_MARGIN` survives as a floor for a window too small for half of it to
+be eight tiles. The clamp's "does it fit" test had to change with it: `w + margin*2 <= visible` is
+never true once the margin is proportional, which would have silently retired the centring branch.
+
+**The camera opens on the content.** A board is not its content — the root board is 192x120 tiles
+and the components sit in a patch in the middle. Starting at 0,0 showed a screenful of bare
+substrate with the board off to the lower right. `contentBounds()` frames what is actually there,
+once, on arrival in a room. Never on rebuild: that is the camera-snap bug and it stays fixed.
+
+## 2026-09-10 — sendInputEvent does not produce pointer events, so no mouse drag was ever tested
+
+Found while chasing what looked like a camera regression from the tripling. It was not one.
+
+`BoardCanvas` listens for `pointerdown` — that is what gives it pointer capture and what lets a
+drag released off-canvas still finish. The smoke harness drove drags with
+`win.webContents.sendInputEvent({ type: 'mouseDown' })`, which produces the mouse half and no
+pointer event at all. So from the moment that listener changed, every mouse drag the harness
+"performed" landed on nothing: `09-drag-ghost.png` was a picture of a board with no drag in
+progress, and the only assertion — "did a node move" — reads the same whether the harness is
+broken or the app is. Real hardware sends both, so the app was fine and the test was theatre.
+
+The harness now dispatches real `PointerEvent`s in the page: `pointerdown` on the canvas,
+`pointermove`/`pointerup` on `window`, because that is where BoardCanvas listens. They are
+`isTrusted: false`, which nothing in the renderer tests for.
+
+Two things fell out of fixing it:
+
+- `setPointerCapture` is now in a try/catch. It throws `InvalidStateError` for a pointerId the
+  element has never seen, and that exception abandoned the gesture before the cursor was even set.
+  The capture is a nicety — the window listeners are what actually carry a drag — so failing to
+  get it must not cost the drag.
+- The harness stopped guessing where things are. It had three assumptions and all three were
+  wrong: that the camera clamps to 0,0 (tripling moved the content off the corner), that
+  `win.getContentSize()` is the coordinate space `sendInputEvent` uses (it is not — scaleFactor 2
+  means main sees 1267x717 while the page is 2534x1434), and that a node in the middle of the
+  window is clickable (the usage meter, minimap and inspector are DOM chrome drawn over the
+  canvas, and a mousedown on the minimap is a camera JUMP that looks exactly like the bug this
+  section exists to catch). The page now picks the target, `document.elementFromPoint` arbitrates
+  "clickable", and the destination comes from `findFreeSpaceOnBoard` so a refused drop cannot be
+  confused with a broken drag.

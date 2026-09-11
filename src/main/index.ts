@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
+import { DEFAULT_FOOTPRINT, type Board, type NodeKind } from '@shared/types.js';
+import { findFreeSpaceOnBoard } from './services/placement.js';
 import { registerIpc } from './ipc.js';
 import { getSettings } from './services/settings.js';
 import { boardRoot, pruneSnapshots } from './services/board-store.js';
@@ -487,19 +489,22 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       return b.nodes.find((n) => n.id === id)?.pos;
     };
 
-    // Zoom to 3x, then drag the board hard down-right so the camera CLAMPS to 0,0. That makes
-    // every node's screen position derivable as tile * 16 * zoom, with no assumptions about
-    // where a previous step left the camera. Dragging right moves the camera left; see panTo.
+    /*
+     * Zoom to 3x and work out where a chosen node actually is on screen.
+     *
+     * This used to drag the board hard down-right so the camera clamped to 0,0, which made every
+     * node's screen position derivable as tile * 16 * zoom. That worked while the board was barely
+     * bigger than the window and the components sat near its origin. Tripling every board moved
+     * the content to the middle of a 192x120 grid, so the clamp corner is now bare substrate: the
+     * harness grabbed empty board, moved nothing, and reported a camera "failure" that was really
+     * the harness panning with a drag it thought was a node move.
+     *
+     * So it no longer assumes. It reads the live camera and converts a real node's real position
+     * into a real screen coordinate.
+     */
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '3' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '3' });
     await wait(300);
-    win.webContents.sendInputEvent({ type: 'mouseDown', x: 400, y: 400, button: 'left', clickCount: 1 });
-    for (let i = 1; i <= 20; i++) {
-      win.webContents.sendInputEvent({ type: 'mouseMove', x: 400 + i * 100, y: 400 + i * 60, button: 'left' });
-      await wait(15);
-    }
-    win.webContents.sendInputEvent({ type: 'mouseUp', x: 2400, y: 1300, button: 'left', clickCount: 1 });
-    await wait(400);
 
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'e' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'e' });
@@ -529,6 +534,45 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
      * there after the drop. Without the pan the test would pass at 0,0 by accident, which is
      * exactly the value the bug reset to.
      */
+    /*
+     * ── Dragging, for real ───────────────────────────────────────────────────────────────────
+     *
+     * `win.webContents.sendInputEvent({ type: 'mouseDown' })` does NOT produce a `pointerdown`.
+     * BoardCanvas listens for pointer events — that is what gives it capture and what lets a drag
+     * that leaves the window still finish — so every mouse drag this harness has "performed" since
+     * that change landed on nothing at all. The screenshots named `09-drag-ghost.png` were of a
+     * board with no drag in progress, and nobody noticed, because the only assertion was "did a
+     * node move", which a broken harness and a broken app both answer the same way.
+     *
+     * Real hardware produces both. `sendInputEvent` produces only the mouse half. So the harness
+     * dispatches PointerEvents in the page instead: same listeners, same handlers, same code path
+     * a mouse takes. They are `isTrusted: false`, which nothing in the renderer tests for.
+     *
+     * `pointerdown` goes to the canvas; `pointermove` and `pointerup` go to `window`, because that
+     * is where BoardCanvas listens for them — see the comment there about drags released
+     * off-canvas never delivering `pointerup`.
+     */
+    const pointerDrag = async (from: { x: number; y: number }, to: { x: number; y: number }, steps = 12): Promise<void> => {
+      await win.webContents.executeJavaScript(`
+        (async () => {
+          const canvas = document.querySelector('canvas');
+          if (!canvas) throw new Error('no canvas in the page');
+          const ev = (type, x, y, target) => target.dispatchEvent(new PointerEvent(type, {
+            pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+            clientX: x, clientY: y, bubbles: true, cancelable: true
+          }));
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          ev('pointerdown', ${from.x}, ${from.y}, canvas);
+          for (let i = 1; i <= ${steps}; i++) {
+            const t = i / ${steps};
+            ev('pointermove', ${from.x} + (${to.x} - ${from.x}) * t, ${from.y} + (${to.y} - ${from.y}) * t, window);
+            await wait(25);
+          }
+          ev('pointerup', ${to.x}, ${to.y}, window);
+        })()
+      `);
+    };
+
     const cameraNow = async (): Promise<string> => {
       // Read the live value the ticker publishes, not the HUD — see BoardCanvas.
       const cam = await win.webContents.executeJavaScript(
@@ -538,9 +582,15 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       return parsed ? `${parsed.x},${parsed.y}` : '?';
     };
 
+    /*
+     * A short pan, not a long one. The point is only to be somewhere the bug's reset value is not,
+     * and the camera now ARRIVES framed on the board's content rather than at 0,0 — so a nine
+     * hundred millisecond pan at full ramp speed sails clean off the components and leaves nothing
+     * under the grab point.
+     */
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'd' });
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 's' });
-    await wait(900);
+    await wait(250);
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'd' });
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 's' });
     await wait(400);
@@ -548,20 +598,112 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     console.log(`[smoke] panned away from the origin: CAM ${cameraBefore}`);
 
     const posBefore = allPos();
-    const grabX = 700;
-    const grabY = 500;
-    const whatIsThere = await win.webContents.executeJavaScript(
-      "document.querySelector('.inspector .nodename')?.textContent ?? '(nothing)'"
-    ) as string;
-    void whatIsThere;
 
-    win.webContents.sendInputEvent({ type: 'mouseDown', x: grabX, y: grabY, button: 'left', clickCount: 1 });
-    for (let i = 1; i <= 10; i++) {
-      win.webContents.sendInputEvent({ type: 'mouseMove', x: grabX + i * 10, y: grabY + i * 5, button: 'left' });
-      await wait(30);
+    /*
+     * Which node can we actually grab, and where is it on screen right now?
+     *
+     * Three assumptions used to live here and every one of them has now been wrong:
+     *
+     *   1. "The camera is clamped to 0,0, so a node's screen position is tile * 16 * zoom."
+     *      Tripling every board moved the content to the middle of a 192x120 grid, so the clamp
+     *      corner became bare substrate and the harness dragged empty board.
+     *   2. "win.getContentSize() is the coordinate space sendInputEvent uses." It is not. The OS
+     *      reports scaleFactor 2, so main sees 1267x717 while the page — and every input event —
+     *      is 2534x1434.
+     *   3. "A node in the middle of the window is clickable." The usage meter, minimap, breadcrumb
+     *      and inspector are DOM chrome drawn OVER the canvas. A mousedown on the minimap is a
+     *      camera JUMP, which looks exactly like the camera-reset bug this section exists to catch.
+     *
+     * The fix for all three is to stop reasoning about the window from outside it. The page knows
+     * where its own camera is, how big it is, and what is on top at any point — so it picks the
+     * target, and `document.elementFromPoint` is the arbiter of "clickable" rather than a guess
+     * about which margins the chrome occupies.
+     */
+    const liveBoard = JSON.parse(readNow(boardPath, 'utf8')) as {
+      nodes: { id: string; kind: string; pos: { x: number; y: number }; footprint?: { w: number; h: number } }[]
+    };
+    const grabbableNodes = liveBoard.nodes
+      .filter((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone' && !n.kind.startsWith('decor.'))
+      // A drive descends when clicked, so its drag competes with another gesture. Grab anything else.
+      .filter((n) => n.kind !== 'drive.room')
+      .map((n) => {
+        const fp = n.footprint ?? DEFAULT_FOOTPRINT[n.kind as NodeKind] ?? { w: 2, h: 2 };
+        return { id: n.id, wx: (n.pos.x + fp.w / 2) * 16, wy: (n.pos.y + fp.h / 2) * 16 };
+      });
+
+    const pick = await win.webContents.executeJavaScript(`
+      (() => {
+        const cam = window.__skynetCamera;
+        if (!cam) return JSON.stringify({ error: 'the camera has not published yet' });
+        const nodes = ${JSON.stringify(grabbableNodes)};
+        const tried = [];
+        for (const n of nodes) {
+          const x = Math.round((n.wx - cam.x) * cam.zoom);
+          const y = Math.round((n.wy - cam.y) * cam.zoom);
+          if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) continue;
+          const el = document.elementFromPoint(x, y);
+          const tag = el ? (el.tagName + (el.className ? '.' + String(el.className).split(' ')[0] : '')) : 'none';
+          tried.push(n.id + '@' + tag);
+          // The board is the only canvas in the page. Anything else on top is chrome.
+          if (el && el.tagName === 'CANVAS') {
+            return JSON.stringify({ id: n.id, x, y, view: [window.innerWidth, window.innerHeight], cam, tried: tried.length });
+          }
+        }
+        return JSON.stringify({ error: 'every node is under chrome or off screen', tried });
+      })()
+    `) as string;
+
+    const target = JSON.parse(pick) as
+      { id: string; x: number; y: number; view: number[]; cam: { x: number; y: number; zoom: number }; tried: number }
+      | { error: string; tried?: string[] };
+
+    if ('error' in target) {
+      console.log(`[smoke] NO GRABBABLE NODE: ${target.error}${target.tried ? ` (tried ${target.tried.join(', ')})` : ''}`);
+    } else {
+      console.log(`[smoke] grabbing ${target.id} at ${target.x},${target.y} in a ${target.view.join('x')} view, camera ${target.cam.x},${target.cam.y} @${target.cam.zoom}x`);
     }
+    const grabX = 'error' in target ? 700 : target.x;
+    const grabY = 'error' in target ? 500 : target.y;
+
+    /*
+     * Drag far, not two tiles. A short drag lands on whatever is next door and `canDrop` refuses
+     * it — a refused drop and a broken drag both read as "moved 0 nodes", which is the wrong thing
+     * to be ambiguous about. Tripling the board left a wide empty margin below and right of the
+     * content, so a long drag lands somewhere provably free.
+     */
+    /*
+     * Drag to somewhere provably FREE, not a fixed number of pixels.
+     *
+     * A fixed offset lands on whatever happens to be next door and `canDrop` refuses the drop. A
+     * refused drop and a broken drag both read as "moved 0 node(s)", which is precisely the thing
+     * this must not be ambiguous about — it is how a genuinely broken drag hid here for weeks.
+     * `findFreeSpaceOnBoard` is the same search the drop-in path uses, so the destination is free
+     * by construction and any refusal that still happens is a real one.
+     */
+    const dragged = 'error' in target ? null : liveBoard.nodes.find((n) => n.id === target.id) ?? null;
+    const draggedFp = dragged ? dragged.footprint ?? DEFAULT_FOOTPRINT[dragged.kind as NodeKind] : null;
+    const destination = dragged && draggedFp
+      ? findFreeSpaceOnBoard(
+          JSON.parse(readNow(boardPath, 'utf8')) as Board,
+          draggedFp,
+          { x: dragged.pos.x + draggedFp.w + 2, y: dragged.pos.y + draggedFp.h + 2 }
+        )
+      : null;
+
+    const cameraAtDrag = 'error' in target ? null : target.cam;
+    const dropPoint = destination && dragged && cameraAtDrag
+      ? {
+          x: grabX + (destination.x - dragged.pos.x) * 16 * cameraAtDrag.zoom,
+          y: grabY + (destination.y - dragged.pos.y) * 16 * cameraAtDrag.zoom
+        }
+      : { x: grabX + 360, y: grabY + 300 };
+
+    console.log(`[smoke] dragging ${dragged?.id ?? '?'} from tile ${dragged?.pos.x},${dragged?.pos.y} to a free ${destination ? `${destination.x},${destination.y}` : '(none found)'} — screen ${grabX},${grabY} -> ${Math.round(dropPoint.x)},${Math.round(dropPoint.y)}`);
+
+    const ghost = pointerDrag({ x: grabX, y: grabY }, { x: Math.round(dropPoint.x), y: Math.round(dropPoint.y) });
+    await wait(200);
     await shoot('09-drag-ghost.png');
-    win.webContents.sendInputEvent({ type: 'mouseUp', x: grabX + 100, y: grabY + 50, button: 'left', clickCount: 1 });
+    await ghost;
     await wait(800);
 
     const posAfter = allPos();

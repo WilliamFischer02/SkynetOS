@@ -12,8 +12,8 @@
   },
   "grid": {
     "tile": 16,
-    "width": 64,
-    "height": 40
+    "width": 192,
+    "height": 120
   },
   "agentEditPolicy": "require-approval",
   "nodes": [
@@ -22,8 +22,8 @@
       "kind": "decor.image",
       "name": "BACKDROP DEMO",
       "pos": {
-        "x": 27,
-        "y": 15
+        "x": 91,
+        "y": 55
       },
       "footprint": {
         "w": 14,
@@ -43,8 +43,8 @@
       "kind": "agent.jarvis",
       "name": "JARVIS",
       "pos": {
-        "x": 28,
-        "y": 17
+        "x": 92,
+        "y": 57
       },
       "url": "https://claude.ai/chat/93fc89d6-6544-4483-9dd1-1641e2c564f6",
       "partition": "persist:jarvis",
@@ -73,8 +73,8 @@
       "kind": "agent.code",
       "name": "JARVIS-PRIME",
       "pos": {
-        "x": 45,
-        "y": 15
+        "x": 109,
+        "y": 55
       },
       "cwd": "C:/dev",
       "launch": "popout",
@@ -122,8 +122,8 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 16,
-        "y": 14
+        "x": 80,
+        "y": 54
       },
       "footprint": {
         "w": 6,
@@ -148,8 +148,8 @@
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
-        "x": 23,
-        "y": 7
+        "x": 87,
+        "y": 47
       },
       "tags": [
         "learning",
@@ -170,8 +170,8 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 19,
-        "y": 23
+        "x": 83,
+        "y": 63
       },
       "tags": [
         "writing",
@@ -192,8 +192,8 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 27,
-        "y": 30
+        "x": 91,
+        "y": 70
       },
       "tags": [
         "truthquestretro",
@@ -212,8 +212,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 44,
-        "y": 25
+        "x": 108,
+        "y": 65
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
@@ -251,8 +251,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 39,
-        "y": 32
+        "x": 103,
+        "y": 72
       },
       "footprint": {
         "w": 4,
@@ -277,8 +277,8 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 35,
-        "y": 7
+        "x": 99,
+        "y": 47
       },
       "footprint": {
         "w": 4,
@@ -294,8 +294,8 @@
       "kind": "note.silk",
       "name": "title",
       "pos": {
-        "x": 24,
-        "y": 1
+        "x": 88,
+        "y": 41
       },
       "text": "SKYNETOS  REV A  //  GOOB ENTERTAINMENT CO.",
       "size": 11,
@@ -308,8 +308,8 @@
       "kind": "note.silk",
       "name": "jarvis label",
       "pos": {
-        "x": 28,
-        "y": 24
+        "x": 92,
+        "y": 64
       },
       "text": "PRIMARY JURISDICTION: ALL",
       "size": 11,
@@ -329,8 +329,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 47,
-        "y": 33
+        "x": 111,
+        "y": 73
       },
       "footprint": {
         "w": 3,
@@ -348,8 +348,8 @@
       "kind": "task.scheduled",
       "name": "Nightly journal",
       "pos": {
-        "x": 44,
-        "y": 12
+        "x": 108,
+        "y": 52
       },
       "footprint": {
         "w": 2,
@@ -367,8 +367,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 46,
-        "y": 16
+        "x": 110,
+        "y": 56
       },
       "part": "via",
       "showName": false,
@@ -379,8 +379,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 46,
-        "y": 22
+        "x": 110,
+        "y": 62
       },
       "part": "via",
       "showName": false,
@@ -391,8 +391,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 36,
-        "y": 15
+        "x": 100,
+        "y": 55
       },
       "part": "via",
       "showName": false,
@@ -403,8 +403,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 30,
-        "y": 23
+        "x": 94,
+        "y": 63
       },
       "part": "via",
       "showName": false,
@@ -415,8 +415,8 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 35,
-        "y": 14
+        "x": 99,
+        "y": 54
       },
       "part": "screw",
       "showName": false,
@@ -427,8 +427,8 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 47,
-        "y": 14
+        "x": 111,
+        "y": 54
       },
       "part": "screw",
       "showName": false,
@@ -439,8 +439,8 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 35,
-        "y": 24
+        "x": 99,
+        "y": 64
       },
       "part": "screw",
       "showName": false,
@@ -451,8 +451,8 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 47,
-        "y": 24
+        "x": 111,
+        "y": 64
       },
       "part": "screw",
       "showName": false,
@@ -463,8 +463,8 @@
       "kind": "decor.part",
       "name": "LED OK",
       "pos": {
-        "x": 46,
-        "y": 17
+        "x": 110,
+        "y": 57
       },
       "part": "led_ok",
       "showName": false,
@@ -475,8 +475,8 @@
       "kind": "decor.part",
       "name": "LED WARN",
       "pos": {
-        "x": 47,
-        "y": 21
+        "x": 111,
+        "y": 61
       },
       "part": "led_warn",
       "showName": false,
@@ -487,8 +487,8 @@
       "kind": "decor.part",
       "name": "LED IDLE",
       "pos": {
-        "x": 38,
-        "y": 25
+        "x": 102,
+        "y": 65
       },
       "part": "led_idle",
       "showName": false,
@@ -499,8 +499,8 @@
       "kind": "decor.part",
       "name": "FIDUCIAL",
       "pos": {
-        "x": 34,
-        "y": 13
+        "x": 98,
+        "y": 53
       },
       "part": "fiducial",
       "showName": false,
@@ -511,8 +511,8 @@
       "kind": "decor.part",
       "name": "FIDUCIAL",
       "pos": {
-        "x": 48,
-        "y": 25
+        "x": 112,
+        "y": 65
       },
       "part": "fiducial",
       "showName": false,
@@ -523,8 +523,8 @@
       "kind": "decor.part",
       "name": "GRILLE",
       "pos": {
-        "x": 44,
-        "y": 15
+        "x": 108,
+        "y": 55
       },
       "part": "grille",
       "showName": false,
@@ -535,8 +535,8 @@
       "kind": "decor.part",
       "name": "PADS",
       "pos": {
-        "x": 44,
-        "y": 23
+        "x": 108,
+        "y": 63
       },
       "part": "pads",
       "showName": false,
@@ -547,8 +547,8 @@
       "kind": "decor.part",
       "name": "CAP",
       "pos": {
-        "x": 40,
-        "y": 28
+        "x": 104,
+        "y": 68
       },
       "part": "cap",
       "showName": false,
@@ -559,8 +559,8 @@
       "kind": "decor.part",
       "name": "JUNCTION",
       "pos": {
-        "x": 43,
-        "y": 27
+        "x": 107,
+        "y": 67
       },
       "part": "junction",
       "showName": false,

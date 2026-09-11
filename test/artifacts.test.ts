@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Board } from '../packages/shared/types.js';
+import { footprintOf, type Board } from '../packages/shared/types.js';
 import { parseVersion, producerOf, producerRepo } from '../src/main/services/artifacts.js';
 import { classify, suggestionToNode } from '../src/main/services/ingest.js';
 import { usePolling, watchTargetsFor } from '../src/main/services/watchers.js';
@@ -200,11 +200,21 @@ describe('findFreeSpaceOnBoard', () => {
   });
 
   it('finds the nearest gap when the drop lands on a component', () => {
-    // u1_jarvis occupies 28,17 to 35,22.
-    const spot = findFreeSpaceOnBoard(root, { w: 2, h: 2 }, { x: 29, y: 18 });
+    /*
+     * Read the obstacle out of the board rather than writing its coordinates down here. They were
+     * written down — "u1_jarvis occupies 28,17 to 35,22" — and tripling every board to give more
+     * room to work moved every node, so the test was asserting that a drop missed a chip that was
+     * no longer there. What matters is that the drop is displaced off whatever it landed on.
+     */
+    const jarvis = root.nodes.find((n) => n.id === 'u1_jarvis');
+    expect(jarvis, 'the root board has no u1_jarvis to drop onto').toBeDefined();
+    const fp = footprintOf(jarvis!);
+
+    const spot = findFreeSpaceOnBoard(root, { w: 2, h: 2 }, { x: jarvis!.pos.x + 1, y: jarvis!.pos.y + 1 });
     expect(spot).not.toBeNull();
     const overlapsJarvis =
-      spot!.x < 36 && spot!.x + 2 > 28 && spot!.y < 23 && spot!.y + 2 > 17;
+      spot!.x < jarvis!.pos.x + fp.w && spot!.x + 2 > jarvis!.pos.x &&
+      spot!.y < jarvis!.pos.y + fp.h && spot!.y + 2 > jarvis!.pos.y;
     expect(overlapsJarvis).toBe(false);
   });
 

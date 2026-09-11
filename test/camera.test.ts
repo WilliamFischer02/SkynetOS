@@ -125,27 +125,64 @@ describe('pan', () => {
 });
 
 describe('clampCamera', () => {
-  it('keeps the viewport near a board larger than the screen, with a margin of slack', () => {
-    /*
-     * The clamp used to pin the board's edge to the viewport's exactly. That made a component near
-     * an edge impossible to bring to the middle of the screen to work on — and with the inspector
-     * open, a node on the right edge could not be brought out from under it at all. PAN_MARGIN is
-     * eight tiles of deliberate overscroll on every side.
-     */
-    const bigBoard = { width: 8000, height: 8000 };
-    const clamped = clampCamera({ x: -500, y: 99999, zoom: 2 }, bigBoard, view);
-    expect(clamped.x).toBe(-PAN_MARGIN);
-    expect(clamped.y).toBe(bigBoard.height - view.height / 2 + PAN_MARGIN);
+  const bigBoard = { width: 8000, height: 8000 };
+
+  /**
+   * ── What the margin is FOR ────────────────────────────────────────────────────────────────
+   *
+   * The clamp used to pin the board's edge to the viewport's exactly, so a component near an edge
+   * could not be brought to the middle of the screen to work on — and with the inspector open, a
+   * node on the right edge could not be brought out from under it at all.
+   *
+   * PAN_MARGIN was eight tiles, and eight tiles never actually delivered that. Bringing a node in
+   * the board's CORNER to the centre of the screen needs the camera at minus half a viewport —
+   * 400 world px here, 60 tiles at zoom 2 on a wide monitor. The old margin was 128.
+   *
+   * So these test the promise rather than the number: every corner of the board can be brought to
+   * the centre of the screen, and not one pixel further.
+   */
+  const centreOn = (x: number, y: number, zoom: Camera['zoom']): Camera =>
+    ({ x: x - view.width / zoom / 2, y: y - view.height / zoom / 2, zoom });
+
+  it.each([
+    ['top-left', 0, 0],
+    ['top-right', bigBoard.width, 0],
+    ['bottom-left', 0, bigBoard.height],
+    ['bottom-right', bigBoard.width, bigBoard.height]
+  ])('can bring the %s corner of the board to the centre of the screen', (_corner, x, y) => {
+    for (const zoom of ZOOM_LEVELS) {
+      const wanted = centreOn(x, y, zoom);
+      const got = clampCamera(wanted, bigBoard, view);
+      expect(got.x, `x at ${zoom}x`).toBeCloseTo(wanted.x, 6);
+      expect(got.y, `y at ${zoom}x`).toBeCloseTo(wanted.y, 6);
+    }
   });
 
   it('still refuses to let the board leave the screen entirely', () => {
-    // Slack, not freedom. Eight tiles is enough to centre anything and little enough that the
-    // board is always still there when you stop panning.
-    const bigBoard = { width: 8000, height: 8000 };
-    const clamped = clampCamera({ x: -999999, y: -999999, zoom: 2 }, bigBoard, view);
+    /*
+     * Slack, not freedom. Half a viewport is the exact amount that makes the promise above true,
+     * and it is self-limiting: at the extreme the board's edge sits at the middle of the screen,
+     * so half the view is always still board.
+     */
+    for (const zoom of ZOOM_LEVELS) {
+      const visibleW = view.width / zoom;
+      const visibleH = view.height / zoom;
+      const clamped = clampCamera({ x: -999999, y: -999999, zoom }, bigBoard, view);
+
+      // Pushed as far off the board as the clamp allows, most of the screen is still board.
+      const boardOnScreenX = (clamped.x + visibleW) / visibleW;
+      const boardOnScreenY = (clamped.y + visibleH) / visibleH;
+      expect(boardOnScreenX, `x at ${zoom}x`).toBeGreaterThanOrEqual(0.45);
+      expect(boardOnScreenY, `y at ${zoom}x`).toBeGreaterThanOrEqual(0.45);
+    }
+  });
+
+  it('never allows less slack than the old fixed margin', () => {
+    // PAN_MARGIN survives as a floor for a window too small for half of it to be eight tiles.
+    const cramped = { width: 100, height: 80 };
+    const clamped = clampCamera({ x: -999999, y: -999999, zoom: 4 }, bigBoard, cramped);
     expect(clamped.x).toBe(-PAN_MARGIN);
     expect(clamped.y).toBe(-PAN_MARGIN);
-    expect(PAN_MARGIN).toBeLessThan(view.width / 2);
   });
 
   it('centres a board smaller than the viewport instead of pinning it to the corner', () => {

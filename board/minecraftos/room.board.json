@@ -12,8 +12,8 @@
   },
   "grid": {
     "tile": 16,
-    "width": 64,
-    "height": 44
+    "width": 192,
+    "height": 132
   },
   "agentEditPolicy": "require-approval",
   "relatedBoards": [
@@ -25,8 +25,8 @@
       "kind": "note.silk",
       "name": "header",
       "pos": {
-        "x": 2,
-        "y": 1
+        "x": 66,
+        "y": 45
       },
       "text": "MINECRAFTOS  //  FABRIC 26.2  //  MOD PIPELINE",
       "size": 11
@@ -36,8 +36,8 @@
       "kind": "group.zone",
       "name": "THE STALKER",
       "pos": {
-        "x": 2,
-        "y": 4
+        "x": 66,
+        "y": 48
       },
       "footprint": {
         "w": 28,
@@ -55,8 +55,8 @@
       "kind": "agent.code",
       "name": "CC-STALKER",
       "pos": {
-        "x": 4,
-        "y": 6
+        "x": 68,
+        "y": 50
       },
       "footprint": {
         "w": 3,
@@ -74,8 +74,8 @@
       "kind": "store.repo",
       "name": "TheStalker",
       "pos": {
-        "x": 12,
-        "y": 6
+        "x": 76,
+        "y": 50
       },
       "footprint": {
         "w": 4,
@@ -90,8 +90,8 @@
       "kind": "file.artifact",
       "name": "thestalker.jar",
       "pos": {
-        "x": 22,
-        "y": 6
+        "x": 86,
+        "y": 50
       },
       "footprint": {
         "w": 3,
@@ -110,8 +110,8 @@
       "kind": "group.zone",
       "name": "PACEKEEPER",
       "pos": {
-        "x": 34,
-        "y": 4
+        "x": 98,
+        "y": 48
       },
       "footprint": {
         "w": 28,
@@ -129,8 +129,8 @@
       "kind": "agent.code",
       "name": "CC-PACEKEEPER",
       "pos": {
-        "x": 36,
-        "y": 6
+        "x": 100,
+        "y": 50
       },
       "footprint": {
         "w": 3,
@@ -148,8 +148,8 @@
       "kind": "store.repo",
       "name": "PaceKeeper",
       "pos": {
-        "x": 44,
-        "y": 6
+        "x": 108,
+        "y": 50
       },
       "footprint": {
         "w": 4,
@@ -164,8 +164,8 @@
       "kind": "file.artifact",
       "name": "pacekeeper.jar",
       "pos": {
-        "x": 54,
-        "y": 6
+        "x": 118,
+        "y": 50
       },
       "footprint": {
         "w": 3,
@@ -182,8 +182,8 @@
       "kind": "group.zone",
       "name": "THERE COULD BE GIANTS",
       "pos": {
-        "x": 2,
-        "y": 14
+        "x": 66,
+        "y": 58
       },
       "footprint": {
         "w": 28,
@@ -201,8 +201,8 @@
       "kind": "agent.code",
       "name": "CC-GIANTS",
       "pos": {
-        "x": 4,
-        "y": 16
+        "x": 68,
+        "y": 60
       },
       "footprint": {
         "w": 3,
@@ -220,8 +220,8 @@
       "kind": "store.repo",
       "name": "ThereCouldBeGiants",
       "pos": {
-        "x": 12,
-        "y": 16
+        "x": 76,
+        "y": 60
       },
       "footprint": {
         "w": 4,
@@ -236,8 +236,8 @@
       "kind": "file.artifact",
       "name": "giants.jar",
       "pos": {
-        "x": 22,
-        "y": 16
+        "x": 86,
+        "y": 60
       },
       "footprint": {
         "w": 3,
@@ -254,8 +254,8 @@
       "kind": "group.zone",
       "name": "TIME SERVED",
       "pos": {
-        "x": 34,
-        "y": 14
+        "x": 98,
+        "y": 58
       },
       "footprint": {
         "w": 28,
@@ -273,8 +273,8 @@
       "kind": "agent.code",
       "name": "CC-TIMESERVED",
       "pos": {
-        "x": 36,
-        "y": 16
+        "x": 100,
+        "y": 60
       },
       "footprint": {
         "w": 3,
@@ -292,8 +292,8 @@
       "kind": "store.repo",
       "name": "TimeServed",
       "pos": {
-        "x": 44,
-        "y": 16
+        "x": 108,
+        "y": 60
       },
       "footprint": {
         "w": 4,
@@ -308,8 +308,8 @@
       "kind": "file.artifact",
       "name": "timeserved.jar",
       "pos": {
-        "x": 54,
-        "y": 16
+        "x": 118,
+        "y": 60
       },
       "footprint": {
         "w": 3,
@@ -326,8 +326,8 @@
       "kind": "note.silk",
       "name": "deploy label",
       "pos": {
-        "x": 2,
-        "y": 25
+        "x": 66,
+        "y": 69
       },
       "text": "DEPLOYMENT BUS",
       "size": 11
@@ -338,8 +338,8 @@
       "kind": "store.folder",
       "name": "Client mods",
       "pos": {
-        "x": 16,
-        "y": 27
+        "x": 80,
+        "y": 71
       },
       "footprint": {
         "w": 4,
@@ -354,8 +354,8 @@
       "kind": "service.process",
       "name": "Goobtropolis (local test)",
       "pos": {
-        "x": 28,
-        "y": 27
+        "x": 92,
+        "y": 71
       },
       "footprint": {
         "w": 3,
@@ -371,8 +371,8 @@
       "kind": "link.url",
       "name": "Bloom.host panel",
       "pos": {
-        "x": 38,
-        "y": 27
+        "x": 102,
+        "y": 71
       },
       "footprint": {
         "w": 2,
@@ -386,8 +386,8 @@
       "kind": "link.url",
       "name": "Modrinth",
       "pos": {
-        "x": 44,
-        "y": 27
+        "x": 108,
+        "y": 71
       },
       "footprint": {
         "w": 2,
@@ -401,8 +401,8 @@
       "kind": "file.exe",
       "name": "Minecraft Launcher",
       "pos": {
-        "x": 50,
-        "y": 27
+        "x": 114,
+        "y": 71
       },
       "footprint": {
         "w": 2,
@@ -416,8 +416,8 @@
       "kind": "note.silk",
       "name": "backlog",
       "pos": {
-        "x": 2,
-        "y": 33
+        "x": 66,
+        "y": 77
       },
       "text": "CHALLENGE BACKLOG — UNPOPULATED FOOTPRINTS",
       "size": 11
@@ -428,8 +428,8 @@
       "kind": "agent.code",
       "name": "CC-JOHNWICK",
       "pos": {
-        "x": 4,
-        "y": 35
+        "x": 68,
+        "y": 79
       },
       "footprint": {
         "w": 3,
@@ -446,8 +446,8 @@
       "kind": "agent.code",
       "name": "CC-HURTCRAFT",
       "pos": {
-        "x": 12,
-        "y": 35
+        "x": 76,
+        "y": 79
       },
       "footprint": {
         "w": 3,
@@ -464,8 +464,8 @@
       "kind": "agent.code",
       "name": "CC-BLOBS",
       "pos": {
-        "x": 20,
-        "y": 35
+        "x": 84,
+        "y": 79
       },
       "footprint": {
         "w": 3,

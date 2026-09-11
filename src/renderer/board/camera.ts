@@ -64,35 +64,56 @@ export function boardPixelSize(grid: { width: number; height: number }): { width
  * a board sitting on a bench, not a board jammed into a corner.
  */
 /**
- * How far past each edge of a board the camera may go, in world pixels.
+ * The least overscroll allowed on any axis, in world pixels. A floor, not the usual value.
  *
- * William: "the camera constraints are a little too tight and margin for movement / navigation
- * needs to be added to each room and board on every side so the user can move the viewport around
- * more freely."
- *
- * The old clamp pinned the board's edge to the viewport's, so a component near an edge could never
- * be brought to the middle of the screen to work on — and with the inspector open, a node on the
- * right edge could not be brought out from under it at all. Eight tiles is enough to centre
- * anything and still little enough that you cannot lose the board off-screen.
+ * It only bites in a window so small that half of it is under eight tiles, where the proportional
+ * margin below would be tighter than the old fixed one and panning would feel worse than it did.
  */
 export const PAN_MARGIN = 8 * TILE;
+
+/**
+ * How far past each edge of a board the camera may go, on one axis.
+ *
+ * ── Why this is half the viewport and not a number of tiles ───────────────────────────────────
+ *
+ * It was a flat eight tiles, chosen to answer "I cannot bring a node near the edge to the middle
+ * of the screen to work on it". It did not actually answer it. To put a node in the top-left
+ * CORNER of the board at the centre of the screen, the camera has to sit at minus half a viewport
+ * — around sixty tiles at zoom 2 on a wide monitor, not eight. The margin was seven times too
+ * small for its own stated purpose, and William asked again: "the board viewport should be able to
+ * go even farther out on the edges."
+ *
+ * Half the visible extent is exactly the amount that makes the promise true, at every zoom, on
+ * every screen: any point of the board, corners included, can be brought to the centre and no
+ * further. It is also self-limiting — at the extreme the board's edge is at the middle of the
+ * screen, so half the view is always still board and you cannot lose it.
+ *
+ * The tripled boards made this urgent rather than merely wrong: on a 192x120 board a flat eight
+ * tiles of slack is 4% of the width.
+ */
+function panMargin(visible: number): number {
+  return Math.max(PAN_MARGIN, visible / 2);
+}
 
 export function clampCamera(cam: Camera, board: { width: number; height: number }, view: Viewport): Camera {
   const visibleW = view.width / cam.zoom;
   const visibleH = view.height / cam.zoom;
+  const marginX = panMargin(visibleW);
+  const marginY = panMargin(visibleH);
 
   /*
-   * The margin is in WORLD pixels, so it is a fixed amount of board rather than a fixed amount of
-   * screen: the same eight tiles of slack at 2x and at 4x. A margin in screen pixels would give
-   * you four times as much room to get lost in at the lowest zoom.
+   * The test is "does the board fit on screen", not "does the board plus both margins fit". With a
+   * proportional margin the second question answers no for every board that has any width at all
+   * (w + visible <= visible is never true), so writing it that way would silently retire the
+   * centring branch and let a board smaller than the window drift around inside it.
    */
-  const x = board.width + PAN_MARGIN * 2 <= visibleW
+  const x = board.width <= visibleW
     ? (board.width - visibleW) / 2
-    : Math.min(Math.max(cam.x, -PAN_MARGIN), board.width - visibleW + PAN_MARGIN);
+    : Math.min(Math.max(cam.x, -marginX), board.width - visibleW + marginX);
 
-  const y = board.height + PAN_MARGIN * 2 <= visibleH
+  const y = board.height <= visibleH
     ? (board.height - visibleH) / 2
-    : Math.min(Math.max(cam.y, -PAN_MARGIN), board.height - visibleH + PAN_MARGIN);
+    : Math.min(Math.max(cam.y, -marginY), board.height - visibleH + marginY);
 
   return { x, y, zoom: cam.zoom };
 }

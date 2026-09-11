@@ -18,19 +18,32 @@ import {
  */
 
 const ROOT = process.cwd();
+
+interface KindBranch {
+  if: { properties: { kind: { const?: string; enum?: string[] } } };
+  then: { required: string[] };
+}
+
 const schema = JSON.parse(readFileSync(join(ROOT, 'schema', 'board.schema.json'), 'utf8')) as {
   $defs: {
     node: {
       properties: Record<string, unknown>;
-      allOf: { if: { properties: { kind: { const?: string; enum?: string[] } } }; then: { required: string[] } }[];
+      allOf: [{ then: { allOf: KindBranch[] } }];
     };
   };
 };
 
-/** Required fields the JSON Schema imposes on a given kind, via its if/then branches. */
+/**
+ * Required fields the JSON Schema imposes on a given kind, via its if/then branches.
+ *
+ * Those branches now sit one level down, inside the gate that exempts a `provisional` node from
+ * naming its target (see docs/DECISIONS.md, 2026-09-10). The form is about a node you are FILLING
+ * IN, so it marks a target required regardless — the gate is about what may sit on a board, not
+ * about what the editor should ask you for.
+ */
 function schemaRequiredFor(kind: NodeKind): string[] {
   const required = new Set<string>();
-  for (const branch of schema.$defs.node.allOf) {
+  for (const branch of schema.$defs.node.allOf[0].then.allOf) {
     const cond = branch.if.properties.kind;
     const matches = cond.const === kind || (cond.enum?.includes(kind) ?? false);
     if (matches) for (const field of branch.then.required) required.add(field);

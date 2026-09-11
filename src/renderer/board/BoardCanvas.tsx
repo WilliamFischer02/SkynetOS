@@ -42,7 +42,7 @@ import { buildBrokenOverlay, buildSelectionOverlay, buildSilkNote, buildZone } f
 import { measureTextBlock } from './text-plate.js';
 import { roomTitle, suffixSize } from '@shared/room-title.js';
 import { COPPER_DARK, SILK as SILK_HEX, brighten, resolveToken } from '@shared/palette.js';
-import { centreOn, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
+import { centreOn, contentBounds, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
 import {
   NO_DRAG,
   beginDrag,
@@ -377,8 +377,16 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       });
 
       if (drag.kind !== 'none') {
-        // Capture the pointer so a drag that leaves the window still tracks and still ends.
-        app.canvas.setPointerCapture(event.pointerId);
+        /*
+         * Capture the pointer so a drag that leaves the window still tracks and still ends.
+         *
+         * In a try: setPointerCapture throws InvalidStateError for a pointerId the element has
+         * never seen, and an exception here would abandon the gesture before the cursor is even
+         * set. The capture is a nicety — pointermove and pointerup are on `window` precisely so a
+         * drag that leaves the canvas still completes — so failing to get it must not cost the
+         * drag itself.
+         */
+        try { app.canvas.setPointerCapture(event.pointerId); } catch { /* the window listeners carry it */ }
         app.canvas.style.cursor =
           drag.kind === 'resize' ? 'nwse-resize' : drag.kind === 'move' ? 'grabbing' : 'move';
       }
@@ -1049,6 +1057,29 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
         rebuildRef.current = rebuild;
         rebuild(live.current.board);
+
+        /*
+         * Open on the CONTENT, not on the origin.
+         *
+         * A board is not its content: the root board is 192x120 tiles and the components sit in a
+         * patch in the middle. Starting the camera at 0,0 — which is what "a different room is a
+         * different place: start at its origin" used to mean — showed a screenful of bare
+         * substrate with the board off to the lower right. Tripling every board to give William
+         * room to work turned that from a corner case into what happens every time you enter a
+         * room.
+         *
+         * Only on arrival. Once you have moved the camera it is yours, and rebuilding the scene
+         * after an edit must never touch it — see the cameraStore comment above for what that cost
+         * the last time.
+         */
+        const bounds = contentBounds(rects);
+        if (bounds) {
+          cameraStore.current = clampCamera(
+            { ...cameraStore.current, ...centreOn(bounds, cameraStore.current.zoom, viewport()) },
+            boardPx,
+            viewport()
+          );
+        }
 
         let frames = 0;
         let fpsAccum = 0;

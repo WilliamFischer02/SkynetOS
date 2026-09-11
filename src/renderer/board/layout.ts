@@ -144,8 +144,11 @@ export function nextInOrder(rects: NodeRect[], currentId: string | null, directi
   return order[next]!.nodeId;
 }
 
+/** Just the geometry — a node's rect, or the box around a whole board's worth of them. */
+export interface Rect { x: number; y: number; w: number; h: number }
+
 /** Camera position that centres a rect in the viewport — used when Tab moves off screen. */
-export function centreOn(rect: NodeRect, zoom: number, view: { width: number; height: number }): { x: number; y: number } {
+export function centreOn(rect: Rect, zoom: number, view: { width: number; height: number }): { x: number; y: number } {
   return {
     x: rect.x + rect.w / 2 - view.width / (2 * zoom),
     y: rect.y + rect.h / 2 - view.height / (2 * zoom)
@@ -198,4 +201,26 @@ export function findFreeSpace(
     }
   }
   return null;
+}
+
+/**
+ * The bounding box of everything actually placed on a board, or null for an empty one.
+ *
+ * A board is not its content: `board/root.board.json` is 192x120 tiles and the components occupy
+ * a patch in the middle of it. Opening a room at the origin — which is what the camera used to do
+ * — then shows a screen of empty substrate with the board somewhere off to the lower right.
+ *
+ * That was survivable when a board was barely bigger than the window. Tripling every board to give
+ * William room to work made it the normal case, so the camera frames the CONTENT on arrival.
+ */
+export function contentBounds(rects: NodeRect[]): Rect | null {
+  if (!rects.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const r of rects) {
+    if (r.x < minX) minX = r.x;
+    if (r.y < minY) minY = r.y;
+    if (r.x + r.w > maxX) maxX = r.x + r.w;
+    if (r.y + r.h > maxY) maxY = r.y + r.h;
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
 }

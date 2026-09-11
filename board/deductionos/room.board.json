@@ -12,8 +12,8 @@
   },
   "grid": {
     "tile": 16,
-    "width": 48,
-    "height": 32
+    "width": 144,
+    "height": 96
   },
   "agentEditPolicy": "require-approval",
   "nodes": [
@@ -22,8 +22,8 @@
       "kind": "note.silk",
       "name": "header",
       "pos": {
-        "x": 2,
-        "y": 1
+        "x": 50,
+        "y": 33
       },
       "text": "DEDUCTIONOS  //  OBSERVATION · INFERENCE · MEMORY",
       "size": 11
@@ -34,8 +34,8 @@
       "kind": "agent.chat",
       "name": "THE OBSERVER",
       "pos": {
-        "x": 6,
-        "y": 5
+        "x": 54,
+        "y": 37
       },
       "footprint": {
         "w": 4,
@@ -52,8 +52,8 @@
       "kind": "note.silk",
       "name": "phase",
       "pos": {
-        "x": 6,
-        "y": 10
+        "x": 54,
+        "y": 42
       },
       "text": "PHASE 1 — FOUNDATIONS & ATTENTION",
       "size": 11
@@ -64,8 +64,8 @@
       "kind": "file.document",
       "name": "The Observer's Curriculum",
       "pos": {
-        "x": 18,
-        "y": 5
+        "x": 66,
+        "y": 37
       },
       "footprint": {
         "w": 2,
@@ -79,8 +79,8 @@
       "kind": "file.document",
       "name": "Mastery rubric",
       "pos": {
-        "x": 22,
-        "y": 5
+        "x": 70,
+        "y": 37
       },
       "footprint": {
         "w": 2,
@@ -94,8 +94,8 @@
       "kind": "file.document",
       "name": "Prediction log",
       "pos": {
-        "x": 26,
-        "y": 5
+        "x": 74,
+        "y": 37
       },
       "footprint": {
         "w": 2,
@@ -109,8 +109,8 @@
       "kind": "store.folder",
       "name": "Course notes",
       "pos": {
-        "x": 18,
-        "y": 10
+        "x": 66,
+        "y": 42
       },
       "footprint": {
         "w": 4,
@@ -125,8 +125,8 @@
       "kind": "store.cloud",
       "name": "Deduction (Drive)",
       "pos": {
-        "x": 26,
-        "y": 10
+        "x": 74,
+        "y": 42
       },
       "footprint": {
         "w": 4,
@@ -140,8 +140,8 @@
       "kind": "link.url",
       "name": "AnkiWeb",
       "pos": {
-        "x": 36,
-        "y": 5
+        "x": 84,
+        "y": 37
       },
       "footprint": {
         "w": 2,
@@ -155,8 +155,8 @@
       "kind": "link.url",
       "name": "memoryOS",
       "pos": {
-        "x": 40,
-        "y": 5
+        "x": 88,
+        "y": 37
       },
       "footprint": {
         "w": 2,
@@ -170,8 +170,8 @@
       "kind": "link.url",
       "name": "Good Judgment Open",
       "pos": {
-        "x": 36,
-        "y": 9
+        "x": 84,
+        "y": 41
       },
       "footprint": {
         "w": 2,
@@ -185,8 +185,8 @@
       "kind": "file.exe",
       "name": "Anki",
       "pos": {
-        "x": 40,
-        "y": 9
+        "x": 88,
+        "y": 41
       },
       "footprint": {
         "w": 2,
@@ -201,8 +201,8 @@
       "kind": "task.scheduled",
       "name": "Daily drill reminder",
       "pos": {
-        "x": 6,
-        "y": 16
+        "x": 54,
+        "y": 48
       },
       "footprint": {
         "w": 2,
@@ -224,8 +224,8 @@
       "engraving": "PALACEOS",
       "boardFile": "deductionos/palace/room.board.json",
       "pos": {
-        "x": 18,
-        "y": 18
+        "x": 66,
+        "y": 50
       },
       "footprint": {
         "w": 6,
