@@ -2,9 +2,42 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
-**Last session:** JARVIS Prime got a real tool surface; boards tripled; wiring by hand.
+**Last session:** stood SkynetOS up on the second desktop (`William-Desktop`). No code changed.
+**Session before that:** JARVIS Prime got a real tool surface; boards tripled; wiring by hand.
 **Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
-**`npm run verify` is green: 534 tests.**
+**`npm run verify` is green: 619 tests** (on both desktops).
+
+---
+
+## Second desktop — state as of 2026-09-10
+
+`npm ci` and `npm run verify` are green here. Of 63 target paths across the five boards, 41
+resolve. Everything the board points at inside the repo (`%SKYNET%`), in OneDrive
+(`%USERPROFILE%`), and in `%APPDATA%/.minecraft` relinked untouched.
+
+The rest is **not a portability bug**. Each miss is one of these, and most were broken on the
+primary desktop too:
+
+- **TruthQuestRetro was cloned here.** This machine has Build Tools 2026 and no VS 2022, so the
+  repo's `win-debug` preset cannot configure. A gitignored `CMakeUserPresets.json` in that repo
+  adds `win-debug-vs2026`, which builds into the same `build/win-debug` folder the root board's
+  PLAYER and FORGE nodes point at. It built clean with MSVC 14.50, and those two nodes resolve.
+  Rebuild with `cmake --build --preset win-debug-vs2026` using the CMake bundled in Build Tools,
+  since none is on PATH.
+- **The gameos room's TQR paths are stale on every machine.** `tools/forge` is `forge/`,
+  `docs/design.md` is `docs/design/game-design.md`, the executables are `player.exe` and
+  `forge.exe`, and there is no `assets/` folder (art lives in `content/` and `assets-inbox/`).
+  Not repointed: Release vs Debug is the user's call.
+- **Five Minecraft repos exist nowhere but the primary desktop.** GoobtropolisTest, Hurtcraft,
+  JohnWickMobs, TheBlobs, TimeServed are not on GitHub. Three are provisional; TimeServed and
+  GoobtropolisTest are not.
+- **storyos and deductionos still carry `REPLACE_ME` template paths** from the base commit. The
+  novels are actually in `%USERPROFILE%/OneDrive/Documents/01 DOCUMENTATION/` and the
+  "Something In The Woods (PANIC) Novel" Claude project folder.
+- **Anki is not installed** on either desktop.
+
+Session ids in `skynet.db` do not travel, so "Resume conversation" on an agent node starts fresh
+here the first time.
 
 ---
 
