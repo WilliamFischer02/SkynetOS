@@ -1205,6 +1205,39 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       }
     }
 
+    /*
+     * ── Portability ──────────────────────────────────────────────────────────────────────────
+     *
+     * The boards now spell repo-internal paths as `%SKYNET%/...` so a clone works wherever it
+     * lands. This checks the expansion against the real filesystem, and counts what is left
+     * absolute — those are genuinely machine-specific and are meant to render broken until the
+     * folder exists.
+     */
+    const { expandPath: expandOne, skynetRoot: rootOne } = await import('./services/target-resolver.js');
+    console.log(`[smoke] %SKYNET% = ${rootOne()}`);
+
+    const portableBoard = loadBoard('root');
+    if (portableBoard.ok) {
+      let portableCount = 0;
+      let resolvedCount = 0;
+      let absoluteCount = 0;
+      const broken: string[] = [];
+      for (const n of portableBoard.board.nodes) {
+        for (const value of [n.image, n.logo, n.persona, n.path, n.cwd]) {
+          if (typeof value !== 'string' || !value) continue;
+          if (value.includes('%SKYNET%')) {
+            portableCount++;
+            const real = expandOne(value);
+            if (existsNow(real)) resolvedCount++;
+            else broken.push(`${n.id}: ${value} -> ${real}`);
+          } else if (/^[A-Za-z]:[\/]/.test(value)) absoluteCount++;
+        }
+      }
+      console.log(`[smoke] EVERY %SKYNET% PATH RESOLVES: ${portableCount > 0 && resolvedCount === portableCount} (${resolvedCount}/${portableCount})`);
+      for (const b of broken.slice(0, 5)) console.log(`[smoke]   BROKEN ${b}`);
+      console.log(`[smoke] still absolute (machine-specific by design): ${absoluteCount}`);
+    }
+
     console.log('[smoke] done');
   } catch (err) {
     console.error('[smoke] FAILED', err);

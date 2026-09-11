@@ -20,9 +20,11 @@
     "test": "vitest run",
     "validate:board": "node tools/validate-board.mjs",
     "validate:assets": "node tools/validate-assets.mjs",
-    "verify": "npm run typecheck && npm run validate:board && npm run assets:bake && npm run validate:assets && npm run test",
+    "verify": "npm run typecheck && npm run validate:board && npm run paths:check && npm run assets:bake && npm run validate:assets && npm run test",
     "assets:bake": "node tools/bake-assets.mjs",
-    "assets:catalogue": "node tools/catalogue-assets.mjs"
+    "assets:catalogue": "node tools/catalogue-assets.mjs",
+    "paths:portable": "node tools/portable-paths.mjs",
+    "paths:check": "node tools/portable-paths.mjs --check"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -66,5 +68,8 @@
   "allowScripts": {
     "electron": true,
     "esbuild": true
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

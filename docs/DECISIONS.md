@@ -1603,3 +1603,39 @@ an optimistic message.
 Guarded twice: `test/launch-script.test.ts` pins the flags and the GUI-vs-console rule, and the
 smoke asserts the PREMISE from inside main — attached runs, detached does not. If Windows ever
 changes that, the smoke says so rather than leaving a `detached: false` with nothing to justify it.
+
+## 2026-09-10 — `%SKYNET%`, so the repo really is the save file
+
+William: "I am going to install skynet OS on my desktop, can you prepare it so that I can simply
+run it on that device and use it the same? the repo will serve as the save between."
+
+It would not have worked. Twenty-six paths across the five boards pointed at files INSIDE this
+repo, written absolutely as `C:/dev/SkynetOS/assets/sprites/...`. Clone it to a different folder,
+or onto a machine with a different username, and every wallpaper, every logo and the JARVIS persona
+resolves as missing — for files sitting right there in the checkout.
+
+`%SKYNET%` expands to the repo root (the resources folder in an install), so
+`%SKYNET%/assets/sprites/jarvis-sprite.png` is the same picture wherever the clone lands. It reuses
+the `%VAR%` grammar the board format already had rather than inventing a second syntax, and it is
+resolved in `expandPath` — the one function every path in the program passes through.
+
+`tools/portable-paths.mjs` rewrites what can be rewritten and, importantly, refuses to touch what
+cannot. `C:/dev/TheStalker` is a true statement about one machine; there is no token that makes it
+true elsewhere, and rewriting it would turn "a repo you have not cloned yet" into "something that
+does not exist and never will". Those 36 are listed instead, so the new machine has a checklist.
+
+`paths:check` runs inside `npm run verify`, because the editor's file picker returns ABSOLUTE
+paths — pick a wallpaper from `assets/sprites/` and the board goes straight back to
+`C:/dev/SkynetOS/...`. Without the check, portability would decay silently one edit at a time.
+
+Also shipped: `assets/sprites` and `codex` in `extraResources`, so an installed build has the
+pictures and personas `%SKYNET%` now points at; and `engines.node >= 22.5.0`, because `node:sqlite`
+is built in from that version and simply absent before it — on an older runtime the session
+database does not open at all.
+
+Relinking needed no work, which is worth recording: nothing is cached, a node resolves its target
+at render time every time, so creating the missing folder makes the node work on the next redraw.
+That is why "if links break I can simply add the missing folders or exe's and it will relink" was
+already true.
+
+Verified by expanding all 26 against the real filesystem from inside the running app: 26/26.

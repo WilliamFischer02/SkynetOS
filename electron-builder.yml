@@ -24,6 +24,15 @@ extraResources:
     to: schema
   - from: assets/atlas
     to: assets/atlas
+  # The pictures on the board. Board JSON points at these as `%SKYNET%/assets/sprites/...`, so they
+  # have to sit next to the executable in an install exactly as they sit in the repo — otherwise
+  # every wallpaper and logo resolves as missing the moment SkynetOS is installed rather than run
+  # from a checkout.
+  - from: assets/sprites
+    to: assets/sprites
+  # The personas and the mailbox. `codex/` is read at launch by every agent node.
+  - from: codex
+    to: codex
   - from: assets/fonts
     to: assets/fonts
   # tools/skynet-mcp.mjs is spawned as a CHILD PROCESS by Claude Code, not imported by the app, so

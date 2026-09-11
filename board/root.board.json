@@ -29,7 +29,7 @@
         "w": 14,
         "h": 11
       },
-      "image": "C:/dev/SkynetOS/assets/sprites/circuittry.jpg",
+      "image": "%SKYNET%/assets/sprites/circuittry.jpg",
       "showName": false,
       "showDesignator": false,
       "notes": "decor.image: a picture drawn behind everything, resizable like any other node. Delete it, repoint it, or drag it wherever you like — it never collides and never steals a click while you are browsing.",
@@ -48,10 +48,10 @@
       },
       "url": "https://claude.ai/chat/93fc89d6-6544-4483-9dd1-1641e2c564f6",
       "partition": "persist:jarvis",
-      "persona": "C:/dev/SkynetOS/codex/personas/persona.md",
+      "persona": "%SKYNET%/codex/personas/persona.md",
       "codexRef": "codex/index.md",
       "notes": "Primary agent. Face = this embedded conversation. Hands = headless runs via skynet-mcp.",
-      "image": "C:/dev/SkynetOS/assets/sprites/circuit-board-garden-stockcake.jpg",
+      "image": "%SKYNET%/assets/sprites/circuit-board-garden-stockcake.jpg",
       "tags": [
         "ai",
         "manager",
@@ -59,7 +59,7 @@
         "creative",
         "jarvis"
       ],
-      "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-sprite.png",
+      "logo": "%SKYNET%/assets/sprites/jarvis-sprite.png",
       "footprint": {
         "w": 11,
         "h": 6
@@ -87,7 +87,7 @@
         "hands"
       ],
       "notes": "The Hands of JARVIS. The Face (U1) thinks and cannot see this disk; this chip is how its decisions become real. Same identity, same codex, same persona.",
-      "image": "C:/dev/SkynetOS/assets/sprites/circuit-board-garden-stockcake.jpg",
+      "image": "%SKYNET%/assets/sprites/circuit-board-garden-stockcake.jpg",
       "prelaunch": [
         "claude",
         "git-fetch",
@@ -109,7 +109,7 @@
         "h": 7
       },
       "textGlow": true,
-      "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg",
+      "logo": "%SKYNET%/assets/sprites/jarvis-hand.jpg",
       "pulseGlow": true,
       "frame": "castellated",
       "priority": 5,
@@ -133,12 +133,12 @@
         "mods",
         "streaming"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "showDesignator": false,
       "size": 22,
       "frame": "socket",
       "priority": 2,
-      "logo": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg",
+      "logo": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
       "footprint": {
         "w": 9,
         "h": 13
@@ -160,12 +160,12 @@
         "observation",
         "memory"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
       "priority": 2,
-      "logo": "C:/dev/SkynetOS/assets/sprites/deduction-bg.jpg",
+      "logo": "%SKYNET%/assets/sprites/deduction-bg.jpg",
       "footprint": {
         "w": 8,
         "h": 11
@@ -187,12 +187,12 @@
         "novel",
         "screenplay"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
       "priority": 2,
-      "logo": "C:/dev/SkynetOS/assets/sprites/writing-cover.jpg",
+      "logo": "%SKYNET%/assets/sprites/writing-cover.jpg",
       "footprint": {
         "w": 9,
         "h": 13
@@ -214,12 +214,12 @@
         "engine",
         "handheld"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
       "priority": 2,
-      "logo": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
+      "logo": "%SKYNET%/assets/sprites/game-os-bg.jpg",
       "footprint": {
         "w": 9,
         "h": 13
@@ -239,7 +239,7 @@
       "resume": true,
       "notes": "The agent that builds and maintains this program.",
       "codexRef": "codex/projects/skynetos.md",
-      "image": "C:/dev/SkynetOS/assets/sprites/circuit-board-garden-stockcake.jpg",
+      "image": "%SKYNET%/assets/sprites/circuit-board-garden-stockcake.jpg",
       "showDesignator": false,
       "prelaunch": [
         "claude",
@@ -255,7 +255,7 @@
         "docs/DECISIONS.md"
       ],
       "initialPrompt": "You are the SkynetOS architect. This repo is the board you are looking at: the app renders board/*.json and every node on it is bound to something real on this disk. Hold the seven prime directives in CLAUDE.md as constraints, not suggestions — especially \"bind to reality\" and \"data before pixels\". handoff.md is the state of play; docs/06-ROADMAP.md is what comes next.",
-      "logo": "C:/dev/SkynetOS/assets/sprites/SkynetOS-worker.jpg",
+      "logo": "%SKYNET%/assets/sprites/SkynetOS-worker.jpg",
       "showLogo": true,
       "frame": "dip",
       "priority": 1,
@@ -281,7 +281,7 @@
       "path": "C:/dev/SkynetOS",
       "remote": "https://github.com/WilliamFischer02/SkynetOS",
       "openWith": "terminal",
-      "image": "C:/dev/SkynetOS/assets/sprites/skynet-logo.png",
+      "image": "%SKYNET%/assets/sprites/skynet-logo.png",
       "showDesignator": false,
       "prelaunch": [
         "claude",
@@ -304,7 +304,7 @@
         "w": 4,
         "h": 4
       },
-      "image": "C:/dev/SkynetOS/assets/sprites/cpu-icon.jpg",
+      "image": "%SKYNET%/assets/sprites/cpu-icon.jpg",
       "showDesignator": false,
       "frame": "rails",
       "priority": 1
@@ -357,7 +357,7 @@
         "h": 3
       },
       "url": "https://github.com/WilliamFischer02/SkynetOS",
-      "image": "C:/dev/SkynetOS/assets/sprites/github.jpg",
+      "image": "%SKYNET%/assets/sprites/github.jpg",
       "showDesignator": false,
       "frame": "fingers",
       "priority": 1
@@ -549,7 +549,7 @@
       "designator": "J2",
       "provisional": true,
       "url": "https://dirty-plush.vercel.app/",
-      "image": "C:/dev/SkynetOS/assets/sprites/dirty-plush.jpg",
+      "image": "%SKYNET%/assets/sprites/dirty-plush.jpg",
       "footprint": {
         "w": 9,
         "h": 5
@@ -577,9 +577,9 @@
         "w": 3,
         "h": 3
       },
-      "path": "C:\\dev\\SkynetOS\\assets\\Shortcuts\\minecraft.lnk",
+      "path": "%SKYNET%/assets/Shortcuts/minecraft.lnk",
       "elevated": false,
-      "image": "C:/dev/SkynetOS/assets/sprites/mc-images.jpg",
+      "image": "%SKYNET%/assets/sprites/mc-images.jpg",
       "showLogo": false,
       "frame": "castellated",
       "priority": 1,
@@ -610,7 +610,7 @@
       "designator": "U4",
       "provisional": true,
       "url": "https://claude.ai/chat/33d12658-01ab-4b26-b5cb-97fe1f14c5ea",
-      "image": "C:/dev/SkynetOS/assets/sprites/jonathan-dulcahn-dodd-scary-mansion.jpg",
+      "image": "%SKYNET%/assets/sprites/jonathan-dulcahn-dodd-scary-mansion.jpg",
       "showLogo": false,
       "frame": "bga",
       "priority": 1,
@@ -626,13 +626,13 @@
       },
       "designator": "F2",
       "provisional": true,
-      "path": "C:\\Users\\wills\\OneDrive\\Documents\\01 DOCUMENTATION\\PANIC_NovelRoughDraft.docx",
+      "path": "%USERPROFILE%/OneDrive/Documents/01 DOCUMENTATION/PANIC_NovelRoughDraft.docx",
       "footprint": {
         "w": 6,
         "h": 8
       },
       "openWith": "office",
-      "image": "C:/dev/SkynetOS/assets/sprites/Pan_-_Ancient_Greek_god_of_the_shepherds.jpg",
+      "image": "%SKYNET%/assets/sprites/Pan_-_Ancient_Greek_god_of_the_shepherds.jpg",
       "showLogo": false,
       "showDesignator": false,
       "plateBorder": "copper"
@@ -664,7 +664,7 @@
       },
       "designator": "F3",
       "provisional": true,
-      "path": "C:\\Users\\wills\\OneDrive\\Documents\\01 DOCUMENTATION\\Dirty Plush - Novel 063026.docx",
+      "path": "%USERPROFILE%/OneDrive/Documents/01 DOCUMENTATION/Dirty Plush - Novel 063026.docx",
       "openWith": "office",
       "showLogo": false,
       "priority": 1,
@@ -673,7 +673,7 @@
         "w": 6,
         "h": 8
       },
-      "image": "C:/dev/SkynetOS/assets/sprites/s-l1200.jpg",
+      "image": "%SKYNET%/assets/sprites/s-l1200.jpg",
       "plateBorder": "ok"
     },
     {
@@ -837,7 +837,7 @@
         "w": 4,
         "h": 4
       },
-      "image": "C:/dev/SkynetOS/assets/sprites/Anki-icon.svg.png"
+      "image": "%SKYNET%/assets/sprites/Anki-icon.svg.png"
     }
   ],
   "edges": [

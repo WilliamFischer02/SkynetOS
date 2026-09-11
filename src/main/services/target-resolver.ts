@@ -15,11 +15,58 @@ import { normaliseRoot, trustedRoots } from './settings.js';
  * All three need the same answer, so there is one implementation of it.
  */
 
-/** `%APPDATA%`, `%USERPROFILE%`, `$HOME` and a leading `~`. */
+/**
+ * Where SkynetOS itself lives: the repo in development, the resources folder in an install.
+ *
+ * Mirrors `boardRoot()`, because `board/` and `assets/` travel together and always have.
+ */
+export function skynetRoot(): string {
+  /*
+   * Falls back to the working directory when Electron is not there.
+   *
+   * Two callers are not the app: vitest, which imports this module to exercise pure resolution
+   * against the real board files, and anything under `tools/`. In both, the working directory IS
+   * the repo root, so the fallback is not a guess — it is the same answer by a different route.
+   * Without it, `app.isPackaged` throws on a board that merely mentions `%SKYNET%`.
+   */
+  if (!app) return process.cwd().replace(/\\/g, '/');
+  return (app.isPackaged ? process.resourcesPath : app.getAppPath()).replace(/\\/g, '/');
+}
+
+/**
+ * `%SKYNET%`, `%APPDATA%`, `%USERPROFILE%`, any other environment variable, and a leading `~`.
+ *
+ * ── Why `%SKYNET%` exists ─────────────────────────────────────────────────────────────────────
+ *
+ * A board is meant to move between machines — William: "the repo will serve as the save between."
+ * It could not. Twenty-six paths across the five boards pointed at files INSIDE this repo, written
+ * absolutely as `C:/dev/SkynetOS/assets/sprites/...`. Clone it to a different folder, or onto a
+ * machine with a different username, and every wallpaper, every logo and the JARVIS persona
+ * resolve as missing — for files sitting right there in the checkout.
+ *
+ * `%SKYNET%` is the repo's own root, so `%SKYNET%/assets/sprites/jarvis-sprite.png` is the same
+ * picture wherever the clone lands. It deliberately reuses the `%VAR%` grammar the board format
+ * already has rather than inventing a second syntax, and it resolves here — the one function every
+ * path in this program passes through — rather than at each call site.
+ *
+ * Paths pointing OUTSIDE the repo are left absolute on purpose. `C:/dev/TheStalker` is a true
+ * statement about a particular machine; rewriting it would be pretending it is portable when it is
+ * not. Those render broken on a new machine, which is correct, and relink the moment the folder
+ * exists.
+ */
 export function expandPath(raw: string): string {
   let out = raw.trim().replace(/\\/g, '/');
   if (out.startsWith('~/') || out === '~') {
     out = join(app.getPath('home'), out.slice(1)).replace(/\\/g, '/');
+  }
+  /*
+   * Before the generic environment pass, so a stray SKYNET variable cannot shadow it — and only
+   * when the token is actually present. `skynetRoot()` reaches into Electron's `app`, which does
+   * not exist under vitest; expanding eagerly made every pure path test explode on a string that
+   * had no `%SKYNET%` in it.
+   */
+  if (out.includes('%SKYNET%') || out.includes('%skynet%')) {
+    out = out.replace(/%SKYNET%/gi, skynetRoot());
   }
   out = out.replace(/%([A-Za-z_][A-Za-z0-9_]*)%/g, (whole, name: string) => {
     const value = process.env[name] ?? process.env[name.toUpperCase()];
