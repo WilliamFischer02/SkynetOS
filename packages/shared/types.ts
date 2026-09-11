@@ -56,7 +56,15 @@ export function isDecorPart(value: string): value is DecorPart {
 }
 
 export type LaunchMode = 'popout' | 'popout-elevated' | 'embedded' | 'headless';
-export type OpenWith = 'explorer' | 'default' | 'browser' | 'terminal' | 'vscode';
+/**
+ * What a click on a node does.
+ *
+ * `office` is document-only: it hands an online document to the DESKTOP Word/Excel/PowerPoint
+ * through the `ms-word:` family of URI schemes instead of opening it in a browser tab. It needs a
+ * direct document URL and falls back to the browser, with an explanation, when it does not get
+ * one. See packages/shared/office.ts.
+ */
+export type OpenWith = 'explorer' | 'default' | 'browser' | 'terminal' | 'vscode' | 'office';
 
 /** Grid position, in tiles from the board origin. Never pixels. */
 export interface GridPos { x: number; y: number }

@@ -1394,3 +1394,50 @@ unreadable. `layoutLabel` had exactly one caller left: that test.
 It failed the moment a node was named "launcher.exe" on a 4x4 footprint, blocking the build over a
 label nobody would ever see. The test is gone and `layoutLabel` is marked superseded. A test that
 asserts on board data is a test that breaks when William edits his board, and the board is his.
+
+## 2026-09-10 — A document is bound by a path OR a URL
+
+William: "make the document node compatible with https word doc file directories; many of my word
+docs are hosted in onedrive so instead of a hard drive directory they have an https address."
+
+`file.document` required `path`. A document that only exists behind a OneDrive or SharePoint URL
+therefore could not be represented at all — the alternatives were a second node kind for the same
+thing, or a node that renders broken forever.
+
+**`requiredOneOf`.** A new field-spec marker: these fields satisfy "required" between them. The
+schema says the same thing with `anyOf: [{required:[path]},{required:[url]}]`. Both halves matter
+and they have to agree — if the form is stricter the user cannot save a valid node, and if the
+schema is stricter the command bus rejects what the form accepted. That exact disagreement shipped
+once already (the provisional-node fix, earlier today), so `test/node-fields.test.ts` now pins the
+one-of groups against the schema the same way it pins plain `required`.
+
+**`primaryTargetField` takes the node, not just the kind.** Which field binds a document depends on
+which one is FILLED IN. Without the node it was a guess, and the guess decided whether the node
+resolved against the filesystem or against a URL — so a OneDrive document would have been looked
+for on disk and drawn as broken. A node with both filled in prefers the path: a local file opens
+instantly in the desktop app and works offline.
+
+**`openWith: 'office'`** hands an online document to desktop Word/Excel/PowerPoint through the
+`ms-word:ofe|u|<url>` family instead of a browser tab. Opt-in, not default, because it only works
+on a DIRECT document URL. A share link — `1drv.ms/w/s!Ab3…`, or a `/:w:/g/personal/…` URL — is a
+redirect, and Office cannot follow one: it shows a "document not found" dialog and does not fall
+back. So `officeUri` returns null for anything it cannot read from the URL's path, and the caller
+opens the browser and says why. A refusal the user cannot act on is worse than no feature.
+
+Two traps in reading that extension, both closed in `urlExtension`:
+
+- **The query string.** SharePoint appends `?d=w4f2…&csf=1&web=1` to nearly every link it
+  generates, and "text after the last dot" reads `1` out of `web=1`.
+- **Windows paths parse as URLs.** `new URL('C:/Users/w/Novel.docx')` does not throw — the WHATWG
+  parser reads `c:` as a scheme and returns a pathname of `/Users/w/Novel.docx`, so a local file
+  confidently reports `docx`. The scheme check belongs in the helper, not in each caller.
+
+`directoryForNode` returns null for a URL-bound document. `dirname` on one returns
+`https:/contoso-my.sharepoint.com/personal/w/Documents`, which is not a path and would have been
+handed to a terminal as a working directory.
+
+**Worth saying plainly, and said to William:** his OneDrive syncs locally to
+`C:/Users/wills/OneDrive` and those .docx files are real files on disk, not Files-On-Demand
+placeholders (checked: no Offline or Recall attribute). For his own documents the local path is the
+better binding — desktop Word, offline, and the board can watch the file for changes. The URL form
+is for documents shared with him, or ones he has not synced.

@@ -59,6 +59,15 @@ export interface FieldSpec {
   control: FieldControl;
   /** Required by the JSON Schema for this kind. The form refuses to save without it. */
   required?: boolean;
+  /**
+   * This field and its group-mates satisfy "required" between them: exactly one must be filled.
+   *
+   * `file.document` is the case this exists for. William: "many of my word docs are hosted in
+   * onedrive so instead of a hard drive directory they have an https address." A document is a
+   * document whether it lives on a disk or behind a URL, and forcing a path on one that has none
+   * would mean either a second node kind for the same thing or a node that renders broken forever.
+   */
+  requiredOneOf?: string;
   options?: readonly string[];
   placeholder?: string;
   help?: string;
@@ -169,6 +178,21 @@ const OPEN_WITH: FieldSpec = {
   help: 'What a click does. explorer reveals it in File Explorer; default hands it to Windows; vscode runs `code <path>`; terminal opens a shell there.'
 };
 
+/**
+ * The same control, plus `office`, for documents.
+ *
+ * `office` hands an online document to the DESKTOP Word/Excel/PowerPoint through the `ms-word:`
+ * family of URI schemes instead of opening it in a browser tab. It is offered rather than made the
+ * default because it only works on a direct document URL — a SharePoint or OneDrive link that ends
+ * in .docx. A share link (1drv.ms/..., or a /:w:/g/ URL) is a redirect, and Office cannot follow
+ * one; it fails with a dialog rather than falling back, so the browser stays the safe default.
+ */
+const OPEN_WITH_DOCUMENT: FieldSpec = {
+  key: 'openWith', label: 'Open with', control: 'select',
+  options: ['default', 'office', 'browser', 'explorer', 'terminal', 'vscode'],
+  help: 'What a click does. For an online document, default and browser open it in your browser; office hands it to desktop Word/Excel/PowerPoint, which needs a direct link to the file (one ending in .docx), not a share link.'
+};
+
 const BY_KIND: Record<NodeKind, FieldSpec[]> = {
   'agent.code': [
     { key: 'cwd', label: 'Working directory', control: 'path-dir', required: true, placeholder: 'C:/dev/TheStalker', help: 'The repo the Claude Code session opens in. This is the session\'s whole world.' },
@@ -232,8 +256,18 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
     { key: 'localPath', label: 'Local mirror', control: 'path-dir', help: 'Optional. The synced folder on this machine, if there is one.' }
   ],
   'file.document': [
-    { key: 'path', label: 'Document', control: 'path-file', required: true, placeholder: 'C:/Users/you/Documents/Novel.docx', filters: [{ name: 'Documents', extensions: ['docx', 'doc', 'md', 'txt', 'pdf', 'rtf', 'odt'] }] },
-    OPEN_WITH
+    {
+      key: 'path', label: 'Document', control: 'path-file', requiredOneOf: 'document',
+      placeholder: 'C:/Users/you/Documents/Novel.docx',
+      filters: [{ name: 'Documents', extensions: ['docx', 'doc', 'md', 'txt', 'pdf', 'rtf', 'odt'] }],
+      help: 'A file on this machine. A OneDrive folder that syncs locally counts — and is the better choice when you have it, because it opens instantly in the desktop app, works offline, and the board can watch it for changes.'
+    },
+    {
+      key: 'url', label: 'Document URL', control: 'url', requiredOneOf: 'document',
+      placeholder: 'https://onedrive.live.com/... or https://contoso-my.sharepoint.com/...',
+      help: 'For a document that is only online — one shared with you, or a OneDrive file you have not synced. Fill in EITHER this or the path above.'
+    },
+    OPEN_WITH_DOCUMENT
   ],
   'file.exe': [
     { key: 'path', label: 'Executable', control: 'path-file', required: true, placeholder: 'C:/dev/tool/build/tool.exe', filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1'] }] },
@@ -320,19 +354,51 @@ const NON_TARGET_KEYS: readonly (keyof BoardNode)[] = ['image', 'logo'];
  * as "resolved". Returns undefined for kinds that point at nothing (note.silk, group.zone,
  * monitor.system, task.scheduled).
  */
-export function primaryTargetField(kind: NodeKind): FieldSpec | undefined {
+/**
+ * The field that says what this node points at.
+ *
+ * `node` disambiguates a `requiredOneOf` group: a `file.document` can be bound by `path` OR by
+ * `url`, and which one it IS depends on which one is filled in. Without the node the answer is a
+ * guess, and the guess would decide whether the node resolves against the filesystem or against a
+ * URL — so a document behind a OneDrive link would be looked for on disk and render broken.
+ */
+export function primaryTargetField(kind: NodeKind, node?: BoardNode): FieldSpec | undefined {
   const fields = targetFieldsFor(kind).filter((f) => !NON_TARGET_KEYS.includes(f.key));
-  return fields.find((f) => f.required) ?? fields[0];
+
+  if (node) {
+    const filled = fields.find((f) => {
+      const value = node[f.key];
+      return typeof value === 'string' && value.trim() !== '';
+    });
+    if (filled) return filled;
+  }
+
+  return fields.find((f) => f.required) ?? fields.find((f) => f.requiredOneOf) ?? fields[0];
 }
 
 /** Required fields missing from a node. Empty array means the form may be saved. */
 export function missingRequired(node: BoardNode): FieldSpec[] {
-  return fieldsFor(node.kind).filter((f) => {
-    if (!f.required) return false;
+  const filled = (f: FieldSpec): boolean => {
     const value = node[f.key];
-    if (value === undefined || value === null) return true;
-    if (typeof value === 'string') return value.trim() === '';
-    if (Array.isArray(value)) return value.length === 0;
-    return false;
-  });
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'string') return value.trim() !== '';
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  };
+
+  const fields = fieldsFor(node.kind);
+  const missing = fields.filter((f) => f.required && !filled(f));
+
+  /*
+   * A `requiredOneOf` group is satisfied by ANY of its members. Report the whole group as missing
+   * when none is filled — naming one arbitrarily would tell the user to fill in a path when a URL
+   * would have done.
+   */
+  const groups = new Set(fields.map((f) => f.requiredOneOf).filter((g): g is string => Boolean(g)));
+  for (const group of groups) {
+    const members = fields.filter((f) => f.requiredOneOf === group);
+    if (!members.some(filled)) missing.push(...members);
+  }
+
+  return missing;
 }

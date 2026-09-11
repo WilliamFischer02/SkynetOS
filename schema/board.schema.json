@@ -317,7 +317,8 @@
             "default",
             "browser",
             "terminal",
-            "vscode"
+            "vscode",
+            "office"
           ]
         },
         "glob": {
@@ -601,7 +602,6 @@
                       "enum": [
                         "store.repo",
                         "store.folder",
-                        "file.document",
                         "file.exe"
                       ]
                     }
@@ -701,6 +701,30 @@
                 "then": {
                   "required": [
                     "part"
+                  ]
+                }
+              },
+              {
+                "$comment": "A document is a document whether it lives on a disk or behind a URL. William's Word files are in OneDrive; the ones he has not synced have an https address and no path at all. Forcing `path` would mean either a second node kind for the same thing, or a node that renders broken forever. See requiredOneOf in packages/shared/node-fields.ts.",
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "file.document"
+                    }
+                  }
+                },
+                "then": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
                   ]
                 }
               }

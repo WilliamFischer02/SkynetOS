@@ -211,7 +211,9 @@ export function resolveValue(control: FieldControl, value: string, node?: BoardN
 
 /** Resolve a node's primary target — the thing a click acts on. */
 export function resolveNodeTarget(node: BoardNode): TargetInfo {
-  const field = primaryTargetField(node.kind);
+  // The NODE, not just its kind: a file.document is bound by `path` or by `url`, and which one it
+  // is depends on which one is filled in. See primaryTargetField.
+  const field = primaryTargetField(node.kind, node);
   if (!field) return { state: 'none', raw: null, resolved: null, detail: null };
   const raw = node[field.key];
   if (typeof raw !== 'string') {

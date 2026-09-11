@@ -21,7 +21,12 @@ const ROOT = process.cwd();
 
 interface KindBranch {
   if: { properties: { kind: { const?: string; enum?: string[] } } };
-  then: { required: string[] };
+  /**
+   * `required` is "this kind must have all of these". `anyOf` is "this kind must have one of
+   * these" — `file.document` is bound by a `path` OR a `url`, because many of William's Word
+   * documents live in OneDrive and have an https address and no path at all.
+   */
+  then: { required?: string[]; anyOf?: { required: string[] }[] };
 }
 
 const schema = JSON.parse(readFileSync(join(ROOT, 'schema', 'board.schema.json'), 'utf8')) as {
@@ -43,12 +48,25 @@ const schema = JSON.parse(readFileSync(join(ROOT, 'schema', 'board.schema.json')
  */
 function schemaRequiredFor(kind: NodeKind): string[] {
   const required = new Set<string>();
-  for (const branch of schema.$defs.node.allOf[0].then.allOf) {
-    const cond = branch.if.properties.kind;
-    const matches = cond.const === kind || (cond.enum?.includes(kind) ?? false);
-    if (matches) for (const field of branch.then.required) required.add(field);
+  for (const branch of branchesFor(kind)) {
+    for (const field of branch.then.required ?? []) required.add(field);
   }
   return [...required];
+}
+
+/** Every if/then branch that applies to a kind. */
+function branchesFor(kind: NodeKind): KindBranch[] {
+  return schema.$defs.node.allOf[0].then.allOf.filter((branch) => {
+    const cond = branch.if.properties.kind;
+    return cond.const === kind || (cond.enum?.includes(kind) ?? false);
+  });
+}
+
+/** The "one of these" groups the schema imposes on a kind, each as a sorted list of field names. */
+function schemaOneOfGroupsFor(kind: NodeKind): string[][] {
+  return branchesFor(kind)
+    .filter((b) => b.then.anyOf)
+    .map((b) => b.then.anyOf!.flatMap((o) => o.required).sort());
 }
 
 describe('every kind has a field spec', () => {
@@ -230,5 +248,31 @@ describe('display toggles', () => {
   it('treats an explicit true as ON, not as "unset"', () => {
     expect(displayOf({ showDesignator: true, showName: true, showThumbnail: true, showLogo: true }))
       .toEqual(ALL_ON);
+  });
+});
+
+/**
+ * ── "One of these two" has to mean the same thing in both places ─────────────────────────────
+ *
+ * A `file.document` is bound by a `path` OR a `url`. The schema says so with `anyOf`; the form
+ * says so with `requiredOneOf`. If they disagree, one of two bad things happens: the form lets you
+ * save a node the command bus then rejects, or it refuses to save a node that would have been
+ * perfectly valid. Both have already happened once in this project for the plain `required` case —
+ * see the provisional-node fix in docs/DECISIONS.md.
+ */
+describe('the form and the schema agree about one-of groups', () => {
+  it.each(NODE_KINDS)('%s', (kind) => {
+    const fromSchema = schemaOneOfGroupsFor(kind);
+
+    const byGroup = new Map<string, string[]>();
+    for (const field of fieldsFor(kind)) {
+      if (!field.requiredOneOf) continue;
+      const members = byGroup.get(field.requiredOneOf) ?? [];
+      members.push(String(field.key));
+      byGroup.set(field.requiredOneOf, members);
+    }
+    const fromForm = [...byGroup.values()].map((m) => m.sort());
+
+    expect(fromForm.sort(), `one-of groups differ for ${kind}`).toEqual(fromSchema.sort());
   });
 });

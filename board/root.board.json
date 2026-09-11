@@ -430,18 +430,6 @@
       }
     },
     {
-      "id": "p_screw_2",
-      "kind": "decor.part",
-      "name": "SCREW",
-      "pos": {
-        "x": 111,
-        "y": 54
-      },
-      "part": "screw",
-      "showName": false,
-      "showDesignator": false
-    },
-    {
       "id": "p_screw_3",
       "kind": "decor.part",
       "name": "SCREW",
@@ -454,24 +442,12 @@
       "showDesignator": false
     },
     {
-      "id": "p_screw_4",
-      "kind": "decor.part",
-      "name": "SCREW",
-      "pos": {
-        "x": 111,
-        "y": 64
-      },
-      "part": "screw",
-      "showName": false,
-      "showDesignator": false
-    },
-    {
       "id": "p_led_u1",
       "kind": "decor.part",
       "name": "LED OK",
       "pos": {
-        "x": 110,
-        "y": 57
+        "x": 102,
+        "y": 67
       },
       "part": "led_ok",
       "showName": false,
@@ -482,8 +458,8 @@
       "kind": "decor.part",
       "name": "LED WARN",
       "pos": {
-        "x": 111,
-        "y": 61
+        "x": 99,
+        "y": 67
       },
       "part": "led_warn",
       "showName": false,
@@ -494,7 +470,7 @@
       "kind": "decor.part",
       "name": "LED IDLE",
       "pos": {
-        "x": 103,
+        "x": 100,
         "y": 67
       },
       "part": "led_idle",
@@ -506,8 +482,8 @@
       "kind": "decor.part",
       "name": "FIDUCIAL",
       "pos": {
-        "x": 112,
-        "y": 65
+        "x": 101,
+        "y": 67
       },
       "part": "fiducial",
       "showName": false,
@@ -546,7 +522,7 @@
       "kind": "decor.part",
       "name": "CAP",
       "pos": {
-        "x": 102,
+        "x": 101,
         "y": 67
       },
       "part": "cap",
@@ -642,6 +618,22 @@
       "frame": "bga",
       "priority": 1,
       "showDesignator": false
+    },
+    {
+      "id": "f_new_document",
+      "kind": "file.document",
+      "name": "PANIC",
+      "pos": {
+        "x": 82,
+        "y": 70
+      },
+      "designator": "F2",
+      "provisional": true,
+      "path": "https://d.docs.live.net/1DFB3144610D75AC/Documents/01%20DOCUMENTATION/PANIC_NovelRoughDraft.docx",
+      "footprint": {
+        "w": 6,
+        "h": 8
+      }
     }
   ],
   "edges": [
@@ -733,6 +725,12 @@
       "id": "e13",
       "from": "u_new_conversation",
       "to": "d1_minecraftos",
+      "kind": "reads"
+    },
+    {
+      "id": "e14",
+      "from": "f_new_document",
+      "to": "d3_storyos",
       "kind": "reads"
     }
   ]

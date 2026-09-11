@@ -6,6 +6,7 @@ import type { BoardNode } from '@shared/types.js';
 import type { TerminalOpenResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
+import { officeRefusal, officeUri } from '@shared/office.js';
 import { elevatedProgramArgv } from './launch-script.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
@@ -144,6 +145,23 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
         target
       };
     }
+    /*
+     * A document behind a URL can go to the DESKTOP Office app instead of a browser tab.
+     *
+     * Opt in per node (`openWith: 'office'`), because it only works on a direct document URL.
+     * `officeUri` returns null for a share link — Office cannot follow a redirect and fails with a
+     * dialog rather than falling back — so this falls back HERE, to the browser, and says why.
+     */
+    if (node.openWith === 'office') {
+      const uri = officeUri(resolved);
+      if (uri) {
+        await shell.openExternal(uri);
+        return { ok: true, action: `opened in desktop Office: ${resolved}`, target };
+      }
+      await shell.openExternal(resolved);
+      return { ok: true, action: `${officeRefusal(resolved)}`, target };
+    }
+
     await shell.openExternal(resolved);
     return { ok: true, action: `opened in browser: ${resolved}`, target };
   }
@@ -255,7 +273,13 @@ export function directoryForNode(node: BoardNode, resolved: string): string | nu
     case 'file.document':
     case 'file.exe':
     case 'file.artifact':
-      return dirname(resolved);
+      /*
+       * A document bound by a URL has no directory. `dirname` on one cheerfully returns
+       * `https:/contoso-my.sharepoint.com/personal/w/Documents`, which is not a path, is not on
+       * this machine, and would be handed to a terminal as a working directory. Saying "there
+       * isn't one" is the honest answer and the caller already knows how to report it.
+       */
+      return /^https?:\/\//i.test(resolved) ? null : dirname(resolved);
     default: {
       try {
         return statSync(resolved).isDirectory() ? resolved : dirname(resolved);

@@ -1059,6 +1059,26 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       mcp.kill();
     }
 
+    /*
+     * ── A document bound by a URL ────────────────────────────────────────────────────────────
+     *
+     * William: "many of my word docs are hosted in onedrive so instead of a hard drive directory
+     * they have an https address." A file.document is now bound by a path OR a url, and this
+     * checks the resolver picks the right one and calls both states healthy — the whole point
+     * being that a OneDrive document must not render as a broken footprint.
+     */
+    const { resolveNodeTarget: resolveOne } = await import('./services/target-resolver.js');
+    const docCases = [
+      { label: 'url only', node: { id: 'f_url', kind: 'file.document', name: 'NOVEL', pos: { x: 0, y: 0 }, url: 'https://contoso-my.sharepoint.com/personal/w/Documents/Novel.docx' } },
+      { label: 'share link', node: { id: 'f_share', kind: 'file.document', name: 'NOVEL', pos: { x: 0, y: 0 }, url: 'https://1drv.ms/w/s!AbCdEf' } },
+      { label: 'local OneDrive path', node: { id: 'f_local', kind: 'file.document', name: 'NOVEL', pos: { x: 0, y: 0 }, path: `${(process.env['OneDrive'] ?? '').split(String.fromCharCode(92)).join('/')}/Attachments/GRN SCRN.docx` } },
+      { label: 'no binding', node: { id: 'f_none', kind: 'file.document', name: 'NOVEL', pos: { x: 0, y: 0 } } }
+    ];
+    for (const { label, node } of docCases) {
+      const t = resolveOne(node as unknown as Parameters<typeof resolveOne>[0]);
+      console.log(`[smoke] document (${label}): state=${t.state} kind=${t.kind ?? '-'} ${t.detail ?? ''}`);
+    }
+
     console.log('[smoke] done');
   } catch (err) {
     console.error('[smoke] FAILED', err);
