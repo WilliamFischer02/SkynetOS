@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { fitScale } from '../src/renderer/ui/Minimap.js';
 
 /**
  * Structural guards on the renderer.
@@ -128,5 +129,55 @@ describe('a control inside click-through chrome opts back in', () => {
   it.each(['.add-fab', '.drag-badge'])('%s is clickable', (selector) => {
     expect(blockFor(selector), `${selector} lives inside click-through chrome and never receives a click`)
       .toContain('pointer-events: auto');
+  });
+});
+
+/**
+ * ── A panel's size is a property of the panel ────────────────────────────────────────────────
+ *
+ * Reported: "the minimap is way too big of a window."
+ *
+ * Pixels-per-tile was a constant — 3, chosen when a board was 64 tiles wide, where 3 x 64 is a
+ * tidy 192. Tripling every board to 192 tiles turned the same constant into 576 art pixels, which
+ * at chrome scale 2 is over a thousand pixels of screen: a minimap occupying a quarter of the
+ * window, with no way to move it or close it.
+ *
+ * The bug is the direction of the dependency. A panel that derives its SIZE from the data it
+ * shows grows without limit as the data does. So the budget is fixed and the scale is derived,
+ * and these check that a bigger board gets a smaller scale rather than a bigger panel.
+ */
+describe('the minimap fits its corner, whatever the board', () => {
+  it('keeps every real board inside the budget', () => {
+    for (const grid of [
+      { width: 48, height: 32 },    // the smallest room
+      { width: 64, height: 40 },    // the old root board
+      { width: 144, height: 96 },   // a room today
+      { width: 192, height: 120 },  // the root board today
+      { width: 240, height: 160 }   // room to grow again before this needs rethinking
+    ]) {
+      const scale = fitScale(grid);
+      expect(Number.isInteger(scale), 'a fractional scale is a blurry minimap').toBe(true);
+      expect(scale).toBeGreaterThanOrEqual(1);
+      expect(grid.width * scale, `a ${grid.width}x${grid.height} board overflows the panel`)
+        .toBeLessThanOrEqual(240);
+    }
+  });
+
+  it('gives a bigger board a smaller scale, never a bigger panel', () => {
+    const small = fitScale({ width: 48, height: 32 });
+    const large = fitScale({ width: 192, height: 120 });
+    expect(large).toBeLessThanOrEqual(small);
+  });
+
+  it('never collapses to nothing, even past the point the budget can hold', () => {
+    /*
+     * One pixel per tile is the floor, and at the schema's maximum of 512 tiles that is 512 art
+     * pixels — wider than the budget. There is no honest way to fit it: half a pixel per tile is
+     * not a smaller minimap, it is a blurry one, and dropping tiles would be a minimap that lies
+     * about where things are. So the budget is a target the floor outranks, and the failure mode
+     * at an absurd board size is "large", not "empty" — `floor()` of a budget smaller than the
+     * board is 0, and a zero-scale minimap is a black box.
+     */
+    expect(fitScale({ width: 512, height: 512 })).toBe(1);
   });
 });

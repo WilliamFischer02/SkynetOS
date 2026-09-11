@@ -21,12 +21,42 @@ export interface MinimapProps {
   onJump: (world: { x: number; y: number }) => void;
 }
 
-/** Pixels per tile. 3 keeps a 64x40 board at 192x120 — big enough to aim at, small enough to sit in a corner. */
-const SCALE = 3;
+/**
+ * How wide the minimap wants to be, in art pixels, before the chrome scale is applied.
+ *
+ * This is the number that was missing. Pixels-per-tile used to be a constant — 3, chosen when a
+ * board was 64 tiles wide and 3 x 64 was a tidy 192. Tripling every board to 192 tiles turned that
+ * same constant into 576 art pixels, which at chrome scale 2 is over a thousand pixels of screen:
+ * a minimap occupying a quarter of the window. William: "the minimap is way too big of a window."
+ *
+ * A panel's size should be a property of the PANEL, so this is the budget and the scale is derived
+ * from it. A bigger board gets a smaller scale rather than a bigger panel.
+ */
+const BUDGET_PX = 240;
+
+/** Pixels per tile that fits `grid` inside the budget. Integer, 1-4, like the board's own zoom. */
+export function fitScale(grid: { width: number; height: number }): number {
+  const byWidth = Math.floor(BUDGET_PX / grid.width);
+  // Two thirds, so a tall board does not produce a panel taller than it is wide.
+  const byHeight = Math.floor((BUDGET_PX * 0.66) / grid.height);
+  return Math.min(4, Math.max(1, Math.min(byWidth, byHeight)));
+}
 
 export function Minimap({ board, targets, cameraRef, onJump }: MinimapProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const uiScale = useBoardStore((s) => s.uiScale);
+  const minimapScale = useBoardStore((s) => s.minimapScale);
+  const minimapOpen = useBoardStore((s) => s.minimapOpen);
+  const setMinimapScale = useBoardStore((s) => s.setMinimapScale);
+  const toggleMinimap = useBoardStore((s) => s.toggleMinimap);
+
+  /*
+   * The stored preference is a NUDGE, not the scale. It is remembered across rooms, and rooms are
+   * different sizes — a scale that suits a 144-tile room would blow a 192-tile board back out to
+   * the size being fixed here. So the fit is computed per board and the preference moves it by up
+   * to two steps either way.
+   */
+  const SCALE = Math.min(4, Math.max(1, fitScale(board.grid) + (minimapScale - 1)));
 
   const width = board.grid.width * SCALE;
   const height = board.grid.height * SCALE;
@@ -97,14 +127,63 @@ export function Minimap({ board, targets, cameraRef, onJump }: MinimapProps): Re
     onJump({ x: (px / SCALE) * board.grid.tile, y: (py / SCALE) * board.grid.tile });
   };
 
+  /*
+   * Resizing steps, because the scale is an integer and a smooth drag would lie about what it is
+   * doing. Dragging left and up shrinks; the panel jumps a whole pixel-per-tile at a time, which is
+   * the same bargain the board's own 2x/3x/4x zoom makes and for the same reason.
+   */
+  const onGrip = (event: React.PointerEvent<HTMLButtonElement>): void => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startScale = minimapScale;
+    const STEP_PX = 90;
+
+    const move = (e: PointerEvent): void => {
+      // Grip is top-left, so dragging LEFT (negative) makes the panel bigger.
+      setMinimapScale(startScale - Math.round((e.clientX - startX) / STEP_PX));
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  if (!minimapOpen) {
+    return (
+      <div className="minimap collapsed">
+        <button type="button" className="minimap-toggle" onClick={toggleMinimap} title="Show the minimap (M)">
+          ▣
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="minimap" title="Click to jump">
+    <div className="minimap">
+      <div className="minimap-bar">
+        <button
+          type="button"
+          className="minimap-grip"
+          onPointerDown={onGrip}
+          title="Drag to resize"
+          aria-label="Resize the minimap"
+        >
+          ⤡
+        </button>
+        <span className="minimap-scale">{SCALE}×</span>
+        <button type="button" className="minimap-toggle" onClick={toggleMinimap} title="Hide the minimap">
+          ✕
+        </button>
+      </div>
       <canvas
         ref={canvasRef}
         width={width}
         height={height}
         style={{ width: width * uiScale, height: height * uiScale }}
         onClick={jump}
+        title="Click to jump"
       />
     </div>
   );

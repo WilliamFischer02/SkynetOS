@@ -547,6 +547,61 @@ canvas {
   image-rendering: pixelated;
 }
 
+/*
+ * The title bar. Three controls in the width of the panel: resize, what scale it is at, and close.
+ * It exists because a minimap with no affordances is a minimap you cannot get out of the way, and
+ * because the scale is a discrete step — showing the number is how a jump from 2x to 1x reads as
+ * deliberate rather than broken.
+ */
+.minimap-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  line-height: 1;
+  padding-bottom: var(--gap);
+}
+
+.minimap-scale {
+  color: var(--copper);
+  font-size: var(--f);
+  letter-spacing: var(--p);
+}
+
+.minimap-grip,
+.minimap-toggle {
+  /*
+   * Explicit, not inherited. `.breadcrumb`, `.hud` and `.help` are click-through and every control
+   * placed inside one has silently stopped working at least once — it renders, it highlights on
+   * hover, and clicking does nothing. The minimap is not one of those today; saying so here means
+   * these buttons keep working if the panel is ever moved into one that is.
+   */
+  pointer-events: auto;
+  appearance: none;
+  background: transparent;
+  border: var(--p) solid var(--copper);
+  color: var(--silk);
+  font: inherit;
+  font-size: var(--f);
+  line-height: 1;
+  padding: calc(2 * var(--p)) calc(4 * var(--p));
+  cursor: pointer;
+}
+
+.minimap-grip { cursor: ew-resize; }
+
+.minimap-grip:hover,
+.minimap-toggle:hover { background: var(--copper); color: var(--mask-dark); }
+
+.minimap-grip:active,
+.minimap-toggle:active { transform: translate(var(--p), var(--p)); }
+
+/* Collapsed: just the button, so the corner is given back to the board. */
+.minimap.collapsed {
+  padding: calc(2 * var(--p));
+  border-color: var(--copper-dark);
+}
+
 /* ---------- iris transition ---------- */
 
 /*

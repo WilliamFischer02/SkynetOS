@@ -1134,3 +1134,36 @@ Rate limited to three an hour, matching docs/07's existing limit for agent-to-se
 because this is that act with a launch attached. A loop in the Face cannot become a hundred
 terminals. `autoRunMail: false` turns it off, and it lives in settings.json because there is no
 settings:write channel by design.
+
+## 2026-09-10 — A panel's size is a property of the panel
+
+Reported: "the minimap is way too big of a window make it a smaller window / and resizable."
+
+Pixels-per-tile was a constant — `const SCALE = 3`, with a comment saying "3 keeps a 64x40 board
+at 192x120 — big enough to aim at, small enough to sit in a corner". Both halves of that were true
+when it was written. Tripling every board to 192 tiles turned the same constant into 576 art
+pixels, which at chrome scale 2 is over a thousand pixels of screen: a minimap covering a quarter
+of the window, with no way to move it, resize it or close it.
+
+The bug is the direction of the dependency. A panel that derives its SIZE from the data it shows
+grows without bound as the data does. So the budget is fixed (240 art px) and the scale is derived
+from it — a bigger board gets a smaller scale, never a bigger panel.
+
+The scale stays an INTEGER, and resizing therefore snaps rather than glides. That is the same
+bargain the board's own 2x/3x/4x zoom makes, for the same reason: docs/02 §Anti-mush does not make
+an exception for chrome, and a fractionally scaled minimap is a blurry one. The panel shows the
+number it is at so a jump from 2x to 1x reads as deliberate.
+
+The stored preference is a NUDGE (±2 steps), not the scale itself, because it is remembered across
+rooms and rooms are different sizes — a scale that suited a 144-tile room would blow a 192-tile
+board straight back out to the size being fixed here.
+
+One case cannot be fixed: the schema permits 512 tiles, and at the floor of 1px per tile that is
+512 art pixels, wider than the budget. Half a pixel per tile is not a smaller minimap but a blurry
+one, and dropping tiles would be a minimap that lies about where things are. So the floor outranks
+the budget and the failure mode at an absurd board size is "large", not "empty".
+
+Preferences live in localStorage, not settings.json. They are how the window is arranged, not what
+the app is allowed to do, and docs/07 keeps settings.json user-only with no write channel on
+purpose. Every read is in a try/catch because storage throws outright in some contexts and a
+thrown preference must not cost the board.

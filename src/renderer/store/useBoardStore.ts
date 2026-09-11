@@ -6,6 +6,39 @@ import type { UsageRoute } from '@shared/usage.js';
 import type { TargetInfo } from '@shared/targets.js';
 
 /**
+ * Small, boring UI preferences that outlive a reload.
+ *
+ * localStorage and not settings.json: these are how the window is arranged, not what the app is
+ * allowed to do. docs/07 keeps settings.json user-only and gives it no write channel on purpose,
+ * and "how big is the minimap" has no business anywhere near that file. Every read is guarded
+ * because storage throws outright in some contexts, and a thrown preference read must not cost the
+ * whole board.
+ */
+function loadNumber(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const value = Number.parseInt(raw, 10);
+    return Number.isInteger(value) ? Math.min(max, Math.max(min, value)) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadBoolean(key: string, fallback: boolean): boolean {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw === null ? fallback : raw === '1';
+  } catch {
+    return fallback;
+  }
+}
+
+function save(key: string, value: string): void {
+  try { window.localStorage.setItem(key, value); } catch { /* a preference that cannot persist still applies */ }
+}
+
+/**
  * Renderer state.
  *
  * Note what is NOT here: the undo stack. It lives in the main process, because a JARVIS edit
@@ -60,6 +93,23 @@ interface BoardState {
   /** Integer chrome scale, derived from the OS scale factor. See App.uiScaleFor. */
   uiScale: number;
   setUiScale: (scale: number) => void;
+
+  /**
+   * Minimap pixels per tile, 1-4, and whether the panel is open at all.
+   *
+   * A user preference rather than a constant, because the right size depends on the board AND on
+   * what the user is doing — and because the constant was wrong. It was 3 px per tile, chosen when
+   * a board was 64x40; tripling every board made the minimap 576x360 art pixels, which at chrome
+   * scale 2 is over a thousand pixels of screen. William: "the minimap is way too big of a window
+   * make it a smaller window / and resizable."
+   *
+   * Integer only, like the board's own zoom. A fractionally scaled minimap is a blurry minimap,
+   * and docs/02 §Anti-mush does not make an exception for chrome.
+   */
+  minimapScale: number;
+  minimapOpen: boolean;
+  setMinimapScale: (scale: number) => void;
+  toggleMinimap: () => void;
 
   /**
    * Live sessions and services, pushed from main. Every room's, not just this one's — an agent
@@ -154,6 +204,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   busy: false,
   focus: false,
   uiScale: 1,
+  minimapScale: loadNumber('skynet.minimapScale', 1, 1, 4),
+  minimapOpen: loadBoolean('skynet.minimapOpen', true),
   jumpTo: null,
   sessions: [],
   services: [],
@@ -302,6 +354,18 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   toggleFocus: () => set((state) => ({ focus: !state.focus })),
 
   setUiScale: (scale) => set({ uiScale: scale }),
+
+  setMinimapScale: (scale) => {
+    const clamped = Math.min(4, Math.max(1, Math.round(scale)));
+    save('skynet.minimapScale', String(clamped));
+    set({ minimapScale: clamped });
+  },
+
+  toggleMinimap: () => set((state) => {
+    const next = !state.minimapOpen;
+    save('skynet.minimapOpen', next ? '1' : '0');
+    return { minimapOpen: next };
+  }),
 
   /**
    * Subscribe to pushed session/service state, and take one snapshot immediately — the push only
