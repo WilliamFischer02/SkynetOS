@@ -10,6 +10,7 @@ import { SessionDock } from './ui/SessionDock.js';
 import { DragBadges } from './ui/DragBadges.js';
 import { IngestWizard } from './ui/IngestWizard.js';
 import { useBoardStore } from './store/useBoardStore.js';
+import { isBroken } from '@shared/targets.js';
 
 /**
  * The DOM chrome's scale.
@@ -88,6 +89,27 @@ export function App(): React.JSX.Element {
     const timer = setInterval(() => { void refreshUsageRoutes(); }, 30_000);
     return () => clearInterval(timer);
   }, [refreshUsageRoutes]);
+
+  /*
+   * Relink a broken node the moment the thing it points at appears.
+   *
+   * William, on moving to a second machine: "if links break I can simply add the missing folders or
+   * exe's and it will relink." That was ALMOST true — resolution is never cached, so a redraw
+   * always asks the filesystem afresh. What was missing is anything to prompt the redraw: targets
+   * are re-resolved on a `files:changed` event, and a directory that does not exist cannot be
+   * watched, so the one case that needed it was the one case that never fired.
+   *
+   * Polling, but only while something is actually broken — on a healthy board this does nothing at
+   * all, and on a broken one it is a handful of `stat` calls every few seconds. It stops on its own
+   * the moment the last fault clears.
+   */
+  const broken = Object.values(targets).filter((t) => isBroken(t)).length;
+  const refreshTargets = useBoardStore((s) => s.refreshTargets);
+  useEffect(() => {
+    if (broken === 0) return;
+    const timer = setInterval(() => { void refreshTargets(); }, 5_000);
+    return () => clearInterval(timer);
+  }, [broken, refreshTargets]);
 
   useEffect(() => {
     void window.skynet['display:info']().then((info) => {

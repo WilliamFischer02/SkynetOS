@@ -1639,3 +1639,20 @@ That is why "if links break I can simply add the missing folders or exe's and it
 already true.
 
 Verified by expanding all 26 against the real filesystem from inside the running app: 26/26.
+
+## 2026-09-10 — Relinking needed a nudge after all
+
+A claim I wrote in docs/10 and then checked: "it relinks on the next redraw, no restart."
+
+Half true, and the wrong half. Resolution genuinely is never cached — `resolveNodeTarget` asks the
+filesystem every time — so a redraw always sees the truth. What was missing is anything to PROMPT
+the redraw. Targets are re-resolved on a `files:changed` event from the watchers, and a directory
+that does not exist cannot be watched. The one case that needed it was the one case that never
+fired: create the missing folder and the board sat there insisting it was still missing until you
+pressed `R`.
+
+So the board now re-resolves every five seconds while ANY node on it is broken, and stops the
+moment the last fault clears. A healthy board costs nothing; a broken one costs a handful of
+`stat` calls. That makes "add the missing folder and it relinks" true rather than nearly true,
+which matters most on exactly the machine this was all for — a fresh clone where a dozen things
+are missing until they are cloned or installed one at a time.

@@ -89,7 +89,11 @@ Nothing is cached. A node resolves its target **at render time**, every time, so
 1. Open SkynetOS on the new machine. Nodes pointing at things that are not there yet render as
    broken hardware — a fault outline, and the reason in the inspector.
 2. Create the folder, clone the repo, or install the program.
-3. It relinks on the next redraw. No restart, no repair step, no re-import.
+3. It relinks within about five seconds. No restart, no repair step, no re-import.
+
+While **anything** on the current board is broken, SkynetOS re-resolves every five seconds; the
+moment the last fault clears it stops, so a healthy board costs nothing. (`R` reloads the board
+immediately if you would rather not wait.)
 
 If the thing lives somewhere else on the new machine, select the node, press `F2`, and repoint it.
 The picker verifies before it saves.
