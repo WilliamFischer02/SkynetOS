@@ -915,6 +915,89 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     }
 
     /*
+     * ── The resize handle still works with wiring on ─────────────────────────────────────────
+     *
+     * Reported: "i'm having trouble scaling nodes because of the wire creation ui, instead of
+     * scaling it always tried to create a wire instead."
+     *
+     * The handle is in the node's bottom-right CORNER, which is where the east and south edges
+     * meet, and ports are hit-tested along a whole edge — so wiring, which runs first, took every
+     * press on the handle. This selects a node, grabs its handle, drags, and reads the footprint
+     * back out of the board file.
+     */
+    const resizeTarget = (JSON.parse(readNow(boardPath, 'utf8')) as {
+      nodes: { id: string; kind: string; pos: { x: number; y: number }; footprint?: { w: number; h: number } }[]
+    }).nodes.find((n) => n.id === 'u2_agent_skynet');
+
+    if (resizeTarget) {
+      const fpBefore = resizeTarget.footprint ?? DEFAULT_FOOTPRINT[resizeTarget.kind as NodeKind];
+      const resized = await win.webContents.executeJavaScript(`
+        (async () => {
+          const cam = window.__skynetCamera;
+          const canvas = document.querySelector('canvas');
+          if (!cam || !canvas) return JSON.stringify({ error: 'no camera or canvas' });
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          const ev = (type, x, y, target) => target.dispatchEvent(new PointerEvent(type, {
+            pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+            clientX: x, clientY: y, bubbles: true, cancelable: true
+          }));
+          const toScreen = (wx, wy) => ({ x: Math.round((wx - cam.x) * cam.zoom), y: Math.round((wy - cam.y) * cam.zoom) });
+
+          // Select it by clicking its middle — the handle only exists on the selected node.
+          const centre = toScreen(${(resizeTarget.pos.x + fpBefore.w / 2) * 16}, ${(resizeTarget.pos.y + fpBefore.h / 2) * 16});
+          if (document.elementFromPoint(centre.x, centre.y)?.tagName !== 'CANVAS') {
+            return JSON.stringify({ error: 'the node is not clickable where it should be' });
+          }
+          ev('pointerdown', centre.x, centre.y, canvas);
+          ev('pointerup', centre.x, centre.y, window);
+          await wait(200);
+
+          // The handle: an 8 world-px square inside the node's bottom-right corner.
+          const corner = toScreen(${(resizeTarget.pos.x + fpBefore.w) * 16 - 4}, ${(resizeTarget.pos.y + fpBefore.h) * 16 - 4});
+          ev('pointermove', corner.x, corner.y, window);
+          await wait(60);
+          // Nothing may light there. A port under the handle IS the bug.
+          const litOnHandle = window.__skynetWire?.hover ?? null;
+
+          ev('pointerdown', corner.x, corner.y, canvas);
+          for (let i = 1; i <= 10; i++) {
+            ev('pointermove', corner.x + i * 12, corner.y + i * 8, window);
+            await wait(20);
+          }
+          ev('pointerup', corner.x + 120, corner.y + 80, window);
+          return JSON.stringify({ litOnHandle, wiring: window.__skynetWire?.wiring ?? null });
+        })()
+      `) as string;
+
+      const outcome = JSON.parse(resized) as { litOnHandle?: unknown; wiring?: string | null; error?: string };
+      const footprintOfNow = (): { w: number; h: number } => {
+        const node = (JSON.parse(readNow(boardPath, 'utf8')) as {
+          nodes: { id: string; kind: string; footprint?: { w: number; h: number } }[]
+        }).nodes.find((n) => n.id === 'u2_agent_skynet');
+        return node?.footprint ?? DEFAULT_FOOTPRINT[(node?.kind ?? 'agent.code') as NodeKind];
+      };
+
+      let fpAfter = footprintOfNow();
+      for (let i = 0; i < 30 && fpAfter.w === fpBefore.w && fpAfter.h === fpBefore.h; i++) {
+        await wait(100);
+        fpAfter = footprintOfNow();
+      }
+
+      console.log(`[smoke] handle hover lit a wire port: ${outcome.litOnHandle ? 'YES — THE BUG IS BACK' : 'no'}${outcome.error ? ` (${outcome.error})` : ''}`);
+      console.log(`[smoke] A NODE STILL RESIZES WITH WIRING ON: ${fpAfter.w !== fpBefore.w || fpAfter.h !== fpBefore.h} (${fpBefore.w}x${fpBefore.h} -> ${fpAfter.w}x${fpAfter.h})`);
+
+      if (fpAfter.w !== fpBefore.w || fpAfter.h !== fpBefore.h) {
+        await win.webContents.executeJavaScript(`window.skynet['command:undo']()`);
+        let restored = footprintOfNow();
+        for (let i = 0; i < 20 && (restored.w !== fpBefore.w || restored.h !== fpBefore.h); i++) {
+          await wait(100);
+          restored = footprintOfNow();
+        }
+        console.log(`[smoke] and undone: ${restored.w === fpBefore.w && restored.h === fpBefore.h}`);
+      }
+    }
+
+    /*
      * ── JARVIS Prime's tool surface, end to end ──────────────────────────────────────────────
      *
      * Spawns the REAL tools/skynet-mcp.mjs the way Claude Code will, pointed at the REAL control

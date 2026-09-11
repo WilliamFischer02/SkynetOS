@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardEdge } from '../packages/shared/types.js';
 import type { NodeRect } from '../src/renderer/board/layout.js';
-import { freeEdgeId, guessEdgeKind, isWirable, portAt, portsFor, wireRefusal } from '../src/renderer/board/ports.js';
+import { freeEdgeId, guessEdgeKind, isWirable, portAt, portUnderPoint, portsFor, wireRefusal } from '../src/renderer/board/ports.js';
 
 /**
  * Drawing a trace by hand.
@@ -62,10 +62,38 @@ describe('hovering an edge finds its port', () => {
     expect(portAt(rects, 132, 224, 6)).toBeNull();
   });
 
-  it('reaches just outside the edge as well as just inside', () => {
-    // Approaching from outside is how you actually do it — the cursor arrives from the substrate.
-    expect(portAt(rects, 132, 196, 6)?.side).toBe('n');
-    expect(portAt(rects, 132, 192, 6)).toBeNull();
+  it('reaches further OUTSIDE the node than inside it', () => {
+    /*
+     * The band is deliberately lopsided. Outside is empty substrate where the only competing
+     * gesture is panning, and approaching an edge from the outside is how you actually do it — so
+     * reach there is free and makes the dot easy to catch. Inside is where selecting, dragging to
+     * move and the resize handle all live, and every pixel of reach is stolen from them.
+     *
+     * With tolerance 6: ~9.6 world px outside, ~2.7 inside.
+     */
+    expect(portAt(rects, 132, 192, 6)?.side, '8px outside the top edge should still light it').toBe('n');
+    expect(portAt(rects, 132, 189, 6), '11px outside is too far').toBeNull();
+
+    expect(portAt(rects, 132, 202, 6)?.side, '2px inside the top edge should light it').toBe('n');
+    expect(portAt(rects, 132, 205, 6), '5px inside belongs to the node, not the wire').toBeNull();
+  });
+
+  it('leaves most of a small node draggable', () => {
+    /*
+     * The case that motivated the asymmetry. A 2x2 node is 32 world px square; a symmetric band
+     * would make a meaningful fraction of its face un-draggable, and a press meant to move it
+     * would start a trace instead.
+     */
+    const small = [rect('s3', 0, 0, 32, 32)];
+    let free = 0;
+    let total = 0;
+    for (let y = 0; y < 32; y++) {
+      for (let x = 0; x < 32; x++) {
+        total++;
+        if (!portAt(small, x + 0.5, y + 0.5, 6)) free++;
+      }
+    }
+    expect(free / total, 'too much of a small node is given over to wiring').toBeGreaterThan(0.6);
   });
 
   it('picks the right node when two are near', () => {
@@ -144,5 +172,59 @@ describe('the guessed relationship', () => {
         expect(['produces', 'reads', 'depends', 'deploys', 'syncs', 'supervises']).toContain(guessEdgeKind(a, b));
       }
     }
+  });
+});
+
+/**
+ * ── The resize handle keeps its corner ───────────────────────────────────────────────────────
+ *
+ * Reported: "i'm having trouble scaling nodes because of the wire creation ui, instead of scaling
+ * it always tried to create a wire instead."
+ *
+ * The handle sits in the selected node's bottom-right CORNER — exactly where the east and south
+ * edges meet — and ports are hit-tested along the whole length of an edge. So every press on the
+ * handle was also a press on two ports, and wiring, which runs first, took all of them. The mouse
+ * path to resizing became unreachable the day wiring landed.
+ */
+describe('the resize handle outranks wiring', () => {
+  // A node at 100,200, 64x48. Its handle is the 8px square in the bottom-right corner.
+  const rects = [rect('s1', 100, 200, 64, 48)];
+  const handle = { x: 156, y: 240, w: 8, h: 8 };
+
+  it('lights no port anywhere on the handle', () => {
+    for (const [x, y] of [[157, 241], [160, 244], [163, 247], [156, 240], [164, 248]]) {
+      expect(portUnderPoint(rects, x!, y!, 6, handle), `the handle at ${x},${y} still started a wire`)
+        .toBeNull();
+    }
+  });
+
+  it('lights no port just OUTSIDE the handle either', () => {
+    /*
+     * The dead zone is the handle padded by the tolerance. An exact test would mean missing an
+     * eight-pixel target by two pixels starts a trace instead — the same frustration, rarer and
+     * harder to explain.
+     */
+    expect(portUnderPoint(rects, 153, 245, 6, handle)).toBeNull();
+    expect(portUnderPoint(rects, 160, 237, 6, handle)).toBeNull();
+  });
+
+  it('would have started a wire there without the handle — which is the bug', () => {
+    // The premise. If this ever stops being true the guard above is measuring nothing.
+    expect(portAt(rects, 160, 247, 6)).not.toBeNull();
+    expect(portUnderPoint(rects, 160, 247, 6, null)).not.toBeNull();
+  });
+
+  it('still wires every edge away from the corner', () => {
+    // The handle takes a corner, not a node. Ports live at edge MIDPOINTS, which are untouched.
+    expect(portUnderPoint(rects, 132, 201, 6, handle)?.side).toBe('n');
+    expect(portUnderPoint(rects, 101, 224, 6, handle)?.side).toBe('w');
+    expect(portUnderPoint(rects, 132, 247, 6, handle)?.side).toBe('s');
+    expect(portUnderPoint(rects, 163, 224, 6, handle)?.side).toBe('e');
+  });
+
+  it('takes nothing from an unselected node', () => {
+    // Only the selected node has a handle, so every other node's corner still wires.
+    const two = [rect('s1', 100, 200, 64, 48), rect('s2', 400, 200, 64, 48)];
+    expect(portUnderPoint(two, 462, 247, 6, handle)?.nodeId).toBe('s2');
   });
 });

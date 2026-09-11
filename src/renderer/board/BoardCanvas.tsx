@@ -43,7 +43,7 @@ import { measureTextBlock } from './text-plate.js';
 import { roomTitle, suffixSize } from '@shared/room-title.js';
 import { COPPER_DARK, SILK as SILK_HEX, brighten, resolveToken } from '@shared/palette.js';
 import { centreOn, contentBounds, hitTest, isVisible, layoutRects, nodeRect, nextInOrder, type NodeRect } from './layout.js';
-import { portAt, wireRefusal, type Port, type WiringState } from './ports.js';
+import { portUnderPoint, wireRefusal, type Port, type WiringState } from './ports.js';
 import {
   NO_DRAG,
   beginDrag,
@@ -396,6 +396,33 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      */
     const portTolerance = (): number => 7 / cameraStore.current.zoom;
 
+    /** The selected node's resize handle in world pixels, or null. */
+    const selectedHandle = (): { x: number; y: number; w: number; h: number } | null => {
+      const selected = nodeById(live.current.selectedId);
+      return selected ? handleRect(selected) : null;
+    };
+
+    /**
+     * The port under a world point, unless the resize handle has a better claim on it.
+     *
+     * The handle is in the node's bottom-right CORNER, where the east and south edges meet, and a
+     * port is hit-tested along the whole length of an edge — so without this every press on the
+     * handle was also a press on two ports and wiring took all of them. See `portUnderPoint`.
+     */
+    const portUnder = (x: number, y: number): Port | null =>
+      portUnderPoint(rects, x, y, portTolerance(), selectedHandle());
+
+    /** Is the cursor claiming the resize handle rather than an edge? */
+    const overResizeHandle = (x: number, y: number): boolean => {
+      const handle = selectedHandle();
+      if (!handle) return false;
+      const pad = portTolerance();
+      return (
+        x >= handle.x - pad && x <= handle.x + handle.w + pad &&
+        y >= handle.y - pad && y <= handle.y + handle.h + pad
+      );
+    };
+
     const onPointerDown = (event: PointerEvent) => {
       if (!app) return;
       const screen = canvasPoint(event);
@@ -403,12 +430,13 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const point = screenToWorld(camera, screen.x, screen.y);
 
       /*
-       * Wiring takes precedence over every other gesture, but only in Edit Board mode and only
-       * when the cursor is actually on an edge. Browsing a board involves a lot of clicking near
-       * components, and a click that starts a trace by accident would be worse than no feature.
+       * Wiring takes precedence over every other gesture, but only in Edit Board mode, only when
+       * the cursor is actually on an edge, and never over the resize handle. Browsing a board
+       * involves a lot of clicking near components, and a click that starts a trace by accident
+       * would be worse than no feature.
        */
-      if (live.current.editMode && event.button === 0) {
-        const port = portAt(rects, point.x, point.y, portTolerance());
+      if (live.current.editMode && event.button === 0 && !overResizeHandle(point.x, point.y)) {
+        const port = portUnder(point.x, point.y);
 
         if (wiring && port) {
           const refusal = wireRefusal(wiring.from, port, board.edges);
@@ -438,6 +466,15 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           rebuildOverlay();
           return;
         }
+      } else if (wiring) {
+        /*
+         * Grabbing the resize handle mid-wire abandons the wire and resizes — one gesture, not
+         * two. Making the first press cancel and the second resize would mean the handle needs
+         * clicking twice for no reason the user can see.
+         */
+        wiring = null;
+        hoverPort = null;
+        rebuildOverlay();
       }
 
       const hit = hitTest(rects, point.x, point.y);
@@ -493,7 +530,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        */
       if (live.current.editMode && drag.kind === 'none') {
         const point = screenToWorld(cameraStore.current, screen.x, screen.y);
-        const port = portAt(rects, point.x, point.y, portTolerance());
+        // `portUnder`, not `portAt`: the resize handle keeps its corner, so no dot lights over it
+        // and the block below can set the resize cursor without something else fighting for it.
+        const port = portUnder(point.x, point.y);
         const changed =
           port?.nodeId !== hoverPort?.nodeId ||
           port?.side !== hoverPort?.side ||

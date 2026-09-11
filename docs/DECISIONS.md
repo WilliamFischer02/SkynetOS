@@ -1220,3 +1220,36 @@ schema validation, a snapshot and a disk write sometimes takes longer, so it rea
 count, reported a failure the app had not committed, and then skipped its own cleanup because the
 count had not changed — leaving a stray trace in the real board file. It now polls for the change
 and always undoes what it drew. A harness that runs against real data has to put it back.
+
+## 2026-09-10 — Wiring must yield to the gestures that were already there
+
+Reported: "i'm having trouble scaling nodes because of the wire creation ui, instead of scaling it
+always tried to create a wire instead."
+
+The resize handle sits in the selected node's bottom-right CORNER, which is exactly where the east
+and south edges meet — and a port is hit-tested along the whole length of an edge. So every press
+on the handle was also a press on two ports, and wiring, which runs first, took all of them. The
+mouse path to resizing became unreachable the day wiring landed. Shift+arrows still worked, which
+is why it was a frustration rather than a wall, and is also why nothing caught it.
+
+Two changes, and the second is the one that matters more.
+
+**The handle outranks wiring**, the way it already outranks the move gesture — it is drawn on top
+of the node, so a press there is unambiguous. The dead zone is the handle PADDED by the port
+tolerance, because an exact test means missing an eight-pixel target by two pixels starts a trace
+instead: the same frustration, rarer and harder to explain. Nothing is lost, because ports live at
+edge MIDPOINTS and a node's corner is not where you aim to wire it. Grabbing the handle mid-wire
+abandons the wire and resizes in one gesture rather than two.
+
+**The port band is lopsided.** It was symmetric, and the corner was only the sharpest instance of
+a general problem: every world pixel the band reaches INSIDE a node is a pixel stolen from
+selecting it, dragging it, and the handle. On a 2x2 node — 32 world pixels square — a symmetric
+band gives a meaningful fraction of the face to wiring, and a press meant to move the node starts
+a trace. So it now reaches 1.6x the tolerance outside and 0.45x inside. Outside is empty substrate
+where the only competing gesture is panning, so reach there is free — and approaching an edge from
+the outside is how you actually do it, which makes the dot easier to catch than before.
+
+The smoke now selects a node, grabs its handle, drags, and reads the footprint back, asserting
+both that the resize committed and that `window.__skynetWire` lit nothing on the handle. A unit
+test can prove the geometry; only this proves the four gestures — pan, move, resize, wire — still
+coexist on one canvas.

@@ -74,6 +74,21 @@ function distanceToSegment(
 }
 
 /**
+ * How far outside a node's edge still counts as aiming at it, as a multiple of the tolerance.
+ *
+ * The band is deliberately LOPSIDED: it reaches further out than in.
+ *
+ * Outside the node is empty substrate where the only other gesture is panning, so reach costs
+ * nothing and buys the approach — you arrive at an edge from the outside, and a generous outer
+ * band is what makes the dot easy to catch. Inside the node is where selecting, dragging to move
+ * and the resize handle all live, and every world pixel of reach there is a pixel stolen from
+ * them. On a 2x2 node — 32 world pixels square — a symmetric band would make a meaningful
+ * fraction of the node's face un-draggable.
+ */
+const OUTSIDE = 1.6;
+const INSIDE = 0.45;
+
+/**
  * The port under a world point, or null.
  *
  * Hit-tested against the whole EDGE rather than against the dot, then snapped to that edge's
@@ -86,14 +101,25 @@ function distanceToSegment(
  */
 export function portAt(rects: readonly NodeRect[], x: number, y: number, tolerance: number): Port | null {
   let best: Port | null = null;
-  let bestDistance = tolerance;
+  let bestDistance = Infinity;
+
+  const outer = tolerance * OUTSIDE;
+  const inner = tolerance * INSIDE;
 
   for (const rect of rects) {
     if (!isWirable(rect.kind)) continue;
 
-    // Cheap reject: anything further away than the tolerance on either axis cannot be close.
-    if (x < rect.x - tolerance || x > rect.x + rect.w + tolerance) continue;
-    if (y < rect.y - tolerance || y > rect.y + rect.h + tolerance) continue;
+    // Cheap reject: anything further away than the outer reach on either axis cannot be close.
+    if (x < rect.x - outer || x > rect.x + rect.w + outer) continue;
+    if (y < rect.y - outer || y > rect.y + rect.h + outer) continue;
+
+    /*
+     * Which band applies is decided per NODE, not per edge: a point is either over this component
+     * or beside it. Deciding per edge would let a point inside the node qualify under the outer
+     * band for the far edge, which is the inner band leaking back in through the side door.
+     */
+    const within = x > rect.x && x < rect.x + rect.w && y > rect.y && y < rect.y + rect.h;
+    const limit = within ? inner : outer;
 
     const right = rect.x + rect.w;
     const bottom = rect.y + rect.h;
@@ -106,7 +132,7 @@ export function portAt(rects: readonly NodeRect[], x: number, y: number, toleran
 
     for (const [side, ax, ay, bx, by] of edges) {
       const distance = distanceToSegment(x, y, ax, ay, bx, by);
-      if (distance >= bestDistance) continue;
+      if (distance > limit || distance >= bestDistance) continue;
       bestDistance = distance;
       const port = portsFor(rect).find((p) => p.side === side);
       if (port) best = port;
@@ -114,6 +140,45 @@ export function portAt(rects: readonly NodeRect[], x: number, y: number, toleran
   }
 
   return best;
+}
+
+/**
+ * The port under a point, unless the resize handle has a better claim on it.
+ *
+ * ── The conflict ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Reported: "i'm having trouble scaling nodes because of the wire creation ui, instead of scaling
+ * it always tried to create a wire instead."
+ *
+ * The resize handle sits in the selected node's bottom-right CORNER, which is exactly where the
+ * east and south edges meet — and `portAt` hit-tests along the whole length of an edge. So every
+ * press on the handle was also a press on two ports, and wiring, which runs first, took all of
+ * them. The mouse path to resizing became unreachable the day wiring landed. (Shift+arrows still
+ * worked, which is why it was a frustration rather than a wall.)
+ *
+ * The handle already outranks the MOVE gesture for the same reason — it is drawn on top of the
+ * node, so a press there is unambiguous — and it has to outrank wiring too.
+ *
+ * The dead zone is the handle PADDED by the tolerance, because an exact test means missing an
+ * eight-pixel target by two pixels starts a trace instead: the same frustration, rarer and harder
+ * to explain. Nothing is lost by the padding — ports live at edge MIDPOINTS, so a node's corner is
+ * not where you aim to wire it.
+ */
+export function portUnderPoint(
+  rects: readonly NodeRect[],
+  x: number,
+  y: number,
+  tolerance: number,
+  /** The selected node's resize handle in world pixels, or null when nothing is selected. */
+  handle: { x: number; y: number; w: number; h: number } | null
+): Port | null {
+  if (handle &&
+    x >= handle.x - tolerance && x <= handle.x + handle.w + tolerance &&
+    y >= handle.y - tolerance && y <= handle.y + handle.h + tolerance
+  ) {
+    return null;
+  }
+  return portAt(rects, x, y, tolerance);
 }
 
 /**
