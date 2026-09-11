@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Optional: install a post-commit hook that rebuilds the unpacked app in the BACKGROUND.
+ * Optional git hooks. Two of them, installed separately.
  *
- *   npm run hooks:install     add it
- *   npm run hooks:uninstall   remove it
+ *   npm run hooks:install     post-commit: rebuild the unpacked app in the background
+ *   npm run hooks:uninstall
+ *   npm run face:hook         pre-commit: rebake FACE-BOOT.md and stage it
+ *   npm run face:unhook
  *
- * Why background, and why unpacked rather than the installer:
+ * ── The build hook: why background, and why unpacked rather than the installer ────────────────
  *
  *   - A commit must stay instant. A 36-second NSIS build in a blocking hook turns every commit
  *     into a coffee break and you will start passing --no-verify, which is worse than no hook.
@@ -15,9 +17,16 @@
  *   - GitHub Actions builds the actual signed-shaped installer on every push (.github/workflows).
  *     This hook is for the machine you are sitting at.
  *
- * The hook never fails a commit. If the build breaks, the commit still lands and the reason is
- * in release/build.log — a hook that can reject work you have already decided to keep is a hook
- * that gets disabled.
+ * ── The face hook: why PRE-commit ─────────────────────────────────────────────────────────────
+ *
+ * The Face asked for post-commit. A post-commit bake rewrites FACE-BOOT.md AFTER the commit is
+ * made, so every pushed copy would be one commit stale and the working tree would never be clean.
+ * Baking before the commit and staging the result means each commit carries a boot file that
+ * describes itself. The bake is read-only apart from that one file and takes about a second.
+ *
+ * Neither hook ever fails a commit. A hook that can reject work you have already decided to keep
+ * is a hook that gets disabled. Hooks live in .git/hooks, which git does not track, so each clone
+ * installs its own.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -37,13 +46,16 @@ function gitHooksDir() {
   return join(ROOT, gitDir, 'hooks');
 }
 
-const MARKER = '# skynetos-post-commit-build';
-
-const HOOK = `#!/bin/sh
-${MARKER}
+const HOOKS = {
+  build: {
+    file: 'post-commit',
+    marker: '# skynetos-post-commit-build',
+    uninstall: 'npm run hooks:uninstall',
+    body: (marker, uninstall) => `#!/bin/sh
+${marker}
 # Rebuilds release/win-unpacked/SkynetOS.exe in the background after every commit.
 # Never blocks the commit and never fails it. Log: release/build.log
-# Remove with: npm run hooks:uninstall
+# Remove with: ${uninstall}
 mkdir -p release
 (
   echo "=== $(date) $(git rev-parse --short HEAD) $(git log -1 --pretty=%s) ==="
@@ -51,30 +63,60 @@ mkdir -p release
   echo "=== exit $? ==="
 ) > release/build.log 2>&1 &
 exit 0
-`;
+`,
+    done: [
+      'Every commit now rebuilds release/win-unpacked/SkynetOS.exe in the background.',
+      'Progress and errors: release/build.log'
+    ]
+  },
+  face: {
+    file: 'pre-commit',
+    marker: '# skynetos-pre-commit-face-boot',
+    uninstall: 'npm run face:unhook',
+    // node on vite-node's entry directly, not npx: npx costs a second of resolution per commit.
+    body: (marker, uninstall) => `#!/bin/sh
+${marker}
+# Rebakes FACE-BOOT.md and stages it, so every commit carries a current copy for the Face.
+# Never fails a commit: if the bake breaks, the commit lands with the previous copy.
+# Log: .git/face-bake.log   Remove with: ${uninstall}
+log="$(git rev-parse --git-dir)/face-bake.log"
+node node_modules/vite-node/vite-node.mjs --config vitest.config.ts tools/face-bake.ts > "$log" 2>&1 && git add FACE-BOOT.md
+exit 0
+`,
+    done: [
+      'Every commit now rebakes FACE-BOOT.md and includes it.',
+      'Output of the last bake: .git/face-bake.log'
+    ]
+  }
+};
+
+const mode = process.argv[2] ?? 'install';
+const hook = HOOKS[process.argv[3] ?? 'build'];
+if (!hook) {
+  console.error(`Unknown hook "${process.argv[3]}". Use one of: ${Object.keys(HOOKS).join(', ')}`);
+  process.exit(1);
+}
 
 const dir = gitHooksDir();
-const file = join(dir, 'post-commit');
-const mode = process.argv[2] ?? 'install';
+const file = join(dir, hook.file);
 
 if (mode === 'uninstall') {
-  if (existsSync(file) && readFileSync(file, 'utf8').includes(MARKER)) {
+  if (existsSync(file) && readFileSync(file, 'utf8').includes(hook.marker)) {
     rmSync(file);
     console.log(`Removed ${file}`);
   } else if (existsSync(file)) {
     console.log(`Left ${file} alone — it is not the SkynetOS hook.`);
   } else {
-    console.log('No post-commit hook installed.');
+    console.log(`No ${hook.file} hook installed.`);
   }
   process.exit(0);
 }
 
 mkdirSync(dir, { recursive: true });
-if (existsSync(file) && !readFileSync(file, 'utf8').includes(MARKER)) {
-  console.error(`Refusing to overwrite an existing post-commit hook at:\n  ${file}\nMerge it by hand if you want both.`);
+if (existsSync(file) && !readFileSync(file, 'utf8').includes(hook.marker)) {
+  console.error(`Refusing to overwrite an existing ${hook.file} hook at:\n  ${file}\nMerge it by hand if you want both.`);
   process.exit(1);
 }
-writeFileSync(file, HOOK, { mode: 0o755 });
+writeFileSync(file, hook.body(hook.marker, hook.uninstall), { mode: 0o755 });
 console.log(`Installed ${file}`);
-console.log('Every commit now rebuilds release/win-unpacked/SkynetOS.exe in the background.');
-console.log('Progress and errors: release/build.log');
+for (const line of hook.done) console.log(line);

@@ -57,6 +57,7 @@ What agents can do through `skynet-mcp`:
 | Open a terminal or session on a node, with a task | Allowed. The node supplies the working directory; the task reaches it through a staged FILE, never a command line |
 | Launch elevated | **Never.** A node set to `popout-elevated` is refused, not downgraded — elevation is a decision a human made about that node |
 | Start a session from a mailbox message | Allowed when the message carries `run:`, capped at 3/hour, never elevated, message archived before launch so it cannot fire twice. `autoRunMail: false` disables it |
+| Replace the Face's standing orders from a mailbox message | Allowed when the message carries `standing:`. Writes exactly one file, `codex/face-brief.md`, whole, then archives the message; every earlier version stays in `archive/`. Never launches anything, even with `run:` also set. Injected only into the Hands node's briefing. Not gated on `autoRunMail`, because it starts nothing: it changes what the next session is told, which every message in `to-hands/` already does |
 | Undo or redo | **Never.** The undo stack is shared with the user and is not per-actor: an agent's undo reverts whatever happened last, which may be William's work |
 | Summon a native file picker or any modal | **Never.** A modal an agent raised is a modal the user may dismiss by reflex |
 
@@ -84,6 +85,9 @@ longer exists and a token nothing will accept.
 ## Secrets
 - No tokens, keys, or passwords in `board/*.json` — the board is git-tracked and will end up on stream. Secrets live in Windows Credential Manager via `keytar`, referenced by name.
 - `service.process` nodes reference a `.env` path, never inline values.
+- **The repo is public.** `FACE-BOOT.md` and `codex/mailbox/` are how the Face reads this machine,
+  and anyone can read them too. Mail to the Face never quotes a secret, a token, or a path outside
+  what the boards already expose.
 - Before any screenshot export, the exporter redacts full paths beyond the dev root and any string matching a secret-like pattern.
 
 ## Recovery

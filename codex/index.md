@@ -13,6 +13,10 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `JARVIS-SETUP.md` — how JARVIS is launched, which surface is which, and what the two bodies can
   and cannot each do. Read once; it is setup, not standing context.
 - `board-map.md` — auto-generated room/node inventory. Regenerate with `board_read`. NOT WRITTEN YET.
+- `face-brief.md` — the Face's standing orders. Face-owned, written by SkynetOS from `standing:`
+  mail, never hand-edited. See `mailbox/README.md`. NOT WRITTEN YET.
+- `../FACE-BOOT.md` — generated at the repo root for the Face: this index, its mail, board faults,
+  Hands state. Never hand-edited.
 
 > **The project files below do not exist yet.** `codex/projects/` is empty. Every line in this
 > index is a promise about a file, and an index line with no file behind it is worse than no line

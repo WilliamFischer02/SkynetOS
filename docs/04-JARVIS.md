@@ -163,6 +163,29 @@ never elevated, three runs an hour, only nodes the board already declares, and a
 launching so a message can never fire twice. `autoRunMail: false` in settings.json turns it off
 entirely.
 
+A message carrying `standing: true` is state rather than a task. SkynetOS writes its body over
+`codex/face-brief.md` and archives it (`services/face-brief.ts`), and every Hands session opens
+with those orders inlined between its briefing and its mail. The Face owns the file; the Hands
+never edit it. Details in `codex/mailbox/README.md`.
+
+## Prime → Head: FACE-BOOT.md
+
+The Face cannot write anywhere, but it can read this repo through github.com, with two limits:
+it fetches only URLs that William pasted or that appeared in an earlier fetch result, and GitHub
+robots-blocks directory listings. From a cold start it reaches the repo root page and one hop
+beyond. So `FACE-BOOT.md` sits at the root and carries everything inline:
+
+1. `codex/index.md`, verbatim
+2. every unread `codex/mailbox/to-face/` message, newest first
+3. board truth: node counts per board, every unresolved target with its path, every provisional
+   node, resolved through `target-resolver.ts` on the machine that baked it
+4. the Hands' state, compressed from `handoff.md`
+5. the skynet MCP tool names, read from `tools/skynet-mcp.mjs`
+
+It is a bake artefact: `npm run face:bake` writes it, and the pre-commit hook installed by
+`npm run face:hook` rebakes and stages it so every commit carries a current copy. Nobody edits it
+by hand.
+
 ---
 
 ## Supervision loop

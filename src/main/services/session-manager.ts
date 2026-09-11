@@ -19,6 +19,8 @@ import {
 import { resolveMcpConfigs } from './mcp-config.js';
 import { conversationExists } from './conversations.js';
 import { mailForBriefing } from './mailbox.js';
+import { standingOrdersForBriefing } from './face-brief.js';
+import { pickHandsNode } from '@shared/face-brief.js';
 import { openTerminal, readLivePid, stagePrompt } from './terminal.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { getSettings, trustedRoots, normaliseRoot } from './settings.js';
@@ -292,14 +294,25 @@ export async function startSession(
   });
 
   /*
-   * The last mile of the mailbox.
+   * The last mile of the mailbox, with the Face's standing orders above it.
    *
    * Unread post for the Hands is appended to the briefing, so a session opens already holding it
    * rather than being asked to remember to check a directory. A mailbox nobody checks is a drawer.
    * Only for agents that get a briefing at all — a chip with `briefing: 'none'` asked for silence.
+   *
+   * Standing orders go between the two, and only to the Hands. The Face: "mail is a queue and a
+   * plan is a state." They are what is still true rather than what has happened since, so they
+   * come after who-you-are and before the news, labelled as standing so a session does not act on
+   * them as a fresh request. They are addressed to every future Hands session, not to every agent
+   * on the board.
    */
+  const load = briefing ? loadBoard(boardId) : null;
+  const isHands = !!load && load.ok && pickHandsNode(load.board.nodes)?.id === node.id;
+  const standing = isHands ? standingOrdersForBriefing() : null;
   const mail = briefing ? mailForBriefing() : null;
-  const withMail = mail ? `${briefing ?? ''}\n\n---\n\n${mail}` : briefing;
+  const withMail = briefing
+    ? [briefing, standing, mail].filter((part): part is string => Boolean(part)).join('\n\n---\n\n')
+    : briefing;
 
   /*
    * The task goes LAST, after the briefing and after the post.

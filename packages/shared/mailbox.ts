@@ -49,6 +49,14 @@ export interface MailboxMessage {
    * instruction to act.
    */
   run: string | null;
+  /**
+   * Whether this message REPLACES the Face's standing orders rather than being read once.
+   *
+   * The Face: "mail is a queue and a plan is a state." A `standing:` message is not delivered to a
+   * session at all. SkynetOS writes its body over `codex/face-brief.md` and archives it, and every
+   * Hands session from then on opens holding it. See packages/shared/face-brief.ts.
+   */
+  standing: boolean;
 }
 
 /**
@@ -64,6 +72,27 @@ export function parseRun(value: string): string | null {
   if (lower === 'false' || lower === 'no' || lower === '0') return null;
   if (lower === 'true' || lower === 'yes' || lower === '1') return '';
   return trimmed;
+}
+
+/** Read the `standing:` field. Only an explicit yes counts; anything else is ordinary post. */
+export function parseStanding(value: string): boolean {
+  const lower = value.trim().toLowerCase();
+  return lower === 'true' || lower === 'yes' || lower === '1';
+}
+
+/**
+ * Which mailbox a side name means, however it was spelled.
+ *
+ * The app says `hands` and `face`, the directories say `to-hands` and `to-face`, and the MCP tools
+ * say `to-head`. All of them reached `sendMail`, and anything that was not literally `hands` fell
+ * through to the Face's directory with `to: to-head` written into its header. Null for anything
+ * else, so a typo is refused rather than delivered somewhere.
+ */
+export function normaliseSide(raw: string): MailSide | null {
+  const side = String(raw).trim().toLowerCase().replace(/^to-/, '');
+  if (side === 'hands') return 'hands';
+  if (side === 'face' || side === 'head') return 'face';
+  return null;
 }
 
 /** A filename that sorts chronologically and says what it is at a glance. */
@@ -85,6 +114,8 @@ export function formatMessage(message: {
   body: string;
   /** Omit for ordinary post. See `run` on MailboxMessage. */
   run?: string | null;
+  /** Omit for ordinary post. See `standing` on MailboxMessage. */
+  standing?: boolean;
 }): string {
   return [
     '---',
@@ -93,6 +124,7 @@ export function formatMessage(message: {
     `subject: ${message.subject}`,
     `sent: ${message.sentAt}`,
     ...(message.run === null || message.run === undefined ? [] : [`run: ${message.run || 'true'}`]),
+    ...(message.standing ? ['standing: true'] : []),
     '---',
     '',
     message.body.trimEnd(),
@@ -114,7 +146,8 @@ export function parseMessage(raw: string, file: string): Omit<MailboxMessage, 'f
     subject: file.replace(/^[\d-]+--/, '').replace(/\.md$/, '').replace(/-/g, ' '),
     sentAt: '',
     body: raw.trim(),
-    run: null
+    run: null,
+    standing: false
   };
 
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
@@ -134,7 +167,31 @@ export function parseMessage(raw: string, file: string): Omit<MailboxMessage, 'f
     subject: field('subject') || fallback.subject,
     sentAt: field('sent'),
     body: body || fallback.body,
-    run: parseRun(field('run'))
+    run: parseRun(field('run')),
+    standing: parseStanding(field('standing'))
+  };
+}
+
+/**
+ * A message pasted into the panel WITH its header.
+ *
+ * The Face writes its post as a whole message, frontmatter then body, because README.md tells it
+ * to. The panel then wrapped all of that in a second header, so the Face's own `subject:` and
+ * `run:` landed in the body, where by design they mean nothing. `run:` could never arrive through
+ * the panel at all. Returns the pasted header's fields and the body under it, or null when the
+ * text does not open with a header.
+ */
+export function liftPastedHeader(
+  text: string
+): { subject: string; run: string | null; standing: boolean; body: string } | null {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text.replace(/^\s+/, ''));
+  if (!match) return null;
+  const parsed = parseMessage(match[0], '');
+  return {
+    subject: parsed.subject,
+    run: parsed.run,
+    standing: parsed.standing,
+    body: (match[2] ?? '').trim()
   };
 }
 

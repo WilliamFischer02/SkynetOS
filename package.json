@@ -14,6 +14,9 @@
     "app": "electron-vite build && electron-builder --win --dir && \"release/win-unpacked/SkynetOS.exe\"",
     "hooks:install": "node tools/install-hooks.mjs install",
     "hooks:uninstall": "node tools/install-hooks.mjs uninstall",
+    "face:bake": "vite-node --config vitest.config.ts tools/face-bake.ts",
+    "face:hook": "node tools/install-hooks.mjs install face",
+    "face:unhook": "node tools/install-hooks.mjs uninstall face",
     "sheet": "node tools/sheet-contact.mjs",
     "build": "npm run verify && electron-vite build && electron-builder --win nsis",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -40,6 +43,7 @@
     "pngjs": "^7.0.0",
     "typescript": "~5.9.3",
     "vite": "^5.4.11",
+    "vite-node": "^2.1.9",
     "vitest": "^2.1.9"
   },
   "dependencies": {
@@ -58,7 +62,7 @@
   "$deps": [
     "node-pty is in optionalDependencies because M3's embedded terminal will need it and nothing",
     "imports it yet. It has no working node-gyp toolchain on this machine, so it installs unbuilt.",
-    "electron-builder.yml therefore sets npmRebuild:false \u2014 the packaged app contains zero native",
+    "electron-builder.yml therefore sets npmRebuild:false — the packaged app contains zero native",
     "modules today. M3 must flip that back and rebuild node-pty against Electron's ABI.",
     "",
     "better-sqlite3 and keytar were REMOVED on 2026-09-09. node:sqlite in Electron 44 replaces",

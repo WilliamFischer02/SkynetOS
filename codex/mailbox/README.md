@@ -51,6 +51,13 @@ Filenames sort chronologically by construction: `2026-09-10T15-40-00-000--add-a-
 SkynetOS generates them; if you are writing one by hand, follow the same shape and the ordering
 takes care of itself.
 
+## Pasting a message whole
+
+Paste the Face's message into the panel as it is, header included. SkynetOS lifts the pasted
+header rather than wrapping a second one around it: its `subject:` fills an empty subject box, and
+its `run:` and `standing:` lines take effect. Before 2026-09-11 the panel buried the pasted header
+in the body, where it means nothing, so a `run:` message could never actually arrive through it.
+
 ## `run:` — a message that starts the work
 
 One optional field turns a note into an instruction:
@@ -83,6 +90,34 @@ The bounds (`docs/07-SECURITY.md`, `services/mail-dispatch.ts`): never elevated,
 hour, only nodes the board already declares, and the message is archived **before** the launch so
 it can never fire twice. `autoRunMail: false` in settings.json switches it off.
 
+## `standing:` — orders that outlast a session
+
+Mail is a queue: a message reaches the next session that opens, then it is archived and gone. A
+standing order has to reach every session until the Face changes its mind, so it lives in one
+file, `codex/face-brief.md`.
+
+```markdown
+---
+from: face
+to: hands
+subject: Standing orders
+standing: true
+---
+
+The whole of the standing orders, every time. This replaces what was there; it does not add to it.
+```
+
+On its next ten-second sweep, SkynetOS writes the body over `codex/face-brief.md` and archives the
+message. Every Hands session from then on opens with the orders inlined in its briefing, after
+who-it-is and before the mail, labelled as standing rather than new. Only the Hands get them.
+
+- **The Face owns the file.** The Hands never edit it and answer through `to-face/`. It is never
+  appended to: if it became a log it would stop being current, and a stale standing order is
+  worse than none.
+- **Nothing is lost.** Every earlier version is the body of a message in `archive/`, and the file
+  names the message it came from.
+- **It never launches anything**, even if the header also carries `run:`. It is state, not a task.
+
 ## If you are the HANDS, this is your job
 
 1. **On launch you are handed your post.** Unread `to-hands/` messages are folded into your session
@@ -96,10 +131,17 @@ it can never fire twice. `autoRunMail: false` in settings.json switches it off.
 
 ## If you are the FACE
 
-You cannot reach this directory. You do not need to: William has a panel that carries messages both
-ways in one click. When you want something done on the disk, say so plainly and in one block — it is
-going to be copied verbatim into `to-hands/`, so write it as an instruction to another agent rather
-than as conversation.
+You cannot write to this directory, and you cannot list it: GitHub robots-blocks `tree/` pages, and
+you can only fetch a URL that William pasted or that appeared in an earlier fetch result. What you
+CAN reach from a cold start is the repo's root page and one hop from it, so everything you need is
+put in one root-level file: **`FACE-BOOT.md`**. It carries the codex index, every unread message in
+`to-face/` inlined in full, what is broken on the board right now, and the Hands' state. It is
+regenerated on every commit (`npm run face:bake`, installed per clone with `npm run face:hook`).
+The repo is public, so the Hands put nothing into `to-face/` that the repo does not already expose.
+
+To reach the Hands, write one whole message, header included, and William pastes it into the panel.
+It is going to be read by another agent, so write it as an instruction rather than as conversation.
+Add `run: true` to have it start a session, or `standing: true` to replace your standing orders.
 
 ## What this does NOT do
 

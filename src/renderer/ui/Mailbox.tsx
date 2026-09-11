@@ -57,7 +57,8 @@ export function Mailbox(): React.JSX.Element | null {
       // The Face has no way to write here itself, so a message put in by hand is FROM the Face
       // as far as the Hands are concerned — that is exactly what carrying it across means.
       from: side === 'hands' ? 'face' : 'hands',
-      subject: subject.trim() || 'No subject',
+      // Empty is fine: a pasted header's own subject: fills it, and failing that, "No subject".
+      subject: subject.trim(),
       body: body.trim()
     });
     if (!result.ok) { toast('fault', result.error ?? 'COULD NOT SEND'); return; }
@@ -156,7 +157,7 @@ export function Mailbox(): React.JSX.Element | null {
             rows={6}
             placeholder={
               side === 'hands'
-                ? 'Paste what the Face decided. It lands in codex/mailbox/to-hands/ and the next session opens holding it.'
+                ? 'Paste the Face\'s message whole, header included: its subject:, run: and standing: lines are honoured. It lands in codex/mailbox/to-hands/ and the next session opens holding it.'
                 : 'Anything you want the Face told next time you talk to it.'
             }
             value={body}

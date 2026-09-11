@@ -1,4 +1,5 @@
 import { existsSync, globSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { pathExists, pathInfo, type PathInfo } from './which.js';
 import { isAbsolute, join, normalize, resolve as resolvePath, dirname, basename } from 'node:path';
 import { app } from 'electron';
@@ -57,7 +58,7 @@ export function skynetRoot(): string {
 export function expandPath(raw: string): string {
   let out = raw.trim().replace(/\\/g, '/');
   if (out.startsWith('~/') || out === '~') {
-    out = join(app.getPath('home'), out.slice(1)).replace(/\\/g, '/');
+    out = join(app ? app.getPath('home') : homedir(), out.slice(1)).replace(/\\/g, '/');
   }
   /*
    * Before the generic environment pass, so a stray SKYNET variable cannot shadow it — and only
@@ -225,8 +226,9 @@ function resolveUrlTarget(raw: string): TargetInfo {
   return { state: 'ok', raw, resolved: check.normalised, detail: null, kind: 'url' };
 }
 
+/** Derived from `skynetRoot()`, so it survives the absence of Electron the same way. */
 function boardRoot(): string {
-  return app.isPackaged ? join(process.resourcesPath, 'board') : join(app.getAppPath(), 'board');
+  return join(skynetRoot(), 'board');
 }
 
 function resolveBoardFile(raw: string): TargetInfo {

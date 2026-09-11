@@ -6,6 +6,7 @@ import { callAsAgent, registerIpc } from './ipc.js';
 import { startControlServer, stopControlServer } from './services/control-server.js';
 import { writeMcpConfig } from './services/mcp-config.js';
 import { dispatchMail } from './services/mail-dispatch.js';
+import { applyStandingOrders } from './services/face-brief.js';
 import { getSettings } from './services/settings.js';
 import { boardRoot, loadBoard, pruneSnapshots } from './services/board-store.js';
 import { closeDb, reapDeadSessions } from './services/db.js';
@@ -1307,6 +1308,11 @@ app.whenReady().then(() => {
    * something whose other end is a human typing into a chat window.
    */
   const dispatch = setInterval(() => {
+    // Standing orders first, so a `standing:` message is never also considered for `run:`.
+    for (const result of applyStandingOrders()) {
+      if (result.ok) console.log(`[mail] standing orders replaced from ${result.file}`);
+      else console.warn(`[mail] standing orders NOT applied from ${result.file}: ${result.error}`);
+    }
     void dispatchMail().then((results) => {
       for (const result of results) {
         const what = `"${result.subject}" (${result.file})`;

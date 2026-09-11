@@ -517,7 +517,8 @@ const TOOLS = [
       },
       required: ['side', 'subject', 'body']
     },
-    run: ({ side, subject, body }) => call('mailbox:send', [side, { subject, body }])
+    // `from` was never sent, so every message an agent wrote was signed "undefined".
+    run: ({ side, subject, body }) => call('mailbox:send', [side, { from: 'hands', subject, body }])
   },
   {
     name: 'mailbox_archive',

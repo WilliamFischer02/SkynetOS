@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatMessage, parseMessage, parseRun, type MailSide } from '../packages/shared/mailbox.js';
+import {
+  formatMessage,
+  liftPastedHeader,
+  normaliseSide,
+  parseMessage,
+  parseRun,
+  type MailSide
+} from '../packages/shared/mailbox.js';
 
 /**
  * The `run:` field, which is the difference between a note and an instruction.
@@ -67,6 +74,65 @@ describe('a message survives a round trip', () => {
     // A malformed message must never be more powerful than a well-formed one.
     const parsed = parseMessage('Just some prose with no frontmatter at all.', '2026-01-01--note.md');
     expect(parsed.run).toBeNull();
+    expect(parsed.standing).toBe(false);
     expect(parsed.body).toContain('Just some prose');
+  });
+
+  it('carries the standing flag, and writes none for ordinary post', () => {
+    expect(parseMessage(formatMessage({ ...base, standing: true }), 'x.md').standing).toBe(true);
+    expect(formatMessage(base)).not.toContain('standing:');
+  });
+
+  it('does not read a "standing" mentioned in the body as a flag', () => {
+    const written = formatMessage({ ...base, body: 'standing: true\n\nThese are my standing orders.' });
+    expect(parseMessage(written, 'x.md').standing).toBe(false);
+  });
+});
+
+describe('normaliseSide', () => {
+  it.each([
+    ['hands', 'hands'], ['to-hands', 'hands'], ['TO-HANDS', 'hands'],
+    ['face', 'face'], ['to-face', 'face'], ['to-head', 'face'], ['head', 'face']
+  ])('reads %s as %s', (raw, side) => {
+    // `to-head` is what the MCP tools say. It used to reach the Face's directory only by
+    // falling through, with `to: to-head` written into the header.
+    expect(normaliseSide(raw)).toBe(side);
+  });
+
+  it.each(['', 'hand', 'to-everyone', '../to-hands'])('refuses %j rather than guessing', (raw) => {
+    expect(normaliseSide(raw)).toBeNull();
+  });
+});
+
+describe('a message pasted with its header', () => {
+  const pasted = [
+    '---',
+    'from: face',
+    'to: hands',
+    'subject: Fix the lighting regression',
+    'run: true',
+    '---',
+    '',
+    'Shadow acne on sloped surfaces.'
+  ].join('\n');
+
+  it('keeps the header\'s subject and run flag instead of burying them in the body', () => {
+    const lifted = liftPastedHeader(pasted);
+    expect(lifted?.subject).toBe('Fix the lighting regression');
+    expect(lifted?.run).toBe('');
+    expect(lifted?.body).toBe('Shadow acne on sloped surfaces.');
+  });
+
+  it('carries standing: across', () => {
+    expect(liftPastedHeader(pasted.replace('run: true', 'standing: true'))?.standing).toBe(true);
+  });
+
+  it('tolerates leading whitespace from a clipboard', () => {
+    expect(liftPastedHeader(`\n\n  ${pasted}`)?.subject).toBe('Fix the lighting regression');
+  });
+
+  it('leaves prose alone, including a rule further down', () => {
+    expect(liftPastedHeader('Just a note.')).toBeNull();
+    expect(liftPastedHeader('A note.\n\n---\nrun: true\n---\n')).toBeNull();
   });
 });

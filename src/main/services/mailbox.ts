@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync,
 import { join } from 'node:path';
 import { boardRoot } from './board-store.js';
 import type { MailboxMessage, MailSide } from '@shared/mailbox.js';
-import { formatMessage, messageFileName, parseMessage } from '@shared/mailbox.js';
+import { formatMessage, liftPastedHeader, messageFileName, normaliseSide, parseMessage } from '@shared/mailbox.js';
 
 /**
  * The mailbox: how the Face and the Hands talk to each other.
@@ -62,9 +62,11 @@ function ensureDirs(): void {
  * raw text rather than being skipped — a message you cannot read is still a message you were sent,
  * and silently dropping it is the worst possible failure for a mailbox.
  */
-export function listMail(side: MailSide): MailboxMessage[] {
+export function listMail(side: MailSide | string): MailboxMessage[] {
+  const which = normaliseSide(side);
+  if (!which) return [];
   ensureDirs();
-  const dir = sideDir(side);
+  const dir = sideDir(which);
   let files: string[];
   try {
     files = readdirSync(dir).filter((f) => f.endsWith('.md')).sort();
@@ -86,7 +88,7 @@ export function listMail(side: MailSide): MailboxMessage[] {
       mtimeMs = statSync(full).mtimeMs;
     } catch { /* a file that vanished mid-read contributes its parse and no mtime */ }
 
-    out.push({ ...parseMessage(raw, file), file, to: side, mtimeMs });
+    out.push({ ...parseMessage(raw, file), file, to: which, mtimeMs });
   }
   return out;
 }
@@ -103,14 +105,43 @@ export function unreadCount(side: MailSide): number {
  * but the names themselves.
  */
 export function sendMail(
-  to: MailSide,
-  message: { from: string; subject: string; body: string }
+  to: MailSide | string,
+  message: { from?: string; subject: string; body: string }
 ): { ok: boolean; file?: string; error?: string } {
+  const side = normaliseSide(to);
+  if (!side) return { ok: false, error: `NO SUCH MAILBOX — "${to}". Use "to-hands" or "to-face".` };
   ensureDirs();
+
+  /*
+   * A pasted header is lifted, not wrapped.
+   *
+   * The Face writes whole messages, header included, and William pastes them into the panel as
+   * they are. Wrapping that in a second header buried the Face's `run:` in the body, where it
+   * means nothing, so an autonomous run could never arrive through the panel. `run:` and
+   * `standing:` only mean something to the Hands, so they are kept only on post going that way.
+   * This grants nothing new: anything that can call this could already write a flagged file
+   * into to-hands/ directly.
+   */
+  const lifted = liftPastedHeader(message.body);
+  const subject = message.subject.trim() || lifted?.subject || 'No subject';
+  const body = lifted ? lifted.body : message.body;
+  if (!body.trim()) return { ok: false, error: 'NOTHING TO SEND — the message has a header and no body' };
+
   const now = new Date();
-  const file = join(sideDir(to), messageFileName(now, message.subject));
+  const file = join(sideDir(side), messageFileName(now, subject));
   try {
-    writeFileSync(file, formatMessage({ ...message, to, sentAt: now.toISOString() }), 'utf8');
+    writeFileSync(
+      file,
+      formatMessage({
+        from: message.from?.trim() || 'unknown',
+        to: side,
+        subject,
+        sentAt: now.toISOString(),
+        body,
+        ...(side === 'hands' && lifted ? { run: lifted.run, standing: lifted.standing } : {})
+      }),
+      'utf8'
+    );
     return { ok: true, file };
   } catch (err) {
     return { ok: false, error: `COULD NOT WRITE ${file} — ${(err as Error).message}` };
@@ -124,12 +155,14 @@ export function sendMail(
  * destruction, and a mailbox is exactly where you want the history: "what did the Face actually
  * ask for" is a question you ask weeks later. The archive is chronological and git-tracked.
  */
-export function archiveMail(side: MailSide, file: string): { ok: boolean; error?: string } {
+export function archiveMail(side: MailSide | string, file: string): { ok: boolean; error?: string } {
+  const which = normaliseSide(side);
+  if (!which) return { ok: false, error: `NO SUCH MAILBOX — "${side}". Use "to-hands" or "to-face".` };
   ensureDirs();
   // The filename comes from a listing, but it crosses IPC — so it is re-derived rather than
   // trusted. A `..` here would be a path traversal into the repo.
   const safe = file.replace(/[\\/]/g, '');
-  const from = join(sideDir(side), safe);
+  const from = join(sideDir(which), safe);
   if (!existsSync(from)) return { ok: false, error: `NO SUCH MESSAGE — ${safe}` };
   try {
     renameSync(from, join(archiveDir(), safe));
@@ -166,11 +199,14 @@ export function mailForBriefing(): string | null {
   const mail = listMail('hands');
   if (!mail.length) return null;
 
+  // Absolute, because a chip's working directory need not be this repo: U3 runs from C:/dev, and
+  // "codex/mailbox/" relative to that is a directory that does not exist.
+  const where = mailboxRoot().replace(/\\/g, '/');
   const lines: string[] = [];
-  lines.push(`You have ${mail.length} unread message${mail.length === 1 ? '' : 's'} in codex/mailbox/to-hands/.`);
+  lines.push(`You have ${mail.length} unread message${mail.length === 1 ? '' : 's'} in ${where}/to-hands/.`);
   lines.push('Read them first, act on what they ask, and reply by writing a file into');
-  lines.push('codex/mailbox/to-face/ (the format is in codex/mailbox/README.md). Move anything you have');
-  lines.push('dealt with into codex/mailbox/archive/ — do not delete it.');
+  lines.push(`${where}/to-face/ (the format is in ${where}/README.md). Move anything you have`);
+  lines.push(`dealt with into ${where}/archive/ — do not delete it.`);
   lines.push('');
   for (const message of mail) {
     lines.push(`  - ${message.file} — "${message.subject}" from ${message.from}`);

@@ -1,5 +1,6 @@
 import type { BoardNode } from '@shared/types.js';
 import type { MailboxMessage } from '@shared/mailbox.js';
+import { pickHandsNode } from '@shared/face-brief.js';
 import { loadBoard } from './board-store.js';
 import { archiveMail, listMail } from './mailbox.js';
 import { startSession } from './session-manager.js';
@@ -67,13 +68,8 @@ export function findHandsNode(boardId: string, wanted: string): BoardNode | null
   if (!load.ok) return null;
 
   if (wanted) return load.board.nodes.find((n) => n.id === wanted) ?? null;
-
-  const agents = load.board.nodes.filter((n) => n.kind === 'agent.code');
-  return (
-    agents.find((n) => n.tags?.includes('hands')) ??
-    agents.find((n) => /jarvis/i.test(n.name)) ??
-    null
-  );
+  // The same search the briefing uses to decide who gets the standing orders.
+  return pickHandsNode(load.board.nodes);
 }
 
 /** How a message reads to the session that receives it. */
@@ -99,7 +95,9 @@ export function taskFromMessage(message: MailboxMessage): string {
 export async function dispatchMail(boardId = 'root'): Promise<DispatchResult[]> {
   if (getSettings().autoRunMail === false) return [];
 
-  const flagged = listMail('hands').filter((m) => m.run !== null);
+  // A standing order is state, not a task. services/face-brief.ts applies it, and it never launches
+  // anything, whatever else its header says.
+  const flagged = listMail('hands').filter((m) => m.run !== null && !m.standing);
   if (!flagged.length) return [];
 
   const results: DispatchResult[] = [];

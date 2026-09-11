@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { isPlanId, type PlanId } from '@shared/plans.js';
@@ -83,15 +84,30 @@ const DEFAULTS: Settings = {
 
 let cached: Settings | null = null;
 
+/**
+ * Electron's userData inside the app, and the same folder by its Windows name outside it.
+ *
+ * `npm run face:bake` resolves every board target through target-resolver.ts, which asks
+ * `trustedRoots()`, which asks this, with no Electron in the process. `%APPDATA%/SkynetOS` is
+ * what userData is for a productName of SkynetOS, so it reads the real file rather than a guess.
+ */
+function userDataDir(): string {
+  if (app) return app.getPath('userData');
+  return join(process.env['APPDATA'] ?? join(homedir(), 'AppData', 'Roaming'), 'SkynetOS');
+}
+
 function settingsFile(): string {
-  return join(app.getPath('userData'), 'settings.json');
+  return join(userDataDir(), 'settings.json');
 }
 
 export function getSettings(): Settings {
   if (cached) return cached;
   const file = settingsFile();
   if (!existsSync(file)) {
-    mkdirSync(app.getPath('userData'), { recursive: true });
+    // Outside the app this is read-only: a build tool has no business creating the user's
+    // settings file, and the defaults are the same answer the app would write.
+    if (!app) return { ...DEFAULTS };
+    mkdirSync(userDataDir(), { recursive: true });
     writeFileSync(file, JSON.stringify(DEFAULTS, null, 2));
     console.log(`[settings] wrote defaults to ${file}`);
     cached = { ...DEFAULTS };
@@ -137,7 +153,7 @@ export function setUsagePlan(plan: PlanId | null, tokenBudget: number | null): {
       : null
   };
   try {
-    mkdirSync(app.getPath('userData'), { recursive: true });
+    mkdirSync(userDataDir(), { recursive: true });
     writeFileSync(settingsFile(), JSON.stringify(next, null, 2) + '\n', 'utf8');
     cached = next;
     return { ok: true };
@@ -160,8 +176,9 @@ export function trustedRoots(): string[] {
   const settings = getSettings();
   return [
     ...settings.devRoots,
-    app.getPath('home'),
-    app.isPackaged ? process.resourcesPath : app.getAppPath()
+    app ? app.getPath('home') : homedir(),
+    // Outside the app the working directory is the repo: see skynetRoot() in target-resolver.ts.
+    app ? (app.isPackaged ? process.resourcesPath : app.getAppPath()) : process.cwd()
   ].map(normaliseRoot);
 }
 
