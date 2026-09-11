@@ -239,7 +239,8 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
     { key: 'path', label: 'Executable', control: 'path-file', required: true, placeholder: 'C:/dev/tool/build/tool.exe', filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1'] }] },
     { key: 'args', label: 'Arguments', control: 'tags', placeholder: '--flag, value' },
     { key: 'cwd', label: 'Working directory', control: 'path-dir' },
-    { key: 'confirmBeforeLaunch', label: 'Confirm before launch', control: 'boolean', help: 'On by default. Leave it on for anything outside a dev root.' }
+    { key: 'confirmBeforeLaunch', label: 'Confirm before launch', control: 'boolean', help: 'On by default. Leave it on for anything outside a dev root.' },
+    { key: 'elevated', label: 'Run as administrator', control: 'boolean', help: 'Windows shows a UAC prompt every launch — that is unavoidable, because SkynetOS itself is not elevated and no process can grant itself privileges. Asked for confirmation every time regardless of the setting above.' }
   ],
   'file.artifact': [
     { key: 'glob', label: 'Artifact glob', control: 'glob', required: true, placeholder: 'C:/dev/TheStalker/build/libs/*.jar', help: 'Resolves to the newest match, so the node always points at the current build.' },

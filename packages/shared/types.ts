@@ -155,6 +155,18 @@ export interface BoardNode {
   // file.exe
   args?: string[];
   confirmBeforeLaunch?: boolean;
+  /**
+   * Ask Windows to start this program as administrator.
+   *
+   * Opt in per node, never inherited and never a default — docs/07: "elevation is user-only", and
+   * SkynetOS itself stays non-elevated. Setting this means a UAC prompt on every single launch,
+   * which is not avoidable for an app that is not itself elevated, and is the correct trade: the
+   * alternative is a board editor running as administrator all day.
+   *
+   * Confirmed every time regardless of `confirmBeforeLaunch`, because the question it answers —
+   * "do you want to run this at all" — is not the question elevation asks.
+   */
+  elevated?: boolean;
 
   // service.process
   startCommand?: string;

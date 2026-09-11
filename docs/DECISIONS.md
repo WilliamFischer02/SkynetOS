@@ -1301,3 +1301,46 @@ Tool, Python, winget). The rest — Calculator, Photos, Clock among the user-fac
 alias at all and can only be launched as `shell:AppsFolder\<PackageFamilyName>!<AppId>` via
 explorer. That needs a target kind, a resolver branch and a picker, so it is offered rather than
 assumed.
+
+## 2026-09-10 — "Broken" means it does not resolve, and admin is a per-node opt-in
+
+William: "Still not working - I need to be able to link any exe anywhere on my drive and the
+program can try to launch it as admin; if I need to change the advanced security settings of the
+file to get this to work please provide me detailed instructions."
+
+No security settings needed changing. Three unrelated things were being read as one problem.
+
+**1. Some paths were simply wrong.** `C:/Program Files/Anki/anki.exe` (Anki is not installed),
+`C:/dev/TruthQuestRetro/build/Release/TruthQuestRetro.exe` (not built), and
+`C:/Program Files (x86)/Minecraft Launcher/MinecraftLauncher.exe` — which is on this machine at
+`C:/XboxGames/Minecraft Launcher/Content/Minecraft.exe`. Those rendered broken because they ARE
+broken, which is prime directive 1 working. The Minecraft path is now the real one.
+
+**2. `outside-dev-root` was being rendered as a fault.** This was the actual bug. A node pointing
+at `C:/Program Files/…/WINWORD.EXE` resolves, launches, and worked the whole time — but drew the
+broken-hardware overlay, went fault-red on the minimap, and marked its own input field bad.
+
+The cause is the shape this codebase keeps getting bitten by: one rule written down twice. Every
+BEHAVIOURAL call site wrote the exception by hand — `isBroken(t) && t.state !== 'outside-dev-root'`,
+four times across three files — and the three RENDERING sites did not. So `isBroken` now means what
+it says (the target does not resolve), `needsConfirmation` carries the policy half, and every hand-
+written exception collapsed away. docs/07 is unchanged: outside a dev root is still confirmed on
+every activation. It was always a statement about ACTIVATION, never about resolution.
+
+**3. There was no way to launch anything elevated.** `file.exe` nodes now take `elevated: true`,
+surfaced as "Run as administrator" in the editor. It goes through `Start-Process -Verb RunAs`
+because a process cannot raise its own privileges and cannot hand them to a child — elevation is
+brokered by the Application Information service, and there is no `spawn` option for it. SkynetOS
+therefore stays non-elevated and asks Windows for an elevated CHILD, which is docs/07's position
+and costs a UAC prompt every launch. That is not avoidable for an app that is not itself elevated,
+and the alternative — a board editor running as administrator all day — is worse.
+
+Elevated launches are confirmed EVERY time regardless of `confirmBeforeLaunch`, because "do you
+want to run this at all" and "do you want to run this as administrator" are different questions.
+
+The command builder lives in `launch-script.ts` beside the other pure argv builders so it can be
+read without spawning anything. Its test strips every single-quoted region and asserts that what
+remains — the actual PowerShell code — contains exactly one statement and none of the caller's
+characters. Verified by swapping in a naive quoter and watching it fail. Counting occurrences of
+"Start-Process" would have been the wrong test: an injected one appears in the command string
+precisely because it is safely inside the quoted path.

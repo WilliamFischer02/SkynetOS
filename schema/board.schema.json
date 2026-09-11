@@ -143,7 +143,7 @@
         "pos"
       ],
       "additionalProperties": false,
-      "$strictness": "additionalProperties:false is deliberate and matches $defs/edge. Without it a typo like \"cdw\" instead of \"cwd\" validates clean and the node silently fails to resolve at runtime — the exact class of bug this schema exists to catch. Every field a node may carry is declared below; the allOf branch below only adds `required` (conditionally, via its provisional gate), never new properties, so it does not interact with this.",
+      "$strictness": "additionalProperties:false is deliberate and matches $defs/edge. Without it a typo like \"cdw\" instead of \"cwd\" validates clean and the node silently fails to resolve at runtime \u2014 the exact class of bug this schema exists to catch. Every field a node may carry is declared below; the allOf branch below only adds `required` (conditionally, via its provisional gate), never new properties, so it does not interact with this.",
       "properties": {
         "id": {
           "type": "string",
@@ -152,7 +152,7 @@
         "designator": {
           "type": "string",
           "pattern": "^[A-Z]{1,2}[0-9]{1,3}$",
-          "description": "U4, J2, D7 — auto-assigned per room"
+          "description": "U4, J2, D7 \u2014 auto-assigned per room"
         },
         "kind": {
           "enum": [
@@ -198,7 +198,7 @@
               "maximum": 512
             }
           },
-          "description": "In tiles. Defaults per kind if omitted. Scalable from the node editor, by dragging the corner handle in Edit Board mode, or with Shift+arrows. The interactive cap is per kind — see maxFootprintFor() in packages/shared/types.ts — because a group.zone is a bracket drawn around a cluster and is meant to span a room, while a component is an object you pick out at a glance."
+          "description": "In tiles. Defaults per kind if omitted. Scalable from the node editor, by dragging the corner handle in Edit Board mode, or with Shift+arrows. The interactive cap is per kind \u2014 see maxFootprintFor() in packages/shared/types.ts \u2014 because a group.zone is a bracket drawn around a cluster and is meant to span a room, while a component is an object you pick out at a glance."
         },
         "tags": {
           "type": "array",
@@ -212,7 +212,7 @@
         "provisional": {
           "type": "boolean",
           "default": false,
-          "description": "Unpopulated footprint — a TODO on the board"
+          "description": "Unpopulated footprint \u2014 a TODO on the board"
         },
         "codexRef": {
           "type": "string",
@@ -259,7 +259,7 @@
               "pip-reqs"
             ]
           },
-          "description": "Named update steps to run before the session starts. Ids only — the shell text lives in packages/shared/prime-steps.ts, because docs/07 forbids executable strings in board JSON. Omit for the safe default; [] to prime nothing."
+          "description": "Named update steps to run before the session starts. Ids only \u2014 the shell text lives in packages/shared/prime-steps.ts, because docs/07 forbids executable strings in board JSON. Omit for the safe default; [] to prime nothing."
         },
         "addDirs": {
           "type": "array",
@@ -380,7 +380,7 @@
         },
         "relation": {
           "type": "string",
-          "description": "A board id. On a group.zone, draws the zone outline in that board's signal colour, marking this cluster as related to that room. Colour only — no behaviour."
+          "description": "A board id. On a group.zone, draws the zone outline in that board's signal colour, marking this cluster as related to that room. Colour only \u2014 no behaviour."
         },
         "image": {
           "type": "string",
@@ -388,7 +388,7 @@
         },
         "logo": {
           "type": "string",
-          "description": "LOGO. A smaller image centred on the face, aspect ratio preserved, with its own bevel so it reads as a badge sitting on the wallpaper. Sized by logoBoxTiles() in packages/shared/types.ts — proportional to the footprint, always a whole number of tiles."
+          "description": "LOGO. A smaller image centred on the face, aspect ratio preserved, with its own bevel so it reads as a badge sitting on the wallpaper. Sized by logoBoxTiles() in packages/shared/types.ts \u2014 proportional to the footprint, always a whole number of tiles."
         },
         "showDesignator": {
           "type": "boolean",
@@ -439,7 +439,7 @@
         "pulseGlow": {
           "type": "boolean",
           "default": false,
-          "description": "Animate the wallpaper as a wave of energy travelling outward from the node's centre. A palette shift along the room's own six-colour brightness ramp, not a translucent glow — see src/renderer/board/glow.ts. Costs one set of precomputed frames per image; off under reducedMotion."
+          "description": "Animate the wallpaper as a wave of energy travelling outward from the node's centre. A palette shift along the room's own six-colour brightness ramp, not a translucent glow \u2014 see src/renderer/board/glow.ts. Costs one set of precomputed frames per image; off under reducedMotion."
         },
         "textColor": {
           "enum": [
@@ -453,7 +453,7 @@
             "warn",
             "fault"
           ],
-          "description": "Colour of this node's printed text. A palette token, never a hex string — signal/mask-dark/mask-light mean something different in every room, and a hex value can be off-palette."
+          "description": "Colour of this node's printed text. A palette token, never a hex string \u2014 signal/mask-dark/mask-light mean something different in every room, and a hex value can be off-palette."
         },
         "textStroke": {
           "enum": [
@@ -519,18 +519,23 @@
             "socket",
             "castellated"
           ],
-          "description": "The copper that hangs off the edge of this node — pin legs, connector fingers, mounting tabs, a socket ring, a pad array. Drawn in a margin OUTSIDE the footprint, like the nameplate, so collision and routing are unaffected."
+          "description": "The copper that hangs off the edge of this node \u2014 pin legs, connector fingers, mounting tabs, a socket ring, a pad array. Drawn in a margin OUTSIDE the footprint, like the nameplate, so collision and routing are unaffected."
         },
         "priority": {
           "type": "integer",
           "minimum": 0,
           "maximum": 5,
-          "description": "How important this node is, shown as physical height: each level is two pixels of long shadow cast down and to the right. 0 is flat, 5 sits ten pixels proud. Deliberately thin — it is a hierarchy cue, not a skyline."
+          "description": "How important this node is, shown as physical height: each level is two pixels of long shadow cast down and to the right. 0 is flat, 5 sits ten pixels proud. Deliberately thin \u2014 it is a hierarchy cue, not a skyline."
+        },
+        "elevated": {
+          "type": "boolean",
+          "default": false,
+          "description": "file.exe only: ask Windows to start this program as administrator. Opt in per node; a UAC prompt appears on every launch. SkynetOS itself never runs elevated \u2014 it asks Windows to start an elevated child. See docs/07-SECURITY.md."
         }
       },
       "allOf": [
         {
-          "$comment": "A node must declare its target UNLESS it is provisional.\n\nEvery branch below says \"a node of this kind points at something real, so name the thing\" — a store.repo has a path, a link.url has a url, an agent.code has a cwd and a launch. That is prime directive 1 and it stays.\n\nBut `provisional: true` is the board saying, in the one word it has for it, that this node does not point at anything yet: it renders as an unpopulated footprint, a TODO printed on the board, which is a real PCB convention and the whole reason the flag exists. Demanding a target from a node that has openly declared it has none is a contradiction, and it had a cost: services/node-factory.ts creates every new node unbound and provisional by design, so the \"+\" palette could not add a link, a repo, a backdrop, a build or an agent at all. The edit was rejected before it reached the board.\n\nSo the requirement is conditional on the claim. Bind it and it must resolve; mark it a TODO and it must look like one.",
+          "$comment": "A node must declare its target UNLESS it is provisional.\n\nEvery branch below says \"a node of this kind points at something real, so name the thing\" \u2014 a store.repo has a path, a link.url has a url, an agent.code has a cwd and a launch. That is prime directive 1 and it stays.\n\nBut `provisional: true` is the board saying, in the one word it has for it, that this node does not point at anything yet: it renders as an unpopulated footprint, a TODO printed on the board, which is a real PCB convention and the whole reason the flag exists. Demanding a target from a node that has openly declared it has none is a contradiction, and it had a cost: services/node-factory.ts creates every new node unbound and provisional by design, so the \"+\" palette could not add a link, a repo, a backdrop, a build or an agent at all. The edit was rejected before it reached the board.\n\nSo the requirement is conditional on the claim. Bind it and it must resolve; mark it a TODO and it must look like one.",
           "if": {
             "not": {
               "properties": {
@@ -758,7 +763,7 @@
         },
         "relation": {
           "type": "string",
-          "description": "A board id. Draws this trace's inner strand in that board's signal colour, so a wire that leads to another room carries that room's identity. Colour only — it changes nothing about routing or behaviour."
+          "description": "A board id. Draws this trace's inner strand in that board's signal colour, so a wire that leads to another room carries that room's identity. Colour only \u2014 it changes nothing about routing or behaviour."
         }
       }
     }

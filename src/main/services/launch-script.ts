@@ -284,3 +284,52 @@ export function elevatedArgv(
     `-WorkingDirectory ${psQuote(cwd)} -ArgumentList ${psQuote(argumentList)}`;
   return { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', command] };
 }
+
+/**
+ * The argv that asks Windows to start a PROGRAM elevated.
+ *
+ * `elevatedArgv` above does this for a terminal running our staged script; this does it for an
+ * arbitrary executable a `file.exe` node points at.
+ *
+ * ── Why PowerShell and not spawn ──────────────────────────────────────────────────────────────
+ *
+ * A process cannot raise its own privileges, and it cannot hand them to a child either. Elevation
+ * goes through the Application Information service, which shows the UAC consent dialog and starts
+ * the process on your behalf; `Start-Process -Verb RunAs` is how you ask. There is no `spawn`
+ * option for "and also be administrator".
+ *
+ * This is also why SkynetOS stays non-elevated (docs/07): it asks Windows for an elevated CHILD
+ * rather than running elevated and inheriting that everywhere. The cost is a UAC prompt on every
+ * launch, which CLAUDE.md already warns about and which cannot be avoided by an app that is not
+ * itself elevated. The alternative is a board editor running as administrator all day.
+ */
+export function elevatedProgramArgv(
+  exePath: string,
+  args: readonly string[],
+  cwd: string
+): { file: string; args: string[] } {
+  /*
+   * `-ArgumentList` is omitted entirely when there are none. Passing an empty list makes
+   * Start-Process fail with "Cannot validate argument on parameter 'ArgumentList'", and that
+   * surfaces as a launch silently not happening — the exact failure mode this codebase has spent
+   * more time on than any other.
+   */
+  const argumentList = args.length
+    ? ` -ArgumentList ${args.map((a) => psQuote(a)).join(', ')}`
+    : '';
+  const command =
+    `Start-Process -FilePath ${psQuote(toWindowsPath(exePath))} -Verb RunAs ` +
+    `-WorkingDirectory ${psQuote(toWindowsPath(cwd))}${argumentList}`;
+  return { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', command] };
+}
+
+/**
+ * Board paths are stored with forward slashes; Windows wants back ones.
+ *
+ * Spelled this way because the obvious `.replace(/\//g, '\')` literal has been mangled three
+ * times by tools that eat backslashes — see the landmine note in handoff.md.
+ */
+const BACKSLASH = String.fromCharCode(92);
+export function toWindowsPath(p: string): string {
+  return p.split('/').join(BACKSLASH);
+}

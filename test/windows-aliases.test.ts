@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pathExists, pathInfo } from '../src/main/services/which.js';
+import { isBroken, needsConfirmation, type TargetInfo } from '../packages/shared/targets.js';
 
 /**
  * Windows App Execution Aliases, and why `existsSync` must never be asked about one.
@@ -106,5 +107,45 @@ describe.runIf(onWindows && findAlias() !== null)('an App Execution Alias', () =
   it('reports no size, rather than the size of the reparse buffer', () => {
     // 93 bytes is not the size of Notepad. Showing it beside a Launch button is a confident lie.
     expect(pathInfo(alias)!.sizeBytes).toBe(0);
+  });
+});
+
+/**
+ * ── "Broken" means it does not resolve ───────────────────────────────────────────────────────
+ *
+ * Reported: "I need to be able to link any exe anywhere on my drive... so the program CAN show
+ * representations of any exe I can launch from within the program."
+ *
+ * It could launch them all along. `outside-dev-root` was lumped in with the states that mean "this
+ * target does not exist", so a node pointing at `C:/Program Files/…/WINWORD.EXE` drew the
+ * broken-hardware overlay, went fault-red on the minimap and marked its own input field bad — for
+ * a program that runs perfectly. Every BEHAVIOURAL call site wrote the exception out by hand
+ * (`isBroken(t) && t.state !== 'outside-dev-root'`, four times, four files); the three RENDERING
+ * sites did not. One rule written down twice, again.
+ */
+describe('outside a dev root is a policy, not a fault', () => {
+  const at = (state: TargetInfo['state']): TargetInfo =>
+    ({ state, raw: 'C:/Program Files/Thing/thing.exe', resolved: 'C:/Program Files/Thing/thing.exe', detail: null });
+
+  it('does not call a resolvable target broken', () => {
+    expect(isBroken(at('outside-dev-root'))).toBe(false);
+  });
+
+  it('still calls a genuinely unresolvable target broken', () => {
+    for (const state of ['missing', 'invalid', 'unknown'] as const) {
+      expect(isBroken(at(state)), `${state} should still render as broken`).toBe(true);
+    }
+  });
+
+  it('leaves the happy states alone', () => {
+    expect(isBroken(at('ok'))).toBe(false);
+    expect(isBroken(at('none'))).toBe(false);
+  });
+
+  it('asks for confirmation exactly where docs/07 requires it', () => {
+    expect(needsConfirmation(at('outside-dev-root'))).toBe(true);
+    for (const state of ['ok', 'none', 'missing', 'invalid', 'unknown'] as const) {
+      expect(needsConfirmation(at(state)), `${state} must not prompt`).toBe(false);
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLaunchScript } from '../src/main/services/launch-script.js';
+import { buildLaunchScript, elevatedProgramArgv } from '../src/main/services/launch-script.js';
 import { DEFAULT_PRIME, PRIME_STEPS, normalisePrime, primeStepsFor } from '../packages/shared/prime-steps.js';
 
 /**
@@ -194,5 +194,97 @@ describe('the prime step registry', () => {
     expect(PRIME_STEPS['npm-update'].mutates).toBe(true);
     expect(PRIME_STEPS['pip-reqs'].mutates).toBe(true);
     expect(PRIME_STEPS['npm-audit'].mutates).toBe(false);
+  });
+});
+
+/**
+ * ── Launching a program as administrator ─────────────────────────────────────────────────────
+ *
+ * William: "I need to be able to link any exe anywhere on my drive and the program can try to
+ * launch it as admin."
+ *
+ * A process cannot raise its own privileges and cannot hand them to a child, so this goes through
+ * `Start-Process -Verb RunAs` — there is no `spawn` option for "and also be administrator". The
+ * command string is built here rather than in shell-opener so it can be read without spawning
+ * anything, which is the only way to check quoting.
+ */
+describe('elevatedProgramArgv', () => {
+  const BACKSLASH = String.fromCharCode(92);
+
+  it('asks Windows to elevate, rather than trying to elevate itself', () => {
+    const { file, args } = elevatedProgramArgv('C:/Program Files/Anki/anki.exe', [], 'C:/Program Files/Anki');
+    expect(file).toBe('powershell.exe');
+    expect(args.join(' ')).toContain('-Verb RunAs');
+    expect(args.join(' ')).toContain('Start-Process');
+  });
+
+  it('converts board paths to Windows separators', () => {
+    const { args } = elevatedProgramArgv('C:/Program Files/Anki/anki.exe', [], 'C:/Program Files/Anki');
+    expect(args.join(' ')).toContain(`C:${BACKSLASH}Program Files${BACKSLASH}Anki${BACKSLASH}anki.exe`);
+  });
+
+  it('omits -ArgumentList entirely when there are no arguments', () => {
+    /*
+     * An empty list makes Start-Process fail with "Cannot validate argument on parameter
+     * 'ArgumentList'", and that surfaces as a launch silently not happening — the failure mode this
+     * codebase has spent more time on than any other.
+     */
+    const { args } = elevatedProgramArgv('C:/tools/thing.exe', [], 'C:/tools');
+    expect(args.join(' ')).not.toContain('ArgumentList');
+  });
+
+  it('passes arguments as separate quoted strings', () => {
+    const { args } = elevatedProgramArgv('C:/tools/thing.exe', ['--flag', 'a value'], 'C:/tools');
+    const command = args[args.length - 1] ?? '';
+    expect(command).toContain("-ArgumentList '--flag', 'a value'");
+  });
+
+  it('cannot be broken out of by a path or an argument', () => {
+    /*
+     * A single quote is the only character that matters to PowerShell inside a single-quoted
+     * string, and psQuote doubles it. Everything else — ; & $ ` ( ) — is inert *as long as it
+     * stays inside the quotes*, which is the property worth testing.
+     *
+     * Counting occurrences of "Start-Process" would be the wrong test: the injected text appears
+     * in the command twice because it is sitting inside the quoted path, which is exactly the
+     * outcome we want. So instead, strip every single-quoted region (PowerShell escapes a quote by
+     * doubling it) and assert that what REMAINS — the actual PowerShell code — is one harmless
+     * statement with none of the attacker's characters in it.
+     */
+    const stripQuoted = (text: string): string => {
+      let out = '';
+      let i = 0;
+      let inString = false;
+      while (i < text.length) {
+        const ch = text[i];
+        if (!inString) {
+          if (ch === "'") { inString = true; i++; continue; }
+          out += ch;
+          i++;
+          continue;
+        }
+        // Inside a string: '' is an escaped quote and stays inside; a lone ' ends it.
+        if (ch === "'" && text[i + 1] === "'") { i += 2; continue; }
+        if (ch === "'") { inString = false; i++; continue; }
+        i++;
+      }
+      expect(inString, 'a quote was left open — the command is malformed').toBe(false);
+      return out;
+    };
+
+    const nasty = "C:/tools/it's; Start-Process calc.exe #.exe";
+    const { args } = elevatedProgramArgv(nasty, ['$(whoami)', "a'b"], 'C:/tools');
+    const command = args[args.length - 1] ?? '';
+
+    // The quotes are there and doubled correctly.
+    expect(command).toContain("it''s");
+    expect(command).toContain("'$(whoami)'");
+    expect(command).toContain("'a''b'");
+
+    const code = stripQuoted(command);
+    expect(code.match(/Start-Process/g), 'a second statement escaped the quotes').toHaveLength(1);
+    expect(code, 'a semicolon escaped the quotes').not.toContain(';');
+    expect(code, 'a subexpression escaped the quotes').not.toContain('$(');
+    expect(code, 'a comment escaped the quotes').not.toContain('#');
   });
 });

@@ -145,7 +145,7 @@ export function Inspector(): React.JSX.Element | null {
             <button
               type="button"
               className="btn primary"
-              disabled={!targetField || (target ? isBroken(target) && target.state !== 'outside-dev-root' : false)}
+              disabled={!targetField || (target ? isBroken(target) : false)}
               onClick={() => void openNode(node.id)}
             >
               {openLabel(node)}
@@ -166,7 +166,7 @@ export function Inspector(): React.JSX.Element | null {
               <button
                 type="button"
                 className="btn"
-                disabled={target ? isBroken(target) && target.state !== 'outside-dev-root' : false}
+                disabled={target ? isBroken(target) : false}
                 onClick={() => void openTerminal(node.id, false)}
                 title="Open a PowerShell window in this folder, primed with the update steps this node declares"
               >
@@ -175,7 +175,7 @@ export function Inspector(): React.JSX.Element | null {
               <button
                 type="button"
                 className="btn warn"
-                disabled={target ? isBroken(target) && target.state !== 'outside-dev-root' : false}
+                disabled={target ? isBroken(target) : false}
                 onClick={() => void openTerminal(node.id, true)}
                 title="Open an ELEVATED PowerShell window in this folder. Windows will ask for confirmation."
               >

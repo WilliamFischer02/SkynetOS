@@ -6,6 +6,7 @@ import type { BoardNode } from '@shared/types.js';
 import type { TerminalOpenResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
+import { elevatedProgramArgv } from './launch-script.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
 import { openTerminal } from './terminal.js';
@@ -77,6 +78,26 @@ function openInVSCode(absPath: string): { ok: boolean; error?: string } {
 }
 
 /**
+ * Launch a program elevated.
+ *
+ * The argv is built by `services/launch-script.ts`, where the other pure command builders live and
+ * where it can be tested without spawning anything. See `elevatedProgramArgv` for why this goes
+ * through PowerShell rather than through `spawn` options.
+ *
+ * The pid this returns belongs to the PowerShell that made the REQUEST, not to the program.
+ * PowerShell exits as soon as the request is placed, so reporting it as the program's pid would be
+ * a lie with a very short shelf life — which is why the caller does not print it.
+ */
+function spawnElevated(exePath: string, args: string[], cwd: string): ReturnType<typeof spawn> {
+  const invocation = elevatedProgramArgv(exePath, args, cwd);
+  return spawn(invocation.file, invocation.args, {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true
+  });
+}
+
+/**
  * Activate a node. Returns a description of what happened rather than throwing, because the
  * renderer shows this in a toast either way and "nothing happened, here is why" is a result.
  */
@@ -86,7 +107,7 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
   if (target.state === 'none') {
     return { ok: false, action: 'nothing to open', target, error: `${node.kind} POINTS AT NOTHING` };
   }
-  if (isBroken(target) && target.state !== 'outside-dev-root') {
+  if (isBroken(target)) {
     return { ok: false, action: 'blocked', target, error: target.detail ?? 'TARGET DID NOT RESOLVE' };
   }
 
@@ -130,28 +151,45 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
   // A launchable binary is the one case that runs code rather than opening a document.
   if (node.kind === 'file.exe') {
     const settings = getSettings();
-    const needsConfirm = node.confirmBeforeLaunch !== false || settings.confirmAllLaunches || !confirmedBinaries.has(resolved);
+    const elevated = node.elevated === true;
+    const needsConfirm =
+      elevated || node.confirmBeforeLaunch !== false || settings.confirmAllLaunches || !confirmedBinaries.has(resolved);
+
     if (needsConfirm) {
       const proceed = await confirm(
-        'Launch this program?',
+        elevated ? 'Launch this program AS ADMINISTRATOR?' : 'Launch this program?',
         `${node.designator ? node.designator + ' — ' : ''}${node.name}`,
         // An alias has no size worth reporting — the reparse buffer's 93 bytes describes nothing a
         // person cares about, and "0 KB" next to a launch button reads as a corrupt file.
-        `${resolved}\n${target.alias ? 'Windows app · ' : target.sizeBytes ? `${(target.sizeBytes / 1024).toFixed(0)} KB · ` : ''}${node.args?.length ? `args: ${node.args.join(' ')}` : 'no arguments'}\n\nSkynetOS is not elevated, and neither is this.`,
-        'Launch'
+        `${resolved}\n${target.alias ? 'Windows app · ' : target.sizeBytes ? `${(target.sizeBytes / 1024).toFixed(0)} KB · ` : ''}${node.args?.length ? `args: ${node.args.join(' ')}` : 'no arguments'}\n\n` +
+        (elevated
+          ? 'Windows will show a UAC prompt. An elevated program can change anything on this machine.\nSkynetOS itself stays non-elevated — it asks Windows to start an elevated child.'
+          : 'SkynetOS is not elevated, and neither is this.'),
+        elevated ? 'Launch as admin' : 'Launch'
       );
       if (!proceed) return { ok: false, action: 'cancelled by user', target };
       confirmedBinaries.add(resolved);
     }
+
     try {
-      const child = spawn(resolved.replace(/\//g, '\\'), node.args ?? [], {
-        cwd: node.cwd ? node.cwd.replace(/\//g, '\\') : dirname(resolved).replace(/\//g, '\\'),
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: false
-      });
+      const child = elevated
+        ? spawnElevated(resolved, node.args ?? [], node.cwd ?? dirname(resolved))
+        : spawn(resolved.replace(/\//g, '\\'), node.args ?? [], {
+            cwd: node.cwd ? node.cwd.replace(/\//g, '\\') : dirname(resolved).replace(/\//g, '\\'),
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: false
+          });
       child.unref();
-      return { ok: true, action: `launched ${resolved} (pid ${child.pid ?? '?'})`, target };
+      return {
+        ok: true,
+        action: elevated
+          // The pid is PowerShell's, not the program's — see spawnElevated. Saying so beats
+          // printing a number that belongs to a process that has already exited.
+          ? `asked Windows to launch ${resolved} elevated (UAC)`
+          : `launched ${resolved} (pid ${child.pid ?? '?'})`,
+        target
+      };
     } catch (err) {
       return { ok: false, action: 'launch failed', target, error: (err as Error).message };
     }
@@ -247,7 +285,7 @@ export async function openNodeTerminal(
   if (!resolved) {
     return { ok: false, pid: null, scriptFile: '', elevated, cwd: '', error: target.detail ?? `${node.kind} POINTS AT NOTHING` };
   }
-  if (isBroken(target) && target.state !== 'outside-dev-root') {
+  if (isBroken(target)) {
     return { ok: false, pid: null, scriptFile: '', elevated, cwd: '', error: target.detail ?? 'TARGET DID NOT RESOLVE' };
   }
 

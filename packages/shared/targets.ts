@@ -53,8 +53,41 @@ export interface TargetInfo {
 
 export const OK_STATES: readonly TargetState[] = ['ok', 'none'];
 
+/**
+ * ── "Broken" means it does not resolve ───────────────────────────────────────────────────────
+ *
+ * `outside-dev-root` is NOT broken. The path is real, the file is there, and clicking the node
+ * launches it. All that is true of it is that it sits somewhere the user has not declared as a
+ * dev root, which docs/07 answers with a confirmation on every activation — a policy about
+ * ACTIVATION, never a claim about resolution.
+ *
+ * It used to be lumped in, and every behavioural call site then had to write the exception out by
+ * hand: `isBroken(target) && target.state !== 'outside-dev-root'`, four times, in four files. The
+ * three RENDERING sites did not, so a node pointing at `C:/Program Files/…/WINWORD.EXE` drew the
+ * broken-hardware overlay, went fault-red on the minimap, and marked its own input field bad —
+ * for a program that launches perfectly.
+ *
+ * William: "I need to be able to link any exe anywhere on my drive... so the program CAN show
+ * representations of any exe I can launch from within the program." It could launch them all
+ * along. It just drew them as faults, which reads exactly like a permissions problem — and sent
+ * him to the ACL editor twice.
+ *
+ * One rule written down twice is the smell this codebase has already been bitten by three times.
+ * So the distinction is here, once: `isBroken` is about resolution, `needsConfirmation` is about
+ * policy, and no call site has to remember the difference.
+ */
 export function isBroken(info: TargetInfo): boolean {
-  return !OK_STATES.includes(info.state);
+  return !OK_STATES.includes(info.state) && info.state !== 'outside-dev-root';
+}
+
+/**
+ * Does activating this need the user to say yes first?
+ *
+ * True only for a target outside every dev root. docs/07 §Path policy: asked every time, with no
+ * remembering — the answer is about this click, not about this path.
+ */
+export function needsConfirmation(info: TargetInfo): boolean {
+  return info.state === 'outside-dev-root';
 }
 
 /**
