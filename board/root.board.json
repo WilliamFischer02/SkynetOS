@@ -73,8 +73,8 @@
       "kind": "agent.code",
       "name": "JARVIS-PRIME",
       "pos": {
-        "x": 112,
-        "y": 58
+        "x": 113,
+        "y": 55
       },
       "cwd": "C:/dev",
       "launch": "popout",
@@ -125,23 +125,24 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 74,
-        "y": 53
-      },
-      "footprint": {
-        "w": 6,
-        "h": 4
+        "x": 72,
+        "y": 48
       },
       "tags": [
         "minecraft",
         "mods",
         "streaming"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "showDesignator": false,
       "size": 22,
       "frame": "socket",
-      "priority": 2
+      "priority": 2,
+      "logo": "C:/dev/SkynetOS/assets/sprites/minecraft-cover.jpg",
+      "footprint": {
+        "w": 9,
+        "h": 13
+      }
     },
     {
       "id": "d2_deductionos",
@@ -151,19 +152,24 @@
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
-        "x": 90,
-        "y": 45
+        "x": 91,
+        "y": 38
       },
       "tags": [
         "learning",
         "observation",
         "memory"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/deduction-bg.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
-      "priority": 2
+      "priority": 2,
+      "logo": "C:/dev/SkynetOS/assets/sprites/deduction-bg.jpg",
+      "footprint": {
+        "w": 8,
+        "h": 11
+      }
     },
     {
       "id": "d3_storyos",
@@ -173,19 +179,24 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 75,
-        "y": 64
+        "x": 79,
+        "y": 69
       },
       "tags": [
         "writing",
         "novel",
         "screenplay"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/writing-cover.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
-      "priority": 2
+      "priority": 2,
+      "logo": "C:/dev/SkynetOS/assets/sprites/writing-cover.jpg",
+      "footprint": {
+        "w": 9,
+        "h": 13
+      }
     },
     {
       "id": "d4_gameos",
@@ -195,19 +206,24 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 92,
-        "y": 74
+        "x": 94,
+        "y": 77
       },
       "tags": [
         "truthquestretro",
         "engine",
         "handheld"
       ],
-      "image": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
+      "image": "C:/dev/SkynetOS/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
-      "priority": 2
+      "priority": 2,
+      "logo": "C:/dev/SkynetOS/assets/sprites/game-os-bg.jpg",
+      "footprint": {
+        "w": 9,
+        "h": 13
+      }
     },
     {
       "id": "u2_agent_skynet",
@@ -215,8 +231,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 121,
-        "y": 69
+        "x": 109,
+        "y": 76
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
@@ -255,8 +271,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 113,
-        "y": 76
+        "x": 110,
+        "y": 69
       },
       "footprint": {
         "w": 4,
@@ -298,8 +314,8 @@
       "kind": "note.silk",
       "name": "title",
       "pos": {
-        "x": 87,
-        "y": 38
+        "x": 88,
+        "y": 32
       },
       "text": "SKYNETOS  REV A  //  GOOB ENTERTAINMENT CO.",
       "size": 11,
@@ -333,8 +349,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 121,
-        "y": 79
+        "x": 119,
+        "y": 74
       },
       "footprint": {
         "w": 3,
@@ -383,8 +399,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 119,
-        "y": 71
+        "x": 120,
+        "y": 70
       },
       "part": "via",
       "showName": false,
@@ -419,8 +435,8 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 120,
-        "y": 71
+        "x": 97,
+        "y": 72
       },
       "part": "screw",
       "showName": false,
@@ -499,8 +515,8 @@
       "kind": "decor.part",
       "name": "GRILLE",
       "pos": {
-        "x": 107,
-        "y": 57
+        "x": 106,
+        "y": 56
       },
       "part": "grille",
       "showName": false,
@@ -527,8 +543,8 @@
       "kind": "link.url",
       "name": "DIRTY PLUSH (HUD)",
       "pos": {
-        "x": 64,
-        "y": 63
+        "x": 63,
+        "y": 71
       },
       "designator": "J2",
       "provisional": true,
@@ -552,8 +568,8 @@
       "kind": "file.exe",
       "name": "launcher.exe",
       "pos": {
-        "x": 65,
-        "y": 54
+        "x": 64,
+        "y": 50
       },
       "designator": "F1",
       "provisional": true,
@@ -588,8 +604,8 @@
       "kind": "agent.chat",
       "name": "MC MIND PALACE",
       "pos": {
-        "x": 76,
-        "y": 45
+        "x": 74,
+        "y": 40
       },
       "designator": "U4",
       "provisional": true,
@@ -605,8 +621,8 @@
       "kind": "file.document",
       "name": "PANIC",
       "pos": {
-        "x": 75,
-        "y": 71
+        "x": 71,
+        "y": 79
       },
       "designator": "F2",
       "provisional": true,
@@ -626,8 +642,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 119,
-        "y": 77
+        "x": 117,
+        "y": 72
       },
       "part": "panel",
       "showName": false,
@@ -643,8 +659,8 @@
       "kind": "file.document",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 64,
-        "y": 74
+        "x": 62,
+        "y": 82
       },
       "designator": "F3",
       "provisional": true,
@@ -665,8 +681,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 85,
-        "y": 61
+        "x": 86,
+        "y": 55
       },
       "part": "elbow_thin",
       "showName": false,
@@ -699,8 +715,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 86,
-        "y": 56
+        "x": 87,
+        "y": 62
       },
       "part": "grille",
       "showName": false,
@@ -716,8 +732,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 107,
-        "y": 63
+        "x": 106,
+        "y": 62
       },
       "part": "pads",
       "showName": false,
@@ -733,8 +749,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 86,
-        "y": 62
+        "x": 87,
+        "y": 56
       },
       "part": "pads",
       "showName": false,
@@ -750,8 +766,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 106,
-        "y": 62
+        "x": 105,
+        "y": 61
       },
       "part": "elbow_thin",
       "showName": false,
@@ -767,8 +783,8 @@
       "kind": "file.exe",
       "name": "Truth Quest Retro",
       "pos": {
-        "x": 91,
-        "y": 81
+        "x": 104,
+        "y": 94
       },
       "designator": "F4",
       "provisional": true,
@@ -789,8 +805,8 @@
       "kind": "file.exe",
       "name": "FORGE (ENGINE)",
       "pos": {
-        "x": 100,
-        "y": 82
+        "x": 93,
+        "y": 94
       },
       "designator": "F5",
       "provisional": true,
@@ -805,17 +821,23 @@
     {
       "id": "j_new_link_2",
       "kind": "link.url",
-      "name": "NEW LINK",
+      "name": "ANKI (WEB)",
       "pos": {
-        "x": 81,
-        "y": 35
+        "x": 84,
+        "y": 46
       },
       "designator": "J3",
       "provisional": true,
+      "url": "https://ankiweb.net/decks",
+      "showLogo": false,
+      "frame": "dip",
+      "priority": 2,
+      "showDesignator": false,
       "footprint": {
         "w": 4,
         "h": 4
-      }
+      },
+      "image": "C:/dev/SkynetOS/assets/sprites/Anki-icon.svg.png"
     }
   ],
   "edges": [
@@ -944,6 +966,24 @@
       "from": "u2_agent_skynet",
       "to": "u1_jarvis",
       "kind": "supervises"
+    },
+    {
+      "id": "e20",
+      "from": "d2_deductionos",
+      "to": "j_new_link_2",
+      "kind": "reads"
+    },
+    {
+      "id": "e21",
+      "from": "f_new_program",
+      "to": "u_new_conversation",
+      "kind": "reads"
+    },
+    {
+      "id": "e22",
+      "from": "u1_jarvis",
+      "to": "s1_repo_skynet",
+      "kind": "reads"
     }
   ]
 }
