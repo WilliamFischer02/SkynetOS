@@ -23,6 +23,7 @@ import {
   type Zoom,
   boardPixelSize,
   clampCamera,
+  fitZoom,
   isZoom,
   screenToWorld,
   stagePosition,
@@ -33,6 +34,7 @@ import {
 } from './camera.js';
 import { buildSubstrate } from './substrate.js';
 import { CourierLayer, courierColor, courierSource, type CourierRoute } from './couriers.js';
+import { courierHub, elbowPath, wirePath, type Wire } from './courier-paths.js';
 import { GLOW_FPS, GLOW_FRAMES, buildGlowFrames } from './glow.js';
 import type { Point } from './traces.js';
 import { SpriteStore, textureOffset } from './sprites.js';
@@ -54,6 +56,13 @@ import {
   resizeTo,
   shouldCommit,
   shouldCommitResize,
+  shouldCommitGroup,
+  groupDelta,
+  groupTargets,
+  canDropGroup,
+  marqueeRect,
+  selectInRect,
+  type GroupMember,
   type DragState
 } from './drag.js';
 import fontUrl from '../../../assets/fonts/DepartureMono-1.500/DepartureMono-Regular.woff2?url';
@@ -85,6 +94,8 @@ export interface BoardCanvasProps {
   onSelect: (nodeId: string | null) => void;
   onActivate: (nodeId: string) => void;
   onMoveNode: (nodeId: string, pos: { x: number; y: number }) => void;
+  /** Commit a group move: every member at once, as one command and one undo step. */
+  onMoveNodes?: (moves: { nodeId: string; pos: { x: number; y: number } }[]) => void;
   /** Commit a new footprint. Same command bus, same undo, as a move. */
   onResizeNode: (nodeId: string, footprint: Footprint) => void;
   onStatus?: (status: BoardCanvasStatus) => void;
@@ -130,6 +141,8 @@ export interface BoardCanvasStatus {
   fallbackCount: number;
   /** Couriers walking right now, so the layer is never a mystery. */
   courierCount: number;
+  /** Nodes in the group selection. 0 when the selection is one node or none. */
+  groupCount: number;
   fps: number;
 }
 
@@ -192,6 +205,16 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let drag: DragState = NO_DRAG;
 
     /*
+     * The group selection: two or more nodes, picked with a selection box (Shift+drag on the
+     * substrate in Edit Board mode) or with Shift+click. Pressing on any member moves all of them.
+     *
+     * Local to the canvas rather than in the store. Nothing outside the canvas acts on a group,
+     * since the inspector edits one node, and it has to survive a scene rebuild after the move
+     * lands. A local here does that; a prop would be re-supplied from outside on every render.
+     */
+    let group = new Set<string>();
+
+    /*
      * ── Wiring ────────────────────────────────────────────────────────────────────────────────
      *
      * Click a node's edge to start a trace, click another node's edge to finish it. Not a drag:
@@ -219,6 +242,13 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let gridLayer: Container | null = null;
     let overlayLayer: Container | null = null;
     let couriers: CourierLayer | null = null;
+    /**
+     * The traces as last routed, and the obstacle map they were routed against. The couriers'
+     * road network, and what the router uses to generate a road where no wire runs.
+     */
+    let wires: Wire[] = [];
+    let routeGrid: ReturnType<typeof buildRouteGrid> | null = null;
+    let routeObstacles: RouteObstacle[] = [];
 
     const spriteById = new Map<string, Sprite>();
     /** Decor parts whose atlas key has more than one frame — the LEDs. */
@@ -249,6 +279,13 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const nodeById = (id: string | null): BoardNode | undefined =>
       id ? board.nodes.find((n) => n.id === id) : undefined;
+
+    /** The group as a drag needs it: where each member stands now, and how big it is. */
+    const groupMembers = (): GroupMember[] =>
+      [...group]
+        .map((id) => nodeById(id))
+        .filter((n): n is BoardNode => Boolean(n))
+        .map((n) => ({ nodeId: n.id, kind: n.kind, originTile: { x: n.pos.x, y: n.pos.y }, footprint: footprintOf(n) }));
 
     /**
      * The corner handle's world rect for a node, or null when it should not be offered.
@@ -302,9 +339,31 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const dir = PAN_KEYS[event.code];
       if (dir) { held[dir] = true; event.preventDefault(); return; }
 
-      if (event.code === 'Digit2' || event.code === 'Digit3' || event.code === 'Digit4') {
+      if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3' || event.code === 'Digit4') {
         const z = Number(event.code.slice(-1));
         if (isZoom(z)) cameraStore.current = { ...cameraStore.current, zoom: z };
+        event.preventDefault();
+        return;
+      }
+
+      /*
+       * 0: the whole board. The closest level at which all of it fits, which clampCamera then
+       * centres, because a board smaller than the view is always centred. William: "I want to be
+       * able to see the whole board from far away."
+       */
+      if (event.code === 'Digit0') {
+        const view = viewport();
+        cameraStore.current = clampCamera(setZoom(cameraStore.current, fitZoom(boardPx, view), view), boardPx, view);
+        event.preventDefault();
+        return;
+      }
+
+      // - and = step out and in, for anyone without a wheel. Centred, like the number keys.
+      if (event.code === 'Minus' || event.code === 'Equal' || event.code === 'NumpadSubtract' || event.code === 'NumpadAdd') {
+        const out = event.code === 'Minus' || event.code === 'NumpadSubtract';
+        const view = viewport();
+        const next = stepZoom(cameraStore.current.zoom, out ? -1 : 1);
+        cameraStore.current = clampCamera(setZoom(cameraStore.current, next, view), boardPx, view);
         event.preventDefault();
         return;
       }
@@ -342,6 +401,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         }
         live.current.onSelect(null);
       }
+    };
+
+    /*
+     * Escape with a group selected clears the group, and does nothing else.
+     *
+     * In the CAPTURE phase, and it stops the event there. App's own Escape leaves the room when
+     * nothing is selected, and a group has no single selected node, so without this the first
+     * Escape after drawing a selection box would throw you out of the room you were arranging.
+     * App's listener is registered before this component's, so going first is the only way to
+     * go first.
+     */
+    const onEscapeCapture = (event: KeyboardEvent) => {
+      if (event.code !== 'Escape' || !group.size) return;
+      group = new Set();
+      rebuildOverlay();
+      event.preventDefault();
+      event.stopImmediatePropagation();
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
@@ -495,7 +571,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         editMode: live.current.editMode,
         nodeTile: node ? { x: node.pos.x, y: node.pos.y } : null,
         nodeFootprint: node ? footprintOf(node) : null,
-        onResizeHandle: onHandle
+        onResizeHandle: onHandle,
+        shiftKey: event.shiftKey,
+        group: groupMembers()
       });
 
       if (drag.kind !== 'none') {
@@ -510,7 +588,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
          */
         try { app.canvas.setPointerCapture(event.pointerId); } catch { /* the window listeners carry it */ }
         app.canvas.style.cursor =
-          drag.kind === 'resize' ? 'nwse-resize' : drag.kind === 'move' ? 'grabbing' : 'move';
+          drag.kind === 'resize' ? 'nwse-resize'
+            : drag.kind === 'move' || drag.kind === 'group' ? 'grabbing'
+              : drag.kind === 'marquee' ? 'crosshair' : 'move';
       }
     };
 
@@ -578,6 +658,26 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         return;
       }
 
+      if (drag.kind === 'marquee') {
+        drag = { ...drag, currentScreen: { ...screen } };
+        rebuildOverlay();
+        return;
+      }
+
+      /*
+       * A group drag moves every member's sprite a whole tile at a time, the same presentation a
+       * single move has, and the data is untouched until the drop. Recomputed only when the offset
+       * actually changes, which is at most once per tile rather than once per pointer event.
+       */
+      if (drag.kind === 'group' && drag.members) {
+        const members = drag.members;
+        const delta = groupDelta(drag, screen, camera.zoom);
+        if (drag.delta && delta.dx === drag.delta.dx && delta.dy === drag.delta.dy) return;
+        drag = { ...drag, delta, valid: canDropGroup(members, delta, rects, board.grid) };
+        for (const target of groupTargets(members, delta)) placeSpriteAt(target.nodeId, target.pos);
+        return;
+      }
+
       const node = nodeById(drag.nodeId);
       if (!node) return;
 
@@ -625,7 +725,24 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         const screen = canvasPoint(event);
         const point = screenToWorld(cameraStore.current, screen.x, screen.y);
         const hit = hitTest(rects, point.x, point.y);
-        live.current.onSelect(hit ? hit.nodeId : null);
+        // Shift+click in Edit Board mode adds a node to the group, or takes it out again.
+        if (live.current.editMode && event.shiftKey) {
+          if (hit) toggleInGroup(hit.nodeId);
+        } else {
+          if (group.size) { group = new Set(); rebuildOverlay(); }
+          live.current.onSelect(hit ? hit.nodeId : null);
+        }
+      } else if (drag.kind === 'marquee' && drag.currentScreen) {
+        const camera = cameraStore.current;
+        const a = screenToWorld(camera, drag.originScreen.x, drag.originScreen.y);
+        const b = screenToWorld(camera, drag.currentScreen.x, drag.currentScreen.y);
+        drag = NO_DRAG;
+        adoptSelection(selectInRect(rects, marqueeRect(a, b)));
+      } else if (shouldCommitGroup(drag) && drag.members && drag.delta) {
+        live.current.onMoveNodes?.(groupTargets(drag.members, drag.delta));
+      } else if (drag.kind === 'group' && drag.members) {
+        // Refused or abandoned: every sprite back where the data still says it is.
+        for (const member of drag.members) placeSprite(member.nodeId);
       } else if (shouldCommit(drag) && drag.nodeId && drag.currentTile) {
         live.current.onMoveNode(drag.nodeId, drag.currentTile);
       } else if (shouldCommitResize(drag) && drag.nodeId && drag.currentFootprint) {
@@ -689,6 +806,50 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         plateFill: resolveToken(node.plateColor, board.theme, board.theme.maskLight),
         plateBorder: resolveToken(node.plateBorder, board.theme, SILK_HEX)
       };
+    };
+
+    /**
+     * Make a list of ids THE selection.
+     *
+     * One id is an ordinary selection: the inspector opens and the resize handle appears. Two or
+     * more is a group, which the inspector cannot edit, so it closes and the members are outlined
+     * instead. None clears both.
+     */
+    const adoptSelection = (ids: string[]): void => {
+      if (ids.length >= 2) {
+        group = new Set(ids);
+        live.current.onSelect(null);
+      } else {
+        group = new Set();
+        live.current.onSelect(ids[0] ?? null);
+      }
+      rebuildOverlay();
+    };
+
+    /** Shift+click. Extends from the node already selected, so the first Shift+click makes a pair. */
+    const toggleInGroup = (nodeId: string): void => {
+      const next = new Set(group);
+      const primary = live.current.selectedId;
+      if (primary && next.size === 0) next.add(primary);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      adoptSelection([...next]);
+    };
+
+    /** Put a node's sprite on a tile without touching the data: a drag in progress. */
+    const placeSpriteAt = (nodeId: string, tile: { x: number; y: number }): void => {
+      const node = nodeById(nodeId);
+      const sprite = spriteById.get(nodeId);
+      if (!node || !sprite) return;
+      if (node.kind === 'decor.part') {
+        // A part is drawn at its tile with no nameplate offset; see drawNode.
+        sprite.x = tile.x * TILE;
+        sprite.y = tile.y * TILE;
+        return;
+      }
+      const off = textureOffset(displayOf(node).name ? node.name : undefined, titleSize(node), node.frame);
+      sprite.x = tile.x * TILE - off.x;
+      sprite.y = tile.y * TILE - off.y;
     };
 
     /** Put a node's sprite where the board data says it belongs. */
@@ -858,7 +1019,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const obstacles: RouteObstacle[] = board.nodes
         .filter((n) => !isPrinted(n.kind))
         .map((n) => ({ ...nodeRect(n), nodeId: n.id }));
-      const routeGrid = buildRouteGrid(obstacles, boardPx);
+      const grid = buildRouteGrid(obstacles, boardPx);
+      routeGrid = grid;
+      routeObstacles = obstacles;
 
       routedCount = 0;
       fallbackCount = 0;
@@ -873,7 +1036,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         } else {
           const path = routeAStar(
             { from: { ...from, nodeId: edge.from }, to: { ...to, nodeId: edge.to }, obstacles, boardPx },
-            routeGrid
+            grid
           );
           if (path) { points = attachEndpoints(path, from, to); routedCount++; }
         }
@@ -886,6 +1049,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       }
       console.info(`[router] ${routedCount} auto-routed, ${fallbackCount} fell back to a direct run`);
       traceLayer.addChild(buildTraceLayer(routed));
+      // The same polylines that were just drawn, so a courier walks exactly the copper on screen.
+      wires = routed.map((r) => ({ id: r.edge.id, from: r.edge.from, to: r.edge.to, points: r.points }));
     };
 
     const buildNodes = (): void => {
@@ -1039,6 +1204,51 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         }
       }
 
+      /*
+       * The group. Every member outlined, the same vocabulary as a single selection; while the
+       * group is being dragged, a ghost where each member would land instead, in fault red if the
+       * group as a whole cannot land there.
+       */
+      const draggingGroup = drag.kind === 'group' && drag.exceeded && drag.members && drag.delta;
+      if (!draggingGroup) {
+        for (const id of group) {
+          const node = nodeById(id);
+          if (node) overlayLayer.addChild(buildSelectionOverlay(nodeRect(node), board.theme.signal));
+        }
+      } else if (drag.members && drag.delta) {
+        const color = drag.valid ? board.theme.signal : FAULT;
+        for (const target of groupTargets(drag.members, drag.delta)) {
+          const node = nodeById(target.nodeId);
+          if (node) overlayLayer.addChild(buildSelectionOverlay(nodeRect({ ...node, pos: target.pos }), color));
+        }
+      }
+
+      /*
+       * The selection box: a frame in the room's signal colour, no fill, nothing translucent.
+       * Its line is one SCREEN pixel at every zoom, so it does not vanish at 1/4x, where a
+       * one-world-pixel line would be a quarter of a pixel wide.
+       */
+      if (drag.kind === 'marquee' && drag.exceeded && drag.currentScreen) {
+        const camera = cameraStore.current;
+        const box = marqueeRect(
+          screenToWorld(camera, drag.originScreen.x, drag.originScreen.y),
+          screenToWorld(camera, drag.currentScreen.x, drag.currentScreen.y)
+        );
+        const t = Math.max(1, Math.round(1 / camera.zoom));
+        const x = Math.round(box.x);
+        const y = Math.round(box.y);
+        const w = Math.max(t, Math.round(box.w));
+        const h = Math.max(t, Math.round(box.h));
+        const frame = new Graphics();
+        frame.rect(x, y, w, t);
+        frame.rect(x, y + h - t, w, t);
+        frame.rect(x, y, t, h);
+        frame.rect(x + w - t, y, t, h);
+        frame.fill({ color: hexToNumber(board.theme.signal) });
+        frame.roundPixels = true;
+        overlayLayer.addChild(frame);
+      }
+
       // Drag ghost: where the node would land, or what size it would become. Signal if legal,
       // fault if not — same vocabulary as selection, nothing translucent or blurred.
       const ghostNode = nodeById(drag.nodeId);
@@ -1137,40 +1347,55 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     };
 
     /**
-     * Turn per-node usage shares into walkable routes.
+     * Turn per-node usage shares into walkable routes, along the wires.
      *
-     * The source is the JARVIS head when the board has one — the packets are its errands, and it
-     * is the node with jurisdiction over everything. Inside a room there is no head, so they come
-     * in from the nearest edge: work arriving from outside.
+     * The source is the JARVIS head when the board has one: the packets are its errands. A room has
+     * no head, so its best-connected node stands in, the node its traces already radiate from. See
+     * courier-paths.ts.
      */
     const buildCourierRoutes = (): void => {
       if (!couriers) return;
       const shares = live.current.usageRoutes ?? [];
       if (!shares.length) { couriers.setRoutes([]); return; }
 
-      const head = board.nodes.find((n) => n.kind === 'agent.jarvis');
-      const headPoint = head
-        ? (() => {
-            const fp = footprintOf(head);
-            return { x: head.pos.x * TILE + (fp.w * TILE) / 2, y: head.pos.y * TILE + (fp.h * TILE) / 2 };
-          })()
-        : null;
+      const hub = nodeById(courierHub(board.nodes, wires));
+
+      /*
+       * The road to one destination, best first:
+       *   1. along the drawn traces, because the wires are the paths;
+       *   2. where no wire joins the two, a trace the router generates on the spot, around the
+       *      components, with the same A* that lays the copper, so the walk still looks like one;
+       *   3. from the nearest board edge, for a board with no wiring at all, or for a room's hub,
+       *      which has no hub of its own to be sent from.
+       */
+      const roadTo = (node: BoardNode): Point[] => {
+        if (hub && hub.id !== node.id) {
+          const wired = wirePath(hub.id, node.id, wires);
+          if (wired) return wired;
+          const from = nodeRect(hub);
+          const to = nodeRect(node);
+          if (routeGrid) {
+            const path = routeAStar(
+              { from: { ...from, nodeId: hub.id }, to: { ...to, nodeId: node.id }, obstacles: routeObstacles, boardPx },
+              routeGrid
+            );
+            if (path) return attachEndpoints(path, from, to);
+          }
+          return routeOrthogonal(from, to, undefined, board.grid.tile);
+        }
+        const r = nodeRect(node);
+        const centre = { x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2) };
+        return elbowPath(courierSource(null, centre, boardPx), centre);
+      };
 
       const routes: CourierRoute[] = [];
       for (const share of shares) {
         const node = nodeById(share.nodeId);
         if (!node || share.share <= 0) continue;
-        // A head does not send packets to itself.
-        if (head && node.id === head.id) continue;
-        const fp = footprintOf(node);
-        const to = { x: node.pos.x * TILE + (fp.w * TILE) / 2, y: node.pos.y * TILE + (fp.h * TILE) / 2 };
-        routes.push({
-          nodeId: node.id,
-          from: courierSource(headPoint, to, boardPx),
-          to,
-          share: share.share,
-          color: courierColor(node.id)
-        });
+        // The JARVIS head does not send packets to itself. A room's stand-in hub does receive
+        // them, from the edge, since its work is somebody's work too.
+        if (hub && node.id === hub.id && hub.kind === 'agent.jarvis') continue;
+        routes.push({ nodeId: node.id, path: roadTo(node), share: share.share, color: courierColor(node.id) });
       }
       couriers.setRoutes(routes);
     };
@@ -1199,6 +1424,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      */
     const rebuild = (next: Board): void => {
       board = next;
+      // A member deleted, or moved to another room by an agent, leaves the group rather than
+      // lingering as an outline around nothing.
+      if (group.size) group = new Set([...group].filter((id) => next.nodes.some((n) => n.id === id)));
       boardPx = boardPixelSize(board.grid);
       rects = layoutRects(board, live.current.editMode, measureNode);
       buildTraces();
@@ -1479,6 +1707,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             // gesture you have no way to cancel.
             wiring = null;
             hoverPort = null;
+            // A group only means something in Edit Board mode, where it can be moved.
+            if (!lastEditMode) group = new Set();
             buildGrid();
             rebuildOverlay();
           }
@@ -1486,7 +1716,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           const brokenKey = Object.entries(live.current.targets).map(([id, t]) => `${id}:${t.state}`).join('|');
           const dragKey = drag.exceeded && (drag.kind === 'move' || drag.kind === 'resize')
             ? `${drag.kind}:${drag.nodeId}:${drag.currentTile?.x},${drag.currentTile?.y}:${drag.currentFootprint?.w}x${drag.currentFootprint?.h}:${drag.valid}`
-            : '';
+            : drag.exceeded && drag.kind === 'group'
+              ? `group:${drag.delta?.dx},${drag.delta?.dy}:${drag.valid}`
+              : '';
           if (live.current.selectedId !== lastSelection || brokenKey !== lastBrokenKey || dragKey !== lastDragKey) {
             lastSelection = live.current.selectedId;
             lastBrokenKey = brokenKey;
@@ -1517,6 +1749,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               routedCount,
               fallbackCount,
               courierCount: couriers?.count ?? 0,
+              groupCount: group.size,
               fps
             });
           }
@@ -1537,6 +1770,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
          * Pointer capture already covered most of this. `window` covers the rest, costs nothing,
          * and does not depend on capture having been granted.
          */
+        window.addEventListener('keydown', onEscapeCapture, true);
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
         window.addEventListener('blur', onBlur);
@@ -1558,6 +1792,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       disposed = true;
       rebuildRef.current = null;
       builtRef.current = null;
+      window.removeEventListener('keydown', onEscapeCapture, true);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);

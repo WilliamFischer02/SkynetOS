@@ -167,7 +167,7 @@ Board JSON ──parse──► BoardGraph (nodes, edges, rooms)
                                 Layer 5  selection/edit overlay (grid, snap ghosts)
 ```
 
-Camera: integer zoom only (`2x 3x 4x`), position rounded to device pixels each frame, `roundPixels: true`, textures `scaleMode: 'nearest'`, no mipmaps.
+Camera: integer working zoom (`1x 2x 3x 4x`) plus two binary-fraction overview levels (`1/2x 1/4x`, see docs/02 rule 4), position rounded to device pixels each frame, `roundPixels: true`, textures `scaleMode: 'nearest'`, no mipmaps.
 
 Traces are re-routed only on graph change, cached as a baked texture per room, with the animated overlay drawn on top. Target 60fps with 200 nodes; if a room exceeds ~300 nodes the answer is a sub-room, not an optimization.
 
@@ -184,9 +184,13 @@ node re-routes its traces. Not yet done: bundling parallel runs with a ribbon cl
 ## Navigation
 
 - **Pan:** WASD / arrows (accelerating, 4px→16px per frame), middle-drag, or left-drag on empty substrate
-- **Zoom:** `2`/`3`/`4` keys, Ctrl+scroll, snapping to integers. The key is named for the zoom it
-  selects. (Corrected 2026-09-09: this said `1`/`2`/`3`, which contradicted `docs/02` §Grid & sizes
-  where zoom is defined as {2,3,4} and there is no 1x.)
+- **Zoom:** the wheel (anchored on the cursor), `-`/`=`, or `1`/`2`/`3`/`4`, where each number key
+  is named for the zoom it selects. `0` shows the whole board: the closest of 4x…1/4x at which all
+  of it fits, centred. (Amended 2026-09-11: the floor was 2x, which on a tripled board showed under
+  a third of its width. 1x and the 1/2x and 1/4x overview levels were added; see docs/02 rule 4.)
+- **Select a group (Edit Board mode):** Shift+drag on empty substrate draws a box; Shift+click
+  adds or removes one node. Drag any member to move the whole group, one tile at a time, as one
+  undo step (`node.moveMany`). Escape clears the group.
 - **Enter a room:** click a `drive.room` node, or `Space`/`Enter` with it selected → iris-wipe transition (hard-edged pixel iris, not a fade)
 - **Leave a room:** `Backspace` always; `Esc` deselects first and only leaves the room when nothing is selected, so `Esc` never surprises you out of a room you were working in. *(The ejector sprite is M5 art.)*
 - **Breadcrumb:** `SKYNET / MINECRAFTOS / THE STALKER` rendered as silkscreen along the top edge

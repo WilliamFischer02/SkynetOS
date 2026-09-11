@@ -7,8 +7,31 @@
  * are what makes a pixel-art camera shimmer (docs/02, anti-mush rule 4).
  */
 
-/** Integer zoom only. There is no 1x — the board is unreadable below 2x. */
-export const ZOOM_LEVELS = [2, 3, 4] as const;
+/**
+ * The zoom levels: whole numbers from 1 up for working, exact binary fractions below 1 for seeing a
+ * whole board at once.
+ *
+ * ── Why there are levels below 2 at all ───────────────────────────────────────────────────────
+ *
+ * The floor was 2x, on the grounds that the board is unreadable below it. True, and beside the
+ * point once the boards were tripled: a 192x120 board is 3072x1920 art pixels, and at 2x a
+ * 1920-wide window shows under a third of its width. William: "I want to be able to see the whole
+ * board from far away." Seeing the layout is a different job from reading a label, and it had no
+ * zoom at all.
+ *
+ * ── What the fractions cost, and why these ones ───────────────────────────────────────────────
+ *
+ * docs/02 rule 4. Below 1x, nearest-neighbour sampling DROPS pixels rather than blending them.
+ * Every pixel on screen is still an exact palette colour and alpha is still binary, so nothing
+ * mushes. But a one-pixel trace can vanish at 1/2, and most silkscreen is illegible. These levels
+ * are for seeing where things are, not for reading them.
+ *
+ * They are powers of two so the scale is exact in floating point, and the stage still sits on a
+ * whole device pixel every frame (`stagePosition`). Together that means each screen pixel samples
+ * the same texels in every frame, wherever the camera is, so panning at 1/2 does not shimmer.
+ * test/camera.test.ts proves the phase is fixed rather than asserting it here.
+ */
+export const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 3, 4] as const;
 export type Zoom = (typeof ZOOM_LEVELS)[number];
 
 export const TILE = 16;
@@ -147,7 +170,24 @@ export function setZoom(cam: Camera, zoom: Zoom, view: Viewport, anchor?: { x: n
   return { x: worldX - ax / zoom, y: worldY - ay / zoom, zoom };
 }
 
-/** Next / previous zoom level, saturating at the ends. Used by Ctrl+scroll. */
+/**
+ * The closest level at which the whole board fits in the view: the `0` key. The smallest level
+ * if none does, which only happens on a board near the schema's 512-tile limit.
+ */
+export function fitZoom(board: { width: number; height: number }, view: Viewport): Zoom {
+  for (let i = ZOOM_LEVELS.length - 1; i >= 0; i--) {
+    const zoom = ZOOM_LEVELS[i];
+    if (zoom !== undefined && board.width * zoom <= view.width && board.height * zoom <= view.height) return zoom;
+  }
+  return ZOOM_LEVELS[0];
+}
+
+/** A zoom as the HUD prints it: `3X`, `1X`, `1/2X`. */
+export function formatZoom(zoom: number): string {
+  return zoom >= 1 ? `${zoom}X` : `1/${Math.round(1 / zoom)}X`;
+}
+
+/** Next / previous zoom level, saturating at the ends. Used by the wheel and by - and =. */
 export function stepZoom(zoom: Zoom, direction: 1 | -1): Zoom {
   const i = ZOOM_LEVELS.indexOf(zoom);
   const next = ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, i + direction))];

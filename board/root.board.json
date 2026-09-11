@@ -79,8 +79,8 @@
       "cwd": "C:/dev",
       "launch": "popout",
       "resume": true,
-      "initialPrompt": "You are the Hands of JARVIS. You act on William’s machine: you read and write files, run commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and plans but cannot see this disk; you are how its decisions become real. Follow docs/07-SECURITY.md as a hard boundary: never delete files, force-push, or remove a board node without explicit approval in that exact exchange. Check codex/mailbox/ for anything the Face has left you, and end every session with a CODEX PATCH and a HANDOFF block.",
-      "persona": "codex/persona.md",
+      "initialPrompt": "You are the Hands of JARVIS. You act on William’s machine: you read and write files, run commands, and edit board JSON. The Face — the claude.ai conversation on the U1 chip — thinks and plans but cannot see this disk; you are how its decisions become real. You work from C:/dev, so the SkynetOS repo is SkynetOS/. Follow SkynetOS/docs/07-SECURITY.md as a hard boundary: never delete files, force-push, or remove a board node without explicit approval in that exact exchange. The Face's standing orders (SkynetOS/codex/face-brief.md) and any unread mail it left in SkynetOS/codex/mailbox/ are folded into this briefing. End every session with a CODEX PATCH and a HANDOFF block.",
+      "persona": "%SKYNET%/codex/personas/persona.md",
       "codexRef": "codex/index.md",
       "tags": [
         "jarvis",
@@ -95,11 +95,12 @@
       ],
       "briefing": "every",
       "readOnLaunch": [
-        "CLAUDE.md",
-        "codex/persona.md",
-        "codex/index.md",
-        "docs/07-SECURITY.md",
-        "handoff.md"
+        "SkynetOS/CLAUDE.md",
+        "SkynetOS/codex/personas/persona.md",
+        "SkynetOS/codex/personas/jarvis-voice.md",
+        "SkynetOS/codex/index.md",
+        "SkynetOS/docs/07-SECURITY.md",
+        "SkynetOS/handoff.md"
       ],
       "addDirs": [
         "C:/"
@@ -125,8 +126,8 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 72,
-        "y": 48
+        "x": 67,
+        "y": 45
       },
       "tags": [
         "minecraft",
@@ -137,7 +138,7 @@
       "showDesignator": false,
       "size": 22,
       "frame": "socket",
-      "priority": 2,
+      "priority": 4,
       "logo": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
       "footprint": {
         "w": 9,
@@ -180,7 +181,7 @@
       "boardFile": "storyos/room.board.json",
       "pos": {
         "x": 79,
-        "y": 69
+        "y": 71
       },
       "tags": [
         "writing",
@@ -191,7 +192,7 @@
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
-      "priority": 2,
+      "priority": 4,
       "logo": "%SKYNET%/assets/sprites/writing-cover.jpg",
       "footprint": {
         "w": 9,
@@ -206,8 +207,8 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 94,
-        "y": 77
+        "x": 102,
+        "y": 81
       },
       "tags": [
         "truthquestretro",
@@ -231,8 +232,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 109,
-        "y": 76
+        "x": 120,
+        "y": 72
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
@@ -271,8 +272,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 110,
-        "y": 69
+        "x": 121,
+        "y": 65
       },
       "footprint": {
         "w": 4,
@@ -297,17 +298,17 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 103,
-        "y": 42
+        "x": 119,
+        "y": 36
       },
       "footprint": {
-        "w": 4,
-        "h": 4
+        "w": 5,
+        "h": 5
       },
       "image": "%SKYNET%/assets/sprites/cpu-icon.jpg",
       "showDesignator": false,
       "frame": "rails",
-      "priority": 1
+      "priority": 5
     },
     {
       "id": "n1_title",
@@ -349,8 +350,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 119,
-        "y": 74
+        "x": 130,
+        "y": 70
       },
       "footprint": {
         "w": 3,
@@ -399,8 +400,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 120,
-        "y": 70
+        "x": 131,
+        "y": 66
       },
       "part": "via",
       "showName": false,
@@ -543,8 +544,8 @@
       "kind": "link.url",
       "name": "DIRTY PLUSH (HUD)",
       "pos": {
-        "x": 63,
-        "y": 71
+        "x": 64,
+        "y": 72
       },
       "designator": "J2",
       "provisional": true,
@@ -556,7 +557,7 @@
       },
       "showLogo": false,
       "frame": "tabs",
-      "priority": 1,
+      "priority": 3,
       "textStroke": "mask-dark",
       "textPlate": true,
       "plateColor": "mask-dark",
@@ -568,8 +569,8 @@
       "kind": "file.exe",
       "name": "launcher.exe",
       "pos": {
-        "x": 64,
-        "y": 50
+        "x": 59,
+        "y": 51
       },
       "designator": "F1",
       "provisional": true,
@@ -582,30 +583,16 @@
       "image": "%SKYNET%/assets/sprites/mc-images.jpg",
       "showLogo": false,
       "frame": "castellated",
-      "priority": 1,
+      "priority": 5,
       "showDesignator": false
-    },
-    {
-      "id": "m_monitor",
-      "kind": "monitor.system",
-      "name": "MONITOR",
-      "pos": {
-        "x": 112,
-        "y": 36
-      },
-      "designator": "M2",
-      "footprint": {
-        "w": 6,
-        "h": 10
-      }
     },
     {
       "id": "u_new_conversation",
       "kind": "agent.chat",
       "name": "MC MIND PALACE",
       "pos": {
-        "x": 74,
-        "y": 40
+        "x": 60,
+        "y": 39
       },
       "designator": "U4",
       "provisional": true,
@@ -613,7 +600,7 @@
       "image": "%SKYNET%/assets/sprites/jonathan-dulcahn-dodd-scary-mansion.jpg",
       "showLogo": false,
       "frame": "bga",
-      "priority": 1,
+      "priority": 3,
       "showDesignator": false
     },
     {
@@ -622,7 +609,7 @@
       "name": "PANIC",
       "pos": {
         "x": 71,
-        "y": 79
+        "y": 81
       },
       "designator": "F2",
       "provisional": true,
@@ -635,15 +622,16 @@
       "image": "%SKYNET%/assets/sprites/Pan_-_Ancient_Greek_god_of_the_shepherds.jpg",
       "showLogo": false,
       "showDesignator": false,
-      "plateBorder": "copper"
+      "plateBorder": "copper",
+      "priority": 2
     },
     {
       "id": "p_part",
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 117,
-        "y": 72
+        "x": 128,
+        "y": 68
       },
       "part": "panel",
       "showName": false,
@@ -659,15 +647,15 @@
       "kind": "file.document",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 62,
-        "y": 82
+        "x": 60,
+        "y": 83
       },
       "designator": "F3",
       "provisional": true,
       "path": "%USERPROFILE%/OneDrive/Documents/01 DOCUMENTATION/Dirty Plush - Novel 063026.docx",
       "openWith": "office",
       "showLogo": false,
-      "priority": 1,
+      "priority": 2,
       "showDesignator": false,
       "footprint": {
         "w": 6,
@@ -783,8 +771,8 @@
       "kind": "file.exe",
       "name": "Truth Quest Retro",
       "pos": {
-        "x": 104,
-        "y": 94
+        "x": 112,
+        "y": 98
       },
       "designator": "F4",
       "provisional": true,
@@ -805,8 +793,8 @@
       "kind": "file.exe",
       "name": "FORGE (ENGINE)",
       "pos": {
-        "x": 93,
-        "y": 94
+        "x": 101,
+        "y": 98
       },
       "designator": "F5",
       "provisional": true,
@@ -838,6 +826,76 @@
         "h": 4
       },
       "image": "%SKYNET%/assets/sprites/Anki-icon.svg.png"
+    },
+    {
+      "id": "bg_backdrop",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 57,
+        "y": 67
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/pixel-art-library-digital-tapestry-books-illustration-filled-bookshelves-style-359333719-ezgif.com-webp-to-png-converter.png",
+      "showLogo": false,
+      "frame": "fingers",
+      "footprint": {
+        "w": 33,
+        "h": 27
+      }
+    },
+    {
+      "id": "bg_backdrop_2",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 58,
+        "y": 37
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/arcade-game-world-pixel-scene_24640-45908-ezgif.com-avif-to-png-converter.png",
+      "showLogo": false,
+      "footprint": {
+        "w": 19,
+        "h": 22
+      }
+    },
+    {
+      "id": "bg_backdrop_3",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 111,
+        "y": 31
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/aa5f785be03ca1b.png",
+      "showLogo": false,
+      "footprint": {
+        "w": 22,
+        "h": 17
+      },
+      "pulseGlow": true
+    },
+    {
+      "id": "m_monitor",
+      "kind": "monitor.system",
+      "name": "MONITOR",
+      "pos": {
+        "x": 138,
+        "y": 32
+      },
+      "designator": "M2",
+      "footprint": {
+        "w": 11,
+        "h": 15
+      }
     }
   ],
   "edges": [
@@ -914,12 +972,6 @@
       "kind": "reads"
     },
     {
-      "id": "e11",
-      "from": "m_monitor",
-      "to": "m1_psu",
-      "kind": "reads"
-    },
-    {
       "id": "e12",
       "from": "u_new_conversation",
       "to": "d2_deductionos",
@@ -983,6 +1035,12 @@
       "id": "e22",
       "from": "u1_jarvis",
       "to": "s1_repo_skynet",
+      "kind": "reads"
+    },
+    {
+      "id": "e11",
+      "from": "m1_psu",
+      "to": "m_monitor",
       "kind": "reads"
     }
   ]

@@ -14,6 +14,7 @@ import { onSessionsChanged, restoreSessions, sweepSessions } from './services/se
 import { onServicesChanged, stopAllServices, sweepServices } from './services/service-runner.js';
 import { onFileChanged, stopWatching } from './services/watchers.js';
 import { closeAllChatWindows } from './services/chat-window.js';
+import { setBoardWindow } from './services/main-window.js';
 
 const isDev = !app.isPackaged;
 
@@ -115,6 +116,8 @@ function createWindow(): BrowserWindow {
   if (isDev && devServer) void win.loadURL(devServer);
   else void win.loadFile(join(__dirname, '../renderer/index.html'));
 
+  // Every dialog is parented to this window by reference, never by position in getAllWindows().
+  setBoardWindow(win);
   return win;
 }
 

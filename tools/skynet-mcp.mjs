@@ -494,6 +494,16 @@ const TOOLS = [
     run: ({ boardId }) => call('usage:routes', [boardId])
   },
   {
+    name: 'system_info',
+    description:
+      'The machine itself, read live and read-only: CPU model, per-thread load and effective clock; GPU ' +
+      'temperature, margin to slowdown, load, clocks, VRAM and power (nvidia-smi); RAM modules and use; ' +
+      'drives, activity and free space; every readable temperature; and a `missing` list naming what ' +
+      'could NOT be read, why, and what would provide it. Readings are cached for a few seconds.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => call('hardware:snapshot', [])
+  },
+  {
     name: 'mailbox_read',
     description:
       'Read post. "to-hands" is what JARVIS Head has sent you; "to-head" is what you have sent back. ' +

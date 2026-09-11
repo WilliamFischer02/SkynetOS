@@ -23,7 +23,15 @@ import { TILE } from './camera.js';
 /** Movement below this, in screen pixels, is a click. At 4px a deliberate drag still registers. */
 export const DRAG_THRESHOLD_PX = 4;
 
-export type DragKind = 'none' | 'pan' | 'move' | 'resize';
+export type DragKind = 'none' | 'pan' | 'move' | 'resize' | 'marquee' | 'group';
+
+/** One node in a group selection, as it stood when a group drag started. */
+export interface GroupMember {
+  nodeId: string;
+  kind: string;
+  originTile: { x: number; y: number };
+  footprint: { w: number; h: number };
+}
 
 export interface DragState {
   kind: DragKind;
@@ -44,6 +52,12 @@ export interface DragState {
   currentTile: { x: number; y: number } | null;
   /** Whether currentTile is a legal place to drop. */
   valid: boolean;
+  /** A group drag: every member, and where each started. Null for every other kind. */
+  members: GroupMember[] | null;
+  /** A group drag's offset from where it started, in whole tiles. */
+  delta: { dx: number; dy: number } | null;
+  /** A marquee's far corner, in screen pixels. The near corner is `originScreen`. */
+  currentScreen: { x: number; y: number } | null;
 }
 
 export const NO_DRAG: DragState = {
@@ -56,7 +70,10 @@ export const NO_DRAG: DragState = {
   currentFootprint: null,
   exceeded: false,
   currentTile: null,
-  valid: true
+  valid: true,
+  members: null,
+  delta: null,
+  currentScreen: null
 };
 
 export interface BeginDragInput {
@@ -76,6 +93,10 @@ export interface BeginDragInput {
    * caller, which is the only place that knows where the handle was actually drawn.
    */
   onResizeHandle?: boolean;
+  /** Shift was held. On empty substrate in Edit Board mode, that draws a selection box. */
+  shiftKey?: boolean;
+  /** The current group selection. Pressing on any member of a group of two or more moves all of it. */
+  group?: GroupMember[];
 }
 
 export function beginDrag(input: BeginDragInput): DragState {
@@ -90,6 +111,16 @@ export function beginDrag(input: BeginDragInput): DragState {
   if (input.button === 1) return { ...base, kind: 'pan' };
   if (input.button !== 0) return NO_DRAG;
 
+  /*
+   * Shift-drag on empty substrate draws a selection box. Shift, rather than taking over the plain
+   * drag, because a plain drag on the substrate pans in Edit Board mode and is in William's hands
+   * already. Only in Edit Board mode, for the same reason moving is: selecting a group is the
+   * first half of rearranging one.
+   */
+  if (input.editMode && input.shiftKey && !input.hit) {
+    return { ...base, kind: 'marquee', currentScreen: { ...input.screen } };
+  }
+
   if (input.editMode && input.hit && input.nodeTile) {
     // The handle wins over the body: it is drawn on top of the node's bottom-right corner, so a
     // press there is unambiguously a resize even though it is also inside the node.
@@ -101,6 +132,18 @@ export function beginDrag(input: BeginDragInput): DragState {
         originTile: { ...input.nodeTile },
         originFootprint: { ...input.nodeFootprint },
         currentFootprint: { ...input.nodeFootprint }
+      };
+    }
+    // A press on any member of a group moves the whole group, rigidly, by whole tiles.
+    const group = input.group ?? [];
+    const hitId = input.hit.nodeId;
+    if (group.length > 1 && group.some((m) => m.nodeId === hitId)) {
+      return {
+        ...base,
+        kind: 'group',
+        nodeId: hitId,
+        members: group.map((m) => ({ ...m, originTile: { ...m.originTile }, footprint: { ...m.footprint } })),
+        delta: { dx: 0, dy: 0 }
       };
     }
     return {
@@ -240,4 +283,84 @@ export function shouldCommit(state: DragState): boolean {
   if (state.kind !== 'move' || !state.exceeded || !state.valid) return false;
   if (!state.originTile || !state.currentTile) return false;
   return state.originTile.x !== state.currentTile.x || state.originTile.y !== state.currentTile.y;
+}
+
+/* ────────────────────────── group selection ────────────────────────── */
+
+/**
+ * The offset of a group drag, in whole tiles.
+ *
+ * Clamped so no member is dragged past the top or left edge: the group moves as one rigid piece,
+ * so the member nearest an edge decides how far the whole group may go. The right and bottom
+ * edges are left to `canDropGroup`, which turns the ghosts red rather than stopping the drag,
+ * the same as a single node does.
+ */
+export function groupDelta(state: DragState, screen: { x: number; y: number }, zoom: number): { dx: number; dy: number } {
+  const members = state.members ?? [];
+  if (!members.length) return { dx: 0, dy: 0 };
+  let dx = Math.round((screen.x - state.originScreen.x) / zoom / TILE);
+  let dy = Math.round((screen.y - state.originScreen.y) / zoom / TILE);
+  const minX = Math.min(...members.map((m) => m.originTile.x));
+  const minY = Math.min(...members.map((m) => m.originTile.y));
+  dx = Math.max(dx, -minX);
+  dy = Math.max(dy, -minY);
+  return { dx: dx === 0 ? 0 : dx, dy: dy === 0 ? 0 : dy };
+}
+
+/** Where every member of a group lands for a given offset. */
+export function groupTargets(members: readonly GroupMember[], delta: { dx: number; dy: number }): { nodeId: string; pos: { x: number; y: number } }[] {
+  return members.map((m) => ({ nodeId: m.nodeId, pos: { x: m.originTile.x + delta.dx, y: m.originTile.y + delta.dy } }));
+}
+
+/**
+ * Is this offset a legal home for the whole group?
+ *
+ * Each member obeys the same rule a single node does, against everything OUTSIDE the group. The
+ * members themselves are not obstacles to each other: they move together, so two that did not
+ * overlap before cannot overlap after, and a member sliding into the tile another member just
+ * vacated is exactly what moving a cluster one tile to the right looks like.
+ */
+export function canDropGroup(
+  members: readonly GroupMember[],
+  delta: { dx: number; dy: number },
+  others: NodeRect[],
+  grid: { width: number; height: number }
+): boolean {
+  const inGroup = new Set(members.map((m) => m.nodeId));
+  const outside = others.filter((o) => !inGroup.has(o.nodeId));
+  return members.every((m) =>
+    canDrop(m.nodeId, { x: m.originTile.x + delta.dx, y: m.originTile.y + delta.dy }, m.footprint, outside, grid, m.kind)
+  );
+}
+
+/** Did a group drag actually move the group somewhere legal? */
+export function shouldCommitGroup(state: DragState): boolean {
+  if (state.kind !== 'group' || !state.exceeded || !state.valid || !state.delta) return false;
+  return state.delta.dx !== 0 || state.delta.dy !== 0;
+}
+
+/** A selection box from two corners in any order, in world pixels. */
+export function marqueeRect(a: { x: number; y: number }, b: { x: number; y: number }): { x: number; y: number; w: number; h: number } {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+
+/**
+ * The nodes a selection box catches.
+ *
+ * Components are caught by TOUCHING the box: a cluster of chips is selected by sweeping across
+ * it, which is how every drawing program behaves. Printed things (backdrops, zones, parts, notes)
+ * are caught only when the box holds them WHOLLY. A backdrop is usually as big as a room and
+ * sits under everything, so if touching counted, every box drawn anywhere near it would pick it
+ * up and the next drag would haul the scenery along with the chips.
+ */
+export function selectInRect(rects: readonly NodeRect[], box: { x: number; y: number; w: number; h: number }): string[] {
+  const out: string[] = [];
+  for (const r of rects) {
+    const printed = PRINTED_KINDS.includes(r.kind);
+    const hit = printed
+      ? r.x >= box.x && r.y >= box.y && r.x + r.w <= box.x + box.w && r.y + r.h <= box.y + box.h
+      : r.x < box.x + box.w && r.x + r.w > box.x && r.y < box.y + box.h && r.y + r.h > box.y;
+    if (hit) out.push(r.nodeId);
+  }
+  return out;
 }

@@ -7,7 +7,9 @@ Rewritten at the end of every session. This is what the next agent reads first, 
 **Restart SkynetOS once more** before the first `standing:` message: the dev app was restarted before the protocol header landed. An older app still works; it just writes the pre-protocol header, which is still read correctly.
 **Session before that:** stood SkynetOS up on the second desktop (`William-Desktop`). No code changed.
 **Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
-**`npm run verify` is green: 669 tests** on William-Desktop. The laptop has not run this commit.
+**Later the same session, uncommitted:** U3's read list fixed on the board. Zoom now goes down to 1/4x, and `0` shows the whole board. Browse fixed: every dialog had been parented to the Face's window. Browse also stores portable paths now. None of it has been seen on screen yet: SkynetOS needs a restart.
+**Then, also uncommitted:** group selection: Shift+drag a box or Shift+click, then drag any member, applied as one undo (`node.moveMany`). Couriers walk the traces, and their traffic is credited to the repos and files Claude's tool calls touched, not only the folder a session started in. A Speccy-style system monitor for the `monitor.system` nodes, built by a parallel agent. None of it has been seen on screen.
+**`npm run verify` is green: 742 tests** on William-Desktop, with all of the above in place. Nothing of it is committed.
 
 ---
 
@@ -92,11 +94,12 @@ here the first time.
 
 ### New this session
 
-- **U3 runs from `C:/dev`, but its `readOnLaunch` and `persona` are repo-relative.**
-  `resolveReading` joins them to the cwd, so a fresh U3 session is told `CLAUDE.md`, the persona,
-  the codex index, docs/07 and this file are "NOT on disk". The fix is to prefix `SkynetOS/`
-  (resolveReading does not expand `%SKYNET%`) and point `persona` at
-  `codex/personas/persona.md`. Waiting on William's approval.
+- **U3 runs from `C:/dev`, so its `readOnLaunch` entries are prefixed `SkynetOS/`.** Fixed
+  2026-09-11. `resolveReading` joins them to the cwd and does not expand `%SKYNET%`, so keep that
+  prefix when editing the list. `persona` is `%SKYNET%/codex/personas/persona.md`, so the
+  inspector's Verify resolves it.
+- **Never find a window with `BrowserWindow.getAllWindows()[0]`.** It is the newest window, which
+  is the Face's once that has been opened. Use `boardWindow()` from `services/main-window.ts`.
 - **Two persona files disagree.** U1 uses `codex/personas/persona.md`, U3 the older
   `codex/persona.md`, which lacks the voice section. Root-level `persona.md` and `jarvis-voice.md`
   are untracked copies William added; they match `codex/personas/` apart from whitespace.
@@ -104,6 +107,12 @@ here the first time.
   project-scoped install (`EALLOWSCRIPTS`). Clear it for that one command:
   `Remove-Item Env:npm_config_allow_scripts; npm install ...`.
 - **The repo is public.** `FACE-BOOT.md` and `codex/mailbox/` are world-readable.
+- **Board edits made in the running (pre-restart) app store absolute image paths.** Three
+  backdrops arrived as `C:/dev/SkynetOS/...` and turned `paths:check` red; each was rewritten with
+  `npm run paths:portable`. The picker fix stops this once SkynetOS is restarted.
+- **The system monitor cannot read CPU die, fan or drive temperatures non-elevated.** It says so
+  under NOT READABLE. Running LibreHardwareMonitor as administrator fills them in automatically
+  (WMI namespace `root/LibreHardwareMonitor`).
 - **`git commit -- <paths>`** uses a temporary index, so the pre-commit hook's `git add` may not
   make it into that commit. A normal `git commit` and GitHub Desktop are fine.
 
@@ -145,7 +154,7 @@ heredoc with a quoted delimiter, or `String.fromCharCode(92)`.
 
 In rough order of what was asked for most recently:
 
-1. **Repoint U3's read list** — prefix `SkynetOS/`, persona to `codex/personas/persona.md`, add the voice file. One `node_update`, awaiting approval.
+1. **Restart SkynetOS and check today's work on screen** — Browse with the Face's window open; `0` for the whole board and the wheel down to 1/4x; Shift+drag a box in Edit Board mode and drag the group; couriers walking the traces (on real data the SkynetOS repo node should now draw about a third of the traffic); double-click the PSU or MONITOR for the system monitor. None of it has been seen yet.
 2. **Prove standing orders end to end with the Face's first real brief** — restart SkynetOS, paste the Face's `standing:` message into the panel whole, confirm `codex/face-brief.md` appears with the protocol header, and open U3 fresh to see it in the briefing. Not yet run.
 3. **A board selector** — save and load board variations, so alternatives can be tried side by side.
 4. **Rooms within rooms.** `drive.room` already points at a board file; the descend stack already holds more than two levels.

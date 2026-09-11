@@ -111,6 +111,35 @@ function transform(board: Board, command: Command): { next: Board; inverse: Comm
       };
     }
 
+    case 'node.moveMany': {
+      /*
+       * All or nothing. Every id is checked before anything moves, and the whole result is
+       * validated once by `apply`, so a group that would land one member on top of a chip is
+       * refused as a group rather than half-applied.
+       */
+      const seen = new Set<string>();
+      for (const move of command.moves) {
+        if (seen.has(move.nodeId)) throw new Error(`NODE LISTED TWICE IN ONE MOVE — "${move.nodeId}"`);
+        seen.add(move.nodeId);
+        if (!next.nodes.some((n) => n.id === move.nodeId)) throw new Error(`NO SUCH NODE — "${move.nodeId}"`);
+      }
+      const restore: { nodeId: string; pos: { x: number; y: number } }[] = [];
+      const changed: ChangedField[] = [];
+      for (const move of command.moves) {
+        const node = next.nodes.find((n) => n.id === move.nodeId) as BoardNode;
+        if (node.pos.x === move.pos.x && node.pos.y === move.pos.y) continue;
+        const before = { ...node.pos };
+        node.pos = { x: move.pos.x, y: move.pos.y };
+        restore.push({ nodeId: move.nodeId, pos: before });
+        changed.push({ path: `${move.nodeId}.pos`, before, after: node.pos });
+      }
+      return {
+        next,
+        inverse: { type: 'node.moveMany', boardId: command.boardId, moves: restore },
+        changed
+      };
+    }
+
     case 'node.delete': {
       const index = next.nodes.findIndex((n) => n.id === command.nodeId);
       if (index === -1) throw new Error(`NO SUCH NODE — "${command.nodeId}"`);

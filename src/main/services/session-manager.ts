@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve as resolvePath } from 'node:path';
 import { briefingModeOf, buildBriefing, claudeArgs } from './launch-args.js';
-import { BrowserWindow, dialog } from 'electron';
+import { dialog } from 'electron';
 import type { BoardNode, LaunchMode } from '@shared/types.js';
 import type { SessionInfo, SessionStartResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
@@ -20,6 +20,7 @@ import { resolveMcpConfigs } from './mcp-config.js';
 import { conversationExists } from './conversations.js';
 import { mailForBriefing } from './mailbox.js';
 import { standingOrdersForBriefing } from './face-brief.js';
+import { boardWindow } from './main-window.js';
 import { pickHandsNode } from '@shared/face-brief.js';
 import { openTerminal, readLivePid, stagePrompt } from './terminal.js';
 import { resolveNodeTarget } from './target-resolver.js';
@@ -526,7 +527,7 @@ export function briefingActive(node: BoardNode): boolean {
 }
 
 async function confirm(title: string, message: string, detail: string): Promise<boolean> {
-  const win_ = BrowserWindow.getAllWindows()[0];
+  const win_ = boardWindow();
   const options = {
     type: 'warning' as const,
     buttons: ['Launch', 'Cancel'],

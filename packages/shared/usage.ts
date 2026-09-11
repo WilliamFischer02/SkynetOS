@@ -180,6 +180,135 @@ export interface UsageRoute {
   projects: string[];
   /** Weighted tokens inside the window, attributed to this node. */
   windowTokens: number;
+  /** Distinct files Claude touched inside this node's folders or files, inside the window. */
+  touchedFiles?: number;
+}
+
+/* ────────────────────────── what Claude actually worked on ────────────────────────── */
+
+/**
+ * One assistant message inside the window: what it cost, which project's conversation it was in,
+ * and which files its tool calls named.
+ *
+ * ── Why files, and not only projects ──────────────────────────────────────────────────────────
+ *
+ * William: "the bot movement should be proportional and updating based on which repos or files
+ * claude has worked within." Attributing by project directory alone credits the directory a
+ * session was STARTED in. A session started in C:/dev that spends an hour editing
+ * C:/dev/SkynetOS/src sent every token to "C:/dev" and none to the SkynetOS repo node, which is
+ * where the work actually happened. The tool calls say where it happened: every Read, Edit and
+ * Write names its file in the same transcript line that carries the usage.
+ */
+export interface ActivityEvent {
+  /** Weighted tokens (see `weightedTokens`). */
+  w: number;
+  /** The Claude project directory the conversation lives in, e.g. `C--dev`. */
+  project: string;
+  /** Normalised absolute paths the message's tool calls named. Often empty. */
+  paths: string[];
+}
+
+/** What one board node stands for, for attribution. */
+export interface NodeClaim {
+  nodeId: string;
+  /** Claude project directories whose conversations are this node's own (an agent's cwd). */
+  projects: string[];
+  /** Folders: a touched path inside one of these is work in this node. */
+  dirs: string[];
+  /** Single files: a touched path equal to one of these is work in this node. */
+  files: string[];
+}
+
+/** One spelling for a path, so `C:\Dev\X` and `c:/dev/x/` compare equal. Windows is case-insensitive. */
+export function normalisePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
+const isAbsolutePath = (p: string): boolean => /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('/') || p.startsWith('\\\\');
+
+/**
+ * The paths a transcript message's tool calls named.
+ *
+ * `file_path` (Read, Edit, Write), `notebook_path` (NotebookEdit) and `path` (Grep, Glob, which
+ * name a folder). A relative one is resolved against the conversation's own `cwd`, which every
+ * transcript line records. Anything else, including a Bash command line, is not parsed: guessing
+ * paths out of shell text would credit work to folders that were only mentioned.
+ */
+export function toolPaths(content: unknown, cwd?: string): string[] {
+  if (!Array.isArray(content)) return [];
+  const out = new Set<string>();
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    const b = block as { type?: unknown; input?: unknown };
+    if (b.type !== 'tool_use' || !b.input || typeof b.input !== 'object') continue;
+    const input = b.input as Record<string, unknown>;
+    for (const key of ['file_path', 'notebook_path', 'path']) {
+      const value = input[key];
+      if (typeof value !== 'string' || !value.trim()) continue;
+      const raw = value.trim();
+      const absolute = isAbsolutePath(raw) ? raw : cwd ? `${cwd.replace(/[\\/]+$/, '')}/${raw}` : null;
+      if (absolute) out.add(normalisePath(absolute));
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Share out the window's activity between the nodes of one board.
+ *
+ * Each message is claimed by every node it belongs to: the node whose own conversation it was
+ * (by project), and every node whose folder or file it touched. It is SPLIT evenly between them,
+ * so a message is never counted twice and the shares across a board still sum to at most 1. That
+ * rule is the whole point: a repo that is both a `store.repo` on the board and inside a room
+ * drive would otherwise send twice the traffic it earned.
+ *
+ * A message nobody claims still counts toward the total. The shares are fractions of ALL Claude
+ * activity on this machine, not of the part this board happens to show, so a quiet board looks
+ * quiet.
+ */
+export function attributeActivity(events: readonly ActivityEvent[], claims: readonly NodeClaim[]): UsageRoute[] {
+  const total = events.reduce((sum, e) => sum + e.w, 0);
+  if (total <= 0) return [];
+
+  const prepared = claims.map((c) => ({
+    nodeId: c.nodeId,
+    projects: new Set(c.projects),
+    dirs: c.dirs.map(normalisePath).filter(Boolean),
+    files: new Set(c.files.map(normalisePath).filter(Boolean))
+  }));
+  const tally = new Map<string, { tokens: number; projects: Set<string>; touched: Set<string> }>();
+
+  for (const event of events) {
+    const claimants: { nodeId: string; byProject: boolean; touched: string[] }[] = [];
+    for (const claim of prepared) {
+      const byProject = claim.projects.has(event.project);
+      const touched = event.paths.filter((p) => claim.files.has(p) || claim.dirs.some((d) => p === d || p.startsWith(`${d}/`)));
+      if (byProject || touched.length) claimants.push({ nodeId: claim.nodeId, byProject, touched });
+    }
+    if (!claimants.length) continue;
+    const portion = event.w / claimants.length;
+    for (const c of claimants) {
+      const entry = tally.get(c.nodeId) ?? { tokens: 0, projects: new Set<string>(), touched: new Set<string>() };
+      entry.tokens += portion;
+      entry.projects.add(event.project);
+      for (const p of c.touched) entry.touched.add(p);
+      tally.set(c.nodeId, entry);
+    }
+  }
+
+  const routes: UsageRoute[] = [];
+  for (const [nodeId, entry] of tally) {
+    if (entry.tokens <= 0) continue;
+    routes.push({
+      nodeId,
+      share: entry.tokens / total,
+      projects: [...entry.projects].sort(),
+      windowTokens: entry.tokens,
+      touchedFiles: entry.touched.size
+    });
+  }
+  routes.sort((a, b) => b.share - a.share || a.nodeId.localeCompare(b.nodeId));
+  return routes;
 }
 
 /**

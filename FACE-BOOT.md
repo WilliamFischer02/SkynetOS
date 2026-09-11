@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T06:07:44.293Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T07:10:37.935Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -167,7 +167,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
-| SkynetOS Mainboard (`root`) | `board/root.board.json` | 42 | 22 | 0 | 15 |
+| SkynetOS Mainboard (`root`) | `board/root.board.json` | 45 | 22 | 0 | 18 |
 | DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 14 | 8 | 8 | 1 |
 | GameOS (`gameos`) | `board/gameos/room.board.json` | 13 | 10 | 8 | 1 |
 | MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 27 | 15 | 9 | 3 |
@@ -208,7 +208,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `storyos` / S2 Dirty Plush (shared) (`s2_plush_cloud`, store.cloud): **INVALID** `https://drive.google.com/drive/folders/REPLACE_ME`
 - `storyos` / F3 Series bible (`f3_bible`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md`
 
-### Provisional nodes (20)
+### Provisional nodes (23)
 
 Placed on the board but not yet confirmed as bound to anything real.
 
@@ -227,6 +227,9 @@ Placed on the board but not yet confirmed as bound to anything real.
 - `root` / F4 Truth Quest Retro (`f_new_program_2`, file.exe)
 - `root` / F5 FORGE (ENGINE) (`f_new_program_3`, file.exe)
 - `root` / J3 ANKI (WEB) (`j_new_link_2`, link.url)
+- `root` / BACKDROP (`bg_backdrop`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_2`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_3`, decor.image)
 - `deductionos` / D1 Mind Palace (`d1_palace`, drive.room)
 - `gameos` / D1 Handheld (`d1_handheld`, drive.room)
 - `minecraftos` / U5 CC-JOHNWICK (`u5_johnwick`, agent.code)
@@ -242,11 +245,13 @@ Compressed from `handoff.md`, which is linked from the repo root.
 **Restart SkynetOS once more** before the first `standing:` message: the dev app was restarted before the protocol header landed. An older app still works; it just writes the pre-protocol header, which is still read correctly.
 **Session before that:** stood SkynetOS up on the second desktop (`William-Desktop`). No code changed.
 **Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
-**`npm run verify` is green: 669 tests** on William-Desktop. The laptop has not run this commit.
+**Later the same session, uncommitted:** U3's read list fixed on the board. Zoom now goes down to 1/4x, and `0` shows the whole board. Browse fixed: every dialog had been parented to the Face's window. Browse also stores portable paths now. None of it has been seen on screen yet: SkynetOS needs a restart.
+**Then, also uncommitted:** group selection: Shift+drag a box or Shift+click, then drag any member, applied as one undo (`node.moveMany`). Couriers walk the traces, and their traffic is credited to the repos and files Claude's tool calls touched, not only the folder a session started in. A Speccy-style system monitor for the `monitor.system` nodes, built by a parallel agent. None of it has been seen on screen.
+**`npm run verify` is green: 742 tests** on William-Desktop, with all of the above in place. Nothing of it is committed.
 
 Next, in order:
 
-1. Repoint U3's read list
+1. Restart SkynetOS and check today's work on screen
 2. Prove standing orders end to end with the Face's first real brief
 3. A board selector
 4. Rooms within rooms
@@ -262,7 +267,7 @@ None. `codex/face-brief.md` has not been written.
 
 ## 6. Hands tool surface
 
-The skynet MCP server (`tools/skynet-mcp.mjs`), 22 tools. Name them when you ask the Hands for something.
+The skynet MCP server (`tools/skynet-mcp.mjs`), 23 tools. Name them when you ask the Hands for something.
 The Hands also have a shell, git, and read/write access to everything under `C:/dev`.
 
-`board_list` · `board_read` · `board_resolve` · `classify_path` · `edge_create` · `edge_delete` · `history` · `mailbox_archive` · `mailbox_read` · `mailbox_send` · `node_create` · `node_delete` · `node_fields` · `node_move` · `node_update` · `open_target` · `session_list` · `session_start` · `session_stop` · `terminal_open` · `usage_routes` · `usage_summary`
+`board_list` · `board_read` · `board_resolve` · `classify_path` · `edge_create` · `edge_delete` · `history` · `mailbox_archive` · `mailbox_read` · `mailbox_send` · `node_create` · `node_delete` · `node_fields` · `node_move` · `node_update` · `open_target` · `session_list` · `session_start` · `session_stop` · `system_info` · `terminal_open` · `usage_routes` · `usage_summary`

@@ -1,6 +1,8 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { COPPER, COPPER_DARK, hexToNumber } from '@shared/palette.js';
 import { TILE } from './camera.js';
+import { pathLength, pointAt } from './courier-paths.js';
+import type { Point } from './traces.js';
 
 /**
  * The couriers: little robots that carry packets across the board, in proportion to what you are
@@ -18,11 +20,16 @@ import { TILE } from './camera.js';
  *
  * ── How they move ────────────────────────────────────────────────────────────────────────────
  *
- * Orthogonally, on whole pixels, one axis at a time — the same discipline the copper traces
- * follow, because a diagonal walk on a pixel board is a shimmering staircase. They emerge from a
- * source (the JARVIS head on the root board, a board edge inside a room), walk to the destination,
- * and glitch-dissolve on contact: a two-step decay through the palette rather than a fade, since
- * docs/02 forbids partial alpha.
+ * Along the copper. Each route is a polyline built by courier-paths.ts from the traces the router
+ * actually laid down: out of the JARVIS head (or a room's best-connected node), along every trace
+ * between it and the destination, through the chips in between. Where no wire joins the two, the
+ * router generates one on the spot so the walk still looks like a trace; only a board with no
+ * wiring at all falls back to the old L from the nearest edge. William: "the wires are the paths
+ * basically."
+ *
+ * Orthogonally, on whole pixels, one axis at a time, because a diagonal walk on a pixel board is
+ * a shimmering staircase. On arrival they glitch-dissolve: a decay through the palette rather than
+ * a fade, since docs/02 forbids partial alpha.
  *
  * The whole layer is skipped when `reducedMotion` is set — docs/02 says state must survive
  * without animation, and this is the most animated thing on the board.
@@ -32,10 +39,8 @@ import { TILE } from './camera.js';
 export interface CourierRoute {
   /** The node these couriers serve. Used for the colour and as the arrival point. */
   nodeId: string;
-  /** Where they come from, in world px. */
-  from: { x: number; y: number };
-  /** Where they are going, in world px — the centre of the destination node. */
-  to: { x: number; y: number };
+  /** The road, in world px: orthogonal, from the source to the destination. See courier-paths.ts. */
+  path: Point[];
   /**
    * Share of board activity, 0..1. Drives how many are walking and how often one sets off.
    * Straight from `shares()` on the usage summary.
@@ -47,14 +52,14 @@ export interface CourierRoute {
 
 interface Courier {
   route: CourierRoute;
-  /** Progress along the L-shaped path, 0..1. */
-  t: number;
-  /** World px per frame. Slower for a heavier packet, which reads as effort. */
+  /** World px walked along the route's path so far. */
+  distance: number;
+  /** The path's total length, measured once at spawn. */
+  length: number;
+  /** World px per frame. */
   speed: number;
   /** 0 while walking; counts up once it has arrived, driving the dissolve. */
   decay: number;
-  /** Which leg first: horizontal or vertical. Alternating makes a crowd look like a crowd. */
-  horizontalFirst: boolean;
   sprite: Sprite;
   /** Animation phase, so legs do not all move in lockstep. */
   phase: number;
@@ -88,8 +93,22 @@ const MAX_COURIERS = 180;
  * Applied on the axis PERPENDICULAR to the current leg, and rounded — the walk stays orthogonal
  * and on whole pixels, which is the rule the copper follows and the reason the board does not
  * shimmer.
+ *
+ * Two pixels, down from five, now that they walk the traces: a supervises run is three or four
+ * pixels wide, and five pixels of drift put half the column on the bare substrate beside the wire
+ * it is meant to be following. It tapers to nothing at every corner, so a turn never jumps.
  */
-const WOBBLE_PX = 5;
+const WOBBLE_PX = 2;
+
+/**
+ * How long a journey takes, in frames: five to ten seconds at 60fps, whatever the distance.
+ * Speed is derived from it and clamped, so a short hop is not a crawl and a long one is not a
+ * sprint.
+ */
+const JOURNEY_FRAMES_MIN = 300;
+const JOURNEY_FRAMES_SPREAD = 300;
+const SPEED_MIN = 0.5;
+const SPEED_MAX = 3;
 
 /**
  * ── Colour: every robot is silver; its DESTINATION is in the outline ─────────────────────────
@@ -309,6 +328,8 @@ export class CourierLayer {
 
   private spawn(route: CourierRoute): void {
     if (this.couriers.length >= MAX_COURIERS) return;
+    const length = pathLength(route.path);
+    if (length <= 0) return;
     const shade = Math.floor(Math.random() * SHADES.length);
     const frames = this.framesFor(route.color, shade, 'walk');
     if (!frames.length) return;
@@ -319,12 +340,12 @@ export class CourierLayer {
 
     this.couriers.push({
       route,
-      t: 0,
-      // A spread of speeds, so a column of couriers strings out into a trickle instead of
+      distance: 0,
+      length,
+      // A spread of journey times, so a column of couriers strings out into a trickle instead of
       // marching as one block.
-      speed: 0.0018 + Math.random() * 0.0022,
+      speed: Math.min(SPEED_MAX, Math.max(SPEED_MIN, length / (JOURNEY_FRAMES_MIN + Math.random() * JOURNEY_FRAMES_SPREAD))),
       decay: 0,
-      horizontalFirst: Math.random() < 0.5,
       sprite,
       phase: Math.floor(Math.random() * 8),
       // Signed, so half of them drift one way and half the other and the column fans out rather
@@ -360,47 +381,32 @@ export class CourierLayer {
     for (let i = this.couriers.length - 1; i >= 0; i--) {
       const courier = this.couriers[i];
       if (!courier) continue;
-      const { from, to } = courier.route;
 
       if (courier.decay === 0) {
-        courier.t = Math.min(1, courier.t + courier.speed);
+        courier.distance = Math.min(courier.length, courier.distance + courier.speed);
+
+        // Along the road: one axis at a time, whole pixels, never a diagonal, like the copper.
+        const at = pointAt(courier.route.path, courier.distance);
 
         /*
-         * The L-shaped walk. One axis at a time, whole pixels, never a diagonal — the same rule
-         * the copper follows. The turn happens at t = 0.5, which puts the corner at a different
-         * place for every courier because the two legs are rarely the same length.
-         */
-        let x: number;
-        let y: number;
-        if (courier.horizontalFirst) {
-          x = courier.t < 0.5 ? from.x + (to.x - from.x) * (courier.t * 2) : to.x;
-          y = courier.t < 0.5 ? from.y : from.y + (to.y - from.y) * ((courier.t - 0.5) * 2);
-        } else {
-          x = courier.t < 0.5 ? from.x : from.x + (to.x - from.x) * ((courier.t - 0.5) * 2);
-          y = courier.t < 0.5 ? from.y + (to.y - from.y) * (courier.t * 2) : to.y;
-        }
-
-        /*
-         * The wobble, on the axis perpendicular to the leg being walked.
+         * The wobble, on the axis perpendicular to the stretch being walked.
          *
-         * `sin(t * 2pi + phase)` is a single slow excursion across the whole journey rather than a
-         * jitter, and it is scaled down to nothing at both ends — so couriers leave the source and
-         * arrive at the destination on the line, and only wander in between. Rounded, because the
-         * board is whole pixels.
+         * One slow excursion per stretch, scaled to nothing at both ends of it, so a courier is
+         * exactly on the trace at every corner and at both ends of its journey and only wanders
+         * in between. The sign and the size are per courier, so a column fans out. Rounded, because
+         * the board is whole pixels.
          */
-        const taper = Math.sin(courier.t * Math.PI); // 0 at both ends, 1 in the middle
-        const drift = Math.round(courier.wobble * taper * Math.sin(courier.t * Math.PI * 2 + courier.wobblePhase));
-        const onHorizontalLeg = courier.horizontalFirst ? courier.t < 0.5 : courier.t >= 0.5;
+        const drift = Math.round(courier.wobble * Math.sin(at.along * Math.PI) * Math.sin(courier.wobblePhase));
 
-        courier.sprite.x = Math.round(x) + (onHorizontalLeg ? 0 : drift) - 4;
-        courier.sprite.y = Math.round(y) + (onHorizontalLeg ? drift : 0) - 5;
+        courier.sprite.x = Math.round(at.x) + (at.horizontal ? 0 : drift) - 4;
+        courier.sprite.y = Math.round(at.y) + (at.horizontal ? drift : 0) - 5;
 
         const walk = this.framesFor(courier.route.color, courier.shade, 'walk');
         const step = Math.floor((this.frame + courier.phase) / 6) % 2;
         if (walk[step]) courier.sprite.texture = walk[step];
 
         // Arrived: start coming apart. This is the moment the packet is delivered.
-        if (courier.t >= 1) courier.decay = 1;
+        if (courier.distance >= courier.length) courier.decay = 1;
         continue;
       }
 

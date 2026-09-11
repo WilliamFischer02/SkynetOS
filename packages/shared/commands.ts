@@ -20,6 +20,12 @@ export type Command =
   | { type: 'node.create'; boardId: string; node: BoardNode }
   | { type: 'node.update'; boardId: string; nodeId: string; patch: Partial<BoardNode> }
   | { type: 'node.move'; boardId: string; nodeId: string; pos: GridPos }
+  /**
+   * Several nodes moved together, as ONE command, so one Ctrl+Z puts the whole group back. A
+   * group drag sent as N separate moves would take N undos, and every intermediate state would
+   * be a half-moved cluster nobody ever asked for.
+   */
+  | { type: 'node.moveMany'; boardId: string; moves: { nodeId: string; pos: GridPos }[] }
   | { type: 'node.delete'; boardId: string; nodeId: string }
   | { type: 'edge.create'; boardId: string; edge: BoardEdge }
   | { type: 'edge.update'; boardId: string; edgeId: string; patch: Partial<BoardEdge> }
@@ -97,6 +103,7 @@ export function describeCommand(command: Command): string {
     case 'node.create': return `create ${command.node.kind} ${command.node.name}`;
     case 'node.update': return `update ${command.nodeId} (${Object.keys(command.patch).join(', ')})`;
     case 'node.move': return `move ${command.nodeId} to ${command.pos.x},${command.pos.y}`;
+    case 'node.moveMany': return `move ${command.moves.length} nodes`;
     case 'node.delete': return `delete node ${command.nodeId}`;
     case 'edge.create': return `wire ${command.edge.from} → ${command.edge.to}`;
     case 'edge.update': return `update trace ${command.edgeId}`;

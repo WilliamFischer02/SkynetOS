@@ -163,6 +163,8 @@ interface BoardState {
 
   runCommand: (command: Command, label?: string) => Promise<CommandResult>;
   moveNode: (nodeId: string, pos: { x: number; y: number }) => Promise<void>;
+  /** Move a group selection as one command, so one Ctrl+Z puts all of it back. */
+  moveNodes: (moves: { nodeId: string; pos: { x: number; y: number } }[]) => Promise<void>;
   /**
    * Change a node's footprint. A `node.update` like any other, so it snapshots, it lands in the
    * same history, and Ctrl+Z takes it back — scaling is an edit, not a view setting.
@@ -538,6 +540,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const node = get().board?.nodes.find((n) => n.id === nodeId);
     const label = `move ${node?.designator ?? nodeId} to ${pos.x},${pos.y}`;
     await get().runCommand({ type: 'node.move', boardId: get().boardId, nodeId, pos }, label);
+  },
+
+  moveNodes: async (moves) => {
+    if (!moves.length) return;
+    if (moves.length === 1 && moves[0]) { await get().moveNode(moves[0].nodeId, moves[0].pos); return; }
+    await get().runCommand({ type: 'node.moveMany', boardId: get().boardId, moves }, `move ${moves.length} nodes`);
   },
 
   resizeNode: async (nodeId, footprint) => {

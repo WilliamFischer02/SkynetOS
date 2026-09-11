@@ -279,6 +279,11 @@ export function Inspector(): React.JSX.Element | null {
               <div className="state-meta">
                 <span>{formatTokens(usageRoute.windowTokens)} TOKENS</span>
                 <span>{usageRoute.projects.length} PROJECT{usageRoute.projects.length === 1 ? '' : 'S'}</span>
+                {usageRoute.touchedFiles ? (
+                  <span title="Distinct files Claude's tool calls touched inside this node, in the usage window.">
+                    {usageRoute.touchedFiles} FILE{usageRoute.touchedFiles === 1 ? '' : 'S'} TOUCHED
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : null}

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { BrowserWindow, dialog, shell } from 'electron';
+import { dialog, shell } from 'electron';
 import type { BoardNode } from '@shared/types.js';
 import type { TerminalOpenResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
@@ -11,6 +11,7 @@ import { officeRefusal, officeUri } from '@shared/office.js';
 import { elevatedProgramArgv, toWindowsPath as toWindows } from './launch-script.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
+import { boardWindow } from './main-window.js';
 import { openTerminal } from './terminal.js';
 import { getSettings } from './settings.js';
 
@@ -35,7 +36,7 @@ export interface OpenResult {
 const confirmedBinaries = new Set<string>();
 
 async function confirm(title: string, message: string, detail: string, confirmLabel: string): Promise<boolean> {
-  const win = BrowserWindow.getAllWindows()[0];
+  const win = boardWindow();
   const options = {
     type: 'warning' as const,
     buttons: [confirmLabel, 'Cancel'],

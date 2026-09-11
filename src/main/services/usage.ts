@@ -4,9 +4,13 @@ import type { BoardNode } from '@shared/types.js';
 import {
   ZERO_TOKENS,
   addTokens,
+  attributeActivity,
+  normalisePath,
   projectDirFor,
-  shares,
+  toolPaths,
   weightedTokens,
+  type ActivityEvent,
+  type NodeClaim,
   type ProjectUsage,
   type TokenCounts,
   type UsageRoute,
@@ -14,6 +18,7 @@ import {
 } from '@shared/usage.js';
 import { resolveBudget } from '@shared/plans.js';
 import { loadBoard, loadBoardByFile } from './board-store.js';
+import { expandPath } from './target-resolver.js';
 import { claudeProjectsDir } from './conversations.js';
 import { getSettings } from './settings.js';
 
@@ -45,9 +50,14 @@ interface CacheEntry {
   usage: ProjectUsage;
   /** [timestampMs, weightedTokens] for every assistant message, for the peak calculation. */
   events: [number, number][];
+  /** Every assistant message inside the window, with the files its tool calls named. */
+  activity: ActivityEvent[];
 }
 
 const cache = new Map<string, CacheEntry>();
+
+/** The window's activity across every project, as of the last `readUsage`. What the couriers are shared out from. */
+let latestActivity: ActivityEvent[] = [];
 
 /** Undo Claude Code's directory mangling well enough to show a path. Best effort, and labelled so. */
 function cwdFromProjectDir(dir: string): string {
@@ -96,7 +106,13 @@ export function peakWindow(events: [number, number][], hours: number): number {
   return best;
 }
 
-function scanProject(dir: string, projectDir: string, windowStart: number, events: [number, number][]): ProjectUsage {
+function scanProject(
+  dir: string,
+  projectDir: string,
+  windowStart: number,
+  events: [number, number][],
+  activity: ActivityEvent[]
+): ProjectUsage {
   let allTime: TokenCounts = ZERO_TOKENS;
   let windowTokens: TokenCounts = ZERO_TOKENS;
   let messagesInWindow = 0;
@@ -132,7 +148,9 @@ function scanProject(dir: string, projectDir: string, windowStart: number, event
         type?: string;
         timestamp?: string;
         totalCostUSD?: number;
-        message?: { usage?: Record<string, unknown> };
+        /** The conversation's working directory, recorded on every line. Resolves relative tool paths. */
+        cwd?: string;
+        message?: { usage?: Record<string, unknown>; content?: unknown };
       };
       try {
         record = JSON.parse(line) as typeof record;
@@ -160,6 +178,9 @@ function scanProject(dir: string, projectDir: string, windowStart: number, event
         if (at >= windowStart) {
           windowTokens = addTokens(windowTokens, tokens);
           messagesInWindow++;
+          // The files this message's tool calls named, from the same line that carries its usage,
+          // so attributing it by file costs no extra read. See attributeActivity.
+          activity.push({ w: weightedTokens(tokens), project: projectDir, paths: toolPaths(record.message?.content, record.cwd) });
         }
       }
     }
@@ -229,6 +250,7 @@ export function readUsage(windowHours?: number): UsageSummary {
 
   const projects: ProjectUsage[] = [];
   const allEvents: [number, number][] = [];
+  const activity: ActivityEvent[] = [];
   for (const projectDir of dirs) {
     const dir = join(root, projectDir);
     const signature = directorySignature(dir);
@@ -242,16 +264,20 @@ export function readUsage(windowHours?: number): UsageSummary {
     if (cached && sameWindow && cached.newestMtime === signature.newestMtime && cached.fileCount === signature.fileCount) {
       projects.push(cached.usage);
       allEvents.push(...cached.events);
+      activity.push(...cached.activity);
       continue;
     }
 
     const events: [number, number][] = [];
-    const usage = scanProject(dir, projectDir, windowStart, events);
-    cache.set(projectDir, { ...signature, windowStart, usage, events });
+    const windowActivity: ActivityEvent[] = [];
+    const usage = scanProject(dir, projectDir, windowStart, events, windowActivity);
+    cache.set(projectDir, { ...signature, windowStart, usage, events, activity: windowActivity });
     projects.push(usage);
     allEvents.push(...events);
+    activity.push(...windowActivity);
   }
 
+  latestActivity = activity;
   projects.sort((a, b) => weightedTokens(b.window) - weightedTokens(a.window));
 
   const budget = resolveBudget(settings.plan, settings.tokenBudget);
@@ -276,82 +302,90 @@ export function clearUsageCache(): void {
 
 /* ────────────────────────── attributing usage to nodes ────────────────────────── */
 
+type Claim = Omit<NodeClaim, 'nodeId'>;
+
+const NO_CLAIM: Claim = { projects: [], dirs: [], files: [] };
+
+/** A node's path as an absolute, normalised path, or null for a glob, a URL or nothing. */
+function claimPath(value: string | undefined): string | null {
+  if (!value?.trim() || value.includes('*')) return null;
+  const expanded = expandPath(value);
+  return /^[a-zA-Z]:[\\/]/.test(expanded) ? normalisePath(expanded) : null;
+}
+
 /**
- * Which Claude project directories a node represents.
+ * What a node stands for, for attributing Claude's work to it.
  *
- * Only kinds that can actually consume Claude resources are listed. A `link.url` or a `note.silk`
- * has no working directory and no conversation, so it gets no couriers — William asked for the
- * traffic to be proportional to "each actually claude-enabled node", and a bookmark is not one.
+ * - An agent (or a service) owns the conversations started in its working directory.
+ * - A repo or folder owns work done INSIDE it, whichever conversation did it, as well as
+ *   conversations started in it. This is the change that made the couriers follow "which repos or
+ *   files claude has worked within": a session started in C:/dev that edits the SkynetOS source
+ *   now sends traffic to the SkynetOS repo node, not only to C:/dev.
+ * - A document or program owns work done on that exact file.
+ * - A room drive stands in for everything inside it, so MinecraftOS draws traffic from the top
+ *   level without you having to go in.
+ *
+ * A `link.url` or a `note.silk` has no working directory and no file, so it gets no couriers.
+ * William asked for the traffic to be proportional to "each actually claude-enabled node", and a
+ * bookmark is not one.
  */
-function projectsForNode(node: BoardNode, depth: number): string[] {
+function claimFor(node: BoardNode, depth: number): Claim {
   switch (node.kind) {
     case 'agent.code':
     case 'service.process':
-      return node.cwd ? [projectDirFor(node.cwd)] : [];
+      return node.cwd ? { ...NO_CLAIM, projects: [projectDirFor(expandPath(node.cwd))] } : NO_CLAIM;
     case 'store.repo':
-    case 'store.folder':
-      return node.path ? [projectDirFor(node.path)] : [];
+    case 'store.folder': {
+      const dir = claimPath(node.path);
+      return dir ? { projects: [projectDirFor(dir)], dirs: [dir], files: [] } : NO_CLAIM;
+    }
+    case 'file.document':
+    case 'file.exe': {
+      const file = claimPath(node.path);
+      return file ? { ...NO_CLAIM, files: [file] } : NO_CLAIM;
+    }
     case 'drive.room': {
-      /*
-       * A room drive stands in for everything inside it. Descending is what makes the root board
-       * meaningful: MinecraftOS is not itself a repo, but it is where a quarter of the week went,
-       * and the couriers should say so from the top level without you having to go in.
-       *
-       * Depth-limited because a board file is user-editable data and a cycle in it must degrade
-       * to "no couriers" rather than to a stack overflow.
-       */
-      if (depth <= 0 || !node.boardFile) return [];
+      // Depth-limited because a board file is user-editable data, and a cycle in it must degrade
+      // to "no couriers" rather than to a stack overflow.
+      if (depth <= 0 || !node.boardFile) return NO_CLAIM;
       const load = loadBoardByFile(node.boardFile);
-      if (!load.ok) return [];
-      const out = new Set<string>();
+      if (!load.ok) return NO_CLAIM;
+      const projects = new Set<string>();
+      const dirs = new Set<string>();
+      const files = new Set<string>();
       for (const child of load.board.nodes) {
-        for (const project of projectsForNode(child, depth - 1)) out.add(project);
+        const claim = claimFor(child, depth - 1);
+        claim.projects.forEach((p) => projects.add(p));
+        claim.dirs.forEach((d) => dirs.add(d));
+        claim.files.forEach((f) => files.add(f));
       }
-      return [...out];
+      return { projects: [...projects], dirs: [...dirs], files: [...files] };
     }
     default:
-      return [];
+      return NO_CLAIM;
   }
 }
 
 /**
  * Attribute the window's usage to the nodes of one board.
  *
- * A project claimed by several nodes has its share SPLIT between them rather than counted once
- * per node. Otherwise a repo that appears both as a `store.repo` and inside a room drive would
- * generate twice the traffic it earned, and the board would be lying about proportions — which is
- * the one thing this feature exists to get right.
+ * Message by message, not project by project: each assistant message is split between every node
+ * that claims it, by conversation or by the files it touched. So a message is never counted twice,
+ * the shares across a board still sum to at most 1, and a repo that appears both as a `store.repo`
+ * and inside a room drive does not send twice the traffic it earned. Proportions are the one thing
+ * this feature exists to get right. The arithmetic is `attributeActivity` in packages/shared,
+ * where test/activity.test.ts holds it.
  */
 export function usageRoutes(boardId: string, summary?: UsageSummary): UsageRoute[] {
   const load = loadBoard(boardId);
   if (!load.ok) return [];
-  const usage = summary ?? readUsage();
-  const share = shares(usage);
+  // A caller that passes a summary has just read one, which refreshed the activity with it.
+  if (!summary) readUsage();
 
-  const byNode = new Map<string, string[]>();
-  const claimants = new Map<string, number>();
-
+  const claims: NodeClaim[] = [];
   for (const node of load.board.nodes) {
-    const projects = projectsForNode(node, 3).filter((p) => (share.get(p) ?? 0) > 0);
-    if (!projects.length) continue;
-    byNode.set(node.id, projects);
-    for (const project of projects) claimants.set(project, (claimants.get(project) ?? 0) + 1);
+    const claim = claimFor(node, 3);
+    if (claim.projects.length || claim.dirs.length || claim.files.length) claims.push({ nodeId: node.id, ...claim });
   }
-
-  const windowByProject = new Map(usage.projects.map((p) => [p.projectDir, weightedTokens(p.window)]));
-
-  const routes: UsageRoute[] = [];
-  for (const [nodeId, projects] of byNode) {
-    let total = 0;
-    let tokens = 0;
-    for (const project of projects) {
-      const split = claimants.get(project) ?? 1;
-      total += (share.get(project) ?? 0) / split;
-      tokens += (windowByProject.get(project) ?? 0) / split;
-    }
-    if (total > 0) routes.push({ nodeId, share: total, projects, windowTokens: tokens });
-  }
-
-  routes.sort((a, b) => b.share - a.share);
-  return routes;
+  return attributeActivity(latestActivity, claims);
 }

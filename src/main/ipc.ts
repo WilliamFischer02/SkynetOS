@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
+import { app, dialog, ipcMain, screen } from 'electron';
 import { CHANNELS, isAgentMethod, type Channel, type SkynetApi } from '@shared/ipc.js';
 import type { BoardNode } from '@shared/types.js';
 import type { Actor, CommandRequest } from '@shared/commands.js';
@@ -6,11 +6,13 @@ import { DEFAULT_FOOTPRINT, isDecorPart } from '@shared/types.js';
 import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
+import { boardWindow } from './services/main-window.js';
 import { getSettings, setUsagePlan } from './services/settings.js';
 import { lastClaudeSessionId } from './services/db.js';
 import { resumeCommandLine } from './services/launch-args.js';
 import { mosaicForNode } from './services/mosaic.js';
 import { clearUsageCache, readUsage, usageRoutes } from './services/usage.js';
+import { hardwareSnapshot } from './services/hardware.js';
 import { isPlanId } from '@shared/plans.js';
 import { archiveMail, listMail, sendMail } from './services/mailbox.js';
 import {
@@ -106,7 +108,27 @@ async function openNode(
   nodeId: string,
   by: Actor
 ): Promise<Awaited<ReturnType<SkynetApi['node:open']>>> {
-  const result = await openTarget(nodeOrThrow(boardId, nodeId), by);
+  const node = nodeOrThrow(boardId, nodeId);
+
+  /*
+   * A monitor.system node points at nothing on disk: it IS the reading. So activating it opens the
+   * system monitor panel rather than failing with "POINTS AT NOTHING", which is what a double-click
+   * on the PSU used to say. For the user only: an agent has `hardware:snapshot` for the numbers, and
+   * a panel popping up in front of William because an agent asked would be a surprise with no purpose.
+   */
+  if (node.kind === 'monitor.system' && by === 'user') {
+    const win = boardWindow();
+    const target = resolveNodeTarget(node);
+    if (!win) return { ok: false, action: 'blocked', target, error: 'NO BOARD WINDOW TO OPEN THE MONITOR IN' };
+    win.webContents.send('monitor:open', {
+      boardId,
+      nodeId,
+      name: node.designator ? `${node.designator} ${node.name}` : node.name
+    });
+    return { ok: true, action: `opened the system monitor (${node.name})`, target };
+  }
+
+  const result = await openTarget(node, by);
   return {
     ok: result.ok,
     action: result.action,
@@ -131,7 +153,7 @@ const handlers: Handlers = {
   'board:list': () => listBoards(),
 
   'display:info': () => {
-    const win = BrowserWindow.getAllWindows()[0];
+    const win = boardWindow();
     const display = win ? screen.getDisplayNearestPoint(win.getBounds()) : screen.getPrimaryDisplay();
     const scaleFactor = display.scaleFactor || 1;
     return {
@@ -199,6 +221,8 @@ const handlers: Handlers = {
 
   'usage:routes': (boardId) => usageRoutes(boardId),
 
+  'hardware:snapshot': () => hardwareSnapshot(),
+
   'mailbox:list': (side) => listMail(side),
   'mailbox:send': (side, message) => sendMail(side, message),
   'mailbox:archive': (side, file) => archiveMail(side, file),
@@ -253,7 +277,7 @@ const handlers: Handlers = {
     void _rest;
     const load = loadBoard(boardId);
     if (!load.ok) return { ok: false, error: load.error };
-    const win = BrowserWindow.getAllWindows()[0];
+    const win = boardWindow();
     if (!win) return { ok: false, error: 'NO WINDOW' };
     return startDragOut(win.webContents, load.board, nodeId);
   },
@@ -298,7 +322,7 @@ const handlers: Handlers = {
    * confirm could be dismissed by a stray keypress, and this is the one gate that must not be.
    */
   'command:confirmDestructive': async (summary, detail) => {
-    const win = BrowserWindow.getAllWindows()[0];
+    const win = boardWindow();
     const options = {
       type: 'warning' as const,
       buttons: ['Delete', 'Cancel'],

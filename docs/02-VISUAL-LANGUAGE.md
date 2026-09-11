@@ -155,7 +155,15 @@ These exist because the number one failure mode of a project like this is art th
 1. **Alpha is binary.** Every pixel is `alpha == 0` or `alpha == 255`. No feathered edges.
 2. **Palette lock.** Every pixel must exactly match a hex in `assets/palettes/skynet.gpl`. Max 6 unique colors per sprite.
 3. **Authored at 1x.** Source sprite dimensions must be multiples of 8. Never upscale source art and re-save.
-4. **Integer scaling only.** Zoom ∈ {2,3,4}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+4. **Integer scaling only, above 1x.** Working zoom ∈ {1,2,3,4}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+
+   > **Amended 2026-09-11.** Two overview levels sit below 1x: **1/2** and **1/4**, for seeing a
+   > whole tripled board at once (key `0` picks the closest one that fits). They are exact binary
+   > fractions, still nearest-neighbour, still on whole device pixels, so every pixel on screen is
+   > still an exact palette colour with binary alpha, and the sampling phase is fixed, so panning
+   > does not shimmer (test/camera.test.ts). What they give up is completeness: a downscale drops
+   > pixels, so a 1px trace can vanish and silkscreen is illegible. They are for seeing layout, not
+   > for reading it. An arbitrary fraction (0.75, "fit exactly") remains a bug.
 5. **Nearest-neighbour everywhere.** Pixi `scaleMode: 'nearest'`, CSS `image-rendering: pixelated` on any DOM that shows sprites, mipmaps off.
 6. **No blur/bloom/drop-shadow filters.** Not in Pixi, not in CSS. Glow is achieved with palette ramps and dither masks.
 7. **No rotation off 90°.** Sprites rotate only in 90° steps. Diagonals are pre-drawn, never rotated.

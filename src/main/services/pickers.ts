@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs';
-import { dirname, isAbsolute } from 'node:path';
-import { BrowserWindow, dialog } from 'electron';
+import { dirname, isAbsolute, normalize } from 'node:path';
+import { dialog } from 'electron';
+import { boardWindow } from './main-window.js';
 import type { PickRequest, PickResult } from '@shared/ipc.js';
 import { boardRoot } from './board-store.js';
-import { expandPath } from './target-resolver.js';
+import { homedir } from 'node:os';
+import { expandPath, skynetRoot } from './target-resolver.js';
 import { getSettings } from './settings.js';
 
 /**
@@ -35,8 +37,12 @@ function startingDirectory(current: string | undefined, control: PickRequest['co
 }
 
 export async function pick(request: PickRequest): Promise<PickResult> {
-  const win = BrowserWindow.getAllWindows()[0];
-  const defaultPath = startingDirectory(request.current, request.control);
+  // The board window, not getAllWindows()[0], which is the Face's window once that has been
+  // opened. See services/main-window.ts.
+  const win = boardWindow();
+  // The platform's separators: every value above is board spelling, with forward slashes, and
+  // the shell's file dialog should be handed a Windows path.
+  const defaultPath = normalize(startingDirectory(request.current, request.control));
 
   const wantsDirectory = request.control === 'path-dir';
 
@@ -71,17 +77,42 @@ export async function pick(request: PickRequest): Promise<PickResult> {
     return { cancelled: false, value: relative };
   }
 
+  const stored = portableSpelling(forward, skynetRoot(), homedir());
+
   if (request.control === 'glob') {
     // Picking a concrete file for a glob field is the common case: the user points at the jar
     // that exists today and wants "the newest one like this" from then on. Generalise the
     // extension and say so, rather than storing a pattern that can only ever match one build.
-    const match = /^(.*)\/([^/]*?)(\.[^./]+)$/.exec(forward);
+    const match = /^(.*)\/([^/]*?)(\.[^./]+)$/.exec(stored);
     if (match) {
       const [, dir, , ext] = match;
       return { cancelled: false, value: `${dir}/*${ext}`, note: `Generalised to *${ext} — the node will follow the newest match.` };
     }
-    return { cancelled: false, value: forward };
+    return { cancelled: false, value: stored };
   }
 
-  return { cancelled: false, value: forward };
+  return { cancelled: false, value: stored };
+}
+
+/**
+ * The spelling a board should store for a picked path.
+ *
+ * `npm run paths:check` fails the build on an absolute path into this repo or the user profile,
+ * because it resolves on one machine only. The picker returned exactly that: browsing to a sprite
+ * in assets/ stored `C:/dev/SkynetOS/assets/...`, and the two backdrops added on 2026-09-11 turned
+ * verify red. So a path inside the repo becomes `%SKYNET%/...` and one under the profile
+ * `%USERPROFILE%/...`, the same rewrite tools/portable-paths.mjs makes. Anything else is a true
+ * statement about this machine and is left alone.
+ */
+export function portableSpelling(path: string, repo: string, home: string): string {
+  const p = path.replace(/\\/g, '/');
+  const under = (root: string): string | null => {
+    const r = root.replace(/\\/g, '/').replace(/\/+$/, '');
+    return r && p.toLowerCase().startsWith(`${r.toLowerCase()}/`) ? p.slice(r.length + 1) : null;
+  };
+  const inRepo = under(repo);
+  if (inRepo !== null) return `%SKYNET%/${inRepo}`;
+  const inHome = under(home);
+  if (inHome !== null) return `%USERPROFILE%/${inHome}`;
+  return p;
 }

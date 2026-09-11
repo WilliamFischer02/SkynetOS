@@ -1736,6 +1736,167 @@ the app chains correctly.
 FACE-BOOT gained section 5, "Standing orders in force". It comes after the four the Face
 numbered, so their numbering holds. Without it, the Face owns a file it has no way to see.
 
+## 2026-09-11 — Zoom goes below 2x: 1x, and 1/2 and 1/4 for overview
+
+William: "I can't zoom out enough … I want to be able to see the whole board from far away."
+
+The floor was 2x ("the board is unreadable below 2x"). Readability was never the question for an
+overview, and tripling the boards made the floor a wall: a 192x120 board is 3072x1920 art pixels,
+so at 2x a 1920-wide window shows under a third of it. The levels are now 1/4, 1/2, 1, 2, 3, 4.
+The wheel steps through all six, `-`/`=` do the same without a wheel, `1` joins `2`/`3`/`4`, and `0`
+picks the closest level at which the whole board fits. On a 1920x1080 window that is 1/2 for the
+root board.
+
+This bends docs/02 rule 4, so the objection goes on the record once. Below 1x, nearest-neighbour
+drops pixels: a one-pixel trace can vanish and silkscreen becomes illegible. What it does NOT do is
+mush. Every screen pixel is still an exact palette colour, alpha is still binary, and with a
+power-of-two scale and a whole-pixel stage each screen pixel samples the same texels in every
+frame, so a pan does not crawl. `test/camera.test.ts` proves that phase property for random camera
+positions rather than asserting it.
+
+Rejected:
+- **Arbitrary "fit exactly" fractions** (0.62x and so on). They sample on a phase that changes as
+  the camera moves: the shimmer rule 4 exists to forbid.
+- **Mipmapped or linear downscaling for the overview.** It is smooth and it is mush.
+- **Leaving it to the minimap**, which already shows the whole board. It is 240 art pixels wide on
+  purpose and cannot be worked in.
+
+Not verified visually: the unit tests prove the arithmetic, not what 1/4x looks like on the real
+board. The 0%-tolerance golden-image test covers 2x/3x/4x only.
+
+## 2026-09-11 — Dialogs belong to the board window; Browse stores portable paths
+
+Reported: "the browse button is also not working … I can't select images … perhaps even
+directories".
+
+Every dialog in main found its parent with `BrowserWindow.getAllWindows()[0]`. Electron lists
+windows NEWEST first. Checked against the installed Electron 44 with a scratch script: main alone
+gives [MAIN], and main plus a second window gives [CHAT, MAIN]. So once the Face's conversation
+window had been opened, the file picker, both launch confirmations and the delete confirmation
+were modal to the claude.ai window, and drag-out and `display:info` used it too. Browse then did
+nothing visible on the board. `services/main-window.ts` now holds the board window by reference,
+set in `createWindow`. `test/window-parent.test.ts` fails the build if `getAllWindows()[n]`
+reappears in main.
+
+Found alongside it: a picked path was stored absolute, so browsing to a sprite in `assets/` wrote
+`C:/dev/SkynetOS/...` and `npm run paths:check` went red. That is what happened to the two
+backdrops added today. `portableSpelling` in `pickers.ts` stores `%SKYNET%/...` and
+`%USERPROFILE%/...` instead, the same rewrite `tools/portable-paths.mjs` makes, and the two
+existing paths were rewritten with it. The dialog's starting folder is also handed over with
+Windows separators now. That one is a precaution, not a diagnosed cause.
+
+Not verified on screen: the diagnosis is proven by the script, and the fix only by unit tests and
+typecheck. It needs a restart of SkynetOS to take effect.
+
+## 2026-09-11 — Group selection: Shift+drag a box, drag any member to move them all
+
+William: "add the ability to drag-window / group select nodes collectively within an area and move
+them together / simultaneously."
+
+In Edit Board mode, **Shift+drag on empty substrate** draws a selection box, and **Shift+click**
+adds a node to the group or takes it out. Pressing on any member of a group of two or more moves
+the whole group rigidly, a whole tile at a time, with every sprite following and a ghost at each
+landing spot, red if any member cannot land. The drop is ONE command, `node.moveMany`, so one
+Ctrl+Z puts the whole group back. Escape clears the group.
+
+- **Shift, not a plain drag, for the box.** A plain drag on the substrate already pans in Edit Board
+  mode and is in William's hands. Taking it over would trade a new gesture for a broken old one.
+- **Components are caught by touching the box; printed things only when wholly inside it.** A
+  backdrop is usually as big as a room and sits under everything. If touching counted, every box
+  would pick it up, and the next drag would haul the scenery along with the chips.
+- **Members are not obstacles to each other.** They move together, so a member sliding into the
+  tile its neighbour just left is what moving a cluster looks like. Everything outside the group
+  still is an obstacle, by the same `canDrop` a single node uses.
+- **The group lives in the canvas, not the store.** Nothing outside the canvas acts on a group
+  (the inspector edits one node, so a group closes it), and it has to survive the scene rebuild
+  that follows the move.
+- **Escape is caught in the capture phase.** App's Escape leaves the room when nothing is
+  selected, and a group has no single selected node. Without this, the first Escape after drawing
+  a box would have thrown William out of the room he was arranging.
+- `node.moveMany` is all-or-nothing: every id is checked before anything moves, and the result is
+  validated once, so a group that would land one member on a chip is refused as a group.
+
+Not added: keyboard nudging of a group, and group delete (delete needs per-node approval under
+docs/07, and a group delete is exactly the kind of thing that rule is for).
+
+## 2026-09-11 — Couriers walk the traces; traffic follows the files Claude touched
+
+William: "the bots don't follow the wires; their base paths should be along drawn or generated
+wires, so the wires are the paths basically. … the bot movement should be proportional and updating
+based on which repos or files claude has worked within."
+
+**Roads.** A courier used to cut an L from the JARVIS head straight to its destination, across
+components and bare substrate, so the traces were decoration and the robots ignored them. Now
+`courier-paths.ts` builds each route from the polylines the router actually drew, using Dijkstra
+over the trace graph with each trace an undirected road weighted by its length. Where the road
+passes from one trace to the next, it bridges across the chip in between with an elbow. Couriers
+are drawn under the components, so a packet on a two-hop route visibly passes through the middle
+chip. Where no wire joins the hub to a destination, the same A* that lays the copper generates a
+road on the spot. Only a board with no wiring at all falls back to the old L from the nearest edge.
+The hub is the JARVIS head. In a room, which has none, it is the best-connected node. Journeys
+take five to ten seconds whatever the distance, and the wobble is down from five pixels to two, so
+the column stays on the wire.
+
+**Proportion.** Attribution used to be by Claude project directory, which credits the directory a
+session was STARTED in. A session in C:/dev spending an hour in C:/dev/SkynetOS/src sent every
+token to "C:/dev" and none to the SkynetOS repo node. The transcript says where the work happened:
+each Read, Edit, Write, Grep and Glob names its path on the same line that carries the usage. So
+attribution is now per message (`attributeActivity`):
+- an agent claims the conversations started in its cwd;
+- a repo or folder claims those, plus any message that touched a path inside it;
+- a document or program claims messages that touched that exact file;
+- a room claims everything its children claim;
+- a message is split evenly between its claimants and never counted twice.
+
+Shares across a board therefore still sum to at most 1. Unclaimed activity still counts toward the
+total, so a quiet board looks quiet.
+
+Rejected: parsing paths out of Bash command lines, which would credit folders that were merely
+mentioned; and counting a message once per claimant, which is the double-counting the old code
+existed to prevent.
+
+Not verified in the running app: the arithmetic is tested (`test/activity.test.ts`,
+`test/courier-paths.test.ts`). The main-process scan and the on-screen walk need a restart to be
+seen.
+
+## 2026-09-11 — The PSU is a real system monitor
+
+William: "speccy is an excellent example … a simplified temp bar that gradients color based on
+expected vs actual temp values … this is a literal system monitor". Activating a `monitor.system`
+node now opens a Speccy-style panel. Every number in it is read non-elevated from this machine:
+
+- `os.cpus()` for per-thread load.
+- `% Processor Performance` × base clock for effective clock, the way Task Manager derives
+  "Speed".
+- CIM for the inventory, the drives and the ACPI zone.
+- `nvidia-smi` for the GPU.
+- LibreHardwareMonitor's WMI namespace whenever it is running.
+
+Probed on William-Desktop, Windows gives a non-elevated process no CPU die temperature, fan speed
+or drive temperature: `MSAcpi_ThermalZoneTemperature` and `Get-StorageReliabilityCounter` both
+refuse access. So those appear under NOT READABLE with the reason and the fix, never as a stand-in
+number. The one readable ACPI zone (27.9 °C) is labelled as a motherboard sensor, because showing
+it as a CPU temperature would be the most misleading number on the board.
+
+The "gradient" is a stepped bar: each cell's outline shows the band it stands for, and the fill
+shows the reading. docs/02 forbids smooth gradients, and this puts expected and actual on one line.
+GPU temperature is judged against the driver's own margin to slowdown
+(`temperature.gpu.tlimit`), not a rule of thumb.
+
+Cost is bounded:
+- The parts list is read once.
+- Sensors refresh at most every 3 s and the GPU every 2 s, and only while someone asks.
+- Only the first request waits.
+- Measured: CIM inventory 1.4 s, sensors 1.1 s, `nvidia-smi` 0.06 s, a PowerShell spawn 0.2 s.
+
+Rejected:
+- A persistent PowerShell child, which would need lifecycle hooks in `index.ts` to be worth it.
+- Labelling P-cores and E-cores by their clocks, which is inference.
+- Admin-only sources.
+
+Agents get the same data through `system_info` / `hardware:snapshot`, which docs/07 allows as a
+telemetry read. The panel itself opens only when the user activates the node.
+
 ## 2026-09-10 — FACE-BOOT.md: the Face reads the repo, and why it must sit at the root
 
 Drive was ruled out as a transport the same day (see above). GitHub was tested instead and works:

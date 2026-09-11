@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
+import { formatZoom } from './board/camera.js';
 import { Inspector } from './ui/Inspector.js';
 import { Iris } from './ui/Iris.js';
 import { UsageMeter } from './ui/UsageMeter.js';
 import { AddPalette } from './ui/AddPalette.js';
 import { Mailbox } from './ui/Mailbox.js';
+import { SystemMonitor } from './ui/SystemMonitor.js';
 import { Minimap } from './ui/Minimap.js';
 import { SessionDock } from './ui/SessionDock.js';
 import { DragBadges } from './ui/DragBadges.js';
@@ -50,6 +52,7 @@ export function App(): React.JSX.Element {
   const setMode = useBoardStore((s) => s.setMode);
   const openNode = useBoardStore((s) => s.openNode);
   const moveNode = useBoardStore((s) => s.moveNode);
+  const moveNodes = useBoardStore((s) => s.moveNodes);
   const resizeNode = useBoardStore((s) => s.resizeNode);
   const connectNodes = useBoardStore((s) => s.connectNodes);
   const toast = useBoardStore((s) => s.toast);
@@ -245,6 +248,7 @@ export function App(): React.JSX.Element {
         onSelect={select}
         onActivate={(nodeId) => void openNode(nodeId)}
         onMoveNode={(nodeId, pos) => void moveNode(nodeId, pos)}
+        onMoveNodes={(moves) => void moveNodes(moves)}
         onResizeNode={(nodeId, footprint) => void resizeNode(nodeId, footprint)}
         onConnect={(from, to) => void connectNodes(from, to)}
         onToast={(text, level) => toast(level, text)}
@@ -288,16 +292,18 @@ export function App(): React.JSX.Element {
 
       <AddPalette />
       <Mailbox />
+      <SystemMonitor />
 
       <div className="hud">
         {status ? (
           <>
-            <span>ZOOM {status.zoom}X</span>
+            <span>ZOOM {formatZoom(status.zoom)}</span>
             <span>CAM {status.cameraX},{status.cameraY}</span>
             <span>DPR {status.devicePixelRatio} · UI {uiScale}X</span>
             <span>{status.fps} FPS</span>
             <span>{board.nodes.length} NODES · {board.edges.length} TRACES</span>
             {status.fitsOnScreen ? <span className="warn">WHOLE BOARD VISIBLE — NOTHING TO PAN</span> : null}
+            {status.groupCount > 1 ? <span className="ok-text">{status.groupCount} SELECTED · DRAG ANY TO MOVE ALL · ESC CLEARS</span> : null}
             {status.faceCount > 0 ? <span className="ok-text">{status.faceCount} FACE{status.faceCount === 1 ? '' : 'S'}</span> : null}
             {status.courierCount > 0 ? <span className="ok-text" title="Couriers walking. One robot per packet, in proportion to real Claude usage per project.">{status.courierCount} COURIER{status.courierCount === 1 ? '' : 'S'}</span> : null}
             {liveSessionCount > 0 ? <span className="ok-text">{liveSessionCount} LIVE</span> : null}
@@ -325,8 +331,8 @@ export function App(): React.JSX.Element {
 
       <div className="help">
         {editMode
-          ? 'DRAG A COMPONENT TO MOVE IT · CLICK TWO NODE EDGES TO WIRE THEM · DRAG THE SUBSTRATE TO PAN · E LEAVE EDIT BOARD'
-          : 'DRAG TO PAN · WASD PAN · 2 3 4 ZOOM · TAB CYCLE · SPACE ACTIVATE · E EDIT BOARD · F2 EDIT NODE'}
+          ? 'DRAG A COMPONENT TO MOVE IT · SHIFT+DRAG TO SELECT A GROUP · SHIFT+CLICK ADDS ONE · CLICK TWO NODE EDGES TO WIRE THEM · DRAG THE SUBSTRATE TO PAN · E LEAVE EDIT BOARD'
+          : 'DRAG TO PAN · WASD PAN · WHEEL OR 1-4 ZOOM · 0 WHOLE BOARD · TAB CYCLE · SPACE ACTIVATE · E EDIT BOARD · F2 EDIT NODE'}
         {stack.length > 1 ? ' · BACKSPACE UP A ROOM' : ''}
         {focus ? ' · FOCUS ON' : ''}
         {history.canUndo ? ` · CTRL+Z UNDO ${history.undoLabel?.toUpperCase() ?? ''}` : ''}

@@ -87,7 +87,32 @@ Same as `agent.chat` plus a bound headless worker. See `docs/04-JARVIS.md`.
 `schedule` (cron string), `action` (any node action or a headless JARVIS prompt), `lastRun`, `enabled`. Renders as a crystal oscillator that ticks. Example: "every morning at 8, run headless JARVIS to summarize what every agent did yesterday and write it to `codex/journal/`."
 
 ### `monitor.system` — the PSU
-Real machine stats: CPU %, RAM, free space on `C:`/dev drives. This is the only node showing real hardware numbers; everything else's temperature is explicitly cosmetic.
+Real machine stats. This is the only node showing real hardware numbers; everything else's temperature is explicitly cosmetic.
+
+> **Built 2026-09-11: activating it opens the system monitor.** Double-click the node, or Tab to it
+> and press Space; Esc closes the panel. Modelled on Speccy, with one section per component:
+>
+> - **System:** OS, board, BIOS, uptime.
+> - **CPU:** model, cores/threads, cache, whole-package load and effective clock, then every thread's
+>   load and clock.
+> - **GPU:** temperature against the driver's own slowdown margin, load, clocks, VRAM, power, fan.
+> - **Memory:** use, plus every module's slot, type and configured speed.
+> - **Storage:** each drive's type, bus, health, busy % and read/write rates, plus each volume's free
+>   space.
+> - **Thermal and fans.**
+>
+> Every live value has a segmented bar. The cell outlines show the expected band (ok, warn, fault)
+> and the fill shows now. Sources, all non-elevated: `os.cpus()`, CIM/WMI, and `nvidia-smi`.
+> LibreHardwareMonitor's WMI namespace is read whenever it is running.
+>
+> Windows gives a non-elevated process no CPU die temperature, fan speed or drive temperature. The
+> panel lists those under NOT READABLE with the reason and the fix, and never shows a stand-in
+> number. The one ACPI zone that is readable is labelled as a motherboard sensor, not the CPU.
+>
+> Agents read the same data with the `system_info` MCP tool (`hardware:snapshot`). Readings are
+> cached for 2–3 s and nothing is read while nobody is asking. Code:
+> `packages/shared/hardware.ts` (pure), `src/main/services/hardware.ts` (reading),
+> `src/renderer/ui/SystemMonitor.tsx` (panel).
 
 ### `note.silk` — engraved text, no component
 `text`, `size` (11|22). For section labels and reminders on the board.

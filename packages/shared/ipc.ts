@@ -17,6 +17,7 @@ import type { TargetInfo } from './targets.js';
 import type { Board, BoardNode, Footprint, LaunchMode, NodeKind } from './types.js';
 import type { UsageRoute, UsageSummary } from './usage.js';
 import type { MailSide, MailboxMessage } from './mailbox.js';
+import type { HardwareSnapshot } from './hardware.js';
 
 /** What a board file's load attempt produced. A failure is data, not an exception. */
 export type BoardLoad =
@@ -217,6 +218,14 @@ export interface SkynetApi {
   'usage:routes': (boardId: string) => UsageRoute[];
 
   /**
+   * The machine itself, read live: CPU, GPU, memory, drives, whatever temperatures are readable,
+   * and a list of what could not be read and why. Drives the system monitor that a `monitor.system`
+   * node opens. Cached and rate-limited in main, and nothing is read unless someone asks. See
+   * packages/shared/hardware.ts.
+   */
+  'hardware:snapshot': () => HardwareSnapshot;
+
+  /**
    * The JARVIS mailbox — how the Face and the Hands talk to each other.
    *
    * The Face cannot see this disk, so SkynetOS is the wire: it writes what the Face said into
@@ -334,6 +343,7 @@ export const CHANNELS = [
   'mosaic:forNode',
   'usage:summary',
   'usage:routes',
+  'hardware:snapshot',
   'mailbox:list',
   'mailbox:send',
   'mailbox:archive',
@@ -402,6 +412,13 @@ export const AGENT_METHODS = [
   'ingest:classify',
   'usage:summary',
   'usage:routes',
+  /*
+   * The machine's hardware readings. docs/07: "Read board, telemetry, sessions, codex — Allowed,
+   * always." It is read-only and names nothing on disk, and it lets JARVIS answer "why is the build
+   * slow" or "is the GPU hot" from measurement instead of asking William to look. The cost is
+   * bounded in main: readings are cached for seconds, so an agent asking in a loop spawns nothing.
+   */
+  'hardware:snapshot',
   // Sessions and terminals on nodes the board already declares.
   'session:start',
   'session:stop',
@@ -452,11 +469,17 @@ export interface SkynetEvents {
    * and on which chip — without reading a log file.
    */
   'mail:dispatched': { file: string; subject: string; ok: boolean; nodeId?: string; error?: string };
+  /**
+   * A `monitor.system` node was activated. The node has no target on disk — it IS the reading — so
+   * activating it opens the system monitor panel instead of opening a file. Sent by `openNode` in
+   * src/main/ipc.ts, for the user only.
+   */
+  'monitor:open': { boardId: string; nodeId: string; name: string };
 }
 
 export type EventName = keyof SkynetEvents;
 
-export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched'] as const satisfies readonly EventName[];
+export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched', 'monitor:open'] as const satisfies readonly EventName[];
 
 /** The shape contextBridge exposes on window.skynet. */
 export type SkynetBridge = {

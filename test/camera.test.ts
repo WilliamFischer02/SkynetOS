@@ -8,6 +8,8 @@ import {
   ZOOM_LEVELS,
   boardPixelSize,
   clampCamera,
+  fitZoom,
+  formatZoom,
   isZoom,
   panSpeed,
   screenToWorld,
@@ -23,23 +25,57 @@ const view = { width: 1600, height: 1000 };
 const board = boardPixelSize({ width: 64, height: 40 }); // the real root board: 1024x640 px
 
 describe('zoom', () => {
-  it('offers integer levels only', () => {
-    expect(ZOOM_LEVELS).toEqual([2, 3, 4]);
-    for (const z of ZOOM_LEVELS) expect(Number.isInteger(z)).toBe(true);
+  it('offers whole numbers for working and exact binary fractions for overview', () => {
+    expect(ZOOM_LEVELS).toEqual([0.25, 0.5, 1, 2, 3, 4]);
+    for (const z of ZOOM_LEVELS) {
+      if (z >= 1) expect(Number.isInteger(z)).toBe(true);
+      // A power-of-two fraction: 1/z is a whole power of two, so the scale is exact in floating point.
+      else expect(Math.log2(1 / z) % 1).toBe(0);
+    }
   });
 
-  it('rejects fractional and out-of-range zooms', () => {
+  it('rejects arbitrary fractions and out-of-range zooms', () => {
     expect(isZoom(2.5)).toBe(false);
-    expect(isZoom(1)).toBe(false);
+    expect(isZoom(0.75)).toBe(false);
+    expect(isZoom(0.125)).toBe(false);
     expect(isZoom(5)).toBe(false);
-    expect(isZoom(3)).toBe(true);
+    expect(isZoom(1)).toBe(true);
+    expect(isZoom(0.5)).toBe(true);
   });
 
   it('saturates at the ends instead of wrapping', () => {
     expect(stepZoom(4, 1)).toBe(4);
-    expect(stepZoom(2, -1)).toBe(2);
+    expect(stepZoom(0.25, -1)).toBe(0.25);
     expect(stepZoom(3, 1)).toBe(4);
-    expect(stepZoom(3, -1)).toBe(2);
+    expect(stepZoom(2, -1)).toBe(1);
+    expect(stepZoom(1, -1)).toBe(0.5);
+  });
+
+  it('can show a whole tripled board on an ordinary screen', () => {
+    // William: "I want to be able to see the whole board from far away." The tripled root board is
+    // 192x120 tiles; the old floor of 2x showed under a third of its width in a 1920 window.
+    const tripled = boardPixelSize({ width: 192, height: 120 });
+    const screen = { width: 1920, height: 1080 };
+    const zoom = fitZoom(tripled, screen);
+    expect(tripled.width * zoom).toBeLessThanOrEqual(screen.width);
+    expect(tripled.height * zoom).toBeLessThanOrEqual(screen.height);
+    expect(zoom).toBe(0.5);
+  });
+
+  it('fits at the closest level that works, not the smallest', () => {
+    expect(fitZoom({ width: 400, height: 200 }, view)).toBe(4);
+    expect(fitZoom(boardPixelSize({ width: 64, height: 40 }), view)).toBe(1);
+  });
+
+  it('falls back on the smallest level for a board nothing fits', () => {
+    expect(fitZoom(boardPixelSize({ width: 512, height: 512 }), { width: 800, height: 600 })).toBe(0.25);
+  });
+
+  it('prints fractions as fractions', () => {
+    expect(formatZoom(3)).toBe('3X');
+    expect(formatZoom(1)).toBe('1X');
+    expect(formatZoom(0.5)).toBe('1/2X');
+    expect(formatZoom(0.25)).toBe('1/4X');
   });
 
   it('keeps the anchor point over the same world position', () => {
@@ -69,6 +105,26 @@ describe('stagePosition — the anti-mush guarantee', () => {
     // a whole third of a tile of drift and a visible stutter while panning.
     expect(stagePosition({ x: 10.4, y: 0, zoom: 3 }).x).toBe(-31);
     expect(stagePosition({ x: 10.4, y: 0, zoom: 3 }).x).not.toBe(-30);
+  });
+
+  it('samples the same texels every frame below 1x, wherever the camera is', () => {
+    /*
+     * The one thing that could make the overview levels shimmer. Each screen pixel's left edge maps
+     * to world (s - stage) / zoom. If that ever landed on a different multiple of 1/zoom, the
+     * nearest-neighbour sample would pick a different texel from one frame to the next, and a pan
+     * would crawl. A whole-pixel stage and a power-of-two scale keep it on the same phase.
+     */
+    for (const zoom of ZOOM_LEVELS.filter((z) => z < 1)) {
+      const step = 1 / zoom;
+      for (let i = 0; i < 300; i++) {
+        const pos = stagePosition({ x: Math.random() * 6000 - 3000, y: Math.random() * 6000 - 3000, zoom });
+        for (const s of [0, 1, 7, 333]) {
+          // abs: a negative multiple leaves -0, which is the same phase and fails Object.is(0).
+          expect(Math.abs(((s - pos.x) / zoom) % step), `x at 1/${step}`).toBe(0);
+          expect(Math.abs(((s - pos.y) / zoom) % step), `y at 1/${step}`).toBe(0);
+        }
+      }
+    }
   });
 
   it('moves by at most one device pixel per sub-pixel camera step', () => {
