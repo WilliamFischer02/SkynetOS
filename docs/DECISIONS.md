@@ -1468,3 +1468,48 @@ cannot express and a careless edit can reverse silently, and it has now been cha
 `test/render-invariants.test.ts` reads those call sites and pins the relationships that matter:
 parts under nodes, couriers over parts, parts over copper, couriers under the node they are
 delivering to, overlays last. Verified by putting the old order back and watching two of them fail.
+
+## 2026-09-10 — A .lnk is not an executable, and two dialogs were one too many
+
+Reported: "exe nodes show a message but don't launch a game - I want to remove the confirmation
+messages as much as possible too."
+
+**The launch.** `file.exe` launched with `spawn`, and the node pointed at
+`assets/Shortcuts/minecraft.lnk`. Measured here:
+
+    spawn("thing.lnk")  ->  EFTYPE
+    spawn("thing.bat")  ->  EINVAL
+
+A `.lnk` is a shell object, not an executable image; `CreateProcess` has no idea what to do with
+one. The node editor's own file filter offers `exe, bat, cmd, ps1`, so three of the four types it
+invites you to pick could never have launched — the dialog appeared, the user said yes, and nothing
+happened, which is the worst possible shape for a failure.
+
+Resolving the shortcut ourselves would not have been enough. Its target is
+`C:/Program Files/WindowsApps/Microsoft.4297127D64EC6_2.6.2.0_x64__8wekyb3d8bbwe/Minecraft.exe` —
+an MSIX payload that needs package identity to run, which comes from the shell and not from
+`CreateProcess`. It would have failed a second time for a second reason. **This is also the real
+answer to the WindowsApps permissions question from earlier today**: the shortcut pointed into that
+folder, the launch failed, and the failure read as an access problem. It never was one.
+
+So: `spawn` for `.exe`/`.com`, where it buys arguments, a working directory and a pid; ShellExecute
+(`shell.openPath`) for everything else, and as a fallback when spawn refuses. Handing the `.lnk` to
+the shell is exactly what double-clicking it in Explorer does. Proven end to end in the smoke with a
+harmless shortcut to `cmd /c` — deliberately not the user's game, because a capture run must not
+open one on somebody's desktop.
+
+**The dialogs.** Opening a program outside a dev root raised two in a row, for one click, about one
+file, both answered by the same person for the same reason. They are now one, carrying everything
+both carried. And `confirmBeforeLaunch: false` now means what it says: it used to be ANDed with an
+unconditional "ask once per binary per run", so turning confirmation off still produced a dialog.
+
+The part that needed care: board JSON is agent-writable and `node:open` is in `AGENT_METHODS`, so a
+flag that silences a prompt for everyone is an escalation — an agent could point a node anywhere,
+clear the flag, activate it, and run a program with nothing on screen. `openTarget` now takes an
+ACTOR. Suppression is honoured for `'user'` and ignored for `'agent'`, the same split `node:add`
+already uses for attribution. Elevation is confirmed regardless of both.
+
+Rejected: a per-node `trusted` field, for the same reason — anything in board JSON is writable by
+the thing it would be protecting against. Rejected: dropping the out-of-root prompt entirely; the
+sanctioned way to stop being asked about a whole location is `devRoots` in settings.json, which no
+agent can write, and the dialog now says so.

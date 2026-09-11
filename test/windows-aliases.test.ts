@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -147,5 +147,83 @@ describe('outside a dev root is a policy, not a fault', () => {
     for (const state of ['ok', 'none', 'missing', 'invalid', 'unknown'] as const) {
       expect(needsConfirmation(at(state)), `${state} must not prompt`).toBe(false);
     }
+  });
+});
+
+/**
+ * ── CreateProcess cannot run a shortcut ──────────────────────────────────────────────────────
+ *
+ * Reported: "exe nodes show a message but don't launch a game."
+ *
+ * The node pointed at `assets/Shortcuts/minecraft.lnk`, and `file.exe` launched with `spawn`.
+ * Measured on this machine:
+ *
+ *     spawn("thing.lnk")  ->  EFTYPE
+ *     spawn("thing.bat")  ->  EINVAL
+ *
+ * A `.lnk` is a shell object, not an executable image. The node editor's own file filter offers
+ * `exe, bat, cmd, ps1`, so three of the four types it invites you to choose could never have
+ * launched — the dialog appeared, the user said yes, and nothing happened.
+ *
+ * There was a second reason too, which is why resolving the shortcut ourselves would not have been
+ * enough: that shortcut's target is inside `C:/Program Files/WindowsApps/Microsoft.4297127D64EC6_…/`,
+ * an MSIX payload that needs package identity to run. Only the shell can give it that.
+ */
+describe('a program is launched by a mechanism that can actually run it', () => {
+  const opener = readFileSync(join(process.cwd(), 'src/main/services/shell-opener.ts'), 'utf8');
+
+  it('only spawns real executable images', () => {
+    const list = /const SPAWNABLE = \[([^\]]*)\]/.exec(opener)?.[1] ?? '';
+    expect(list).toContain('.exe');
+    // Any of these in the spawn list is the bug: CreateProcess refuses all of them.
+    for (const cannot of ['.lnk', '.bat', '.cmd', '.ps1', '.msi']) {
+      expect(list, `${cannot} cannot be spawned — it has to go through the shell`).not.toContain(cannot);
+    }
+  });
+
+  it('sends everything else through the shell', () => {
+    expect(opener, 'non-executables must go through ShellExecute').toContain('shell.openPath');
+  });
+
+  it('falls back to the shell when spawn refuses', () => {
+    // An .exe CreateProcess rejects may still be something Explorer knows how to open, and a
+    // silent failure here is indistinguishable from the bug that was just fixed.
+    expect(opener).toMatch(/spawn refused/);
+  });
+});
+
+/**
+ * ── Who may skip a confirmation ──────────────────────────────────────────────────────────────
+ *
+ * William: "I want to remove the confirmation messages as much as possible too." `confirmBeforeLaunch:
+ * false` now means it — but only for a human.
+ *
+ * Board JSON is agent-writable (`command:apply` is in AGENT_METHODS) and so is activation
+ * (`node:open`). If the flag applied to everyone, an agent could point a node at anything, clear
+ * the flag, activate it, and run an arbitrary program with nothing on screen.
+ */
+describe('a node can silence its own prompt only for the user', () => {
+  const opener = readFileSync(join(process.cwd(), 'src/main/services/shell-opener.ts'), 'utf8');
+  const ipc = readFileSync(join(process.cwd(), 'src/main/ipc.ts'), 'utf8');
+
+  it('refuses to trust an agent-initiated activation', () => {
+    const fn = opener.slice(opener.indexOf('function trustedByUser'), opener.indexOf('const SPAWNABLE'));
+    expect(fn).toContain("by !== 'user'");
+  });
+
+  it('lets settings.json override the node in the other direction', () => {
+    // settings.json has no write channel, so this is the one lever an agent cannot touch.
+    const fn = opener.slice(opener.indexOf('function trustedByUser'), opener.indexOf('const SPAWNABLE'));
+    expect(fn).toContain('confirmAllLaunches');
+  });
+
+  it('always confirms elevation, whatever the node says', () => {
+    // "Run this" and "run this as administrator" are different questions.
+    expect(opener).toMatch(/elevated \|\| !trustedByUser/);
+  });
+
+  it('activates as the user from the renderer and as an agent over the control channel', () => {
+    expect(ipc).toContain("openNode(boardId, nodeId, 'user')");
+    expect(ipc).toContain("openNode(boardId, nodeId, 'agent')");
   });
 });

@@ -1079,6 +1079,53 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
       console.log(`[smoke] document (${label}): state=${t.state} kind=${t.kind ?? '-'} ${t.detail ?? ''}`);
     }
 
+    /*
+     * ── Launching what CreateProcess cannot ──────────────────────────────────────────────────
+     *
+     * Reported: "exe nodes show a message but don't launch a game." The node pointed at a .lnk,
+     * and `spawn` answers EFTYPE for one. This makes a harmless shortcut — to `cmd /c exit` —
+     * launches it through the real code path, and checks it actually ran. Deliberately NOT the
+     * user's Minecraft shortcut: a smoke run must not open a game on somebody's desktop.
+     */
+    const { writeFileSync: writeNow, existsSync: existsNow, rmSync: rmNow } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const probeDir = tmpdir();
+    const probeLnk = join(probeDir, 'skynet-smoke.lnk');
+    const probeFlag = join(probeDir, 'skynet-smoke-ran.txt');
+    try { rmNow(probeFlag, { force: true }); } catch { /* nothing to remove */ }
+
+    const { spawnSync: spawnNow } = await import('node:child_process');
+    spawnNow('powershell.exe', ['-NoProfile', '-Command',
+      `$s = (New-Object -ComObject WScript.Shell).CreateShortcut('${probeLnk}'); ` +
+      `$s.TargetPath = "$env:SystemRoot" + [char]92 + 'system32' + [char]92 + 'cmd.exe'; ` +
+      `$s.Arguments = '/c echo ran > "${probeFlag}"'; $s.Save()`
+    ], { windowsHide: true });
+
+    if (existsNow(probeLnk)) {
+      const { openTarget: openOne } = await import('./services/shell-opener.js');
+      const probeNode = {
+        id: 'f_smoke_lnk', kind: 'file.exe', name: 'SMOKE SHORTCUT',
+        pos: { x: 0, y: 0 }, path: probeLnk.split(String.fromCharCode(92)).join('/'),
+        // The user's own "stop asking" flag, so this exercises the no-dialog path too. A smoke run
+        // cannot answer a modal.
+        confirmBeforeLaunch: false
+      };
+      const launched = await openOne(probeNode as unknown as Parameters<typeof openOne>[0], 'user');
+      for (let i = 0; i < 30 && !existsNow(probeFlag); i++) await wait(100);
+      console.log(`[smoke] .lnk launch: ok=${launched.ok} — ${launched.action}${launched.error ? ` (${launched.error})` : ''}`);
+      console.log(`[smoke] A SHORTCUT ACTUALLY RAN: ${existsNow(probeFlag)}`);
+
+      /*
+       * The agent path is NOT exercised here. It raises a modal by design — that is the whole
+       * point of it — and a headless capture has nobody to answer one, so calling it hangs the run
+       * forever with no output. It is guarded structurally in test/windows-aliases.test.ts instead.
+       */
+
+      try { rmNow(probeLnk, { force: true }); rmNow(probeFlag, { force: true }); } catch { /* leave it */ }
+    } else {
+      console.log('[smoke] .lnk launch: could not create the probe shortcut');
+    }
+
     console.log('[smoke] done');
   } catch (err) {
     console.error('[smoke] FAILED', err);

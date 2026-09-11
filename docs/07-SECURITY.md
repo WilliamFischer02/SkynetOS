@@ -10,8 +10,27 @@ This app spawns shells, launches executables, and lets an AI agent modify its ow
 - The claude.ai `WebContentsView` runs in its own partition and has **no** preload, no bridge, no access to SkynetOS APIs. It is a browser tab, nothing more.
 
 ## Path and execution policy
-- `devRoots` in settings (default `C:/dev`). Any node whose target resolves outside a dev root or the user profile requires confirmation on every activation.
-- `file.exe` nodes: `confirmBeforeLaunch: true` by default. First launch of any binary shows the full resolved path and a hash, and asks once.
+- `devRoots` in settings (default `C:/dev`). Any node whose target resolves outside a dev root or
+  the user profile requires confirmation on activation.
+- `file.exe` nodes: `confirmBeforeLaunch: true` by default. A launch shows the full resolved path
+  and asks.
+- **One question, not two.** Opening a program outside a dev root used to raise two dialogs in a
+  row — "target outside your dev roots", then "launch this program?" — for one click, about one
+  file, both answered by the same person for the same reason. They are now a single dialog carrying
+  the same path, the same out-of-root warning and the same refusal default. No consent is lost; a
+  second dialog for the same decision only teaches people to click through without reading.
+- **`confirmBeforeLaunch: false` means it.** It used to be overridden by an unconditional
+  "ask once per binary per run", so a user who explicitly turned confirmation off still got a
+  dialog. Setting it now suppresses the prompt — for a **user-initiated** activation only.
+- **An agent is asked every time, whatever the board says.** Board JSON is agent-writable
+  (`command:apply` is in `AGENT_METHODS`) and so is activation (`node:open`). If a node could
+  silence its own prompt for everyone, an agent could point one at anything, clear the flag,
+  activate it, and run an arbitrary program with nothing on screen. `openTarget` therefore takes an
+  actor and `trustedByUser` refuses anything that is not `'user'`.
+- **Elevation is always confirmed**, whatever the node says and whoever asked. "Run this" and "run
+  this as administrator" are different questions.
+- `settings.confirmAllLaunches` puts every prompt back. It lives in settings.json, which has no
+  write channel, so it is the one lever an agent cannot touch.
 - Path traversal is rejected: a board file may not reference `..` past its room root without an explicit `allowEscape: true` flag on that node.
 - Board JSON is data. It never contains executable code, template expressions, or shell strings that aren't `startCommand`/`args` on a node that declares them.
 

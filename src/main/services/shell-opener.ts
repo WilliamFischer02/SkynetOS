@@ -5,9 +5,10 @@ import { BrowserWindow, dialog, shell } from 'electron';
 import type { BoardNode } from '@shared/types.js';
 import type { TerminalOpenResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
-import { isBroken, type TargetInfo } from '@shared/targets.js';
+import { isBroken, needsConfirmation, type TargetInfo } from '@shared/targets.js';
+import type { Actor } from '@shared/commands.js';
 import { officeRefusal, officeUri } from '@shared/office.js';
-import { elevatedProgramArgv } from './launch-script.js';
+import { elevatedProgramArgv, toWindowsPath as toWindows } from './launch-script.js';
 import { resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
 import { openTerminal } from './terminal.js';
@@ -99,10 +100,102 @@ function spawnElevated(exePath: string, args: string[], cwd: string): ReturnType
 }
 
 /**
+ * Has the USER said "stop asking about this node"?
+ *
+ * `confirmBeforeLaunch: false` is that statement, and it now means it — it used to be overridden
+ * by an unconditional "ask once per binary per run", so a person who explicitly turned
+ * confirmation off still got a dialog, which is the sort of thing that teaches people to click
+ * through dialogs without reading them.
+ *
+ * It is honoured for `'user'` only. Board JSON is agent-writable and `node:open` is in
+ * AGENT_METHODS, so if this applied to everyone an agent could point a node at anything, clear the
+ * flag, activate it, and run a program with nothing on screen. `settings.confirmAllLaunches`
+ * overrides it in the other direction for someone who wants the belt and braces back — and that
+ * lives in settings.json, which no agent can write.
+ */
+function trustedByUser(node: BoardNode, by: Actor): boolean {
+  if (by !== 'user') return false;
+  if (getSettings().confirmAllLaunches) return false;
+  return node.confirmBeforeLaunch === false;
+}
+
+/**
+ * Windows file types that `CreateProcess` can actually execute.
+ *
+ * Everything else has to go through the SHELL. This is not a nicety: measured on this machine,
+ *
+ *     spawn("thing.lnk")  ->  EFTYPE
+ *     spawn("thing.bat")  ->  EINVAL
+ *
+ * and the node editor's own file filter offers `exe, bat, cmd, ps1` — so three of the four types
+ * it invites you to pick could never have launched. A `.lnk` is a shell object, not an image;
+ * `CreateProcess` has no idea what to do with one.
+ */
+const SPAWNABLE = ['.exe', '.com'];
+
+/**
+ * Run a program, by whatever mechanism actually works for it.
+ *
+ * `spawn` for a real executable, because it takes arguments and a working directory and hands back
+ * a pid the dock can track. `shell.openPath` — which is ShellExecute — for everything else, and as
+ * a fallback when spawn refuses.
+ *
+ * ShellExecute is also the only thing that launches a Store app correctly. William's Minecraft node
+ * pointed at a shortcut whose target is
+ * `C:/Program Files/WindowsApps/Microsoft.4297127D64EC6_.../Minecraft.exe`: an MSIX payload that
+ * needs package identity, which you get from the shell and not from `CreateProcess`. Following the
+ * shortcut ourselves and spawning its target would have failed a second time, for a second reason.
+ * Handing the `.lnk` to the shell is exactly what double-clicking it in Explorer does.
+ *
+ * The cost is that ShellExecute returns no pid and takes no arguments, so a node with `args` that
+ * is not a real executable is told plainly that they were ignored rather than silently dropped.
+ */
+async function launchProgram(resolved: string, node: BoardNode, target: TargetInfo): Promise<OpenResult> {
+  const extension = resolved.slice(resolved.lastIndexOf('.')).toLowerCase();
+  const viaShell = !SPAWNABLE.includes(extension);
+
+  if (!viaShell) {
+    try {
+      const child = spawn(toWindows(resolved), node.args ?? [], {
+        cwd: toWindows(node.cwd ?? dirname(resolved)),
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: false
+      });
+      child.unref();
+      return { ok: true, action: `launched ${resolved} (pid ${child.pid ?? '?'})`, target };
+    } catch (err) {
+      // Fall through to the shell rather than reporting failure: an .exe that CreateProcess
+      // refuses may still be something Explorer knows how to open.
+      console.warn(`[open] spawn refused ${resolved} (${(err as Error).message}) — trying the shell`);
+    }
+  }
+
+  const failure = await shell.openPath(toWindows(resolved));
+  if (failure) return { ok: false, action: 'launch failed', target, error: failure };
+
+  const ignoredArgs = node.args?.length ? ' (arguments ignored — the shell takes none)' : '';
+  return { ok: true, action: `launched ${resolved} via the shell${ignoredArgs}`, target };
+}
+
+/**
  * Activate a node. Returns a description of what happened rather than throwing, because the
  * renderer shows this in a toast either way and "nothing happened, here is why" is a result.
  */
-export async function openTarget(node: BoardNode): Promise<OpenResult> {
+export async function openTarget(
+  node: BoardNode,
+  /**
+   * Who asked.
+   *
+   * This is the whole reason a node may silence its own confirmation safely. `confirmBeforeLaunch:
+   * false` is the user saying "I trust this one, stop asking" — and board JSON is agent-writable
+   * (`command:apply` is in AGENT_METHODS), while `node:open` is too. So if that flag suppressed
+   * the prompt for everyone, an agent could point a node anywhere, clear the flag, activate it,
+   * and run an arbitrary program with nothing on screen. Suppression applies to `'user'` only;
+   * an agent is asked every time, whatever the board says.
+   */
+  by: Actor = 'user'
+): Promise<OpenResult> {
   const target = resolveNodeTarget(node);
 
   if (target.state === 'none') {
@@ -117,13 +210,26 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
     return { ok: false, action: 'blocked', target, error: target.detail ?? 'TARGET DID NOT RESOLVE' };
   }
 
-  // docs/07: outside a dev root -> confirm on every activation, no exceptions, no remembering.
-  if (target.state === 'outside-dev-root') {
+  /*
+   * ── One question, not two ─────────────────────────────────────────────────────────────────
+   *
+   * Opening a program outside a dev root used to raise TWO dialogs in a row — "target outside your
+   * dev roots", then "launch this program?" — for one click, about one file, and both answered by
+   * the same person for the same reason. William: "I want to remove the confirmation messages as
+   * much as possible."
+   *
+   * They are now one dialog that says everything relevant, and `trusted()` decides whether it
+   * appears at all. No consent is lost: the combined dialog carries the same path, the same
+   * out-of-root warning, and the same refusal default.
+   */
+  const outsideRoots = needsConfirmation(target);
+  if (outsideRoots && !trustedByUser(node, by)) {
     const proceed = await confirm(
       'Target outside your dev roots',
       `${node.designator ? node.designator + ' — ' : ''}${node.name}`,
-      `This target is not under any configured dev root (${getSettings().devRoots.join(', ')}) or your user profile.\n\n${resolved}\n\nSkynetOS asks every time for these.`,
-      'Open anyway'
+      `${resolved}\n\nNot under any configured dev root (${getSettings().devRoots.join(', ')}) or your user profile.\n\n` +
+      'To stop being asked: add its folder to devRoots in settings.json, or untick "Confirm before launch" on this node.',
+      'Open'
     );
     if (!proceed) return { ok: false, action: 'cancelled by user', target };
   }
@@ -168,12 +274,14 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
 
   // A launchable binary is the one case that runs code rather than opening a document.
   if (node.kind === 'file.exe') {
-    const settings = getSettings();
     const elevated = node.elevated === true;
-    const needsConfirm =
-      elevated || node.confirmBeforeLaunch !== false || settings.confirmAllLaunches || !confirmedBinaries.has(resolved);
 
-    if (needsConfirm) {
+    /*
+     * Elevation is ALWAYS confirmed, whatever the node says and whoever asked. "Do you want to run
+     * this" and "do you want to run this as administrator" are different questions, and the second
+     * one is not a node's to answer on the user's behalf.
+     */
+    if (elevated || !trustedByUser(node, by)) {
       const proceed = await confirm(
         elevated ? 'Launch this program AS ADMINISTRATOR?' : 'Launch this program?',
         `${node.designator ? node.designator + ' — ' : ''}${node.name}`,
@@ -182,35 +290,25 @@ export async function openTarget(node: BoardNode): Promise<OpenResult> {
         `${resolved}\n${target.alias ? 'Windows app · ' : target.sizeBytes ? `${(target.sizeBytes / 1024).toFixed(0)} KB · ` : ''}${node.args?.length ? `args: ${node.args.join(' ')}` : 'no arguments'}\n\n` +
         (elevated
           ? 'Windows will show a UAC prompt. An elevated program can change anything on this machine.\nSkynetOS itself stays non-elevated — it asks Windows to start an elevated child.'
-          : 'SkynetOS is not elevated, and neither is this.'),
+          : 'SkynetOS is not elevated, and neither is this.\nUntick "Confirm before launch" on this node to stop being asked.'),
         elevated ? 'Launch as admin' : 'Launch'
       );
       if (!proceed) return { ok: false, action: 'cancelled by user', target };
       confirmedBinaries.add(resolved);
     }
 
-    try {
-      const child = elevated
-        ? spawnElevated(resolved, node.args ?? [], node.cwd ?? dirname(resolved))
-        : spawn(resolved.replace(/\//g, '\\'), node.args ?? [], {
-            cwd: node.cwd ? node.cwd.replace(/\//g, '\\') : dirname(resolved).replace(/\//g, '\\'),
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: false
-          });
-      child.unref();
-      return {
-        ok: true,
-        action: elevated
-          // The pid is PowerShell's, not the program's — see spawnElevated. Saying so beats
-          // printing a number that belongs to a process that has already exited.
-          ? `asked Windows to launch ${resolved} elevated (UAC)`
-          : `launched ${resolved} (pid ${child.pid ?? '?'})`,
-        target
-      };
-    } catch (err) {
-      return { ok: false, action: 'launch failed', target, error: (err as Error).message };
+    if (elevated) {
+      try {
+        spawnElevated(resolved, node.args ?? [], node.cwd ?? dirname(resolved)).unref();
+        // The pid would be PowerShell's, not the program's — see elevatedProgramArgv. Printing it
+        // would be a number belonging to a process that has already exited.
+        return { ok: true, action: `asked Windows to launch ${resolved} elevated (UAC)`, target };
+      } catch (err) {
+        return { ok: false, action: 'launch failed', target, error: (err as Error).message };
+      }
     }
+
+    return await launchProgram(resolved, node, target);
   }
 
   const openWith = node.openWith ?? (target.kind === 'directory' ? 'explorer' : 'default');

@@ -93,6 +93,28 @@ function addNode(
   return { ok: true, nodeId: node.id };
 }
 
+/**
+ * Activate a node's target.
+ *
+ * Shared, and taking an ACTOR, for the same reason `addNode` does: what a click may do without
+ * asking is not the same as what an agent may do without asking. `confirmBeforeLaunch: false` is
+ * the user saying "stop asking me about this one", and board JSON is agent-writable — so the flag
+ * is honoured for 'user' and ignored for 'agent'. See `trustedByUser` in services/shell-opener.ts.
+ */
+async function openNode(
+  boardId: string,
+  nodeId: string,
+  by: Actor
+): Promise<Awaited<ReturnType<SkynetApi['node:open']>>> {
+  const result = await openTarget(nodeOrThrow(boardId, nodeId), by);
+  return {
+    ok: result.ok,
+    action: result.action,
+    target: result.target,
+    ...(result.error ? { error: result.error } : {})
+  };
+}
+
 function nodeOrThrow(boardId: string, nodeId: string): BoardNode {
   const load = loadBoard(boardId);
   if (!load.ok) throw new Error(load.error);
@@ -262,17 +284,10 @@ const handlers: Handlers = {
 
   'node:add': (boardId, kind, pos, fields) => addNode(boardId, kind, pos, fields, 'user'),
 
-  'node:open': async (boardId, nodeId) => {
-    const result = await openTarget(nodeOrThrow(boardId, nodeId));
-    return {
-      ok: result.ok,
-      action: result.action,
-      target: result.target,
-      ...(result.error ? { error: result.error } : {})
-    };
-  },
+  'node:open': async (boardId, nodeId) => openNode(boardId, nodeId, 'user'),
 
   'command:apply': (request) => apply(request),
+
   'command:undo': () => undo(),
   'command:redo': () => redo(),
   'command:history': () => historyStatus(),
@@ -332,6 +347,15 @@ export async function callAsAgent(method: string, params: unknown[]): Promise<un
   if (method === 'node:add') {
     const [boardId, kind, pos, fields] = params as Parameters<SkynetApi['node:add']>;
     return addNode(boardId, kind, pos, fields, 'agent');
+  }
+
+  /*
+   * Same reason as `node:add`: activating a node runs something on this machine, and an agent must
+   * not be able to skip the confirmation by clearing a flag in board JSON it can also write.
+   */
+  if (method === 'node:open') {
+    const [boardId, nodeId] = params as Parameters<SkynetApi['node:open']>;
+    return openNode(boardId, nodeId, 'agent');
   }
 
   const handler = handlers[method as Channel] as (...a: unknown[]) => unknown;

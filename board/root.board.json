@@ -73,8 +73,8 @@
       "kind": "agent.code",
       "name": "JARVIS-PRIME",
       "pos": {
-        "x": 109,
-        "y": 55
+        "x": 112,
+        "y": 58
       },
       "cwd": "C:/dev",
       "launch": "popout",
@@ -125,8 +125,8 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 81,
-        "y": 54
+        "x": 74,
+        "y": 53
       },
       "footprint": {
         "w": 6,
@@ -152,7 +152,7 @@
       "boardFile": "deductionos/room.board.json",
       "pos": {
         "x": 89,
-        "y": 46
+        "y": 45
       },
       "tags": [
         "learning",
@@ -173,8 +173,8 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 83,
-        "y": 63
+        "x": 75,
+        "y": 64
       },
       "tags": [
         "writing",
@@ -195,8 +195,8 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 91,
-        "y": 70
+        "x": 93,
+        "y": 82
       },
       "tags": [
         "truthquestretro",
@@ -215,8 +215,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 110,
-        "y": 65
+        "x": 119,
+        "y": 72
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
@@ -254,8 +254,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 103,
-        "y": 73
+        "x": 109,
+        "y": 79
       },
       "footprint": {
         "w": 4,
@@ -280,8 +280,8 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 108,
-        "y": 45
+        "x": 103,
+        "y": 42
       },
       "footprint": {
         "w": 4,
@@ -298,7 +298,7 @@
       "name": "title",
       "pos": {
         "x": 88,
-        "y": 41
+        "y": 38
       },
       "text": "SKYNETOS  REV A  //  GOOB ENTERTAINMENT CO.",
       "size": 11,
@@ -332,8 +332,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 112,
-        "y": 74
+        "x": 119,
+        "y": 81
       },
       "footprint": {
         "w": 3,
@@ -351,8 +351,8 @@
       "kind": "task.scheduled",
       "name": "Nightly journal",
       "pos": {
-        "x": 108,
-        "y": 52
+        "x": 111,
+        "y": 49
       },
       "footprint": {
         "w": 2,
@@ -370,8 +370,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 110,
-        "y": 56
+        "x": 97,
+        "y": 49
       },
       "part": "via",
       "showName": false,
@@ -382,7 +382,7 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 109,
+        "x": 118,
         "y": 74
       },
       "part": "via",
@@ -418,7 +418,7 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 109,
+        "x": 117,
         "y": 74
       },
       "part": "screw",
@@ -446,20 +446,24 @@
       "kind": "decor.part",
       "name": "LED OK",
       "pos": {
-        "x": 102,
+        "x": 99,
         "y": 67
       },
       "part": "led_ok",
       "showName": false,
-      "showDesignator": false
+      "showDesignator": false,
+      "footprint": {
+        "w": 3,
+        "h": 4
+      }
     },
     {
       "id": "p_led_u3",
       "kind": "decor.part",
       "name": "LED WARN",
       "pos": {
-        "x": 99,
-        "y": 67
+        "x": 102,
+        "y": 68
       },
       "part": "led_warn",
       "showName": false,
@@ -470,8 +474,8 @@
       "kind": "decor.part",
       "name": "LED IDLE",
       "pos": {
-        "x": 100,
-        "y": 67
+        "x": 103,
+        "y": 68
       },
       "part": "led_idle",
       "showName": false,
@@ -482,8 +486,8 @@
       "kind": "decor.part",
       "name": "FIDUCIAL",
       "pos": {
-        "x": 101,
-        "y": 67
+        "x": 100,
+        "y": 68
       },
       "part": "fiducial",
       "showName": false,
@@ -494,60 +498,36 @@
       "kind": "decor.part",
       "name": "GRILLE",
       "pos": {
-        "x": 106,
+        "x": 107,
         "y": 57
       },
       "part": "grille",
       "showName": false,
       "showDesignator": false,
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 3,
+        "h": 3
       }
-    },
-    {
-      "id": "p_pads",
-      "kind": "decor.part",
-      "name": "PADS",
-      "pos": {
-        "x": 106,
-        "y": 67
-      },
-      "part": "pads",
-      "showName": false,
-      "showDesignator": false
     },
     {
       "id": "p_cap",
       "kind": "decor.part",
       "name": "CAP",
       "pos": {
-        "x": 101,
-        "y": 67
+        "x": 100,
+        "y": 68
       },
       "part": "cap",
       "showName": false,
       "showDesignator": false
     },
     {
-      "id": "p_junc",
-      "kind": "decor.part",
-      "name": "JUNCTION",
-      "pos": {
-        "x": 107,
-        "y": 67
-      },
-      "part": "junction",
-      "showName": false,
-      "showDesignator": false
-    },
-    {
       "id": "j_new_link",
       "kind": "link.url",
-      "name": "DIRTY PLUSH",
+      "name": "DIRTY PLUSH (HUD)",
       "pos": {
-        "x": 72,
-        "y": 64
+        "x": 64,
+        "y": 63
       },
       "designator": "J2",
       "provisional": true,
@@ -571,7 +551,7 @@
       "kind": "file.exe",
       "name": "launcher.exe",
       "pos": {
-        "x": 73,
+        "x": 65,
         "y": 54
       },
       "designator": "F1",
@@ -593,13 +573,13 @@
       "kind": "monitor.system",
       "name": "MONITOR",
       "pos": {
-        "x": 100,
-        "y": 44
+        "x": 112,
+        "y": 36
       },
       "designator": "M2",
       "footprint": {
-        "w": 7,
-        "h": 7
+        "w": 6,
+        "h": 10
       }
     },
     {
@@ -607,8 +587,8 @@
       "kind": "agent.chat",
       "name": "MC MIND PALACE",
       "pos": {
-        "x": 81,
-        "y": 46
+        "x": 76,
+        "y": 45
       },
       "designator": "U4",
       "provisional": true,
@@ -624,8 +604,8 @@
       "kind": "file.document",
       "name": "PANIC",
       "pos": {
-        "x": 82,
-        "y": 70
+        "x": 75,
+        "y": 71
       },
       "designator": "F2",
       "provisional": true,
@@ -633,15 +613,20 @@
       "footprint": {
         "w": 6,
         "h": 8
-      }
+      },
+      "openWith": "office",
+      "image": "C:/dev/SkynetOS/assets/sprites/Pan_-_Ancient_Greek_god_of_the_shepherds.jpg",
+      "showLogo": false,
+      "showDesignator": false,
+      "plateBorder": "copper"
     },
     {
       "id": "p_part",
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 110,
-        "y": 71
+        "x": 117,
+        "y": 79
       },
       "part": "panel",
       "showName": false,
@@ -650,6 +635,130 @@
       "footprint": {
         "w": 7,
         "h": 8
+      }
+    },
+    {
+      "id": "f_new_document_2",
+      "kind": "file.document",
+      "name": "DIRTY PLUSH",
+      "pos": {
+        "x": 64,
+        "y": 74
+      },
+      "designator": "F3",
+      "provisional": true,
+      "path": "C:\\Users\\wills\\OneDrive\\Documents\\01 DOCUMENTATION\\Dirty Plush - Novel 063026.docx",
+      "openWith": "office",
+      "showLogo": false,
+      "priority": 1,
+      "showDesignator": false,
+      "footprint": {
+        "w": 6,
+        "h": 8
+      },
+      "image": "C:/dev/SkynetOS/assets/sprites/s-l1200.jpg",
+      "plateBorder": "copper"
+    },
+    {
+      "id": "p_part_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 85,
+        "y": 61
+      },
+      "part": "elbow_thin",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 2,
+        "h": 2
+      }
+    },
+    {
+      "id": "p_part_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 104,
+        "y": 59
+      },
+      "part": "tee",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 2,
+        "h": 3
+      }
+    },
+    {
+      "id": "p_part_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 86,
+        "y": 56
+      },
+      "part": "grille",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "p_part_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 63
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "p_part_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 86,
+        "y": 62
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 3,
+        "h": 3
+      }
+    },
+    {
+      "id": "p_part_7",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 106,
+        "y": 62
+      },
+      "part": "elbow_thin",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 2,
+        "h": 2
       }
     }
   ],
@@ -748,6 +857,12 @@
       "id": "e14",
       "from": "f_new_document",
       "to": "d3_storyos",
+      "kind": "reads"
+    },
+    {
+      "id": "e15",
+      "from": "f_new_document_2",
+      "to": "j_new_link",
       "kind": "reads"
     }
   ]
