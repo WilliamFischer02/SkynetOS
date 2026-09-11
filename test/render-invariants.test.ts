@@ -221,3 +221,65 @@ describe('the atlas is built from a source Pixi can upload', () => {
     expect(sprites).toMatch(/uploadMethod !== 'image'/);
   });
 });
+
+/**
+ * ── Paint order is statement order ───────────────────────────────────────────────────────────
+ *
+ * There is no z-index anywhere in BoardCanvas. What is in front of what is decided entirely by the
+ * ORDER of the `world.addChild(...)` calls, which makes it the kind of rule a unit test cannot
+ * express and a careless edit can reverse without anything noticing.
+ *
+ * It has already been reversed once deliberately. `decor.part` first went ABOVE the components so
+ * couriers would pass under aesthetic elements; William then asked for the opposite — "i want
+ * shapes and aesthetic elements to render as a layer below the nodes - forget them rendering on
+ * top of the robots" — which is also the more defensible reading: a via, a screw and a pad array
+ * are features OF the board, and a chip soldered over pads hides them.
+ */
+describe('the board paints back to front in one fixed order', () => {
+  const canvas = read('src/renderer/board/BoardCanvas.tsx');
+
+  /** The layers, in the order they are added to `world`. */
+  const order = [...canvas.matchAll(/world\.addChild\((\w+)(?:\.container)?\)/g)].map((m) => m[1]!);
+
+  const before = (a: string, b: string): boolean => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    expect(ia, `${a} is not added to the world at all`).toBeGreaterThanOrEqual(0);
+    expect(ib, `${b} is not added to the world at all`).toBeGreaterThanOrEqual(0);
+    return ia < ib;
+  };
+
+  it('adds every layer exactly once', () => {
+    expect(new Set(order).size, 'a layer is added to the world twice').toBe(order.length);
+  });
+
+  it('puts the substrate and the backdrops at the very back', () => {
+    expect(before('substrateLayer', 'decorLayer')).toBe(true);
+    expect(before('decorLayer', 'traceLayer')).toBe(true);
+  });
+
+  it('puts aesthetic parts BELOW the components', () => {
+    expect(before('partLayer', 'nodeLayer'), 'parts must render under nodes').toBe(true);
+  });
+
+  it('lets the couriers walk OVER the parts', () => {
+    // "forget them rendering on top of the robots". A robot crossing a via passes in front of it.
+    expect(before('partLayer', 'couriers'), 'robots must render over parts').toBe(true);
+  });
+
+  it('keeps parts above the copper, so a via sits ON the trace', () => {
+    expect(before('traceLayer', 'partLayer')).toBe(true);
+    expect(before('zoneLayer', 'partLayer')).toBe(true);
+  });
+
+  it('still hides an arriving courier behind the node it is delivering to', () => {
+    // This is what makes an arrival read as going INTO a component rather than stopping on it.
+    expect(before('couriers', 'nodeLayer')).toBe(true);
+  });
+
+  it('keeps the grid and the selection overlays on top of everything', () => {
+    expect(before('noteLayer', 'gridLayer')).toBe(true);
+    expect(before('gridLayer', 'overlayLayer')).toBe(true);
+    expect(order[order.length - 1]).toBe('overlayLayer');
+  });
+});

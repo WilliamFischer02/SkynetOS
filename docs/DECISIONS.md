@@ -1441,3 +1441,30 @@ handed to a terminal as a working directory.
 placeholders (checked: no Offline or Recall attribute). For his own documents the local path is the
 better binding — desktop Word, offline, and the board can watch the file for changes. The URL form
 is for documents shared with him, or ones he has not synced.
+
+## 2026-09-10 — Aesthetic parts render BELOW the nodes (reversing the entry above)
+
+William: "i want shapes and aesthetic elements to render as a layer below the nodes - forget them
+rendering on top of the robots - i want them to render below nodes."
+
+This reverses the 2026-09-10 entry that put `decor.part` above the components. That entry stands as
+written — this log is append-only — but it is superseded, and the new order is the more defensible
+one anyway:
+
+    backdrops -> copper -> zones -> PARTS -> couriers -> components -> notes -> grid -> overlays
+
+A via, a screw, a pad array and a grille are features OF the board, not objects mounted on it. A
+chip soldered over a pad array hides the pads, because that is exactly what a chip does to the pads
+underneath it. The first version had them as furniture screwed through the board and therefore on
+top of everything, which is a coherent reading and simply not the one William wants to look at.
+
+Parts stay ABOVE the traces and zones, so a via still reads as sitting on the copper rather than
+under it. Couriers now pass over them rather than under, which is the explicit "forget them
+rendering on top of the robots".
+
+**Guarded this time.** There is no z-index anywhere in BoardCanvas — what is in front of what is
+decided entirely by the order of the `world.addChild(...)` calls. That makes it a rule a unit test
+cannot express and a careless edit can reverse silently, and it has now been changed twice. So
+`test/render-invariants.test.ts` reads those call sites and pins the relationships that matter:
+parts under nodes, couriers over parts, parts over copper, couriers under the node they are
+delivering to, overlays last. Verified by putting the old order back and watching two of them fail.

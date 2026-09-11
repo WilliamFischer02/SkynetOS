@@ -215,7 +215,7 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 109,
+        "x": 110,
         "y": 65
       },
       "cwd": "C:/dev/SkynetOS",
@@ -333,7 +333,7 @@
       "name": "GitHub",
       "pos": {
         "x": 112,
-        "y": 73
+        "y": 74
       },
       "footprint": {
         "w": 3,
@@ -629,9 +629,26 @@
       },
       "designator": "F2",
       "provisional": true,
-      "path": "https://d.docs.live.net/1DFB3144610D75AC/Documents/01%20DOCUMENTATION/PANIC_NovelRoughDraft.docx",
+      "path": "C:\\Users\\wills\\OneDrive\\Documents\\01 DOCUMENTATION\\PANIC_NovelRoughDraft.docx",
       "footprint": {
         "w": 6,
+        "h": 8
+      }
+    },
+    {
+      "id": "p_part",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 110,
+        "y": 71
+      },
+      "part": "panel",
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 7,
         "h": 8
       }
     }

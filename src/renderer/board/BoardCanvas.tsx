@@ -900,10 +900,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         const sprite = new Sprite(sprites.get(key) ?? undefined);
         sprite.roundPixels = true;
         /*
-         * Three layers, by kind. A backdrop is scenery and goes to the bottom; a part is furniture
-         * screwed through the board and goes on top of everything mounted to it; a component goes
-         * in between. All three are nodes in every other respect — selectable in Edit Board mode,
-         * movable, resizable, undoable.
+         * Three layers, by kind, and all three sit UNDER the components: a backdrop is scenery the
+         * board stands on, and a part is a feature of the board itself — a via, a screw, a pad
+         * array — so a chip soldered over it hides it, which is what a chip does to the pads
+         * underneath. The paint order that decides this is where the layers are added to `world`;
+         * see the comment there.
+         *
+         * All three are nodes in every other respect — selectable in Edit Board mode, movable,
+         * resizable, undoable.
          */
         const layer = node.kind === 'decor.image' ? decorLayer
           : node.kind === 'decor.part' ? partLayer
@@ -1242,14 +1246,24 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         world.addChild(substrateLayer);
 
         /*
-         * Layers 1-7, in paint order.
+         * The layers, in paint order. Each one is added to `world` below, and the ORDER of those
+         * calls is the whole of it — there is no z-index anywhere in this file.
          *
-         * backdrops -> copper -> zones -> COURIERS -> components -> PARTS -> notes -> grid -> overlays.
+         *   backdrops -> copper -> zones -> PARTS -> couriers -> components -> notes -> grid -> overlays
          *
-         * `decor.part` sits above the components, not among them. William: "aesthetic elements
-         * should be rendered OVER / on top of the board so mini robots pass UNDER the '+' box
-         * aesthetic elements used on the board." A via screwed through the board is on top of
-         * everything mounted to it, and a courier walking past goes underneath.
+         * `decor.part` sits BELOW the components and below the couriers. William asked for this
+         * twice, in opposite directions, and the second answer is the one that holds:
+         *
+         *   "aesthetic elements should be rendered OVER / on top of the board so mini robots pass
+         *    UNDER the '+' box aesthetic elements"          — the first version
+         *   "i want shapes and aesthetic elements to render as a layer below the nodes - forget
+         *    them rendering on top of the robots"           — what it is now
+         *
+         * Which is also the more defensible one physically: a via, a screw, a pad array and a
+         * grille are features OF the board, not objects mounted on it. A chip soldered over a pad
+         * array hides the pads, because that is exactly what a chip does to the pads underneath
+         * it. Parts stay above the traces and zones so a via still reads as sitting on the copper
+         * rather than under it.
          *
          * `decor.image` sits at the very bottom, above the substrate and below the wiring: it is
          * scenery the board is built on top of, so a trace running across it should be visible,
@@ -1264,9 +1278,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         decorLayer = new Container(); world.addChild(decorLayer);
         traceLayer = new Container(); world.addChild(traceLayer);
         zoneLayer = new Container(); world.addChild(zoneLayer);
+        partLayer = new Container(); world.addChild(partLayer);
         couriers = new CourierLayer(); world.addChild(couriers.container);
         nodeLayer = new Container(); world.addChild(nodeLayer);
-        partLayer = new Container(); world.addChild(partLayer);
         noteLayer = new Container(); world.addChild(noteLayer);
         gridLayer = new Container(); world.addChild(gridLayer);
         overlayLayer = new Container(); world.addChild(overlayLayer);
