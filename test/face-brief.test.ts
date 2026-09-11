@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardNode } from '../packages/shared/types.js';
-import { formatFaceBrief, pickHandsNode, standingOrdersBlock } from '../packages/shared/face-brief.js';
+import { briefWrittenAt, formatFaceBrief, pickHandsNode, standingOrdersBlock } from '../packages/shared/face-brief.js';
 
 /**
  * The Face's standing orders: one file, rewritten whole, injected into every Hands briefing.
@@ -63,6 +63,45 @@ describe('the standing orders in a briefing', () => {
 
   it('records which archived message the orders came from', () => {
     expect(formatFaceBrief(message)).toContain(`source: codex/mailbox/archive/${message.file}`);
+  });
+
+  it('writes the header the Face specified, filled in by SkynetOS', () => {
+    const file = formatFaceBrief(message, '2026-09-10T07:00:00.000Z');
+    for (const line of [
+      'protocol: face-brief',
+      'version: 1',
+      'written-by: face',
+      'written-at: 2026-09-11T07:00:00.000Z',
+      'supersedes: 2026-09-10T07:00:00.000Z'
+    ]) expect(file).toContain(line);
+    expect(formatFaceBrief(message)).toContain('supersedes: none');
+  });
+
+  it('chains: a brief supersedes the written-at of the one it replaces', () => {
+    const first = formatFaceBrief(message);
+    const second = formatFaceBrief({ ...message, sentAt: '2026-09-12T07:00:00.000Z' }, briefWrittenAt(first));
+    expect(second).toContain('supersedes: 2026-09-11T07:00:00.000Z');
+  });
+
+  it('drops a header the Face put at the top of its own body', () => {
+    // Two accounts of written-at would disagree, and the Face's is a guess.
+    const file = formatFaceBrief({
+      ...message,
+      body: '---\nprotocol: face-brief\nwritten-at: 2026-09-11T00:00:00.000Z\n---\n\n## CURRENT OBJECTIVE\nShip it.'
+    });
+    expect(file).not.toContain('2026-09-11T00:00:00.000Z');
+    expect(file.match(/^---$/gm)).toHaveLength(2);
+    expect(file).toContain('## CURRENT OBJECTIVE');
+  });
+
+  it('leaves an indented example of the header alone', () => {
+    const body = 'Shape:\n\n    ---\n    protocol: face-brief\n    ---';
+    expect(formatFaceBrief({ ...message, body })).toContain('    protocol: face-brief');
+  });
+
+  it('still reads the date of a brief written before the protocol', () => {
+    expect(briefWrittenAt('---\nupdated: 2026-09-01T00:00:00.000Z\n---\n\nold')).toBe('2026-09-01T00:00:00.000Z');
+    expect(briefWrittenAt(null)).toBeNull();
   });
 
   it('adds nothing when there are no orders', () => {

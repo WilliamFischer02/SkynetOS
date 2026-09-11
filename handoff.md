@@ -3,10 +3,11 @@
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
 **Last session (2026-09-11, U3 JARVIS-PRIME):** gave the Face a way to read this machine. `FACE-BOOT.md` at the repo root, rebaked by a pre-commit hook. `standing:` mail now writes `codex/face-brief.md`. The panel honours a pasted header, so `run:` works through it for the first time.
-**Not live until SkynetOS restarts:** standing orders and header lifting are main-process code, and the running app predates them.
+**Then:** the Face sent its face-brief protocol (v1: five sections, a header with written-at and supersedes). SkynetOS now writes that header itself, and FACE-BOOT shows the orders in force as section 5. The Face has not yet sent a first instance; the protocol message William relayed was cut off mid-sentence.
+**Restart SkynetOS once more** before the first `standing:` message: the dev app was restarted before the protocol header landed. An older app still works; it just writes the pre-protocol header, which is still read correctly.
 **Session before that:** stood SkynetOS up on the second desktop (`William-Desktop`). No code changed.
 **Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
-**`npm run verify` is green: 662 tests** on William-Desktop. The primary desktop has not run this commit.
+**`npm run verify` is green: 669 tests** on William-Desktop. The laptop has not run this commit.
 
 ---
 
@@ -25,7 +26,8 @@ and the MCP tool names.
 
 - `npm run face:bake` → `tools/face-bake.ts` (vite-node) → `src/main/services/face-boot.ts` (pure).
 - `npm run face:hook` installs a **pre-commit** hook that bakes and stages it. Installed on
-  William-Desktop only. **The primary desktop needs `npm run face:hook` once.**
+  William-Desktop and WF_LAPTOPMAIN; the laptop's first bake landed as `04cb826`. Board truth is
+  resolved on whichever machine committed last, and the file names it.
 - The lead block and numbered bold titles under "What is next" in THIS file are what the Face sees
   as the Hands' state. Keep them accurate and keep that shape.
 
@@ -43,6 +45,9 @@ function. The file does not exist yet: the Face has a shape for it and has not s
   panel landed in the body and never fired.
 - MCP `mailbox_send` never passed `from`, so agent mail was signed `undefined`. It also wrote
   `to: to-head`. `normaliseSide` fixes the side and `from: 'hands'` fixes the signature.
+  Verified live after the restart: the side is right. The signature still came out `unknown`,
+  because the MCP server is spawned once per Claude Code session and this one predates the fix.
+  A fresh session picks it up.
 - The mail section of a briefing now gives absolute paths, because U3 runs from `C:/dev`.
 
 ### 4. The resolver runs without Electron
@@ -141,7 +146,7 @@ heredoc with a quoted delimiter, or `String.fromCharCode(92)`.
 In rough order of what was asked for most recently:
 
 1. **Repoint U3's read list** — prefix `SkynetOS/`, persona to `codex/personas/persona.md`, add the voice file. One `node_update`, awaiting approval.
-2. **Restart SkynetOS and prove standing orders end to end** — send a `standing:` message through the panel, confirm `codex/face-brief.md` appears, and open U3 fresh to see it in the briefing. Not yet run.
+2. **Prove standing orders end to end with the Face's first real brief** — restart SkynetOS, paste the Face's `standing:` message into the panel whole, confirm `codex/face-brief.md` appears with the protocol header, and open U3 fresh to see it in the briefing. Not yet run.
 3. **A board selector** — save and load board variations, so alternatives can be tried side by side.
 4. **Rooms within rooms.** `drive.room` already points at a board file; the descend stack already holds more than two levels.
 5. **Agent node output boxes.** A summary of the agent's last output (no model needed: the last assistant turn is in `~/.claude/projects/<cwd>/<uuid>.jsonl`) and an in-character remark (`claude -p` on the Max subscription).

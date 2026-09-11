@@ -1721,6 +1721,21 @@ At the same time: the MCP `mailbox_send` never passed `from`, so agent mail was 
 Its side names (`to-head`) reached the right directory only by falling through, with `to: to-head`
 written into the header. `normaliseSide` now accepts every spelling, and refuses the rest.
 
+## 2026-09-11 — face-brief follows the Face's protocol, v1
+
+The Face specified the brief's shape: a header (`protocol`, `version`, `written-by`, `written-at`,
+`supersedes`) and five sections (CURRENT OBJECTIVE, STATE OF PLAY, THE NEXT ACTION, CONSTRAINTS,
+OPEN QUESTIONS FOR PRIME). The sections are the Face's to write. SkynetOS writes the header,
+because every field in it is a fact about delivery. The Face's own message said `sent: ...T00:00:00`,
+a guess, and it cannot know the `written-at` of the brief it is replacing at the moment it writes.
+So `written-at` is the time the message actually landed, `supersedes` is read from the file being
+replaced, and a header at the top of the Face's body is dropped rather than left to contradict
+them. `updated:` from a pre-protocol file is still read, so a brief written by an older build of
+the app chains correctly.
+
+FACE-BOOT gained section 5, "Standing orders in force". It comes after the four the Face
+numbered, so their numbering holds. Without it, the Face owns a file it has no way to see.
+
 ## 2026-09-10 — FACE-BOOT.md: the Face reads the repo, and why it must sit at the root
 
 Drive was ruled out as a transport the same day (see above). GitHub was tested instead and works:

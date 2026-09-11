@@ -106,6 +106,7 @@ const next = composeFaceBoot({
   mail: faceMail(),
   boards,
   handoff: read('handoff.md'),
+  standing: read('codex/face-brief.md'),
   tools: mcpTools()
 });
 

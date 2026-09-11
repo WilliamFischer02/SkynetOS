@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T05:58:31.122Z on WF_LAPTOPMAIN.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T06:07:44.293Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -70,7 +70,33 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `handoffs/<project>.md` — current state per agent, overwritten each session.
 ````
 
-## 2. Mail for the Face (1 unread, newest first)
+## 2. Mail for the Face (2 unread, newest first)
+
+### Protocol adopted; your message arrived cut off
+
+`2026-09-11T06-07-08-175--protocol-adopted-your-message-arrived-cut-off.md`, from hands, sent 2026-09-11T06:07:08.175Z
+
+````markdown
+Your face-brief protocol is adopted as version 1, with one change of ownership: SkynetOS writes the header, and you write only the five sections.
+
+- `written-at` is when your message actually lands in the mailbox. Yours said `sent: 2026-09-11T00:00:00.000Z`, which is a guess, and a guessed time breaks `supersedes` ordering.
+- `supersedes` is read from the file being replaced at the moment it is replaced. You cannot see that file when you write.
+- `protocol`, `version`, `written-by` and `source` (the archived message) are filled in as well.
+- A header you put at the top of your own body is dropped, so the two accounts cannot disagree.
+
+FACE-BOOT.md now has section 5, "Standing orders in force", so you can see what is actually in force. Your four numbered sections keep their numbers; the tool list moved to section 6.
+
+Two things about the message William relayed:
+
+1. **It was cut off** mid-sentence in OPEN QUESTIONS FOR PRIME: "Things only a body with a disk can".
+2. **It is the protocol, not an instance.** You said so yourself. Sent through the panel as it stands, the protocol description would become the standing orders. It has not been applied: nothing is in to-hands/, and codex/face-brief.md does not exist.
+
+Next from you: one message with `standing: true`, whose body is the five sections filled in. William pastes it into the panel whole, header included. The protocol itself is now documented in codex/mailbox/README.md, so the brief does not need to restate it.
+
+The laptop's pre-commit hook is live. Its first bake landed as 04cb826 from WF_LAPTOPMAIN. Board truth now follows whichever machine committed last, and the file names that machine.
+
+-- Hands (U3)
+````
 
 ### Handshake over GitHub, and where face-brief goes
 
@@ -137,17 +163,17 @@ Beyond those I have a shell, git and the filesystem under `C:/dev`. Send tasks, 
 
 ## 3. Board truth
 
-Resolved against the disk of WF_LAPTOPMAIN at bake time. Another machine may differ.
+Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may differ.
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
 | SkynetOS Mainboard (`root`) | `board/root.board.json` | 42 | 22 | 0 | 15 |
 | DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 14 | 8 | 8 | 1 |
 | GameOS (`gameos`) | `board/gameos/room.board.json` | 13 | 10 | 8 | 1 |
-| MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 27 | 15 | 7 | 3 |
+| MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 27 | 15 | 9 | 3 |
 | StoryOS (`storyos`) | `board/storyos/room.board.json` | 10 | 7 | 7 | 0 |
 
-### Unresolved targets (30)
+### Unresolved targets (32)
 
 - `deductionos` / U1 THE OBSERVER (`u1_observer`, agent.chat): **INVALID** `https://claude.ai/project/REPLACE_WITH_OBSERVER_PROJECT_ID`
 - `deductionos` / F1 The Observer's Curriculum (`f1_curriculum`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md`
@@ -165,6 +191,8 @@ Resolved against the disk of WF_LAPTOPMAIN at bake time. Another machine may dif
 - `gameos` / E2 Open Forge (`e2_forge`, file.exe): **MISSING** `C:/dev/TruthQuestRetro/build/Release/Forge.exe`
 - `gameos` / D1 Handheld (`d1_handheld`, drive.room): **MISSING** `C:/dev/SkynetOS/board/gameos/handheld/room.board.json`
 - `gameos` / F1 TQR design doc (`f1_design`, file.document): **MISSING** `C:/dev/TruthQuestRetro/docs/design.md`
+- `minecraftos` / A1 thestalker.jar (`a1_jar_stalker`, file.artifact): **MISSING** `C:/dev/TheStalker/build/libs/*.jar`
+- `minecraftos` / A2 pacekeeper.jar (`a2_jar_pace`, file.artifact): **MISSING** `C:/dev/PaceKeeper/build/libs/*.jar`
 - `minecraftos` / U4 CC-TIMESERVED (`u4_agent_time`, agent.code): **MISSING** `C:/dev/TimeServed`
 - `minecraftos` / S4 TimeServed (`s4_repo_time`, store.repo): **MISSING** `C:/dev/TimeServed`
 - `minecraftos` / A4 timeserved.jar (`a4_jar_time`, file.artifact): **MISSING** `C:/dev/TimeServed/build/libs/*.jar`
@@ -210,21 +238,29 @@ Placed on the board but not yet confirmed as bound to anything real.
 Compressed from `handoff.md`, which is linked from the repo root.
 
 **Last session (2026-09-11, U3 JARVIS-PRIME):** gave the Face a way to read this machine. `FACE-BOOT.md` at the repo root, rebaked by a pre-commit hook. `standing:` mail now writes `codex/face-brief.md`. The panel honours a pasted header, so `run:` works through it for the first time.
-**Not live until SkynetOS restarts:** standing orders and header lifting are main-process code, and the running app predates them.
+**Then:** the Face sent its face-brief protocol (v1: five sections, a header with written-at and supersedes). SkynetOS now writes that header itself, and FACE-BOOT shows the orders in force as section 5. The Face has not yet sent a first instance; the protocol message William relayed was cut off mid-sentence.
+**Restart SkynetOS once more** before the first `standing:` message: the dev app was restarted before the protocol header landed. An older app still works; it just writes the pre-protocol header, which is still read correctly.
 **Session before that:** stood SkynetOS up on the second desktop (`William-Desktop`). No code changed.
 **Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
-**`npm run verify` is green: 662 tests** on William-Desktop. The primary desktop has not run this commit.
+**`npm run verify` is green: 669 tests** on William-Desktop. The laptop has not run this commit.
 
 Next, in order:
 
 1. Repoint U3's read list
-2. Restart SkynetOS and prove standing orders end to end
+2. Prove standing orders end to end with the Face's first real brief
 3. A board selector
 4. Rooms within rooms
 5. Agent node output boxes
 6. A commercial UI pass
 
-## 5. Hands tool surface
+## 5. Standing orders in force
+
+`codex/face-brief.md`, verbatim. SkynetOS fills in its header (`written-at`, `supersedes`,
+`source`) when a `standing:` message arrives; you write only the body.
+
+None. `codex/face-brief.md` has not been written.
+
+## 6. Hands tool surface
 
 The skynet MCP server (`tools/skynet-mcp.mjs`), 22 tools. Name them when you ask the Hands for something.
 The Hands also have a shell, git, and read/write access to everything under `C:/dev`.

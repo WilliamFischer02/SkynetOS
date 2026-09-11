@@ -41,6 +41,7 @@ const input = (over: Partial<FaceBootInput> = {}): FaceBootInput => ({
   mail: [],
   boards: [board()],
   handoff: '# handoff.md\n\n**Last session:** did things.\n\n---\n\n## What is next\n\n1. **A board selector** — more.\n',
+  standing: null,
   tools: ['board_read', 'node_update'],
   ...over
 });
@@ -114,7 +115,19 @@ describe('FACE-BOOT.md', () => {
 
   it('lists the Hands tools when it has them', () => {
     expect(composeFaceBoot(input())).toContain('`board_read` · `node_update`');
-    expect(composeFaceBoot(input({ tools: [] }))).not.toContain('## 5.');
+    expect(composeFaceBoot(input({ tools: [] }))).not.toContain('## 6.');
+  });
+
+  it('shows the standing orders in force, since the Face owns them and cannot otherwise see them', () => {
+    const text = composeFaceBoot(input({ standing: '---\nwritten-at: 2026-09-11T08:00:00.000Z\n---\n\n## CURRENT OBJECTIVE\nShip it.' }));
+    expect(text).toContain('## 5. Standing orders in force');
+    expect(text).toContain('## CURRENT OBJECTIVE');
+    // After the four sections the Face numbered, so its numbering still holds.
+    expect(text.indexOf('## 4. State of the Hands')).toBeLessThan(text.indexOf('## 5. Standing orders'));
+  });
+
+  it('says when no standing orders have been written', () => {
+    expect(composeFaceBoot(input())).toContain('None. `codex/face-brief.md` has not been written.');
   });
 });
 

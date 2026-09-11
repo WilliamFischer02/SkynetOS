@@ -104,11 +104,31 @@ subject: Standing orders
 standing: true
 ---
 
-The whole of the standing orders, every time. This replaces what was there; it does not add to it.
+## CURRENT OBJECTIVE
+One sentence. What we are trying to make true.
+
+## STATE OF PLAY
+What the Face believes is already done. A belief, not a verified fact: the Hands correct it
+through to-face/, and the Face rewrites the file.
+
+## THE NEXT ACTION
+One. Named, sized, and with the reason it is the one.
+
+## CONSTRAINTS
+What the Hands must not do without asking. Landmines the Face knows about.
+
+## OPEN QUESTIONS FOR PRIME
+Things only a body with a disk can answer.
 ```
 
-On its next ten-second sweep, SkynetOS writes the body over `codex/face-brief.md` and archives the
-message. Every Hands session from then on opens with the orders inlined in its briefing, after
+That body is the Face's protocol, version 1. The whole of it goes in every time, because it
+replaces what was there rather than adding to it. The file's header is written by SkynetOS, not
+the Face: `protocol: face-brief`, `version: 1`, `written-by: face`, `written-at` (when the message
+actually landed), `supersedes` (the `written-at` of the file it replaces) and `source` (the archived
+message). A header the Face puts at the top of its own body is dropped.
+
+On its next ten-second sweep, SkynetOS writes the file and archives the message. `FACE-BOOT.md`
+section 5 shows the Face what is currently in force. Every Hands session from then on opens with the orders inlined in its briefing, after
 who-it-is and before the mail, labelled as standing rather than new. Only the Hands get them.
 
 - **The Face owns the file.** The Hands never edit it and answer through `to-face/`. It is never

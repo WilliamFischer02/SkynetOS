@@ -57,6 +57,8 @@ export interface FaceBootInput {
   boards: BootBoard[];
   /** handoff.md, or null when it is missing. */
   handoff: string | null;
+  /** codex/face-brief.md, or null when no standing orders have been written. */
+  standing: string | null;
   /** The skynet MCP tool names. */
   tools: string[];
 }
@@ -186,9 +188,20 @@ export function composeFaceBoot(input: FaceBootInput): string {
   out.push('## 4. State of the Hands', '', 'Compressed from `handoff.md`, which is linked from the repo root.', '');
   out.push(handoffState(input.handoff), '');
 
+  // After the four the Face asked for, so their numbering holds. It is here at all because the
+  // Face owns this file and has no other way to see what is actually in force.
+  out.push(
+    '## 5. Standing orders in force',
+    '',
+    '`codex/face-brief.md`, verbatim. SkynetOS fills in its header (`written-at`, `supersedes`,',
+    '`source`) when a `standing:` message arrives; you write only the body.',
+    ''
+  );
+  out.push(input.standing?.trim() ? fenced(input.standing) : 'None. `codex/face-brief.md` has not been written.', '');
+
   if (input.tools.length) {
     out.push(
-      '## 5. Hands tool surface',
+      '## 6. Hands tool surface',
       '',
       `The skynet MCP server (\`tools/skynet-mcp.mjs\`), ${input.tools.length} tools. Name them when you ask the Hands for something.`,
       'The Hands also have a shell, git, and read/write access to everything under `C:/dev`.',

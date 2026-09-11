@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { formatFaceBrief, standingOrdersBlock } from '@shared/face-brief.js';
+import { briefWrittenAt, formatFaceBrief, standingOrdersBlock } from '@shared/face-brief.js';
 import { archiveMail, listMail, mailboxRoot } from './mailbox.js';
 
 /**
@@ -48,7 +48,10 @@ export function applyStandingOrders(): StandingResult[] {
   const results: StandingResult[] = [];
   for (const message of listMail('hands').filter((m) => m.standing)) {
     try {
-      writeFileSync(faceBriefPath(), formatFaceBrief(message), 'utf8');
+      // `supersedes` is the written-at of whatever is being replaced, read at the moment of
+      // replacing it: the Face cannot know it when it writes.
+      const previous = existsSync(faceBriefPath()) ? readFileSync(faceBriefPath(), 'utf8') : null;
+      writeFileSync(faceBriefPath(), formatFaceBrief(message, briefWrittenAt(previous)), 'utf8');
     } catch (err) {
       results.push({
         file: message.file,
