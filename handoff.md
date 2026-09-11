@@ -2,154 +2,147 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
-**Last session:** the launch was fixed — it had never worked — then a large feature pass.
-**Milestones done:** M0–M4, plus most of what M5 was going to be (usage telemetry, animation).
-**`npm run verify` is green: 450 tests.**
+**Last session:** JARVIS Prime got a real tool surface; boards tripled; wiring by hand.
+**Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
+**`npm run verify` is green: 534 tests.**
 
 ---
 
 ## What landed this session
 
-### 1. No chip had ever launched. Four stacked bugs.
+Full reasoning for every item is in `docs/DECISIONS.md`, newest last. Read that before changing
+any of it — most of these were fixes to something that had already gone wrong once.
 
-Every conversation id in `skynet.db` was a phantom; `claude` had never once started from the board.
-Full write-up in `docs/DECISIONS.md` — read it before touching the launch path.
+### 1. A provisional node need not name its target
 
-- **`existsSync` is `false` for every Windows App Execution Alias.** They are zero-length reparse
-  points; `stat` throws EACCES. So `wt.exe` and `pwsh.exe` were both "not installed" and the
-  launcher silently fell back to PowerShell 5.1. Fixed by `services/which.ts`, which resolves by
-  listing PATH directories. **Never use `existsSync` to test for an executable again.**
-- **Electron main is a GUI-subsystem process with no console**, so spawning a console app from it
-  detached opened no window at all. The no-wt fallback now goes through `cmd /c start`.
-- **`wt.exe` is a stub that exits 0 in ~200ms**, and `spawn` succeeding was read as a launch.
-- **The conversation id was recorded before the spawn**, so one failure poisoned the chip forever.
+`link.url`, `store.repo`, `agent.code`, `decor.image` — **fourteen of the sixteen kinds the "+"
+palette offers could not be added at all**. `node-factory.ts` creates every node unbound and
+`provisional: true` by design; the schema required the target anyway, so the command bus refused
+the edit before it reached the board ("EDIT REJECTED — the result would not validate").
 
-Now: the whole launch is a staged `.ps1` under userData whose command line carries nothing but
-file paths; it confirms itself by writing a pid file; and `services/conversations.ts` checks
-`~/.claude/projects` before any id reaches `--resume`.
+The schema's `allOf` is now gated behind "this node has not declared itself provisional".
+Everything else still applies with the flag set. `test/new-node.test.ts` runs the real factory
+against the real schema for every kind, and pins the narrowness of the exemption.
 
-**Prove it, don't assume it:** `SKYNET_SMOKE_LAUNCH=terminal node tools/smoke-shot.mjs` opens a
-real shell; `=agent` opens a real Claude Code session and checks the process is running on that
-conversation id.
+### 2. Boards are 3x, and the camera opens on the content
 
-### 2. The camera stopped being destroyed on every edit
+Every board and room is tripled, with existing layouts moved to the middle so nothing is jammed in
+a corner. Two consequences had to be handled:
 
-`BoardCanvas` was keyed on `[props.board, props.boardId]`, and the store replaces `props.board`
-after every mutation — so moving one node rebuilt the entire Pixi application. The app is now built
-once per ROOM and the scene is rebuilt in place. Dragging moves the sprite itself, not just a ghost.
+- `PAN_MARGIN` was eight tiles and never delivered what it promised — centring a corner node needs
+  half a viewport, ~60 tiles at zoom 2. It is now proportional, with the old constant as a floor.
+- The camera opened at 0,0, which on a 192x120 grid is a screenful of bare substrate. It now frames
+  the board's content, **once, on arrival in a room**. Never on rebuild: that is the camera-snap
+  bug and it stays fixed.
 
-### 3. The art pipeline is finally on
+### 3. JARVIS Prime can drive the board and open terminals
 
-`ATLAS_URL` is wired and the atlas loads — 26 frames, all cut from the Kenney 1-bit sheet by
-`npm run assets:bake` and recoloured to the locked palette. `decor.part` is 21 pieces of board
-furniture (vias, screws, junctions, grilles, pad arrays, fiducials, five pulsing LEDs), placeable
-from the `N` palette, which shows each one's ACTUAL baked sprite rather than a redrawing of it.
+`tools/skynet-mcp.mjs` is an MCP server a Claude Code session gets via `"mcpServers": ["skynet"]`
+on its node. 22 tools: read the board in full, create/update/move nodes and traces with every field
+the editor has, and `session_start` a real terminal in a node's repo **already holding a tailored
+prompt**.
 
-Two things had to change to get there, both worth knowing:
-- The baker now always writes an atlas. Vite's `?url` resolves at BUILD time and `assets/atlas` is
-  git-ignored, so a missing file was a build failure rather than a graceful degrade.
-- The atlas PNG is imported too. An emitted asset lives at a hashed path, so deriving its URL from
-  `meta.image` produced "The source image cannot be decoded" in the built app while dev worked.
-- The baker no longer skips a sprite in silence. A `source` missing its `type` baked nothing and
-  said nothing.
+```
+Claude Code ──stdio/JSON-RPC──▶ tools/skynet-mcp.mjs ──named pipe──▶ callAsAgent() ──▶ handlers
+```
 
-### 4. Everything else
+`callAsAgent` (`src/main/ipc.ts`) is the only gate. It refuses anything outside `AGENT_METHODS`,
+forces `actor: 'agent'`, and strips `approved` so an agent cannot authorise its own delete.
 
-- **Priming and briefings.** `prelaunch` (allowlisted ids, never shell strings), `briefing`,
-  `readOnLaunch`, `addDirs` -> `claude --add-dir`.
-- **Terminals anywhere.** `terminal:open`, plain and admin, on any node with a directory.
-- **Node scaling** three ways: corner handle, Shift+arrows, W×H field. Per-kind caps.
-- **Two images per node**: `image` (wallpaper, fills the footprint) and `logo` (centred badge,
-  aspect preserved). `drawBevel()` on every component and badge.
-- **Usage meter** (top-left) and **couriers** — robots carrying packets in proportion to real
-  measured Claude usage, read from `~/.claude/projects`.
-- **Add-component palette** (`N` in Edit Board mode) and editable printed furniture.
-- **`decor.image`** — backdrops behind everything, resizable to the whole board.
-- **JARVIS mailbox** (`M`) — `codex/mailbox/`, with unread mail folded into session briefings.
-- **`docs/08-AGENT-INTAKE.md`** — the brief to hand another agent to populate a room.
-- **`docs/09-ASSET-CATALOGUE.md`** — generated; 764 files measured.
+**The MCP server imports nothing.** It speaks JSON-RPC directly rather than using
+`@modelcontextprotocol/sdk`, because Claude Code spawns it as a bare `node script.mjs` whose
+imports must resolve from disk — and in a packaged build `node_modules` is inside `app.asar`.
 
-## Mid-flight — nothing. Working tree is clean.
+### 4. Head → Prime
 
-## What William has asked for that is NOT done
+A mailbox message carrying `run:` in its frontmatter opens a session on the Hands node with its
+body as the task. Opt in per message, never elevated, 3/hour, archived **before** launching so it
+cannot fire twice. `autoRunMail: false` in settings.json disables it.
 
-- **A tilesheet palette in the board editor** — "open a palette of the tilesheet assets in the board
-  editor and redesign the board myself". `AddPalette` covers node KINDS; picking arbitrary sheet
-  cells as art is not built. `docs/09-ASSET-CATALOGUE.md` is the inventory it would draw from, and
-  `assets/sprites/manifest.json` is where a chosen cell has to end up.
-- **Using more of the vendor sheets.** The catalogue now says what is there (21,981 non-empty
-  cells); nothing new has been kitbashed from it. `ATLAS_URL` in `BoardCanvas.tsx` is still `null`,
-  so every node draws as a placeholder.
-- **`tokenBudget` is unset**, so the meter shows SET A BUDGET where the pool would be. That is
-  deliberate — see the DECISIONS entry — but William may want to pick a number.
+### 5. Wiring by hand
 
-## Landmines, in the order they will bite you
+Edit Board mode: hover a node's edge to light a port, click it, click another node's edge. The edge
+stores two node ids and no coordinates, so traces follow their endpoints already.
 
-- **`existsSync` cannot see a WindowsApps alias.** Cost this project every launch it ever
-  attempted. Use `services/which.ts`.
-- **A console app spawned from Electron main has nowhere to appear.** It needs `wt` or
-  `cmd /c start`.
-- **A successful `spawn` is not a successful launch.** Wait for the pid file.
-- **An assigned conversation id is a plan, not a fact.** Check `~/.claude/projects` before
-  `--resume`, and walk the node's history past phantoms.
-- **Four separate implementations of "which kinds are obstacles"** must stay in step:
-  `tools/validate-board.mjs`, `board-store.graphProblems`, `layout.findFreeSpace`, `drag.canDrop`.
-  Adding `decor.image` needed all four; missing one made the app refuse to load a valid board.
-- **Bash heredocs eat backslashes in this environment.** Write patch scripts with the Write tool,
-  or build every backslash with `String.fromCharCode(92)`. It has produced a broken regex, an
-  invalid string escape and two wrong bug repros across sessions.
-- **`wt.exe` is a second parser.** Only file paths go on its command line now. Keep it that way.
-- **Every hook must run on every render.** An effect added after `if (!board) return` rendered a
-  blank window; renderer errors now reach the smoke log, which is how it was found.
-- **The Ajv validator is compiled from a file that agents may edit while the app runs.** It is
-  keyed on the schema's mtime — do not re-cache it unconditionally.
-- **Copper is an edge colour, not a fill.**
-- **The nameplate extends the TEXTURE, not the footprint.**
-- **Canonical board JSON** is 2-space, LF, trailing newline. Python's `json.dumps` escapes
-  em-dashes; pass `ensure_ascii=False`, or write it with Node.
+### 6. The minimap sized itself from the board
 
-## Standing context
-
-- **This project is personal and will not be on stream.** William said so directly on
-  2026-09-10. `docs/07-SECURITY.md` §Streaming safety and the `streamMode` setting still exist and
-  still work, but do not spend effort on them, and do not let "it might be on stream" shape a
-  design decision. Full paths in the inspector are fine.
-
-## Open questions for William
-
-- **What should `tokenBudget` be?** Until it is set, two of the meter's three numbers are blank.
-- **Is the backdrop demo wanted?** `bg_board` on the root board exists to prove `decor.image`
-  works. Delete it, repoint it, or move it.
-- **M5 proper.** Heat, occupants, the activity feed and alerts are still unbuilt; telemetry and
-  animation arrived early via the usage meter and the couriers.
+`const SCALE = 3` was chosen when a board was 64 tiles wide. At 192 it made a panel covering a
+quarter of the window. The budget is now fixed and the scale derived; it has a title bar with a
+resize grip, the current scale, and a close button.
 
 ---
 
-## Added after the first handoff was written (same session)
+## Landmines
 
-- **`showLogo`** splits from `showThumbnail`, so a badge can sit on a drawn package.
-- **Usage meter**: a bar per value, a `plan` setting, and a clickable dialog that parses free text
-  (`Max 20x`, `96M`). The Max-20x figure is calibrated from this machine's own 96.1M peak window;
-  see `docs/DECISIONS.md`. `settings:setPlan` is the ONLY settings write and touches exactly two
-  keys — do not widen it.
-- **`decor.image`** backdrops and **`decor.part`** furniture, both printed kinds.
-- **`pulseGlow`** on any node with a wallpaper, and **`textGlow`** on type. Both are palette shifts
-  along the room's own ramp, not translucent halos.
-- **The wheel zooms**, anchored on the cursor.
-- **Text plates**, `textColor` / `textStroke`, and a measured bounding box for text nodes.
-- **Rooms store a stem**; the board appends `OS` one size down and darker.
-- **`PRINTED_KINDS` is one shared list.** It used to be five copies of a predicate and adding a
-  kind meant finding all five. Add to the list, not to a condition.
+### `sendInputEvent` does not produce pointer events
 
-## Still not done
+`BoardCanvas` listens for `pointerdown`. `win.webContents.sendInputEvent({ type: 'mouseDown' })`
+produces the mouse half and **no pointer event at all**, so every mouse drag the smoke harness
+"performed" for weeks landed on nothing — `09-drag-ghost.png` was a picture of a board with no drag
+in progress. Real hardware sends both. The harness now dispatches real `PointerEvent`s:
+`pointerdown` on the canvas, `pointermove`/`pointerup` on `window`.
 
-- **A tilesheet-CELL palette.** `N` now shows 21 baked parts, which is most of the way there, but
-  picking an arbitrary cell and turning it into a sprite is still a manifest edit plus a bake.
-  `docs/09-ASSET-CATALOGUE.md` is the inventory; `tools/sheet-contact.mjs` is how you read
-  coordinates off a sheet without guessing.
-- **The component keys are still placeholders.** 12 of them. `component.chip_dip.idle` and friends
-  have no atlas entry, so every mounted node is still a drawn silhouette. The pipeline that would
-  fix that now demonstrably works — `decor.*` proves it end to end.
-- **The `@theme` key swap.** `@mask-dark` / `@mask-light` / `@signal` bake as reserved magenta and
-  the renderer does not swap them, so no sprite may use one yet. Needed before any sprite can take
-  a room's colour.
+### The smoke harness must not guess where things are
+
+It had four assumptions and every one was wrong at least once:
+
+1. "The camera clamps to 0,0" — tripling moved the content off the corner.
+2. "`win.getContentSize()` is the coordinate space `sendInputEvent` takes" — it is not. scaleFactor
+   2 means main sees 1267x717 while the page is 2534x1434.
+3. "A node in the middle of the window is clickable" — the usage meter, minimap and inspector are
+   DOM chrome over the canvas, and a mousedown on the minimap is a camera JUMP, which looks exactly
+   like the camera-reset bug that check exists to catch.
+4. "700ms is enough for a write to land" — it is not, and the harness then skipped its own cleanup
+   and left a stray trace in the real board file.
+
+**Ask the page.** `document.elementFromPoint` arbitrates "clickable"; `window.__skynetCamera` and
+`window.__skynetWire` say where things actually are; poll for a change rather than sleeping; and
+always undo what you created, because this runs against the real `board/`.
+
+### Renderer `console.info` is filtered in the smoke log
+
+`src/main/index.ts` forwards renderer console output only when the level is not `info` **or** the
+message starts with `[router|atlas|ui|mosaic]`. A `console.info('[wire] ...')` probe vanishes and
+looks like the code never ran. Use one of those prefixes.
+
+### Bash heredocs eat backslashes
+
+`\n` inside a heredoc becomes a literal newline in the file. This has corrupted a source file
+twice. Use the Write/Edit tools, a Python heredoc with a quoted delimiter, or
+`String.fromCharCode(92)`.
+
+### The older ones, still true
+
+- **Never use `existsSync` to test for an executable.** Windows App Execution Aliases are
+  zero-length reparse points and `stat` throws EACCES. Use `services/which.ts`.
+- **A node texture is described in exactly one place** (`specFor` in `BoardCanvas.tsx`). Three
+  builders drifted once and the board flickered between framed and unframed several times a second.
+  `test/render-invariants.test.ts` guards it structurally.
+- **A control inside `.breadcrumb`, `.hud` or `.help` needs `pointer-events: auto`.** They are
+  click-through; a button inside one renders, highlights on hover, and never fires.
+- **The Ajv validator is keyed on the schema file's mtime+size.** It used to be compiled once for
+  process life, so editing the schema during a run validated against the old one.
+
+---
+
+## What is next
+
+In rough order of what was asked for most recently:
+
+1. **A board selector** — save and load board variations, so alternatives can be tried side by side.
+2. **Rooms within rooms.** `drive.room` already points at a board file; the descend stack already
+   holds more than two levels. Mostly a question of room creation and the breadcrumb.
+3. **Agent node output boxes.** Two per-node toggles with an adjustable height offset: a short
+   summary of that agent's last output, and a witty in-character remark. **The summary needs no
+   model** — the last assistant turn is already in `~/.claude/projects/<cwd>/<uuid>.jsonl`, which
+   `services/usage.ts` already reads. The remark does; cheapest is `claude -p` against the user's
+   existing Max subscription ($0 extra), with the API as an opt-in fallback (~$1.80/month on Haiku).
+4. **A commercial UI pass** — tuck text into tooltips, auto-closing submenus, more symbols, fewer
+   words, transition animations on redraw/room entry/session open.
+
+Still outstanding from earlier, and worth doing before more features:
+
+- **Component sprites are still 12 drawn placeholders.** `component.*` keys have no atlas entries.
+- **The `@theme` colour-key swap is unimplemented**, so no sprite may use `@mask-dark`,
+  `@mask-light` or `@signal`.
+- **A tilesheet-CELL palette** — pick an arbitrary cell from a vendor sheet, not just a baked key.

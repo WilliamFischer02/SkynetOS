@@ -599,8 +599,8 @@
       "kind": "file.exe",
       "name": "NEW PROGRAM",
       "pos": {
-        "x": 76,
-        "y": 55
+        "x": 74,
+        "y": 54
       },
       "designator": "F1",
       "provisional": true
@@ -671,6 +671,12 @@
       "id": "e9",
       "from": "j_new_link",
       "to": "d3_storyos",
+      "kind": "reads"
+    },
+    {
+      "id": "e10",
+      "from": "f_new_program",
+      "to": "d1_minecraftos",
       "kind": "reads"
     }
   ]
