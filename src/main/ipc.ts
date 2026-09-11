@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
-import { CHANNELS, type Channel, type SkynetApi } from '@shared/ipc.js';
+import { CHANNELS, isAgentMethod, type Channel, type SkynetApi } from '@shared/ipc.js';
 import type { BoardNode } from '@shared/types.js';
+import type { Actor, CommandRequest } from '@shared/commands.js';
 import { DEFAULT_FOOTPRINT, isDecorPart } from '@shared/types.js';
 import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/board-store.js';
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
@@ -41,6 +42,56 @@ import { resolveNodeTarget, resolveValue } from './services/target-resolver.js';
 type Handlers = {
   [K in Channel]: (...args: Parameters<SkynetApi[K]>) => ReturnType<SkynetApi[K]> | Promise<ReturnType<SkynetApi[K]>>;
 };
+
+/**
+ * Put a new node on a board.
+ *
+ * A function rather than an inline handler because the agent path needs it too, and it needs it
+ * attributed differently. The history says who did what — the activity feed, the undo tooltip and
+ * `docs/07`'s audit story all rest on that — so "the renderer called it, therefore William did it"
+ * stops being true the moment JARVIS Prime can call it as well. The actor is a parameter, and the
+ * two callers each pass the truth.
+ */
+function addNode(
+  boardId: string,
+  kind: Parameters<SkynetApi['node:add']>[1],
+  pos: { x: number; y: number },
+  fields: Partial<BoardNode> | undefined,
+  actor: Actor
+): ReturnType<SkynetApi['node:add']> {
+  const load = loadBoard(boardId);
+  if (!load.ok) return { ok: false, error: load.error };
+  const node = makeNode(load.board, kind, pos);
+
+  /*
+   * A deliberately tiny allowlist. The palette needs to say WHICH decor part it is placing and
+   * nothing else; everything else about a new node is decided by the factory or by the editor
+   * afterwards. Accepting an arbitrary patch here would make `node:add` a second, unvalidated
+   * way to write board JSON straight out of the renderer — or out of an agent.
+   */
+  if (fields?.part && isDecorPart(fields.part)) node.part = fields.part;
+
+  /*
+   * A printed kind (note.silk, group.zone) is placed exactly where it was asked for. It has no
+   * footprint on the grid and never collides, so looking for "free space" would move a bracket
+   * away from the cluster it was drawn around — which is the one thing it must not do.
+   */
+  const printed = kind === 'note.silk' || kind === 'group.zone';
+  if (!printed) {
+    const fp = node.footprint ?? DEFAULT_FOOTPRINT[kind];
+    const free = findFreeSpaceOnBoard(load.board, fp, node.pos);
+    if (!free) return { ok: false, error: 'NO FREE GRID SPACE ON THIS BOARD' };
+    node.pos = free;
+  }
+
+  const result = applyCommand({
+    command: { type: 'node.create', boardId, node },
+    actor,
+    label: `add ${kind}`
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, nodeId: node.id };
+}
 
 function nodeOrThrow(boardId: string, nodeId: string): BoardNode {
   const load = loadBoard(boardId);
@@ -131,7 +182,10 @@ const handlers: Handlers = {
   'mailbox:archive': (side, file) => archiveMail(side, file),
 
   'session:start': (boardId, nodeId, options) =>
-    startSession(boardId, nodeOrThrow(boardId, nodeId), { fresh: options?.fresh ?? false }),
+    startSession(boardId, nodeOrThrow(boardId, nodeId), {
+      fresh: options?.fresh ?? false,
+      ...(options?.prompt ? { prompt: options.prompt } : {})
+    }),
 
   'session:stop': (sessionId) => stopSession(sessionId),
 
@@ -206,40 +260,7 @@ const handlers: Handlers = {
     return watchBoard(load.board);
   },
 
-  'node:add': (boardId, kind, pos, fields) => {
-    const load = loadBoard(boardId);
-    if (!load.ok) return { ok: false, error: load.error };
-    const node = makeNode(load.board, kind, pos);
-
-    /*
-     * A deliberately tiny allowlist. The palette needs to say WHICH decor part it is placing and
-     * nothing else; everything else about a new node is decided by the factory or by the editor
-     * afterwards. Accepting an arbitrary patch here would make `node:add` a second, unvalidated
-     * way to write board JSON straight out of the renderer.
-     */
-    if (fields?.part && isDecorPart(fields.part)) node.part = fields.part;
-
-    /*
-     * A printed kind (note.silk, group.zone) is placed exactly where it was asked for. It has no
-     * footprint on the grid and never collides, so looking for "free space" would move a bracket
-     * away from the cluster it was drawn around — which is the one thing it must not do.
-     */
-    const printed = kind === 'note.silk' || kind === 'group.zone';
-    if (!printed) {
-      const fp = node.footprint ?? DEFAULT_FOOTPRINT[kind];
-      const free = findFreeSpaceOnBoard(load.board, fp, node.pos);
-      if (!free) return { ok: false, error: 'NO FREE GRID SPACE ON THIS BOARD' };
-      node.pos = free;
-    }
-
-    const result = applyCommand({
-      command: { type: 'node.create', boardId, node },
-      actor: 'user',
-      label: `add ${kind}`
-    });
-    if (!result.ok) return { ok: false, error: result.error };
-    return { ok: true, nodeId: node.id };
-  },
+  'node:add': (boardId, kind, pos, fields) => addNode(boardId, kind, pos, fields, 'user'),
 
   'node:open': async (boardId, nodeId) => {
     const result = await openTarget(nodeOrThrow(boardId, nodeId));
@@ -277,6 +298,45 @@ const handlers: Handlers = {
     return response === 0;
   }
 };
+
+/**
+ * Call a handler on behalf of an agent.
+ *
+ * Everything that arrives over the control channel comes through here, and it does two things the
+ * renderer's path does not:
+ *
+ *   1. Refuses any method not in AGENT_METHODS.
+ *   2. Rewrites a `command:apply` request so it cannot lie about itself. `actor` becomes 'agent'
+ *      regardless of what was asked for — attribution is not the caller's to choose — and
+ *      `approved` is stripped. That flag means "a human approved THIS command in THIS exchange",
+ *      and an agent setting it for itself would turn the delete guard in command-bus.ts into a
+ *      comment. Deletion still works; it comes back `needsApproval: true` and the user confirms it
+ *      in the UI, which is what docs/07 asks for.
+ */
+export async function callAsAgent(method: string, params: unknown[]): Promise<unknown> {
+  if (!isAgentMethod(method)) {
+    throw new Error(`"${method}" IS NOT AVAILABLE TO AGENTS — see AGENT_METHODS in src/main/ipc.ts`);
+  }
+
+  if (method === 'command:apply') {
+    const request = (params[0] ?? {}) as CommandRequest;
+    const { approved: _discarded, ...rest } = request;
+    return handlers['command:apply']({ ...rest, actor: 'agent' });
+  }
+
+  /*
+   * `node:add` goes through the shared function rather than the handler, so the history records
+   * that an AGENT added this node. The handler's job is to answer the renderer, and the renderer
+   * is always William.
+   */
+  if (method === 'node:add') {
+    const [boardId, kind, pos, fields] = params as Parameters<SkynetApi['node:add']>;
+    return addNode(boardId, kind, pos, fields, 'agent');
+  }
+
+  const handler = handlers[method as Channel] as (...a: unknown[]) => unknown;
+  return await handler(...params);
+}
 
 export function registerIpc(): void {
   for (const channel of CHANNELS) {

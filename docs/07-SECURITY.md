@@ -35,6 +35,32 @@ What agents can do through `skynet-mcp`:
 | Delete files on disk, `git push --force`, `git reset --hard` | **Never.** Not exposed as a tool. JARVIS may print the command for you to run. |
 | Modify settings, allowlists, or elevation policy | **Never.** Settings are user-only. |
 | Run arbitrary shell | Only within a node's declared `cwd`, and only via a session the node already declares |
+| Open a terminal or session on a node, with a task | Allowed. The node supplies the working directory; the task reaches it through a staged FILE, never a command line |
+| Launch elevated | **Never.** A node set to `popout-elevated` is refused, not downgraded — elevation is a decision a human made about that node |
+| Start a session from a mailbox message | Allowed when the message carries `run:`, capped at 3/hour, never elevated, message archived before launch so it cannot fire twice. `autoRunMail: false` disables it |
+| Undo or redo | **Never.** The undo stack is shared with the user and is not per-actor: an agent's undo reverts whatever happened last, which may be William's work |
+| Summon a native file picker or any modal | **Never.** A modal an agent raised is a modal the user may dismiss by reflex |
+
+### Where this is enforced
+
+`callAsAgent` in `src/main/ipc.ts`, against `AGENT_METHODS` in `packages/shared/ipc.ts`. It is an
+allowlist of things granted, not a denylist — a channel added later is unreachable by an agent
+until someone deliberately adds it. It also rewrites every `command:apply` request so it cannot lie
+about itself: `actor` becomes `agent` regardless of what was asked for, and `approved` is stripped,
+because that flag means "a human approved THIS command in THIS exchange" and an agent setting it
+for itself would turn the delete guard in `command-bus.ts` into a comment.
+
+Everything an agent can reach goes through that one function. The MCP server
+(`tools/skynet-mcp.mjs`) is a proxy with no authority of its own; editing it to ask for something
+else changes nothing.
+
+The transport is a **named pipe**, not a localhost port. A port is reachable by every process on
+the machine and, on a misconfigured box, from the network; a pipe is subject to the same
+user-account boundary that already protects `sessions.db` and `settings.json`. A token is written
+beside it in userData and required on every request — not as the security boundary, but so a
+process that stumbles onto the pipe name still cannot drive the board without being able to read
+the user's own AppData. The token is minted per run, so a stale control file names a pipe that no
+longer exists and a token nothing will accept.
 
 ## Secrets
 - No tokens, keys, or passwords in `board/*.json` — the board is git-tracked and will end up on stream. Secrets live in Windows Credential Manager via `keytar`, referenced by name.

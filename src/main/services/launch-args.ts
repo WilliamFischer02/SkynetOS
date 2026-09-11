@@ -71,6 +71,14 @@ export interface ClaudeArgsInput {
    * without anything being moved on disk — `claude --add-dir`.
    */
   addDirs: readonly string[];
+  /**
+   * `--mcp-config` paths, already resolved by the caller.
+   *
+   * The node names a SERVER ("skynet"); turning that into a file path needs `app.getPath` and the
+   * packaged-vs-dev distinction, neither of which belongs in a pure argv builder that has to run
+   * under vitest without Electron. See services/mcp-config.ts.
+   */
+  mcpConfigs?: readonly string[];
 }
 
 export interface ClaudeInvocation {
@@ -104,7 +112,7 @@ export function claudeArgs(input: ClaudeArgsInput): ClaudeInvocation {
 
   if (node.model) args.push('--model', node.model);
   for (const dir of addDirs) args.push('--add-dir', dir);
-  for (const server of node.mcpServers ?? []) args.push('--mcp-config', server);
+  for (const config of input.mcpConfigs ?? []) args.push('--mcp-config', config);
 
   /*
    * A display name, so the terminal's own title bar and `claude --resume`'s picker both say

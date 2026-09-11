@@ -1,7 +1,7 @@
 import { createServer, type Server, type Socket } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { app } from 'electron';
 
 /**
@@ -55,9 +55,14 @@ let server: Server | null = null;
 let token = '';
 let pipePath = '';
 
-/** Where the MCP proxy looks to find us. Same directory as every other bit of app state. */
+/**
+ * Where the MCP proxy looks to find us. Same directory as every other bit of app state.
+ *
+ * `SKYNET_CONTROL_FILE` overrides it so a test can stand up a control channel without writing over
+ * the real one and pointing every agent on this machine at a fixture.
+ */
 export function controlFile(): string {
-  return join(app.getPath('userData'), 'control.json');
+  return process.env['SKYNET_CONTROL_FILE'] ?? join(app.getPath('userData'), 'control.json');
 }
 
 function makePipePath(): string {
@@ -108,7 +113,7 @@ export function startControlServer(handle: ControlHandler): { pipePath: string; 
 
   try {
     server.listen(pipePath, () => {
-      mkdirSync(app.getPath('userData'), { recursive: true });
+      mkdirSync(dirname(controlFile()), { recursive: true });
       writeFileSync(controlFile(), JSON.stringify({ pipePath, token, pid: process.pid }, null, 2), 'utf8');
       console.log(`[control] listening on ${pipePath}`);
     });

@@ -26,6 +26,11 @@ extraResources:
     to: assets/atlas
   - from: assets/fonts
     to: assets/fonts
+  # tools/skynet-mcp.mjs is spawned as a CHILD PROCESS by Claude Code, not imported by the app, so
+  # it cannot live inside app.asar — `node <path-inside-asar>` would find nothing there. It has no
+  # dependencies of its own on purpose, so it is the only file that needs to come along.
+  - from: tools/skynet-mcp.mjs
+    to: tools/skynet-mcp.mjs
 
 asar: true
 

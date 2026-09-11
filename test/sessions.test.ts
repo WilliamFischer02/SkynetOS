@@ -146,10 +146,22 @@ describe('claudeArgs — optional node fields', () => {
     expect(args[args.indexOf('--model') + 1]).toBe('claude-opus-5');
   });
 
-  it('passes each declared MCP server', () => {
-    const { args } = call(agent({ mcpServers: ['skynet-mcp', 'other'] }));
+  it('passes each resolved MCP config', () => {
+    /*
+     * The CONFIGS, not the node's `mcpServers`. A node names a server ("skynet"); turning that name
+     * into a file path needs app.getPath and the packaged-vs-dev distinction, neither of which
+     * belongs in a pure argv builder that has to run here without Electron. session-manager.ts
+     * resolves them — see services/mcp-config.ts for why the file is generated rather than checked
+     * in.
+     */
+    const { args } = call(agent({ mcpServers: ['skynet', 'other'] }), {
+      mcpConfigs: ['C:/Users/x/AppData/Roaming/SkynetOS/mcp/skynet.json', 'D:/tools/other.json']
+    });
     expect(args.filter((a) => a === '--mcp-config')).toHaveLength(2);
-    expect(args).toContain('skynet-mcp');
+    expect(args).toContain('C:/Users/x/AppData/Roaming/SkynetOS/mcp/skynet.json');
+    // A server the caller did not resolve contributes nothing, rather than a bare name the CLI
+    // would try to open as a file and fail the whole launch over.
+    expect(call(agent({ mcpServers: ['skynet'] })).args).not.toContain('--mcp-config');
   });
 
   it('grants extra directories with --add-dir, one flag each', () => {

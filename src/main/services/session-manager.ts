@@ -16,6 +16,7 @@ import {
   recordEvent,
   setSessionPid
 } from './db.js';
+import { resolveMcpConfigs } from './mcp-config.js';
 import { conversationExists } from './conversations.js';
 import { mailForBriefing } from './mailbox.js';
 import { openTerminal, readLivePid, stagePrompt } from './terminal.js';
@@ -157,7 +158,19 @@ export function resolveReading(node: BoardNode, cwd: string): { reading: string[
 export async function startSession(
   boardId: string,
   node: BoardNode,
-  options: { fresh?: boolean } = {}
+  /**
+   * `prompt` is the task this session should open already holding.
+   *
+   * William: "I could ask jarvis prime to fix a mod I'm working on, and it initiates the claude
+   * code window in the correct repo and feeds it a tailored prompt to do the task, opening the
+   * window right here on my desktop."
+   *
+   * It is appended to the briefing and staged to the same prompt FILE the briefing uses. It never
+   * goes on the command line: a task can contain quotes, newlines and paths with spaces, and the
+   * command line is the one place where that becomes a quoting bug with a shell on the other end.
+   * See services/launch-script.ts — the command line carries file paths and nothing else.
+   */
+  options: { fresh?: boolean; prompt?: string } = {}
 ): Promise<SessionStartResult> {
   if (node.kind !== 'agent.code') {
     return { ok: false, error: `${node.kind} IS NOT A CLAUDE CODE AGENT` };
@@ -165,7 +178,23 @@ export async function startSession(
 
   const existing = sessionForNode(boardId, node.id);
   if (existing && !options.fresh) {
-    return { ok: true, session: existing, focused: true, note: 'A SESSION IS ALREADY RUNNING FOR THIS CHIP' };
+    /*
+     * A running session cannot be handed a new task.
+     *
+     * The briefing reaches a session through a file its launch script reads, which happens once,
+     * at launch. There is no channel into a terminal that is already up — it is a real console
+     * with a real person's cursor in it, and typing into it from here would be both impossible
+     * and wrong. So say so, rather than reporting success and silently dropping the task on the
+     * floor. The caller's options are to wait, or to ask for a fresh session.
+     */
+    return {
+      ok: true,
+      session: existing,
+      focused: true,
+      note: options.prompt
+        ? 'A SESSION IS ALREADY RUNNING FOR THIS CHIP — THE TASK WAS NOT DELIVERED. STOP IT FIRST, OR START A FRESH ONE.'
+        : 'A SESSION IS ALREADY RUNNING FOR THIS CHIP'
+    };
   }
 
   const target = resolveNodeTarget(node);
@@ -244,7 +273,10 @@ export async function startSession(
     storedSessionId,
     storedIsReal: storedSessionId !== null,
     fresh: options.fresh ?? false,
-    addDirs: addDirs.granted
+    addDirs: addDirs.granted,
+    // "skynet" becomes the generated config that points Claude Code at tools/skynet-mcp.mjs, so
+    // this session can read and change the board it was launched from. See services/mcp-config.ts.
+    mcpConfigs: resolveMcpConfigs(node.mcpServers)
   });
 
   const { reading, missing } = resolveReading(node, cwd);
@@ -267,7 +299,23 @@ export async function startSession(
    * Only for agents that get a briefing at all — a chip with `briefing: 'none'` asked for silence.
    */
   const mail = briefing ? mailForBriefing() : null;
-  const fullBriefing = mail ? `${briefing ?? ''}\n\n---\n\n${mail}` : briefing;
+  const withMail = mail ? `${briefing ?? ''}\n\n---\n\n${mail}` : briefing;
+
+  /*
+   * The task goes LAST, after the briefing and after the post.
+   *
+   * Order is the whole point: the briefing says where you are and what you are looking at, the
+   * mail says what has happened since, and the task says what to do about it. A task that arrived
+   * before its context would be read first and acted on without any.
+   *
+   * It is also labelled with who asked. A session that cannot tell "William typed this" from
+   * "another agent decided this" cannot apply judgement about which it is, and docs/07 is built
+   * on that difference.
+   */
+  const task = options.prompt?.trim();
+  const fullBriefing = task
+    ? `${withMail ?? ''}\n\n---\n\n## YOUR TASK\n\n${task}\n`
+    : withMail;
 
   const key = `${boardId}.${node.id}`;
   const promptFile = fullBriefing ? stagePrompt(key, fullBriefing) : undefined;

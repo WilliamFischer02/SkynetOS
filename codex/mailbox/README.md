@@ -51,6 +51,38 @@ Filenames sort chronologically by construction: `2026-09-10T15-40-00-000--add-a-
 SkynetOS generates them; if you are writing one by hand, follow the same shape and the ordering
 takes care of itself.
 
+## `run:` — a message that starts the work
+
+One optional field turns a note into an instruction:
+
+```markdown
+---
+from: face
+to: hands
+subject: Fix the lighting regression in GameOS
+run: true
+---
+
+The light rendering update broke shadow acne on sloped surfaces. Look at src/render/light.ts.
+```
+
+SkynetOS checks `to-hands/` every ten seconds. A message carrying `run:` opens a **real Claude Code
+terminal** on the Hands node with its body as the task — the Face asking for something and it
+happening, without William in the middle. `run: true` uses whichever node is the Hands on that
+board; `run: u3_jarvis_hands` names one.
+
+Without the field, nothing happens until a session opens. That is the default and it is deliberate:
+a mailbox where every note starts a process is not a mailbox, and the Face has to be able to say
+something to the Hands without it becoming an order to act.
+
+Only the **frontmatter** counts. The word "run" in the body is prose — "run the tests", "the build
+run failed" — and is ignored, or asking the Hands to run something in conversation would launch a
+terminal.
+
+The bounds (`docs/07-SECURITY.md`, `services/mail-dispatch.ts`): never elevated, three runs an
+hour, only nodes the board already declares, and the message is archived **before** the launch so
+it can never fire twice. `autoRunMail: false` in settings.json switches it off.
+
 ## If you are the HANDS, this is your job
 
 1. **On launch you are handed your post.** Unread `to-hands/` messages are folded into your session
@@ -71,8 +103,14 @@ than as conversation.
 
 ## What this does NOT do
 
-It is not a live channel. Nobody is notified, nothing is pushed, and a message sits until a session
-opens or William opens the panel. Two agents that run at different times, in different places, with
-different powers, exchange post — and post has a subject line and no expectation of an immediate
-reply. Pretending otherwise would mean claiming a wire that does not exist, which is the thing this
-whole design is trying to stop doing.
+Ordinary post is not a live channel. Nobody is notified, nothing is pushed, and an unflagged message
+sits until a session opens or William opens the panel. Two agents that run at different times, in
+different places, with different powers, exchange post — and post has a subject line and no
+expectation of an immediate reply.
+
+`run:` is the one exception, and it is narrow on purpose: it starts a session, once, and the session
+gets the message as its task. It does not deliver anything to a session that is ALREADY running.
+There is no channel into a terminal that is up — it is a real console with a real person's cursor in
+it — so a `run:` message aimed at a busy node reports that it was not delivered rather than
+pretending. Claiming a wire that does not exist is the thing this whole design is trying to stop
+doing.

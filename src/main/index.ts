@@ -2,7 +2,10 @@ import { join } from 'node:path';
 import { app, BrowserWindow, screen, shell } from 'electron';
 import { DEFAULT_FOOTPRINT, type Board, type NodeKind } from '@shared/types.js';
 import { findFreeSpaceOnBoard } from './services/placement.js';
-import { registerIpc } from './ipc.js';
+import { callAsAgent, registerIpc } from './ipc.js';
+import { startControlServer, stopControlServer } from './services/control-server.js';
+import { writeMcpConfig } from './services/mcp-config.js';
+import { dispatchMail } from './services/mail-dispatch.js';
 import { getSettings } from './services/settings.js';
 import { boardRoot, pruneSnapshots } from './services/board-store.js';
 import { closeDb, reapDeadSessions } from './services/db.js';
@@ -773,6 +776,68 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     console.log(`[smoke] unapproved delete blocked: ${!unapproved.ok} needsApproval=${String(unapproved.needsApproval)}`);
     console.log(`[smoke] board unchanged by blocked delete: ${readFileSync(boardFile, 'utf8') === afterUndo}`);
 
+    /*
+     * ── JARVIS Prime's tool surface, end to end ──────────────────────────────────────────────
+     *
+     * Spawns the REAL tools/skynet-mcp.mjs the way Claude Code will, pointed at the REAL control
+     * file this run just wrote, and drives it over stdio. Nothing is stubbed: the call crosses the
+     * MCP protocol, the named pipe, `callAsAgent`, the handler table and the board store, and the
+     * board that comes back is the one on disk.
+     *
+     * The unit test proves the proxy forwards. Only this proves the two halves find each other —
+     * which is the part that silently breaks when a path, a userData location or a packaging rule
+     * changes, and the failure mode is "JARVIS Prime has no tools" with nothing in any log.
+     */
+    const { spawn: spawnMcp } = await import('node:child_process');
+    const mcp = spawnMcp(process.execPath, [join(app.getAppPath(), 'tools', 'skynet-mcp.mjs')], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const mcpCall = (id: number, method: string, params: unknown): Promise<Record<string, unknown>> =>
+      new Promise((resolveCall, rejectCall) => {
+        const timer = setTimeout(() => rejectCall(new Error(`no answer to ${method}`)), 15_000);
+        let acc = '';
+        const onData = (chunk: Buffer): void => {
+          acc += chunk.toString('utf8');
+          for (const line of acc.split('\n')) {
+            if (!line.trim()) continue;
+            let message: { id?: number; result?: Record<string, unknown>; error?: unknown };
+            try { message = JSON.parse(line); } catch { continue; }
+            if (message.id !== id) continue;
+            clearTimeout(timer);
+            mcp.stdout.off('data', onData);
+            if (message.error) rejectCall(new Error(JSON.stringify(message.error)));
+            else resolveCall(message.result ?? {});
+            return;
+          }
+        };
+        mcp.stdout.on('data', onData);
+        mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+      });
+
+    try {
+      const hello = await mcpCall(1, 'initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } });
+      console.log(`[smoke] skynet-mcp handshake: ${(hello['serverInfo'] as { name: string } | undefined)?.name ?? 'NONE'}`);
+
+      const tools = await mcpCall(2, 'tools/list', {});
+      const toolNames = (tools['tools'] as { name: string }[]).map((t) => t.name);
+      console.log(`[smoke] skynet-mcp offers ${toolNames.length} tools including session_start: ${toolNames.includes('session_start')}`);
+
+      const read = await mcpCall(3, 'tools/call', { name: 'board_read', arguments: { boardId: 'root' } });
+      const payload = JSON.parse((read['content'] as { text: string }[])[0]!.text) as { ok?: boolean; board?: { nodes: unknown[] } };
+      console.log(`[smoke] JARVIS PRIME READ THE LIVE BOARD OVER MCP: ${payload.ok === true} (${payload.board?.nodes.length ?? 0} nodes)`);
+
+      // The gate, from the outside. An agent must not be able to reach a settings write.
+      const refused = await mcpCall(4, 'tools/call', { name: 'node_delete', arguments: { boardId: 'root', nodeId: 'u1_jarvis' } });
+      const refusedText = (refused['content'] as { text: string }[])[0]!.text;
+      console.log(`[smoke] AN AGENT DELETE STILL NEEDS APPROVAL: ${refusedText.includes('REQUIRES EXPLICIT APPROVAL')}`);
+    } catch (err) {
+      console.log(`[smoke] skynet-mcp FAILED: ${(err as Error).message}`);
+    } finally {
+      mcp.kill();
+    }
+
     console.log('[smoke] done');
   } catch (err) {
     console.error('[smoke] FAILED', err);
@@ -797,6 +862,24 @@ app.whenReady().then(() => {
   restoreSessions();
 
   registerIpc();
+
+  /*
+   * The control channel: how JARVIS Prime reaches this board.
+   *
+   * `tools/skynet-mcp.mjs` is spawned by Claude Code as a stdio MCP server, so it cannot BE this
+   * process — main is already running and owns the board, the database, the command bus and the
+   * undo stack. It connects here instead, and every call it makes is dispatched through
+   * `callAsAgent`, which is the same handler table the renderer uses narrowed to the authority
+   * docs/07-SECURITY.md grants an agent.
+   */
+  const control = startControlServer(callAsAgent);
+  if (!control) console.warn('[control] not listening — JARVIS Prime will report the board as unreachable');
+
+  // The --mcp-config file a session is launched with. Written every run because it names an
+  // absolute path that differs between this repo and an installed build.
+  const mcpConfig = writeMcpConfig();
+  if (mcpConfig) console.log(`[mcp] skynet tools configured at ${mcpConfig}`);
+
   const win = createWindow();
 
   // Push live session and service state to the renderer. The dock must not have to poll.
@@ -813,8 +896,32 @@ app.whenReady().then(() => {
   // A detached popout terminal can be closed in ways that never reach our 'exit' handler, so the
   // dock is reconciled against the OS on a slow timer as well as on events.
   const sweep = setInterval(() => { sweepSessions(); sweepServices(); }, 5000);
+
+  /*
+   * Head -> Prime. A message the Face flagged with `run:` starts a real session on the Hands node.
+   *
+   * Polled rather than watched. The mailbox is a directory in the repo that git, an editor, the
+   * Face's own clipboard path and the Hands themselves all write to, and a file watcher on a
+   * directory with that many writers fires on partial writes — half a message dispatched as a task
+   * would be worse than one dispatched ten seconds late. Ten seconds is imperceptible for
+   * something whose other end is a human typing into a chat window.
+   */
+  const dispatch = setInterval(() => {
+    void dispatchMail().then((results) => {
+      for (const result of results) {
+        const what = `"${result.subject}" (${result.file})`;
+        if (result.ok) console.log(`[mail] autonomous run started on ${result.nodeId}: ${what}`);
+        else console.warn(`[mail] did not run ${what}: ${result.error}`);
+        if (!win.isDestroyed()) win.webContents.send('mail:dispatched', result);
+      }
+    });
+  }, 10_000);
   app.on('will-quit', () => {
     clearInterval(sweep);
+    clearInterval(dispatch);
+    // The pipe dies with us; the file naming it must not outlive it, or the next proxy waits on
+    // a pipe that is not there rather than reporting that SkynetOS is closed.
+    stopControlServer();
     // Agent popouts are detached on purpose and outlive us. Services do not: a dev server that
     // survives the app that started it is a port you cannot rebind and a process you cannot find.
     stopAllServices();

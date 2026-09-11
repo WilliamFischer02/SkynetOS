@@ -25,6 +25,17 @@ export interface Settings {
   undoDepth: number;
   /** Days to keep board/.snapshots/. */
   snapshotRetentionDays: number;
+  /**
+   * Whether a mailbox message carrying `run:` may start a session on its own.
+   *
+   * On by default, because it is the feature — the Face asking the Hands to do something and the
+   * Hands doing it is the whole point of there being two halves. Off is here because "an agent
+   * started a terminal while I was away" is a thing a person is entitled to switch off without
+   * arguing with anyone, and because it must be switchable from a text file rather than from
+   * inside the app: there is no settings:write channel, by design. See docs/07 and
+   * services/mail-dispatch.ts.
+   */
+  autoRunMail: boolean;
 
   /**
    * The rolling window the usage meter reports over, in hours. 5 matches the shape of Claude's
@@ -64,6 +75,7 @@ const DEFAULTS: Settings = {
   streamMode: false,
   undoDepth: 200,
   snapshotRetentionDays: 30,
+  autoRunMail: true,
   usageWindowHours: 5,
   plan: null,
   tokenBudget: null

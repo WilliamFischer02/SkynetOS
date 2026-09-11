@@ -112,7 +112,10 @@
       "logo": "C:/dev/SkynetOS/assets/sprites/jarvis-hand.jpg",
       "pulseGlow": true,
       "frame": "castellated",
-      "priority": 5
+      "priority": 5,
+      "mcpServers": [
+        "skynet"
+      ]
     },
     {
       "id": "d1_minecraftos",

@@ -276,7 +276,18 @@ export interface SkynetApi {
    * conversation, or focuses the session already running for it. With it, the stored conversation
    * id is ignored, a new one is minted, and the node's initial prompt is sent again.
    */
-  'session:start': (boardId: string, nodeId: string, options?: { fresh?: boolean }) => SessionStartResult;
+  /**
+   * Start a Claude Code session on an agent node.
+   *
+   * `prompt` is a task the session opens already holding — it is appended to the briefing and
+   * staged to a file, never put on a command line. It is how JARVIS Prime opens a terminal in the
+   * right repo with the right job already in front of it.
+   */
+  'session:start': (
+    boardId: string,
+    nodeId: string,
+    options?: { fresh?: boolean; prompt?: string }
+  ) => SessionStartResult;
   'session:stop': (sessionId: string) => { ok: boolean; error?: string };
   'session:list': () => SessionInfo[];
   /** The resume command for this node, so it can be copied and run by hand. */
@@ -350,6 +361,75 @@ export const CHANNELS = [
   'command:confirmDestructive'
 ] as const satisfies readonly Channel[];
 
+/**
+ * ── What an agent may reach ───────────────────────────────────────────────────────────────────
+ *
+ * This is the entire authority of JARVIS Prime, and of anything else that arrives over the
+ * control channel. It is a subset of what the renderer can do, chosen against the authority table
+ * in docs/07-SECURITY.md, and it is written as a list of things granted rather than a list of
+ * things denied — a channel added to CHANNELS later is unreachable by an agent until someone
+ * deliberately adds it here.
+ *
+ * Read the omissions as carefully as the entries:
+ *
+ * - `settings:setPlan` and anything else that writes settings. docs/07: "settings, allowlists and
+ *   elevation are user-only". An agent that can edit the allowlist has no allowlist.
+ * - `command:confirmDestructive`. This is the approval dialog itself. An agent calling it would be
+ *   asking the user a question in its own voice and then reading the answer as consent —
+ *   docs/07's "agents may never approve permission prompts" is exactly this.
+ * - `pick:target`. Summons a native file dialog. An agent must not be able to put a modal in front
+ *   of William that he might dismiss by reflex.
+ * - `command:undo` / `command:redo`. The undo stack is shared with the user and is not per-actor.
+ *   An agent reaching for undo does not revert its own work, it reverts whatever happened last,
+ *   which may well be William's. Prime directive 5 gives HIM the undo, not the agent.
+ * - `drag:startFile`. A drag-out hands a real file to whatever the OS drops it on.
+ *
+ * `command:apply` IS here, because it is the one door every board mutation goes through — schema
+ * validation, snapshot, inverse, history. Letting an agent edit the board means letting it use
+ * that door. What it does not mean is letting it walk through the lock: see `callAsAgent`.
+ */
+export const AGENT_METHODS = [
+  // Read the board and what it points at.
+  'board:load',
+  'board:loadRoom',
+  'board:list',
+  'settings:read',
+  'target:resolveNode',
+  'target:resolveBoard',
+  'target:verify',
+  'artifact:resolve',
+  'artifact:resolveBoard',
+  'ingest:classify',
+  'usage:summary',
+  'usage:routes',
+  // Sessions and terminals on nodes the board already declares.
+  'session:start',
+  'session:stop',
+  'session:list',
+  'session:resumeCommand',
+  'terminal:open',
+  'service:list',
+  'service:tail',
+  // Open a node's real target — the same thing a double click does.
+  'node:open',
+  // Change the board.
+  'node:add',
+  'command:apply',
+  'command:history',
+  // Talk to the other half of JARVIS.
+  'mailbox:list',
+  'mailbox:send',
+  'mailbox:archive'
+] as const satisfies readonly Channel[];
+
+export type AgentMethod = (typeof AGENT_METHODS)[number];
+
+const AGENT_METHOD_SET: ReadonlySet<string> = new Set(AGENT_METHODS);
+
+export function isAgentMethod(value: string): value is AgentMethod {
+  return AGENT_METHOD_SET.has(value);
+}
+
 export function isChannel(value: string): value is Channel {
   return (CHANNELS as readonly string[]).includes(value);
 }
@@ -364,11 +444,19 @@ export interface SkynetEvents {
   'services:changed': ServiceInfo[];
   /** A watched file changed. Carries the nodes that care, so the renderer can refresh just those. */
   'files:changed': { boardId: string; nodeIds: string[]; path: string; reason: string };
+  /**
+   * A mailbox message started a session on its own, or tried to.
+   *
+   * This reaches the UI because an autonomous launch that leaves no trace is worse than no
+   * autonomous launch: William has to be able to see that something started, what asked for it,
+   * and on which chip — without reading a log file.
+   */
+  'mail:dispatched': { file: string; subject: string; ok: boolean; nodeId?: string; error?: string };
 }
 
 export type EventName = keyof SkynetEvents;
 
-export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed'] as const satisfies readonly EventName[];
+export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched'] as const satisfies readonly EventName[];
 
 /** The shape contextBridge exposes on window.skynet. */
 export type SkynetBridge = {

@@ -33,6 +33,37 @@ export interface MailboxMessage {
   body: string;
   /** File mtime, epoch ms. 0 when it could not be read. */
   mtimeMs: number;
+  /**
+   * Whether this message should START the Hands rather than wait to be read by them.
+   *
+   * William: "Jarvis (head) should be able to write to Jarvis Prime and trigger it to do things as
+   * if I'm speaking to it. If I tell Jarvis Head I want xyz, I want it to communicate that to
+   * jarvis prime somehow and jarvis can autonimously start the task."
+   *
+   * `null` is ordinary post: it waits in the inbox and is folded into the next briefing, which is
+   * what every message did before this existed. A string is a request to launch a session now —
+   * empty for "whichever node is the Hands on this board", or a node id to be specific.
+   *
+   * It is opt-in per message on purpose. A mailbox where every note starts a process is not a
+   * mailbox, and the Face must be able to say something to the Hands without it becoming an
+   * instruction to act.
+   */
+  run: string | null;
+}
+
+/**
+ * Read the `run:` field.
+ *
+ * Anything falsy or absent means "do not run" — which is the safe default and also the historical
+ * behaviour, so every message written before this field existed keeps meaning what it meant.
+ */
+export function parseRun(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+  if (lower === 'false' || lower === 'no' || lower === '0') return null;
+  if (lower === 'true' || lower === 'yes' || lower === '1') return '';
+  return trimmed;
 }
 
 /** A filename that sorts chronologically and says what it is at a glance. */
@@ -52,6 +83,8 @@ export function formatMessage(message: {
   subject: string;
   sentAt: string;
   body: string;
+  /** Omit for ordinary post. See `run` on MailboxMessage. */
+  run?: string | null;
 }): string {
   return [
     '---',
@@ -59,6 +92,7 @@ export function formatMessage(message: {
     `to: ${message.to}`,
     `subject: ${message.subject}`,
     `sent: ${message.sentAt}`,
+    ...(message.run === null || message.run === undefined ? [] : [`run: ${message.run || 'true'}`]),
     '---',
     '',
     message.body.trimEnd(),
@@ -79,7 +113,8 @@ export function parseMessage(raw: string, file: string): Omit<MailboxMessage, 'f
     to: 'hands' as MailSide,
     subject: file.replace(/^[\d-]+--/, '').replace(/\.md$/, '').replace(/-/g, ' '),
     sentAt: '',
-    body: raw.trim()
+    body: raw.trim(),
+    run: null
   };
 
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
@@ -98,7 +133,8 @@ export function parseMessage(raw: string, file: string): Omit<MailboxMessage, 'f
     to,
     subject: field('subject') || fallback.subject,
     sentAt: field('sent'),
-    body: body || fallback.body
+    body: body || fallback.body,
+    run: parseRun(field('run'))
   };
 }
 

@@ -61,31 +61,107 @@ The nightly scheduled task does the same automatically for every `agent.code` se
 
 ## MCP tool surface
 
-SkynetOS ships a local MCP server (`skynet-mcp`) so **any** Claude Code session — JARVIS's Hands, or a mod agent — can see and change the board. Register it in each project's `.mcp.json`.
+SkynetOS ships a local MCP server, `tools/skynet-mcp.mjs`, so a Claude Code session can see and
+change the board it was launched from. A node asks for it by name:
+
+```json
+"mcpServers": ["skynet"]
+```
+
+The name is resolved at launch to a generated `--mcp-config` file (`services/mcp-config.ts`),
+because the config has to carry an absolute path to the script and that path differs between this
+repo and an installed build. Do not write a path into board JSON.
+
+### How it is wired
+
+The MCP server is a **thin proxy** and holds no logic. Claude Code spawns it as a child process,
+so it cannot be the Electron main process — main is already running and owns the board, the
+database, the command bus and the undo stack. Instead:
+
+```
+Claude Code  ──stdio/JSON-RPC──▶  tools/skynet-mcp.mjs
+                                        │
+                                 named pipe + token      (services/control-server.ts)
+                                        ▼
+                                  callAsAgent()          (src/main/ipc.ts)
+                                        ▼
+                              the same handler table the renderer uses
+```
+
+`callAsAgent` is the only gate. It refuses anything outside `AGENT_METHODS`, forces
+`actor: 'agent'` so an edit cannot misattribute itself, and strips `approved` so an agent cannot
+assert that a human authorised its own delete. Editing the MCP server to ask for something else
+changes nothing — the authority lives in the app, where it is tested.
+
+The server imports nothing. It speaks JSON-RPC directly rather than using
+`@modelcontextprotocol/sdk`, because it runs as a bare `node script.mjs` whose imports must resolve
+from disk — and in a packaged build `node_modules` is inside `app.asar`, where they would not.
+
+### Tools
 
 **Read**
-- `board_read(roomId?)` → nodes, edges, layout
-- `board_find(query)` → nodes matching name/path/tag across rooms
-- `node_status(nodeId)` → resolved target, live state, heat, recent events
-- `telemetry_query({nodeId?, since, kind?})` → event rollups
-- `session_list()` → live sessions, uptime, last activity
-- `artifact_latest(nodeId)` → resolved path, mtime, version, staleness
-- `codex_search(query, k=5)` → ranked markdown chunks with file paths
+- `board_read(boardId)` → every node with every field, traces, grid, theme
+- `board_list()` → the root board and every room
+- `board_resolve(boardId)` → each node's target resolved against the real filesystem
+- `node_fields()` → every field a node can carry, and what each means
+- `classify_path(paths)` → what a real path is, and the node kind and fields that would represent it
+- `session_list()` · `usage_summary()` · `usage_routes(boardId)` · `history()`
 
-**Write** (all produce a reviewable diff; all snapshot first)
-- `node_create({roomId, kind, name, target, position?})` — position optional; the auto-placer finds free grid space and routes traces
-- `node_update(nodeId, patch)` · `node_move(nodeId, position)` · `node_delete(nodeId)` *(approval always required)*
-- `edge_create({from, to, kind})` · `edge_delete(edgeId)`
-- `room_create({name, engraving, theme})` — also creates the folder and board file
-- `codex_write(path, content, mode: append|replace)`
-- `board_snapshot(label)`
+**Write** — all validated against the schema, all snapshotted, all undoable with Ctrl+Z
+- `node_create({boardId, kind, pos, fields?})` — the auto-placer finds free grid space
+- `node_update(boardId, nodeId, fields)` · `node_move(boardId, nodeId, pos)`
+- `node_delete(boardId, nodeId)` *(always comes back needing approval — there is no way around it)*
+- `edge_create({...})` · `edge_delete(boardId, edgeId)`
 
 **Act**
-- `session_start(nodeId, {prompt?, mode})` · `session_send(nodeId, message)` · `session_stop(nodeId)`
-- `open_target(nodeId)` — same as clicking
-- `notify(level, message)` — raises the buzzer
+- `session_start(boardId, nodeId, {prompt?, fresh?})` — opens a real Claude Code terminal in that
+  node's working directory, on William's desktop, already holding `prompt` as its task. This is
+  the main thing JARVIS Prime is for: asked to fix something in a repo that has a node, it starts
+  a session there rather than trying to do the work from its own directory.
+- `terminal_open(boardId, nodeId, {elevated?})` — a plain shell, no agent
+- `open_target(boardId, nodeId)` — same as clicking
+- `mailbox_read(side)` · `mailbox_send(side, subject, body)` · `mailbox_archive(side, file)`
 
-**Never exposed as tools:** deleting files on disk, `git push --force`, running arbitrary shell outside a node's declared cwd, changing the elevation policy. See `docs/07-SECURITY.md`.
+A task reaches a session through a FILE, appended to its briefing — never on a command line. A
+task contains quotes, newlines and paths with spaces, and a command line is where that becomes a
+quoting bug with a shell on the other end.
+
+**Never exposed as tools:** settings and allowlist writes, the approval dialog itself, the native
+file picker, undo/redo (the stack is shared with the user and is not per-actor), drag-out, deleting
+files on disk, `git push --force`, running arbitrary shell outside a node's declared cwd. See
+`AGENT_METHODS` in `src/main/ipc.ts` and `docs/07-SECURITY.md`.
+
+**Not built yet:** `board_find`, `node_status`, `telemetry_query`, `artifact_latest`,
+`codex_search`, `room_create`, `codex_write`, `board_snapshot`, `session_send`, `notify`. An agent
+can reach most of what these would give it through `board_read` and `board_resolve`.
+
+---
+
+## Head → Prime
+
+The Face is a claude.ai conversation and cannot see this disk. The Hands are a Claude Code session
+and can do anything on it. The mailbox (`codex/mailbox/`) carries words between them; a message
+carrying a `run:` field carries **intent**, and SkynetOS acts on it:
+
+```
+---
+from: face
+to: hands
+subject: Fix the lighting regression in GameOS
+run: true
+---
+
+The light rendering update broke shadow acne on sloped surfaces. Look at src/render/light.ts.
+```
+
+`services/mail-dispatch.ts` polls `to-hands/` every ten seconds, and a flagged message opens a real
+session on the Hands node with its body as the task. `run: true` picks whichever node is the Hands
+on that board; `run: <nodeId>` names one.
+
+The bounds are in `docs/07-SECURITY.md` and are not negotiable from a message: opt in per message,
+never elevated, three runs an hour, only nodes the board already declares, and archived before
+launching so a message can never fire twice. `autoRunMail: false` in settings.json turns it off
+entirely.
 
 ---
 

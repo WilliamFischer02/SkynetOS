@@ -1054,3 +1054,83 @@ Two things fell out of fixing it:
   section exists to catch). The page now picks the target, `document.elementFromPoint` arbitrates
   "clickable", and the destination comes from `findFreeSpaceOnBoard` so a refused drop cannot be
   confused with a broken drag.
+
+## 2026-09-10 — JARVIS Prime gets the board, and a way to open terminals
+
+William: "I want to ensure jarvis hand (which I have renamed to jarvis prime) can access and launch
+terminals and feed them prompts... Additionally, I want Jarvis Prime to have full access and
+editability over every aspect of the board itself... Ensure all of this is wired up."
+
+**The shape.** `tools/skynet-mcp.mjs` is spawned by Claude Code as a stdio MCP server, so it cannot
+be the Electron main process — main is already running and owns the board, the database, the
+command bus and the undo stack. A second process writing board JSON behind its back would break
+undo, skip schema validation, and leave the open window showing a board that no longer exists on
+disk. So the MCP server is a thin proxy over a named pipe, and everything it asks for is dispatched
+by `callAsAgent` into the same handler table the renderer uses.
+
+**A pipe, not a port.** A localhost port is reachable by every process on the machine and, on a
+misconfigured box, from the network. A named pipe is subject to the same user-account boundary that
+already protects sessions.db and settings.json — the boundary this app already relies on
+everywhere else. Using a second, weaker one for the most powerful surface in the program would be
+indefensible. The token beside it is not the boundary; it means a process that stumbles onto the
+pipe name still cannot drive the board without reading the user's own AppData.
+
+**No SDK.** `@modelcontextprotocol/sdk` was the obvious choice and is the wrong one here. Claude
+Code spawns this file as a bare `node tools/skynet-mcp.mjs`, so its imports must resolve from disk
+at that path — and in a packaged build `node_modules` lives inside app.asar, where they do not.
+Shipping the SDK meant shipping seventeen transitive dependencies unpacked, and a resolution
+failure in any one of them presents as "JARVIS Prime has no tools" with nothing in any log to say
+why. What is actually used is three methods over newline-delimited JSON-RPC. Writing them directly
+removed the dependency and took the server's startup from 1747ms to 53ms.
+
+**The gate is one function.** `callAsAgent` refuses anything outside `AGENT_METHODS`, forces
+`actor: 'agent'` so an edit cannot misattribute itself, and strips `approved` — that flag means "a
+human approved THIS command in THIS exchange", and an agent setting it for itself would turn the
+delete guard into a comment. `node:add` moved out of the handler into a shared function taking an
+actor, because "the renderer called it, therefore William did it" stopped being true the moment an
+agent could call it too.
+
+Omissions worth naming: `command:undo`/`redo` are withheld because the undo stack is shared and not
+per-actor — an agent reaching for undo reverts whatever happened last, which may well be William's
+work, and prime directive 5 gives HIM the undo. `pick:target` is withheld because an agent must not
+be able to put a modal in front of someone who might dismiss it by reflex.
+
+Rejected: exposing a generic `board_write` that takes raw JSON. It would have been less code and it
+would have bypassed the schema. Rejected: a `shell` tool. docs/07 already says no, and the honest
+version of "run something" is `session_start`, which opens a real terminal in a directory the board
+declares, with the task in front of it.
+
+## 2026-09-10 — Head → Prime: a message that starts the work
+
+The mailbox already carried words from the Face to the Hands. What it could not do was make
+anything happen: a message sat in `to-hands/` until someone clicked the chip, so the Face could ask
+but never act. William asked for the other half — "jarvis can autonimously start the task".
+
+A `run:` field in the frontmatter. Present, it opens a real session on the Hands node with the
+message body as its task; absent, it is ordinary post, which is what every message written before
+this field existed keeps meaning.
+
+Opt-in per message rather than "every message runs", because a mailbox where every note starts a
+process is not a mailbox — the Face has to be able to say something without it becoming an order.
+Only the frontmatter counts: the body is prose written by a language model and will contain "run
+the tests" constantly, and if the body could arm this then discussing running something would
+launch a terminal.
+
+Three decisions worth the ink:
+
+- **Archived BEFORE launching.** If the launch is what marks a message handled, a launch that
+  throws — or a crash between the two — leaves it flagged and the next sweep runs it again. "Fix
+  the mod" twice is not the same as "fix the mod", and the work may be half done. A dispatch that
+  fails is visible in the log and the archive and is recoverable; a dispatch that repeats is not.
+- **Elevated nodes are refused, not downgraded.** Elevation is a decision William made about that
+  node. Silently running it non-elevated would do the wrong work; arranging a UAC prompt he did not
+  ask for is not an agent's to arrange.
+- **Polled, not watched.** `codex/mailbox/` is written by git, an editor, the clipboard path and the
+  Hands themselves, and a watcher on a directory with that many writers fires on partial writes.
+  Half a message dispatched as a task is worse than one dispatched ten seconds late, and the other
+  end of this is a human typing into a chat window.
+
+Rate limited to three an hour, matching docs/07's existing limit for agent-to-session messages,
+because this is that act with a launch attached. A loop in the Face cannot become a hundred
+terminals. `autoRunMail: false` turns it off, and it lives in settings.json because there is no
+settings:write channel by design.
