@@ -1,5 +1,6 @@
 import type { Board, BoardEdge, BoardNode } from '@shared/types.js';
 import {
+  asWilliam,
   describeCommand,
   isDestructive,
   type ChangedField,
@@ -11,6 +12,9 @@ import {
 } from '@shared/commands.js';
 import { cloneBoard, loadBoard, snapshot, validateBoard, writeBoard } from './board-store.js';
 import { getSettings } from './settings.js';
+import { markActivity } from './activity.js';
+import { approvedBoard, phantomActorRefusal, unapprovedBoard, withPhantom, withoutPhantom } from '@shared/phantoms.js';
+import { applyLookPatch } from '@shared/look.js';
 
 /**
  * One bus, one history, for every board mutation from any source.
@@ -165,6 +169,62 @@ function transform(board: Board, command: Command): { next: Board; inverse: Comm
       };
     }
 
+    case 'node.createMany': {
+      /*
+       * A paste. All or nothing: every id is checked before anything is added, and `apply`
+       * validates the whole result once, so a paste that would not validate lands nowhere.
+       */
+      const nodeIds = new Set(next.nodes.map((n) => n.id));
+      for (const node of command.nodes) {
+        if (nodeIds.has(node.id)) throw new Error(`NODE ID ALREADY EXISTS — "${node.id}"`);
+        nodeIds.add(node.id);
+      }
+      const edgeIds = new Set(next.edges.map((e) => e.id));
+      for (const edge of command.edges) {
+        if (edgeIds.has(edge.id)) throw new Error(`TRACE ID ALREADY EXISTS — "${edge.id}"`);
+        if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) throw new Error(`TRACE ${edge.id} HAS AN END THAT DOES NOT EXIST`);
+        edgeIds.add(edge.id);
+      }
+      next.nodes.push(...command.nodes);
+      next.edges.push(...command.edges);
+      return {
+        next,
+        inverse: {
+          type: 'node.removeMany',
+          boardId: command.boardId,
+          nodeIds: command.nodes.map((n) => n.id),
+          edgeIds: command.edges.map((e) => e.id)
+        },
+        changed: [
+          ...command.nodes.map((n) => ({ path: n.id, before: undefined, after: n })),
+          ...command.edges.map((e) => ({ path: `trace ${e.id}`, before: undefined, after: e }))
+        ]
+      };
+    }
+
+    case 'node.removeMany': {
+      const gone = new Set(command.nodeIds);
+      for (const id of gone) {
+        if (!next.nodes.some((n) => n.id === id)) throw new Error(`NO SUCH NODE — "${id}"`);
+      }
+      const removedNodes = next.nodes.filter((n) => gone.has(n.id));
+      // The named traces, and any trace left dangling by a removed node, so the result validates
+      // and the inverse puts every one of them back.
+      const edgeGone = new Set(command.edgeIds);
+      const removedEdges = next.edges.filter((e) => edgeGone.has(e.id) || gone.has(e.from) || gone.has(e.to));
+      const removedEdgeIds = new Set(removedEdges.map((e) => e.id));
+      next.nodes = next.nodes.filter((n) => !gone.has(n.id));
+      next.edges = next.edges.filter((e) => !removedEdgeIds.has(e.id));
+      return {
+        next,
+        inverse: { type: 'node.createMany', boardId: command.boardId, nodes: removedNodes, edges: removedEdges },
+        changed: [
+          ...removedNodes.map((n) => ({ path: n.id, before: n, after: undefined })),
+          ...removedEdges.map((e) => ({ path: `trace ${e.id}`, before: e, after: undefined }))
+        ]
+      };
+    }
+
     case 'edge.create': {
       if (next.edges.some((e) => e.id === command.edge.id)) {
         throw new Error(`TRACE ID ALREADY EXISTS — "${command.edge.id}"`);
@@ -209,6 +269,74 @@ function transform(board: Board, command: Command): { next: Board; inverse: Comm
         changed: [{ path: `trace ${command.edgeId}`, before: removed, after: undefined }]
       };
     }
+
+    case 'board.update': {
+      // Only `look` is patchable. Stored clean: defaults dropped, and an empty look removed, so a
+      // reset board file is byte-for-byte the board it was before a look was ever set.
+      const { look, inverse, changed } = applyLookPatch(next.look, command.patch.look);
+      if (look) next.look = look;
+      else delete next.look;
+      return {
+        next,
+        inverse: { type: 'board.update', boardId: command.boardId, patch: { look: inverse } },
+        changed: changed ? [{ path: 'look', before: inverse ?? undefined, after: look ?? undefined }] : []
+      };
+    }
+
+    /*
+     * Recommended nodes. The rules live in packages/shared/phantoms.ts, which is pure and tested;
+     * these cases only pair each change with its exact inverse.
+     */
+    case 'phantom.propose': {
+      return {
+        next: withPhantom(next, command.phantom),
+        inverse: { type: 'phantom.dismiss', boardId: command.boardId, phantomId: command.phantom.id },
+        changed: [{ path: `phantom ${command.phantom.id}`, before: undefined, after: command.phantom }]
+      };
+    }
+
+    case 'phantom.dismiss': {
+      const { next: without, removed } = withoutPhantom(next, command.phantomId);
+      return {
+        next: without,
+        inverse: { type: 'phantom.propose', boardId: command.boardId, phantom: removed },
+        changed: [{ path: `phantom ${removed.id}`, before: removed, after: undefined }]
+      };
+    }
+
+    case 'phantom.approve': {
+      const { next: approved, phantom } = approvedBoard(next, command.phantomId, command.node, command.edges);
+      return {
+        next: approved,
+        inverse: { type: 'phantom.unapprove', boardId: command.boardId, phantom, nodeId: command.node.id },
+        changed: [
+          { path: `phantom ${phantom.id}`, before: phantom, after: undefined },
+          { path: command.node.id, before: undefined, after: command.node },
+          ...command.edges.map((e) => ({ path: `trace ${e.id}`, before: undefined, after: e }))
+        ]
+      };
+    }
+
+    case 'phantom.unapprove': {
+      const node = next.nodes.find((n) => n.id === command.nodeId);
+      const edges = next.edges.filter((e) => e.from === command.nodeId || e.to === command.nodeId);
+      const restored = unapprovedBoard(next, command.phantom, command.nodeId);
+      return {
+        next: restored,
+        inverse: {
+          type: 'phantom.approve',
+          boardId: command.boardId,
+          phantomId: command.phantom.id,
+          node: node as BoardNode,
+          edges
+        },
+        changed: [
+          { path: command.nodeId, before: node, after: undefined },
+          ...edges.map((e) => ({ path: `trace ${e.id}`, before: e, after: undefined })),
+          { path: `phantom ${command.phantom.id}`, before: undefined, after: command.phantom }
+        ]
+      };
+    }
   }
 }
 
@@ -249,6 +377,8 @@ export function historyStatus(): HistoryStatus {
  */
 export function apply(request: CommandRequest): CommandResult {
   const { command, actor } = request;
+  // A command from anyone is a sign someone is here: see packages/shared/presence.ts.
+  markActivity();
 
   // docs/07: deleting a node or an edge always requires explicit approval, and no per-room
   // "auto" policy can override it. Checked here, at the only place that writes, so it holds
@@ -266,6 +396,20 @@ export function apply(request: CommandRequest): CommandResult {
     board = loadOrThrow(command.boardId);
   } catch (err) {
     return { ok: false, error: (err as Error).message };
+  }
+
+  /*
+   * Recommended nodes: approval is William's tick and nobody else's, and an agent may withdraw only
+   * what an agent proposed. Here, at the only place that writes, so it holds for MCP as well.
+   * Undo and redo skip it (runInternal), because the step on the stack was already allowed.
+   */
+  if (command.type.startsWith('phantom.')) {
+    const target = command.type === 'phantom.dismiss'
+      ? (board.phantoms ?? []).find((p) => p.id === command.phantomId)
+      : undefined;
+    // His phone, his voice and his hands all count as him here, and never as an agent.
+    const refusal = phantomActorRefusal(command.type, asWilliam(actor), target);
+    if (refusal) return { ok: false, error: refusal };
   }
 
   let transformed: { next: Board; inverse: Command; changed: ChangedField[] };

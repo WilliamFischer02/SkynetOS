@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      The vision page's OWN policy, and deliberately not the board's (src/renderer/index.html).
+      Verified against a real landmarker init — see docs/DECISIONS.md, 2026-09-11, "Vision loads
+      from its own origin, and the CSP stops it phoning home".
+
+        - This page is served from skynet://vision (src/main/services/vision.ts), so its script,
+          its wasm and the hand model are all SAME ORIGIN and 'self' covers them. A file:// page
+          cannot reach a custom scheme at all: Chromium refuses it at the CORS layer.
+        - 'wasm-unsafe-eval' is the one concession, and it is unavoidable — MediaPipe compiles a
+          module at runtime. It permits WebAssembly instantiation and nothing else: not eval, not
+          inline script, not remote script. The board window keeps plain 'self'.
+        - connect-src 'self' is LOAD-BEARING. On every startup MediaPipe tries to POST to
+          https://odml.pa.googleapis.com/v1/log. This is what refuses it. A feature whose premise is
+          that camera data never leaves this machine depends on that directive; never widen it.
+        - No worker-src: tested, the main-thread path creates no worker.
+        - frame-ancestors is omitted because it is ignored in a meta CSP; nothing frames this page.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self' 'wasm-unsafe-eval';
+               connect-src 'self';
+               img-src 'self' blob: data:;
+               media-src 'self' blob:;
+               style-src 'self' 'unsafe-inline';
+               object-src 'none';
+               base-uri 'none';
+               form-action 'none'"
+    />
+    <title>SkynetOS — vision</title>
+    <style>
+      /*
+       * The camera monitor: a small always-on-top window, shown only while manual control is on.
+       *
+       * It has three jobs, and they are the reasons it exists rather than being hidden:
+       *   1. it makes it unmistakable that the cameras are live — a gesture rig with no indicator
+       *      is a webcam running in a room with nobody told about it;
+       *   2. it shows both angles, so a camera that has been knocked or is looking at the ceiling
+       *      is obvious at a glance;
+       *   3. a visible window is not throttled by Chromium, which measurably doubles the landmark
+       *      rate (11 and 9 fps hidden, 20 and 15 shown).
+       *
+       * The previews are small on purpose. The streams behind them stay at 1280x720 and that full
+       * resolution is what the landmarker sees; only the display is scaled down.
+       */
+      body {
+        margin: 0;
+        background: #0e1a14;
+        color: #e9e4d6;
+        font: 10px/1.4 "Cascadia Mono", Consolas, monospace;
+        border: 1px solid #57c25a;
+        overflow: hidden;
+        user-select: none;
+        cursor: default;
+      }
+      #bar {
+        display: flex;
+        justify-content: space-between;
+        gap: 6px;
+        padding: 3px 5px;
+        color: #57c25a;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid #7a5423;
+      }
+      #rate { color: #7a5423; }
+      #views { display: flex; gap: 2px; padding: 2px; }
+      .view { position: relative; flex: 1; min-width: 0; }
+      /* Scaled down for display only; the stream stays 720p for recognition. */
+      video { width: 100%; height: 84px; object-fit: cover; display: block; background: #000; }
+      .tag {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        padding: 0 2px;
+        color: #c08a3e;
+        background: rgba(14, 26, 20, 0.78);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .view.seeing video { outline: 1px solid #7fe0b0; outline-offset: -1px; }
+      /* The detected gesture, in the room's signal colour, big enough to read from the keyboard. */
+      #gesture {
+        padding: 3px 5px;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        color: #7fe0b0;
+        border-top: 1px solid #7a5423;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #gesture.idle { color: #7a5423; }
+      #log { padding: 3px 5px; color: #d2453b; white-space: pre-wrap; }
+      #log:empty { display: none; }
+
+      /* ── the wizard ───────────────────────────────────────────────────────────────────────────
+       *
+       * The same page in a bigger window (services/vision.ts `setTrainMode`). The monitor chrome is
+       * put away and the previews are borrowed into the middle of a guided flow, because in this
+       * mode seeing yourself IS the instruction.
+       *
+       * Board palette, whole pixels, no easing: docs/02 applies here as much as to the canvas.
+       */
+      /*
+       * The window is a fixed 820x620 and the flow inside it is not fixed at all, so something has
+       * to give when a phase is taller than the window. It must never be the buttons: on
+       * 2026-09-11 it was, and the intro screen appeared with nothing to press.
+       *
+       * Hence a column — body scrolls, actions are pinned — from `body` all the way down, because
+       * a percentage height is only meaningful if every ancestor has one.
+       */
+      body.training {
+        border-color: #c08a3e;
+        font-size: 13px;
+        line-height: 1.5;
+        height: 100vh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+      }
+      body.training #bar,
+      body.training #gesture { display: none; }
+      body.training #wizard { display: flex; flex: 1 1 auto; min-height: 0; }
+      #wizard { display: none; }
+
+      .wz {
+        padding: 18px 22px 22px;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .wz-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #7a5423 #0e1a14;
+      }
+      .wz-steps { display: flex; gap: 10px; margin-bottom: 14px; }
+      .wz-step {
+        padding: 2px 8px;
+        color: #7a5423;
+        border: 1px solid #7a5423;
+        letter-spacing: 0.12em;
+        font-size: 11px;
+      }
+      .wz-step.now { color: #0e1a14; background: #7fe0b0; border-color: #7fe0b0; }
+      .wz-step.done { color: #57c25a; border-color: #57c25a; }
+
+      .wz-title {
+        margin: 0 0 6px;
+        font-size: 30px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        color: #e9e4d6;
+      }
+      .wz-lead { margin: 0 0 14px; max-width: 62ch; color: #c9c2b2; }
+
+      /* The previews, at wizard size: big enough to aim a camera by. */
+      .wz-stage { margin-bottom: 12px; }
+      body.training #views { padding: 0; gap: 8px; }
+      /*
+       * Big enough to aim a camera by, small enough that two of them plus a full training panel
+       * still fit. Fixed at 220 it did not: the TRAIN phase carries a countdown, a thumbnail strip
+       * and a keyframe editor that the AIM phase does not.
+       */
+      body.training video { height: clamp(120px, 24vh, 220px); }
+      body.training .tag { font-size: 11px; padding: 1px 4px; }
+      /* A camera that agrees with the reference wears the ok colour — the aiming feedback. */
+      body.training .view.level-ok video { outline: 2px solid #57c25a; outline-offset: -2px; }
+
+      .wz-advice {
+        min-height: 2.6em;
+        padding: 6px 8px;
+        border-left: 3px solid #7a5423;
+        color: #c9c2b2;
+        margin-bottom: 12px;
+      }
+      .wz-advice.ok { border-left-color: #57c25a; color: #7fe0b0; }
+      .wz-advice.bad { border-left-color: #e0a22e; color: #e0a22e; }
+
+      .wz-dots { display: flex; gap: 6px; margin-bottom: 14px; min-height: 12px; }
+      .wz-dots:empty { display: none; }
+      .wz-dot { width: 12px; height: 12px; border: 1px solid #7a5423; }
+      .wz-dot.on { background: #7fe0b0; border-color: #7fe0b0; }
+
+      .wz-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        /* Outside the scrolling body, and never allowed to shrink. */
+        flex: 0 0 auto;
+        padding-top: 12px;
+      }
+      .wz-btn {
+        padding: 8px 16px;
+        font: inherit;
+        letter-spacing: 0.1em;
+        color: #e9e4d6;
+        background: #16261d;
+        border: 1px solid #7a5423;
+        cursor: pointer;
+      }
+      .wz-btn:hover { border-color: #c08a3e; }
+      .wz-btn:focus-visible { outline: 2px solid #7fe0b0; outline-offset: 2px; }
+      .wz-btn.go { color: #0e1a14; background: #7fe0b0; border-color: #7fe0b0; }
+      .wz-btn.stop { color: #0e1a14; background: #e0a22e; border-color: #e0a22e; }
+      .wz-btn.alt { color: #c9c2b2; border-color: #4a3a22; font-size: 11px; padding: 6px 10px; }
+      .wz-btn.alt:hover { border-color: #7fe0b0; color: #7fe0b0; }
+      .wz-btn.tiny { padding: 2px 9px; font-size: 14px; line-height: 1; }
+      /* The selected half of a two-way switch: one hand or two. */
+      .wz-btn.tiny.on { color: #0e1a14; background: #7fe0b0; border-color: #7fe0b0; }
+
+      /* The countdown. Big, because it has one job: to be seen without looking away from the hand. */
+      .wz-count {
+        font: 700 40px/1 ui-monospace, monospace; color: #7a5423;
+        min-height: 44px; letter-spacing: 2px; margin-bottom: 8px;
+      }
+      .wz-count.hold { color: #7fe0b0; font-size: 26px; letter-spacing: 6px; }
+      .wz-count.rest { color: #4a3a22; font-size: 22px; }
+      /*
+       * The grace period wears red. William asked for it as an "are you sure" — the point is that
+       * it reads as different from the ordinary count at a glance, from across a desk, while he is
+       * holding a pose and not reading words.
+       */
+      .wz-count.grace { color: #d2453b; }
+      .wz-count:empty { display: none; }
+
+      /* Keyframe thumbnails during a take, variant tallies on the card, health rows at the end. */
+      .wz-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; min-height: 4px; }
+      .wz-strip:empty { display: none; }
+      .wz-shot {
+        width: 104px; border: 1px solid #4a3a22; background: #14100b;
+        display: flex; flex-direction: column; gap: 4px; padding: 4px;
+      }
+      .wz-shot.got { border-color: #57c25a; }
+      .wz-shot.now { border-color: #7fe0b0; box-shadow: 0 0 0 1px #7fe0b0 inset; }
+      .wz-thumb { width: 96px; height: 96px; image-rendering: pixelated; display: block; }
+      .wz-shot-empty {
+        width: 96px; height: 96px; display: grid; place-items: center;
+        color: #4a3a22; font: 700 28px/1 ui-monospace, monospace; background: #0b0d0c;
+      }
+      .wz-shot-label { font-size: 9px; color: #8d8375; line-height: 1.3; }
+      /* One row per camera, so both angles are visibly being catalogued rather than just one. */
+      .wz-cam { width: 100%; display: flex; gap: 8px; align-items: center; }
+      .wz-cam-name { font-size: 10px; letter-spacing: 1px; color: #6f6558; width: 14ch; flex: 0 0 auto; }
+      .wz-var {
+        font-size: 10px; letter-spacing: 1px; padding: 3px 8px;
+        border: 1px solid #3a2f1c; color: #6f6558;
+      }
+      .wz-var.has { border-color: #57c25a; color: #7fe0b0; }
+      .wz-health {
+        display: flex; gap: 10px; align-items: baseline; width: 100%;
+        border-left: 3px solid #4a3a22; padding: 3px 0 3px 8px;
+      }
+      .wz-health.ok { border-left-color: #57c25a; }
+      .wz-health.bad { border-left-color: #e0a22e; }
+      .wz-health-name { font-size: 11px; letter-spacing: 1px; color: #c9c2b2; min-width: 15ch; }
+      .wz-health-note { font-size: 11px; color: #8d8375; }
+
+      /* The keyframe editor: how many moments this gesture is built from. */
+      .wz-frames { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; min-height: 4px; }
+      .wz-frames:empty { display: none; }
+      .wz-frames-label { font-size: 10px; letter-spacing: 2px; color: #6f6558; }
+      .wz-frame {
+        width: 22px; height: 22px; display: grid; place-items: center;
+        border: 1px solid #7fe0b0; color: #7fe0b0; font: 700 11px/1 ui-monospace, monospace;
+      }
+      .wz-frames-note { font-size: 10px; color: #6f6558; }
+    </style>
+  </head>
+  <body>
+    <div id="bar"><span>MANUAL CONTROL</span><span id="rate">starting</span></div>
+    <div id="wizard"></div>
+    <div id="views"></div>
+    <div id="gesture" class="idle">no hand</div>
+    <div id="log"></div>
+    <script type="module" src="./vision.ts"></script>
+  </body>
+</html>

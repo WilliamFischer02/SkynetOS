@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { BoardNode } from '@shared/types.js';
+import type { LaunchModel } from '@shared/model-availability.js';
 
 /**
  * How a Claude Code session is spelled, and what it is told when it opens.
@@ -79,6 +80,12 @@ export interface ClaudeArgsInput {
    * under vitest without Electron. See services/mcp-config.ts.
    */
   mcpConfigs?: readonly string[];
+  /**
+   * The model and effort this launch asks for, decided by services/model-availability.ts: Fable 5.1
+   * at high effort while Fable is available, Opus 5 at xhigh while it is out of usage. Null leaves
+   * the choice to Claude Code's own default. A node's explicit `model` always wins over it.
+   */
+  launchModel?: LaunchModel | null;
 }
 
 export interface ClaudeInvocation {
@@ -110,7 +117,17 @@ export function claudeArgs(input: ClaudeArgsInput): ClaudeInvocation {
   if (canResume && storedSessionId) args.push('--resume', storedSessionId);
   else args.push('--session-id', sessionId);
 
+  /*
+   * `--model`, `--effort` and `--fallback-model` are all in `claude --help` on this machine; effort
+   * accepts low, medium, high, xhigh and max. The fallback is the CLI's own safety net for a model
+   * that is "overloaded or not available" mid-session. Whether it catches running out of usage
+   * credits is not documented, which is why SkynetOS decides the model before launch as well.
+   */
   if (node.model) args.push('--model', node.model);
+  else if (input.launchModel) {
+    args.push('--model', input.launchModel.model, '--effort', input.launchModel.effort);
+    if (input.launchModel.fallback) args.push('--fallback-model', input.launchModel.fallback);
+  }
   for (const dir of addDirs) args.push('--add-dir', dir);
   for (const config of input.mcpConfigs ?? []) args.push('--mcp-config', config);
 
@@ -119,6 +136,13 @@ export function claudeArgs(input: ClaudeArgsInput): ClaudeInvocation {
    * which chip this is. Costs one flag and turns a wall of identical windows into a board.
    */
   const label = node.designator ? `${node.designator} ${node.name}` : node.name;
+  /*
+   * Remote Control, per node and off unless the node says so. `--remote-control [name]` is in
+   * `claude --help` on this machine (2.1.278). The name is always given: the flag's value is
+   * optional, and a bare flag would swallow whatever argument came next. The phone lists sessions
+   * by this name, so it is the chip's own label.
+   */
+  if (node.remoteControl === true) args.push('--remote-control', label.trim().slice(0, 60) || 'SkynetOS');
   if (label.trim()) args.push('--name', label.trim().slice(0, 60));
 
   const invocation: ClaudeInvocation = { args, sessionId, resumed: canResume };

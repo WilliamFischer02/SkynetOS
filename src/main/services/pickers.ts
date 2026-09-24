@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, normalize } from 'node:path';
 import { dialog } from 'electron';
 import { boardWindow } from './main-window.js';
+import { refuseDialogWhenRemote } from './remote-context.js';
 import type { PickRequest, PickResult } from '@shared/ipc.js';
 import { boardRoot } from './board-store.js';
 import { homedir } from 'node:os';
@@ -37,6 +38,7 @@ function startingDirectory(current: string | undefined, control: PickRequest['co
 }
 
 export async function pick(request: PickRequest): Promise<PickResult> {
+  refuseDialogWhenRemote('a file picker');
   // The board window, not getAllWindows()[0], which is the Face's window once that has been
   // opened. See services/main-window.ts.
   const win = boardWindow();

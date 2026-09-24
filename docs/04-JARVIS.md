@@ -188,6 +188,43 @@ by hand.
 
 ---
 
+## Which model a session gets
+
+Every Claude Code session SkynetOS launches is given a model and an effort on its command line:
+Fable 5.1 at `high` while Fable is available, Opus 5 at `xhigh` while it is out of usage. The Fable
+launch also names Opus 5 as `--fallback-model`. A node's own `model` field always wins, and
+`autoModel: false` in settings.json leaves every launch on Claude Code's own default. SkynetOS never
+edits `~/.claude/settings.json`.
+
+"Out" is read from the transcripts: Claude Code records a refused request as an assistant line with
+`isApiErrorMessage: true` and `error: "rate_limit"`, and the out-of-credits refusal names Fable in
+its text. Fable is back when the restart time passes, or as soon as any conversation gets a real
+Fable reply after the refusal. The restart time comes from `quotaLimits.resetsAt` when the refusal
+carries it, from a "resets …" phrase in its text, or from a time typed into the usage meter,
+because the CLI does not always write it down. Never from a guess.
+
+A terminal that is already open keeps the model it started with. There is no channel into a live
+console, so the switch applies from the next launch or resume. The usage meter shows
+`FABLE 5.1 CORES: OFFLINE` and a `CORE RESTART` countdown while Fable is out, and which model a new
+session gets either way. `models:status` is readable by agents; `models:setFableReset` is not.
+
+## Away mode (built 2026-09-11)
+
+After `awayAfterMinutes` (default 30) with no input anywhere on the machine, no Claude Code
+transcript writes and no board commands, SkynetOS shows a sleep screen. At level `plan` (the
+default) or `work`, it also starts JARVIS Prime **headless** in C:/dev and streams its conversation
+into a centred window, with a growing "while you were away" list below. Any input wakes it: the
+run is stopped and the write-up is shown, and Space returns to the board. The run's journal lands
+in `codex/journal/away-*.md`, and the Face gets the summary as `to-face` mail. The Face window is
+never automated.
+
+- **Code:** `packages/shared/presence.ts` (when), `packages/shared/away.ts` (bounds, command line,
+  prompt, stream parser), `src/main/services/presence.ts` and `away-session.ts`, and
+  `src/renderer/ui/AwayScreen.tsx`.
+- **Settings:** `awayMode`, `awayAfterMinutes`, `awayModel`, set in the LOOK panel's AWAY section.
+  `work` is settings.json only. Shift+Z sleeps at once.
+- **Bounds:** docs/07 rows under "Agent authority", and docs/DECISIONS.md "Away mode".
+
 ## Supervision loop
 
 This is the "keep my agents running when I'm not there" capability, done safely.

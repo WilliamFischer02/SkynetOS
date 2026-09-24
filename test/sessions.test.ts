@@ -10,7 +10,7 @@ import {
 } from '../src/main/services/launch-args.js';
 // From launch-script, not terminal: terminal.ts pulls in Electron and node:sqlite, and a unit
 // test that has to boot half the app is a unit test that stops being run.
-import { elevatedArgv, popoutArgv, safeKey } from '../src/main/services/launch-script.js';
+import { elevatedArgv, popoutArgv, safeKey, UAC_DECLINED_EXIT } from '../src/main/services/launch-script.js';
 
 /**
  * The resume contract.
@@ -62,6 +62,32 @@ describe('claudeArgs — first launch', () => {
   it('names the session after the chip, so the window and the picker say which one it is', () => {
     const { args } = call(agent({ designator: 'U3', name: 'JARVIS-HANDS' }));
     expect(args[args.indexOf('--name') + 1]).toBe('U3 JARVIS-HANDS');
+  });
+});
+
+describe('claudeArgs — Remote Control', () => {
+  /*
+   * William, 2026-09-21: "launch and interact with sessions ... from other locations on my phone."
+   * Claude Code's own Remote Control does the interacting; the chip only has to ask for it, and
+   * only when its node says so.
+   */
+  it('is off unless the node asks for it', () => {
+    expect(call(agent()).args).not.toContain('--remote-control');
+    expect(call(agent({ remoteControl: false })).args).not.toContain('--remote-control');
+  });
+
+  it('always gives the flag a name, because its value is optional and would swallow the next argument', () => {
+    const { args } = call(agent({ designator: 'U4', name: 'CC-TIME', remoteControl: true }));
+    const at = args.indexOf('--remote-control');
+    expect(at).toBeGreaterThan(-1);
+    expect(args[at + 1]).toBe('U4 CC-TIME');
+    expect(args[at + 1]?.startsWith('--')).toBe(false);
+  });
+
+  it('works on a resume as well as a first launch', () => {
+    const { args } = call(agent({ remoteControl: true }), { storedSessionId: '11111111-2222-3333-4444-555555555555', storedIsReal: true });
+    expect(args).toContain('--resume');
+    expect(args).toContain('--remote-control');
   });
 });
 
@@ -356,6 +382,31 @@ describe('elevatedArgv', () => {
   it('quotes a working directory containing an apostrophe so it cannot break out', () => {
     const { args } = elevatedArgv('pwsh', "C:" + BACKSLASH + "dev" + BACKSLASH + "My'Repo", script);
     expect(args.join(' ')).toContain("My''Repo");
+  });
+
+  it('fails loudly: a refusal exits 1223, anything else exits 2 with the reason on stderr', () => {
+    // A bare Start-Process with discarded output made every elevation failure look like nothing.
+    const command = elevatedArgv('powershell', 'C:' + BACKSLASH + 'dev', script).args.join(' ');
+    expect(command).toContain('-ErrorAction Stop');
+    expect(command).toContain(`exit ${UAC_DECLINED_EXIT}`);
+    expect(command).toContain("'UAC_DECLINED'");
+    expect(command).toContain('exit 2');
+    expect(UAC_DECLINED_EXIT).toBe(1223);
+  });
+
+  it('falls back from Store pwsh to Windows PowerShell by full path when pwsh cannot be elevated', () => {
+    const command = elevatedArgv('pwsh', 'C:' + BACKSLASH + 'dev', script).args.join(' ');
+    expect(command.indexOf("-FilePath 'pwsh.exe'")).toBeLessThan(command.indexOf('WindowsPowerShell'));
+    expect(command).toContain(['System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'].join(BACKSLASH));
+    // The retry is not attempted after a refusal: the declined check comes first in the catch.
+    const catchAt = command.indexOf('catch {');
+    expect(command.indexOf('UAC_DECLINED', catchAt)).toBeLessThan(command.indexOf('WindowsPowerShell'));
+    // Windows PowerShell as the chosen shell has nothing to fall back to.
+    expect(elevatedArgv('powershell', 'C:' + BACKSLASH + 'dev', script).args.join(' ')).not.toContain('Join-Path');
+  });
+
+  it('is one line, so no newline has to survive the CreateProcess command line', () => {
+    expect(elevatedArgv('pwsh', 'C:' + BACKSLASH + 'dev', script).args.join(' ')).not.toMatch(/[\r\n]/);
   });
 });
 

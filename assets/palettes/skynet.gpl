@@ -35,6 +35,10 @@ Columns: 6
  16  28  38	game-mask-dark
  24  39  52	game-mask-light
  79 168 216	game-signal
+# Room: FinanceOS
+ 26  27  34	fin-mask-dark
+ 38  39  47	fin-mask-light
+ 92 220 208	fin-signal
 # --- RESERVED THEME KEYS — do not use as literal art colors ---
 # These are baked into sprites by tools/bake-assets.mjs and swapped per room at draw time
 # by an exact-match palette shader. They are legal in the atlas and illegal everywhere else.

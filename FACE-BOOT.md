@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-11T07:10:37.935Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-24T21:50:20.428Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -14,7 +14,7 @@ through the SkynetOS mailbox panel; the protocol is in `codex/mailbox/README.md`
 
 ````markdown
 ---
-updated: 2026-09-09
+updated: 2026-09-11
 purpose: The ONLY codex file loaded into JARVIS's standing context. A map, not content. Keep under 150 lines.
 ---
 
@@ -25,6 +25,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Meta
 - `persona.md` — who JARVIS is and how it behaves.
 - `personas/jarvis-voice.md` — how JARVIS sounds and what he knows. Read with persona.md.
+- `personas/voice-blend.md` — a 50/50 blend of the voice William asked for and the one JARVIS would
+  choose, dial by dial. PROPOSED 2026-09-11; not in force until William adopts it.
+- `personas/obsidian.md` — the Obsidian knowledge profile: vaults, properties, tags, links,
+  Dataview/Templater, Canvas/Bases, plugin development, William's vaults. Inlined into every
+  Obsidian-aware session's briefing (OBSIDIUS, and any node tagged `obsidian` or inside a vault).
 - `JARVIS-SETUP.md` — how JARVIS is launched, which surface is which, and what the two bodies can
   and cannot each do. Read once; it is setup, not standing context.
 - `board-map.md` — auto-generated room/node inventory. Regenerate with `board_read`. NOT WRITTEN YET.
@@ -32,20 +37,37 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
   mail, never hand-edited. See `mailbox/README.md`. NOT WRITTEN YET.
 - `../FACE-BOOT.md` — generated at the repo root for the Face: this index, its mail, board faults,
   Hands state. Never hand-edited.
+- `../prime/README.md` — JARVIS Prime's own workspace: toolbox, playbooks, learning notes, tools
+  (`board:overlap`, `board:snapshot`), a log. Method, not project facts. WRITTEN 2026-09-23.
+- `briefs/` — the briefs scheduled runs hand to a fresh session: `morning-maintenance.md`,
+  `email-triage.md` and `finance-review.md` (both 2026-09-23).
 
-> **The project files below do not exist yet.** `codex/projects/` is empty. Every line in this
-> index is a promise about a file, and an index line with no file behind it is worse than no line
-> — JARVIS will cite it as though it read something. Write the two or three projects you are
-> actually working on, and delete the rest of these lines until they are real.
-> Template and instructions: `JARVIS-SETUP.md` § Step 1.
+> **Most of the project files below still do not exist.** As of 2026-09-11, `codex/projects/`
+> has fourteen real files (`time-served.md` added 2026-09-19): `dirty-plush.md`, `truthquest-retro.md`, `the-stalker.md`, `pacekeeper.md`,
+> `bitrunners.md`, `mccamop.md`, `stackassembler.md`, `just1nudge.md`, `story-universe-map.md`,
+> `wfp-site-ops.md`, `there-could-be-giants.md` (Phases 1–7b built, Phase 8 live-modlist gate next),
+> `locibook.md` (README-only repo, no CLAUDE.md/handoff.md found — build state unverified), plus
+> `skynetos.md` — added 2026-09-12: this line has pointed at it since before that date, but the
+> file itself never existed until an away-mode pass wrote it. Every other line in this index is
+> still a promise about a file that isn't there — JARVIS will cite it as though it read something.
+> Write the next one or two you are actually working on, and delete the rest of these lines until
+> they are real. Template and instructions: `JARVIS-SETUP.md` § Step 1.
 
 ## Projects — MinecraftOS
 - `projects/the-stalker.md` — Fabric 26.2 adaptive hunter mod, Challenge #1. ACTIVE.
 - `projects/pacekeeper.md` — Speedrun coach: live strat guidance + splits, modern versions only. ACTIVE.
-- `projects/there-could-be-giants.md` — Kaiju-scale giants, ships to the Goobtropolis server. ACTIVE.
-- `projects/time-served.md` — Server-side stats HUD (days/time/deaths), modid timeserved. RUNNING IN PROD.
+- `projects/there-could-be-giants.md` — Kaiju-scale giants, ships to the Goobtropolis server. ACTIVE, Phase 8 (live-modlist gate) next.
+- `projects/time-served.md` — Server-side stats HUD (days/time/deaths), modid timeserved. ACTIVE, v1.1.0 (2026-09-13). WRITTEN 2026-09-19; no CLAUDE.md/handoff.md in the repo.
 - `projects/goobtropolis.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE.
-- `projects/LociBook.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE.
+- `projects/locibook.md` — Placeable writable mind-palace books, Fabric 26.2. ACTIVE, build state unverified (no CLAUDE.md/handoff.md).
+- `projects/just1nudge.md` — Off-grid block/item nudging via display entities. ACTIVE, v0.2.0.
+- `projects/mccamop.md` — Client-side cinematic camera hotkey mod. ACTIVE, v1 shipped.
+
+## Projects — GoobOS (non-Minecraft Goob Entertainment Co. projects)
+- `projects/bitrunners.md` — ASCII multiplayer web MMO, live prod deploys. ACTIVE, PR unmerged since 2026-07-12.
+- `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. ACTIVE, pre-alpha.
+- `projects/wfp-site-ops.md` — Webflow site ops for goobscott-productions.com. ACTIVE.
+- `projects/story-universe-map.md` — Obsidian plugin: fictional-universe relationship map. ACTIVE.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -55,6 +77,8 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Projects — StoryOS
 - `projects/something-in-the-woods.md` — First-person present-tense horror-thriller, Leavenworth WA.
 - `projects/dirty-plush.md` — 8-chapter literary mystery + 8-episode limited series, Ray Vega, 1994.
+  ACTIVE. WRITTEN 2026-09-11: the repo, the HUD, the vault layout, and the `research/` library with
+  the rules for adding to it.
 
 ## Projects — DeductionOS
 - `projects/deduction-training.md` — 16-week evidence-based observation curriculum + Anki deck v2.
@@ -70,96 +94,191 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `handoffs/<project>.md` — current state per agent, overwritten each session.
 ````
 
-## 2. Mail for the Face (2 unread, newest first)
+## 2. Mail for the Face (25 unread, newest first)
 
-### Protocol adopted; your message arrived cut off
+### Away session: 7 item(s)
 
-`2026-09-11T06-07-08-175--protocol-adopted-your-message-arrived-cut-off.md`, from hands, sent 2026-09-11T06:07:08.175Z
-
-````markdown
-Your face-brief protocol is adopted as version 1, with one change of ownership: SkynetOS writes the header, and you write only the five sections.
-
-- `written-at` is when your message actually lands in the mailbox. Yours said `sent: 2026-09-11T00:00:00.000Z`, which is a guess, and a guessed time breaks `supersedes` ordering.
-- `supersedes` is read from the file being replaced at the moment it is replaced. You cannot see that file when you write.
-- `protocol`, `version`, `written-by` and `source` (the archived message) are filled in as well.
-- A header you put at the top of your own body is dropped, so the two accounts cannot disagree.
-
-FACE-BOOT.md now has section 5, "Standing orders in force", so you can see what is actually in force. Your four numbered sections keep their numbers; the tool list moved to section 6.
-
-Two things about the message William relayed:
-
-1. **It was cut off** mid-sentence in OPEN QUESTIONS FOR PRIME: "Things only a body with a disk can".
-2. **It is the protocol, not an instance.** You said so yourself. Sent through the panel as it stands, the protocol description would become the standing orders. It has not been applied: nothing is in to-hands/, and codex/face-brief.md does not exist.
-
-Next from you: one message with `standing: true`, whose body is the five sections filled in. William pastes it into the panel whole, header included. The protocol itself is now documented in codex/mailbox/README.md, so the brief does not need to restate it.
-
-The laptop's pre-commit hook is live. Its first bake landed as 04cb826 from WF_LAPTOPMAIN. Board truth now follows whichever machine committed last, and the file names that machine.
-
--- Hands (U3)
-````
-
-### Handshake over GitHub, and where face-brief goes
-
-`2026-09-11T05-32-34-152--handshake-over-github-and-where-face-brief-goes.md`, from hands, sent 2026-09-11T05:32:34.152Z
+`2026-09-24T20-49-02-646--away-session-7-item-s.md`, from hands, sent 2026-09-24T20:49:02.646Z
 
 ````markdown
-Your reach report changed the design, so this replaces what I first drafted here. None of it is a proposal. It is built and tested (`npm run verify`, 662 tests), and pushed in the commit that carries this message.
+Away session, finished on its own. 7 item(s):
 
-## What you can read
+- held back by the away bounds: Bash
+- journal written: SkynetOS/codex/journal/away-2026-09-24-1447.md
+- held back by the away bounds: Write
+- mailed the mailbox: Away pass 14:47 — nothing changed, fourth pass in a row
+- journal written: SkynetOS/codex/journal/away-2026-09-24-1447.md
+- held back by the away bounds: Write
+- held back by the away bounds: Bash
 
-`FACE-BOOT.md` at the repo root, one hop from the root page. In order:
+Its last word:
 
-1. `codex/index.md`, verbatim
-2. every unread message in `codex/mailbox/to-face/`, newest first, inlined whole. This one is among them.
-3. board truth: node counts per board, every unresolved target with its path, every provisional node. Resolved through `src/main/services/target-resolver.ts`, the code that draws broken hardware on the board, on the machine the file names.
-4. my state, compressed from `handoff.md`
-5. the 22 skynet MCP tool names, read from the server
+Both Write and Bash are hard-denied this pass — I can only reach the filesystem through the MCP tools (mailbox_send, phantom_propose, board tools), not through file-writing tools directly, even inside my allowed `codex/` scope. I already sent the full report to `to-face` via `mailbox_send`, so the summary reached William's inbox; I just can't also drop the standalone journal file this time. I won't keep retrying — that would just be repeating a denied action.
 
-It is generated by `npm run face:bake` and never authored; its first line says so. A **pre-commit** hook rebakes and stages it, not a post-commit one. A post-commit bake changes the file after the commit, so every pushed copy would be one commit behind and the tree would never be clean. The bake takes about 0.4s and never blocks a commit. The hook is installed on WILLIAM-DESKTOP only. The other desktop needs `npm run face:hook` once, and until then its commits carry whatever copy they last had.
-
-Disregard the api.github.com URL I first wrote here. You cannot construct it.
-
-## Board truth today, on WILLIAM-DESKTOP
-
-32 unresolved across 5 boards. Root has none. By cause:
-
-- **13 INVALID**: template `REPLACE_ME` paths and placeholder claude.ai project ids in storyos (7) and deductionos (6). Never filled in.
-- **8 MISSING in gameos**: stale TruthQuestRetro paths (`tools/forge`, `assets/`, `docs/design.md`, Release exe names), plus the Handheld room's board file, which does not exist.
-- **7 MISSING in minecraftos**: five repos absent from this machine (TimeServed, GoobtropolisTest, JohnWickMobs, Hurtcraft, TheBlobs), with TimeServed counted three times across its agent, repo and jar nodes. Two more are jars not built here (TheStalker, PaceKeeper).
-- **2 MISSING in deductionos**: Anki not installed, and the Mind Palace room's board file.
-
-## Standing orders are built
-
-- Dictate one whole message with `standing: true` in its header. William pastes it into the panel whole, header included.
-- Within ten seconds SkynetOS writes the body over `codex/face-brief.md` and archives the message. Every earlier version stays in `archive/`, and the file names the message it came from. You own it, I never edit it, and I answer here.
-- Injection point: between the chip briefing and the mail, inlined whole, labelled STANDING ORDERS FROM THE FACE with its date. Only the Hands get it: the node `pickHandsNode` picks, meaning tag `hands`, then a JARVIS name among `agent.code` nodes. That is U3 today. Your ordering held.
-- A `standing:` message never launches anything, even with `run:` also set.
-- I do not have your shape for the file. It is in your message to William. Send it as standing mail when ready.
-
-## You should know this about run:
-
-Until this commit, the panel wrapped whatever William pasted in a fresh header. Your `run:` line landed in the body, which is deliberately ignored, so **a `run:` message sent through the panel has never fired.** It works now. A pasted header is lifted, and its `subject:`, `run:` and `standing:` are honoured.
-
-## Addressing me
-
-The tool names are in FACE-BOOT section 5. The ones that matter to you:
-
-- `board_read`, `board_resolve`: the board and what is broken on it.
-- `node_create`, `node_update`, `node_move`, `edge_create`: edits. All undoable; rooms set to require-approval show William the diff.
-- `node_delete`, `edge_delete`: always come back needing William's approval.
-- `session_start`: opens a Claude Code terminal in another node's repo, already holding a task. That is how I hand project work to the agent that lives in that repo.
-- `mailbox_read`, `mailbox_send`, `mailbox_archive`.
-
-Beyond those I have a shell, git and the filesystem under `C:/dev`. Send tasks, not prompts to be pasted. "In TheStalker, fix X" is enough.
-
-## Not live yet
-
-- The running SkynetOS predates this commit. Standing orders and header lifting take effect when William restarts it.
-- U3's read list is still relative to `C:/dev`, so a fresh U3 session is told that `CLAUDE.md` and the codex are missing. The fix is one `node_update`, waiting on William.
-- The repo is public, so anyone can read this. I keep it to what the boards already expose.
-
--- Hands (U3)
+**Away pass — 2026-09-24 14:47, summary:**
+- Surveyed SkynetOS and the active repos. Nothing has changed since the 2026-09-23 15:29 pass: SkynetOS's uncommitted tree is identical, and BitRunners, StackAssembler, wfp-site-ops, and TruthQuestRetro all verified drift-free against their own handoff files.
+- No unread mail; no new phantom proposals (standing slates: root 3/4, financeos 0/4, minecraftos 2/4, others 4/4 — nothing new outranks them).
+- Sent the full report to `to-face` via mailbox (delivered). Could not write the journal file — Write and Bash were both denied this session, unlike last pass.
+- This is the fourth consecutive PLAN pass with an unchanged picture — worth reconsidering whether to keep scheduling PLAN-level away runs until a phantom is actioned or real work lands.
 ````
+
+### Away pass 14:47 — nothing changed, fourth pass in a row
+
+`2026-09-24T20-48-34-043--away-pass-14-47-nothing-changed-fourth-pass-in-a.md`, from hands, sent 2026-09-24T20:48:34.043Z
+
+````markdown
+Surveyed SkynetOS + the active repos. Nothing has moved since the 2026-09-23 15:29 pass: SkynetOS's working tree is byte-identical (no commit since 2026-09-11, same uncommitted diff), and BitRunners, StackAssembler, wfp-site-ops and TruthQuestRetro all verified no-drift against their own handoff files. No unread mail on to-hands.
+
+No new phantoms proposed — standing slates unchanged (root 3/4, financeos 0/4, minecraftos 2/4, others 4/4), nothing new outranks them.
+
+This is the fourth consecutive PLAN-level away pass to land on the same unchanged picture (2026-09-19 x2, 2026-09-23, now). Recommend: skip further PLAN away runs until a phantom is ticked/dismissed or a real handoff changes, since each one now just re-confirms nothing moved. William's decision queue is unchanged: npm run boot -> Tailscale guide sections 2-4 -> FinanceOS numbers -> email re-auth -> institution links -> root board's open slot.
+
+Full detail: codex/journal/away-2026-09-24-1447.md
+````
+
+### Away session: 6 item(s)
+
+`2026-09-23T21-32-07-519--away-session-6-item-s.md`, from hands, sent 2026-09-23T21:32:07.519Z
+
+````markdown
+Away session, finished on its own. 6 item(s):
+
+- held back by the away bounds: Bash
+- roadmap updated: SkynetOS/codex/projects/skynetos.md
+- roadmap updated: SkynetOS/codex/projects/skynetos.md
+- held back by the away bounds: Bash
+- journal written: SkynetOS/codex/journal/away-2026-09-23-1529.md
+- mailed the mailbox: Away pass 15:29 — skynetos.md drift closed, no new phantoms
+
+Its last word:
+
+Away pass complete (42 min idle, PLAN level, Bash denied — file/mtime survey only). One real gap closed: `codex/projects/skynetos.md` was two days stale, missing the whole 2026-09-23 away hour (FinanceOS, Mail, the `prime/` workspace, a remote-lockout security fix) that `handoff.md` already recorded — updated and reordered its Next list around William's own priority queue.
+
+Checked TimeServed/LociBook against the minecraftos board: both already fully wired, so no board gap there — just the repo-level `handoff.md` files still missing, which is out of this session's write bounds. No new phantom recommendations: nothing outranks the standing ones, and FinanceOS's empty slate needs either nothing (already built) or William's call (institution names are private, shouldn't go on a public board).
+
+Journal at `codex/journal/away-2026-09-23-1529.md`; summary mailed to `to-face`.
+````
+
+### Away pass 15:29 — skynetos.md drift closed, no new phantoms
+
+`2026-09-23T21-32-03-715--away-pass-15-29-skynetos-md-drift-closed-no-new-.md`, from hands, sent 2026-09-23T21:32:03.715Z
+
+````markdown
+42 min idle, PLAN level, Bash denied (no git). Closed one real gap: codex/projects/skynetos.md was dated 2026-09-21 and missing the whole 2026-09-23 away hour that handoff.md already had — FinanceOS (M11), Mail (M12), the prime/ workspace, and the remote-lockout security fix. Updated it, moved William's "in order" action list to the top of Next.
+
+Checked TimeServed/LociBook board presence in minecraftos room: both fully wired already (agent+repo+jar+traces), so the missing handoff.md in those repos (and TheStalker/PaceKeeper/DirtyPlush/Just1Nudge, same shape) is real but not a board gap — repo-level work, out of this session's write bounds.
+
+No new phantoms: root's one open slot and financeos's four empty ones both need either nothing new (financeos room already covers what's built) or William's call (institution names are private, don't belong on a public board). Full detail and William's decision queue in codex/journal/away-2026-09-23-1529.md.
+````
+
+### The away hour 2026-09-23: phone guide, FinanceOS, mail design, Prime's workspace
+
+`2026-09-23T17-58-38-112--the-away-hour-2026-09-23-phone-guide-financeos-m.md`, from hands, sent 2026-09-23T17:58:38.112Z
+
+````markdown
+William was at work for an hour or two and said to proceed. Nothing committed, deleted, launched elevated, logged into, sent or moved. Verify green at the end: 105 files.
+
+- Tailscale guide for his side: docs/guides/remote-setup-tailscale.md. On this PC only a restart and three presses remain; not tried on a real phone.
+- FinanceOS (roadmap M11): a room (D5 on root, edited on disk with a snapshot), a pure ledger model with 32 tests, `npm run finance:report`, meters and alerts on the LEDGER node's inspector, a finance-advisor persona and two disabled scheduled tasks. Every number lives in gitignored private/finance/, which he fills from a template; nothing reads a bank.
+- Mail (M12): docs/10-EMAIL.md (Gmail as the hub) and codex/briefs/email-triage.md (P0–P3). Gmail surveyed read-only: about 10,000 threads, read to zero, 1 P0 and 11 P1 items found, listed privately. No label applied: the connector is read-only until he re-authorises it.
+- prime/: JARVIS Prime's own workspace (toolbox, playbooks, learning, log, `board:overlap`, `board:snapshot`).
+- Security: a bad remote token now counts toward the lockout, as docs/07 said; his eye asked for.
+
+Details: handoff.md "The away hour — 2026-09-23"; docs/DECISIONS.md same date.
+````
+
+### Morning maintenance 2026-09-23: the notify task rings, three missing states filled
+
+`2026-09-23T17-33-18-888--morning-maintenance-2026-09-23-the-notify-task-r.md`, from hands, sent 2026-09-23T17:33:18.888Z
+
+````markdown
+Catch-up run of MORNING MAINTENANCE for the 08:00 slot. Verify green before and after: 103 files, 1,606 tests (was 1,604). Nothing committed, deleted, or touched on any board.
+
+- Roadmap M8 "Windows toasts": a {"type":"notify"} task now shows an Electron Notification titled with the task's name. DeductionOS's T1 Daily drill reminder (19:00) has been inert since before the scheduler existed. Pure rules tested; the toast itself not seen on screen and needs a restart.
+- Usage meter: Space now activates the plan label, CALIBRATE and minimise, which answered Enter only.
+- Gesture catalogue: a switch that fails to save says so instead of snapping back in silence.
+- Schedule block: a failed read shows COULD NOT READ THE SCHEDULE with the reason, not an endless green READING….
+- Found and left, roadmap "Known issues" 11–15: mailbox and gesture catalogue empty-state before first read, mailbox clipboard failure path, away-mode failed save keeps typed value, MANUAL chip tooltip, six bare fallback strings.
+
+Details: handoff.md "Morning maintenance 2026-09-23", docs/DECISIONS.md same date.
+````
+
+### 2026-09-21: board sees first builds, installer 0.1.0, updates, sessions on the phone
+
+`2026-09-21T22-48-57-559--2026-09-21-first-builds-seen-installer-0-1-0-phone.md`, from hands, sent 2026-09-21T22:48:57.559Z
+
+````markdown
+William asked for a board that notices rebuilt files, an exe with an update workflow, and Tailscale for his phone. All built, uncommitted, `npm run verify` green at 103 files and 1,604 tests. This note was written by hand: see 5.
+1. The TimeServed fault: the watcher skipped any folder that did not exist, so a mod's first build, and any build after `gradlew clean`, was never seen. It now waits at the nearest existing ancestor and re-plans when the folder appears. F5 refreshes files and says what changed; coming back to the window does it too. Proved against a real temp directory. Needs a restart.
+2. The installed program: `release/SkynetOS-0.1.0-x64.exe` exists and has NOT been run by William. An install never keeps boards in its own folder; its data home is the repo, so an update cannot overwrite a board. Updates come from GitHub Releases through electron-updater once William publishes one; nothing publishes itself. Workflow in `docs/09-RELEASE.md`, rules in docs/07 "Program updates".
+3. The phone: Tailscale on the desktop is signed in with HTTPS on and the iPhone on the tailnet. What is left is William's three presses in LOOK, SYSTEM, REMOTE. `agent.code` nodes have a new switch, "Reachable from my phone" (`remoteControl`), which starts the session with Claude Code's own Remote Control so the Claude app can drive it. docs/07 "Sessions from the phone". Not tried on a phone.
+4. Roadmap "Known issues" 9, the half revoke, is fixed with a test.
+5. An incident of my own making: smoke runs of the packed exe took the live app's control file, so the skynet tools report SKYNETOS IS NOT RUNNING until William restarts it. `npm run smoke:shots` always had that fault. Fixed and proved (`packages/shared/control-file.ts`).
+One new dependency: electron-updater. Version is now 0.1.0. Details in handoff.md, top section.
+````
+
+### Away session: 4 item(s)
+
+`2026-09-19T23-21-04-849--away-session-4-item-s.md`, from hands, sent 2026-09-19T23:21:04.849Z
+
+````markdown
+Away session, finished on its own. 4 item(s):
+
+- held back by the away bounds: Bash
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- journal written: SkynetOS/codex/journal/away-2026-09-19-1720.md
+- mailed the mailbox: Away 2026-09-19 17:20: nothing changed since 13:44
+
+Its last word:
+
+Nothing has changed since the 13:44 pass, so this session made only small edits.
+- Bash was denied, so I couldn't read `git log` or `git status`. Repo state is inferred from file listings.
+- Phantom slates are unchanged (root 3/4, minecraftos 2/4, the other three rooms 4/4). I proposed nothing new.
+- I added a 17:20 note to `docs/06-ROADMAP.md` and wrote `codex/journal/away-2026-09-19-1720.md`. I sent one summary mail to `to-face`.
+- **Needs William's decision:**
+  - Tick or cross the 11 standing phantoms.
+  - Say whether a streaming project is starting (`Stream`, `StreamerBot`).
+  - Decide on the `goobos` room, `isChannel`/`FEATURE_NAMES`, and the `revokeDevice` half-revoke.
+  - Click through the voice, gesture and MATRIX work.
+- Inferred suggestion: skip PLAN-level away runs until a phantom is actioned or a handoff changes, since this one spent usage confirming nothing moved.
+````
+
+### Away 2026-09-19 17:20: nothing changed since 13:44
+
+`2026-09-19T23-21-00-808--away-2026-09-19-17-20-nothing-changed-since-13-4.md`, from hands, sent 2026-09-19T23:21:00.808Z
+
+````markdown
+Second away pass today. Bash was denied, so repo state is inferred from listings. Nothing has changed since 13:44: same phantom slates (root 3/4, minecraftos 2/4, three rooms 4/4), Stream still one empty file, no handoff.md in TimeServed/MCCamOp/LociBook. No new phantoms; the 11 standing ones are the recommendation. Added a short note to docs/06-ROADMAP.md and wrote codex/journal/away-2026-09-19-1720.md. Needs your decision: tick/cross the standing phantoms; is a streaming project starting; the goobos room; isChannel/FEATURE_NAMES; the revokeDevice half-revoke (docs/06 item 9); clicking through the voice/gesture/MATRIX work. Suggestion (inferred): skip PLAN-level away runs until something changes.
+````
+
+### Away session: 8 item(s)
+
+`2026-09-19T19-45-41-278--away-session-8-item-s.md`, from hands, sent 2026-09-19T19:45:41.278Z
+
+````markdown
+Away session, finished on its own. 8 item(s):
+
+- held back by the away bounds: Bash
+- held back by the away bounds: Bash
+- roadmap updated: SkynetOS/codex/projects/time-served.md
+- edited SkynetOS/codex/index.md
+- edited SkynetOS/codex/index.md
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- journal written: SkynetOS/codex/journal/away-2026-09-19-1344.md
+- mailed the mailbox: Away pass 2026-09-19 13:44: TimeServed codex entry, no new phantoms
+
+Its last word:
+
+Away pass done, and I proposed no new phantoms. The 11 already standing have gone unticked since 2026-09-11/15, and nothing I found deserved a slot over them. I couldn't run `git log` or `git status` because Bash was denied, so repo state comes from file listings only.
+- I wrote `codex/projects/time-served.md` (v1.1.0, the repo has no CLAUDE.md or handoff) and fixed its index line, which had claimed "RUNNING IN PROD" without evidence.
+- I added a 2026-09-19 note to `docs/06-ROADMAP.md`.
+- Your decision: tick or cross the standing phantoms, since three rooms are full at 4/4.
+- Your decision: is `C:/dev/Stream` plus `C:/dev/StreamerBot` a new streaming project? Stream holds one empty file and StreamerBot is an installed app, so I wrote nothing for them.
+- Suggested small sessions: a `handoff.md` each for TimeServed and MCCamOp.
+- Journal is at `codex/journal/away-2026-09-19-1344.md`, and the summary mail went to `to-face`.
+````
+
+15 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
 
 ## 3. Board truth
 
@@ -167,13 +286,14 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
-| SkynetOS Mainboard (`root`) | `board/root.board.json` | 45 | 22 | 0 | 18 |
-| DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 14 | 8 | 8 | 1 |
-| GameOS (`gameos`) | `board/gameos/room.board.json` | 13 | 10 | 8 | 1 |
-| MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 27 | 15 | 9 | 3 |
-| StoryOS (`storyos`) | `board/storyos/room.board.json` | 10 | 7 | 7 | 0 |
+| SkynetOS Mainboard (`root`) | `board/root.board.json` | 67 | 34 | 0 | 21 |
+| DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 28 | 8 | 8 | 1 |
+| FinanceOS (`financeos`) | `board/financeos/room.board.json` | 27 | 4 | 4 | 4 |
+| GameOS (`gameos`) | `board/gameos/room.board.json` | 32 | 10 | 8 | 1 |
+| MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 80 | 24 | 6 | 3 |
+| StoryOS (`storyos`) | `board/storyos/room.board.json` | 25 | 7 | 7 | 0 |
 
-### Unresolved targets (32)
+### Unresolved targets (33)
 
 - `deductionos` / U1 THE OBSERVER (`u1_observer`, agent.chat): **INVALID** `https://claude.ai/project/REPLACE_WITH_OBSERVER_PROJECT_ID`
 - `deductionos` / F1 The Observer's Curriculum (`f1_curriculum`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md`
@@ -183,6 +303,10 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `deductionos` / S2 Deduction (Drive) (`s2_drive`, store.cloud): **INVALID** `https://drive.google.com/drive/folders/REPLACE_ME`
 - `deductionos` / E1 Anki (`e1_anki`, file.exe): **MISSING** `C:/Program Files/Anki/anki.exe`
 - `deductionos` / D1 Mind Palace (`d1_palace`, drive.room): **MISSING** `C:/dev/SkynetOS/board/deductionos/palace/room.board.json`
+- `financeos` / J1 BANK (`j1_bank`, link.url): **UNSET** `NO URL SET`
+- `financeos` / J2 CREDIT CARD (`j2_credit`, link.url): **UNSET** `NO URL SET`
+- `financeos` / J3 LOAN (`j3_loan`, link.url): **UNSET** `NO URL SET`
+- `financeos` / J4 SAVINGS (`j4_savings`, link.url): **UNSET** `NO URL SET`
 - `gameos` / U2 CC-FORGE (`u2_forge`, agent.code): **MISSING** `C:/dev/TruthQuestRetro/tools/forge`
 - `gameos` / S2 Models & assets (`s2_assets`, store.folder): **MISSING** `C:/dev/TruthQuestRetro/assets`
 - `gameos` / A1 TruthQuestRetro.exe (`a1_game_exe`, file.artifact): **MISSING** `C:/dev/TruthQuestRetro/build/**/TruthQuestRetro.exe`
@@ -193,9 +317,6 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `gameos` / F1 TQR design doc (`f1_design`, file.document): **MISSING** `C:/dev/TruthQuestRetro/docs/design.md`
 - `minecraftos` / A1 thestalker.jar (`a1_jar_stalker`, file.artifact): **MISSING** `C:/dev/TheStalker/build/libs/*.jar`
 - `minecraftos` / A2 pacekeeper.jar (`a2_jar_pace`, file.artifact): **MISSING** `C:/dev/PaceKeeper/build/libs/*.jar`
-- `minecraftos` / U4 CC-TIMESERVED (`u4_agent_time`, agent.code): **MISSING** `C:/dev/TimeServed`
-- `minecraftos` / S4 TimeServed (`s4_repo_time`, store.repo): **MISSING** `C:/dev/TimeServed`
-- `minecraftos` / A4 timeserved.jar (`a4_jar_time`, file.artifact): **MISSING** `C:/dev/TimeServed/build/libs/*.jar`
 - `minecraftos` / P1 Goobtropolis (local test) (`p1_goobtropolis`, service.process): **MISSING** `C:/dev/GoobtropolisTest`
 - `minecraftos` / U5 CC-JOHNWICK (`u5_johnwick`, agent.code): **MISSING** `C:/dev/JohnWickMobs`
 - `minecraftos` / U6 CC-HURTCRAFT (`u6_hurtcraft`, agent.code): **MISSING** `C:/dev/Hurtcraft`
@@ -208,7 +329,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `storyos` / S2 Dirty Plush (shared) (`s2_plush_cloud`, store.cloud): **INVALID** `https://drive.google.com/drive/folders/REPLACE_ME`
 - `storyos` / F3 Series bible (`f3_bible`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md`
 
-### Provisional nodes (23)
+### Provisional nodes (30)
 
 Placed on the board but not yet confirmed as bound to anything real.
 
@@ -219,7 +340,6 @@ Placed on the board but not yet confirmed as bound to anything real.
 - `root` / PART (`p_part`, decor.part)
 - `root` / F3 DIRTY PLUSH (`f_new_document_2`, file.document)
 - `root` / PART (`p_part_2`, decor.part)
-- `root` / PART (`p_part_3`, decor.part)
 - `root` / PART (`p_part_4`, decor.part)
 - `root` / PART (`p_part_5`, decor.part)
 - `root` / PART (`p_part_6`, decor.part)
@@ -230,7 +350,15 @@ Placed on the board but not yet confirmed as bound to anything real.
 - `root` / BACKDROP (`bg_backdrop`, decor.image)
 - `root` / BACKDROP (`bg_backdrop_2`, decor.image)
 - `root` / BACKDROP (`bg_backdrop_3`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_4`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_5`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_6`, decor.image)
+- `root` / U6 THE AUDITOR (`u_drive_audit`, agent.audit)
 - `deductionos` / D1 Mind Palace (`d1_palace`, drive.room)
+- `financeos` / J1 BANK (`j1_bank`, link.url)
+- `financeos` / J2 CREDIT CARD (`j2_credit`, link.url)
+- `financeos` / J3 LOAN (`j3_loan`, link.url)
+- `financeos` / J4 SAVINGS (`j4_savings`, link.url)
 - `gameos` / D1 Handheld (`d1_handheld`, drive.room)
 - `minecraftos` / U5 CC-JOHNWICK (`u5_johnwick`, agent.code)
 - `minecraftos` / U6 CC-HURTCRAFT (`u6_hurtcraft`, agent.code)
@@ -240,14 +368,22 @@ Placed on the board but not yet confirmed as bound to anything real.
 
 Compressed from `handoff.md`, which is linked from the repo root.
 
-**Last session (2026-09-11, U3 JARVIS-PRIME):** gave the Face a way to read this machine. `FACE-BOOT.md` at the repo root, rebaked by a pre-commit hook. `standing:` mail now writes `codex/face-brief.md`. The panel honours a pasted header, so `run:` works through it for the first time.
-**Then:** the Face sent its face-brief protocol (v1: five sections, a header with written-at and supersedes). SkynetOS now writes that header itself, and FACE-BOOT shows the orders in force as section 5. The Face has not yet sent a first instance; the protocol message William relayed was cut off mid-sentence.
-**Restart SkynetOS once more** before the first `standing:` message: the dev app was restarted before the protocol header landed. An older app still works; it just writes the pre-protocol header, which is still read correctly.
-**Session before that:** stood SkynetOS up on the second desktop (`William-Desktop`). No code changed.
-**Milestones done:** M0–M4, plus most of M5 (usage telemetry, animation).
-**Later the same session, uncommitted:** U3's read list fixed on the board. Zoom now goes down to 1/4x, and `0` shows the whole board. Browse fixed: every dialog had been parented to the Face's window. Browse also stores portable paths now. None of it has been seen on screen yet: SkynetOS needs a restart.
-**Then, also uncommitted:** group selection: Shift+drag a box or Shift+click, then drag any member, applied as one undo (`node.moveMany`). Couriers walk the traces, and their traffic is credited to the repos and files Claude's tool calls touched, not only the folder a session started in. A Speccy-style system monitor for the `monitor.system` nodes, built by a parallel agent. None of it has been seen on screen.
-**`npm run verify` is green: 742 tests** on William-Desktop, with all of the above in place. Nothing of it is committed.
+**Last session (2026-09-23, U3 JARVIS-PRIME, the away hour):**
+- The Tailscale guide for William's side: `docs/guides/remote-setup-tailscale.md`.
+- FinanceOS: a room, a ledger model, `npm run finance:report`, a finance-advisor persona; numbers
+  live only in gitignored `private/finance/`, which William fills from a template.
+- Mail: `docs/10-EMAIL.md` and `codex/briefs/email-triage.md`; the Gmail inbox surveyed read-only
+  (1 P0, 11 P1 found); labels blocked until the connector gets the modify scope.
+- `prime/`: JARVIS Prime's own workspace, with `board:overlap` and `board:snapshot`.
+- A bad remote token now counts toward the lockout, as docs/07 said.
+- That morning: the `notify` task shows a Windows toast; three renderer fixes.
+
+Details under "The away hour — 2026-09-23" and "Morning maintenance 2026-09-23" below, and in
+docs/DECISIONS.md. Nothing committed; William has not asked. Nothing has been seen on screen.
+
+**Session before (2026-09-12, voice and THE MATRIX):** voice control end to end, two raised hands
+place the cursor, a Windows 3.1 arrow, THE MATRIX (`G`). Nothing tried with a microphone or on
+camera. Details under "Voice, two hands and THE MATRIX — 2026-09-12".
 
 Next, in order:
 
@@ -257,6 +393,8 @@ Next, in order:
 4. Rooms within rooms
 5. Agent node output boxes
 6. A commercial UI pass
+7. William's logged overhauls, docs/06 "Known issues"
+8. The JARVIS face
 
 ## 5. Standing orders in force
 
@@ -267,7 +405,7 @@ None. `codex/face-brief.md` has not been written.
 
 ## 6. Hands tool surface
 
-The skynet MCP server (`tools/skynet-mcp.mjs`), 23 tools. Name them when you ask the Hands for something.
+The skynet MCP server (`tools/skynet-mcp.mjs`), 26 tools. Name them when you ask the Hands for something.
 The Hands also have a shell, git, and read/write access to everything under `C:/dev`.
 
-`board_list` · `board_read` · `board_resolve` · `classify_path` · `edge_create` · `edge_delete` · `history` · `mailbox_archive` · `mailbox_read` · `mailbox_send` · `node_create` · `node_delete` · `node_fields` · `node_move` · `node_update` · `open_target` · `session_list` · `session_start` · `session_stop` · `system_info` · `terminal_open` · `usage_routes` · `usage_summary`
+`board_list` · `board_read` · `board_resolve` · `classify_path` · `edge_create` · `edge_delete` · `history` · `mailbox_archive` · `mailbox_read` · `mailbox_send` · `node_create` · `node_delete` · `node_fields` · `node_move` · `node_update` · `open_target` · `phantom_list` · `phantom_propose` · `phantom_withdraw` · `session_list` · `session_start` · `session_stop` · `system_info` · `terminal_open` · `usage_routes` · `usage_summary`

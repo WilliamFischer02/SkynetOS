@@ -32,6 +32,28 @@ export interface RouteRequest {
   obstacles: RouteObstacle[];
   /** Board extent in world pixels. */
   boardPx: { width: number; height: number };
+  /**
+   * Route from this world point instead of `from`'s centre: a pinned anchor's stub, or a waypoint.
+   * The `from` rect is still carved out, so the route may leave its own node.
+   */
+  start?: Point;
+  /** Route to this world point instead of `to`'s centre. */
+  goal?: Point;
+  /**
+   * Carve `from` / `to` out of the obstacle map (default true), so a route that starts or ends at a
+   * node's CENTRE can leave it. A leg that starts or ends at a pinned end's stub, or runs between two
+   * waypoints, carves neither: otherwise it can cut through the node to reach the far side of it.
+   */
+  carveFrom?: boolean;
+  carveTo?: boolean;
+}
+
+/** A world point as a half-grid cell, clamped to the board. */
+function pointCell(p: Point, grid: RouteGrid): { x: number; y: number } {
+  return {
+    x: Math.min(grid.cols - 1, Math.max(0, Math.round(p.x / HALF_GRID))),
+    y: Math.min(grid.rows - 1, Math.max(0, Math.round(p.y / HALF_GRID)))
+  };
 }
 
 /** Cost of changing direction, in grid steps. 3 is enough to make an L beat a staircase. */
@@ -162,13 +184,13 @@ function centreCell(rect: Rect, grid: RouteGrid): { x: number; y: number } {
  */
 export function routeAStar(request: RouteRequest, grid: RouteGrid): Point[] | null {
   const { cols, rows, cells } = grid;
-  const start = centreCell(request.from, grid);
-  const goal = centreCell(request.to, grid);
+  const start = request.start ? pointCell(request.start, grid) : centreCell(request.from, grid);
+  const goal = request.goal ? pointCell(request.goal, grid) : centreCell(request.to, grid);
   if (start.x === goal.x && start.y === goal.y) return null;
 
   const passable = new Set<number>();
-  carve(grid, request.from, passable);
-  carve(grid, request.to, passable);
+  if (request.carveFrom !== false) carve(grid, request.from, passable);
+  if (request.carveTo !== false) carve(grid, request.to, passable);
 
   const isFree = (x: number, y: number): boolean => {
     if (x < 0 || y < 0 || x >= cols || y >= rows) return false;

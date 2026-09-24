@@ -1,0 +1,164 @@
+/*
+ * Away (sleep) mode. A separate file so it never collides with edits to styles.css.
+ * docs/02 rules: whole multiples of --p, palette tokens, no gradients, motion in steps only.
+ */
+
+.away-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--gap));
+  padding: calc(6 * var(--gap)) calc(4 * var(--gap));
+  overflow-y: auto;
+  color: var(--silk);
+  background: var(--mask-dark);
+  outline: none;
+}
+
+/* ── the sleeping chip ─────────────────────────────────────────────────────────────────── */
+.away-art {
+  position: relative;
+  width: calc(120 * var(--p));
+  height: calc(66 * var(--p));
+  flex: 0 0 auto;
+}
+.away-head {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: calc(120 * var(--p));
+  height: calc(66 * var(--p));
+  animation: away-bob 2400ms steps(1, end) infinite;
+}
+.away-z {
+  position: absolute;
+  width: calc(15 * var(--p));
+  height: calc(15 * var(--p));
+  fill: var(--signal);
+  animation: away-z 3600ms steps(6, end) infinite;
+}
+.away-z.z1 { right: calc(-6 * var(--p)); top: calc(18 * var(--p)); }
+.away-z.z2 { right: calc(-18 * var(--p)); top: calc(6 * var(--p)); width: calc(10 * var(--p)); height: calc(10 * var(--p)); animation-delay: 1200ms; }
+.away-z.z3 { right: calc(-30 * var(--p)); top: calc(-6 * var(--p)); width: calc(5 * var(--p)); height: calc(5 * var(--p)); animation-delay: 2400ms; }
+.away-px-copper { fill: var(--copper); }
+.away-px-dark { fill: var(--mask-light); }
+.away-px-silk { fill: var(--silk); }
+.away-px-signal { fill: var(--signal); }
+
+@keyframes away-bob {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(var(--p)); }
+}
+@keyframes away-z {
+  0% { transform: translate(0, 0); visibility: visible; }
+  100% { transform: translate(calc(24 * var(--p)), calc(-36 * var(--p))); visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .away-head, .away-z { animation: none; }
+}
+
+.away-caption { text-transform: uppercase; color: var(--copper); text-align: center; }
+.away-caption strong { color: var(--signal); font-weight: normal; }
+.away-refusal { color: var(--warn); text-transform: uppercase; text-align: center; }
+
+/* ── the centred session window ────────────────────────────────────────────────────────── */
+.away-window {
+  display: flex;
+  flex-direction: column;
+  width: min(calc(760 * var(--p)), 92vw);
+  max-height: 46vh;
+  flex: 0 1 auto;
+  background: var(--mask-light);
+  border: var(--p) solid var(--signal);
+  box-shadow: calc(3 * var(--p)) calc(3 * var(--p)) 0 #000;
+}
+.away-window-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: var(--gap) calc(1.5 * var(--gap));
+  color: var(--mask-dark);
+  background: var(--signal);
+  text-transform: uppercase;
+}
+.away-window-body {
+  flex: 1 1 auto;
+  min-height: calc(120 * var(--p));
+  overflow-y: auto;
+  padding: var(--gap) calc(1.5 * var(--gap));
+  scrollbar-width: thin;
+}
+.away-line { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: calc(0.5 * var(--gap)); }
+.away-line.text { color: var(--silk); }
+.away-line.tool { color: var(--copper); }
+.away-line.system { color: var(--copper-dark); }
+.away-line.result { color: var(--ok); }
+.away-line.error { color: var(--fault); }
+
+/* ── the while-you-were-away list ──────────────────────────────────────────────────────── */
+.away-list {
+  width: min(calc(760 * var(--p)), 92vw);
+  flex: 0 0 auto;
+}
+.away-list-head {
+  color: var(--signal);
+  text-transform: uppercase;
+  border-bottom: var(--p) solid var(--copper-dark);
+  padding-bottom: calc(0.5 * var(--gap));
+  margin-bottom: var(--gap);
+}
+.away-item { display: flex; gap: calc(1.5 * var(--gap)); align-items: baseline; margin-bottom: calc(0.5 * var(--gap)); }
+.away-kind {
+  flex: 0 0 auto;
+  min-width: calc(62 * var(--p));
+  padding: 0 var(--p);
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--mask-dark);
+  background: var(--copper);
+}
+.away-kind.roadmap, .away-kind.note { background: var(--signal); }
+.away-kind.phantom, .away-kind.mail { background: var(--silk); }
+.away-kind.session { background: var(--ok); }
+.away-kind.blocked, .away-kind.error { background: var(--warn); }
+.away-empty { color: var(--copper-dark); }
+.away-hint { color: var(--copper-dark); text-transform: uppercase; }
+
+/* ── the wake report ───────────────────────────────────────────────────────────────────── */
+.away-report {
+  width: min(calc(760 * var(--p)), 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--gap));
+  padding: calc(2 * var(--gap));
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(3 * var(--p)) calc(3 * var(--p)) 0 #000;
+}
+.away-report h2 { margin: 0; font: inherit; color: var(--signal); text-transform: uppercase; }
+.away-stats { display: flex; flex-wrap: wrap; gap: calc(3 * var(--gap)); color: var(--copper); text-transform: uppercase; }
+.away-summary { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--silk); border-left: calc(3 * var(--p)) solid var(--signal); padding-left: calc(1.5 * var(--gap)); }
+.away-files { color: var(--copper); overflow-wrap: anywhere; }
+.away-return { color: var(--signal); text-transform: uppercase; text-align: center; animation: away-blink 1200ms steps(1, end) infinite; }
+@keyframes away-blink { 50% { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .away-return { animation: none; } }
+.away-report-actions { display: flex; justify-content: space-between; gap: var(--gap); }
+
+/* The HUD chip that reopens the report. `.hud` is click-through, so this must opt back in. */
+.away-chip {
+  pointer-events: auto;
+  font: inherit;
+  padding: 0 var(--gap);
+  color: var(--mask-dark);
+  background: var(--signal);
+  border: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+/* The AWAY section of the LOOK panel. */
+.away-settings { display: flex; flex-direction: column; gap: var(--gap); }
+.away-settings .input { width: calc(90 * var(--p)); }

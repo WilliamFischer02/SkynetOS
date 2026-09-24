@@ -1,0 +1,183 @@
+/*
+ * The compact layout: phones, tablets and narrow windows. docs/08-REMOTE.md.
+ *
+ * One renderer serves the desktop and every remote device, so a small screen is a layout, not a
+ * second app. `html.compact` is set from a media query in main.tsx (max-width 820px, or a coarse
+ * pointer), and `html.remote` marks a page served over the remote bridge. Every rule here is scoped
+ * to one of the two, so the desktop layout is untouched.
+ *
+ *   - Panels become full-width sheets from the bottom edge, the way a phone expects them.
+ *   - The inspector is a bottom sheet over the lower half of the screen, not a sidebar.
+ *   - The HUD condenses, the minimap and the key hint are dropped (pinch replaces the wheel).
+ *   - The usage meter starts as its header (ui/chrome-layout.ts); a tap on the header shows the rest.
+ *   - Touch targets are at least 44 px wherever the pointer is coarse (Apple's minimum).
+ *   - The iPhone's notch and home bar are respected (safe-area insets).
+ */
+
+html.compact body { overscroll-behavior: none; }
+
+html.compact .help,
+html.compact .minimap { display: none; }
+
+html.compact .hud {
+  top: calc(env(safe-area-inset-top, 0px) + var(--gap));
+  right: var(--gap);
+  max-width: 62vw;
+  gap: var(--gap);
+  font-size: calc(var(--f) * 0.9);
+}
+/* The HUD keeps zoom, the counts and faults; the rest is diagnostics a small screen cannot spare. */
+html.compact .hud > span:nth-child(n + 4):not(.fault-text):not(.warn) { display: none; }
+
+html.compact .breadcrumb {
+  top: calc(env(safe-area-inset-top, 0px) + var(--gap));
+  left: var(--gap);
+  max-width: 36vw;
+}
+
+html.compact .usage-meter {
+  top: calc(env(safe-area-inset-top, 0px) + 7 * var(--gap));
+  left: var(--gap);
+  width: auto;
+  min-width: 0;
+  max-width: 48vw;
+}
+html.compact .usage-meter .usage-projects { display: none; }
+/* The header wraps inside the meter rather than running out of it. At 48vw the plan chip, the
+   calibrate flag and the fold arrow do not fit on one line, and the arrow is how you fold it. */
+html.compact .usage-meter .usage-head-row { flex-wrap: wrap; row-gap: var(--p); }
+
+html.compact .toasts {
+  right: var(--gap);
+  left: var(--gap);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 30 * var(--gap));
+  max-width: none;
+  align-items: stretch;
+}
+
+/* The corner prompt and the session dock: docked across the bottom, above the home bar. */
+html.compact .left-stack {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 100%;
+  padding: 0 var(--gap) calc(env(safe-area-inset-bottom, 0px) + var(--gap));
+  align-items: stretch;
+}
+html.compact .left-stack .dock,
+html.compact .jarvis-dock { width: 100%; max-width: 100%; min-width: 0; }
+html.compact .jarvis-quote { display: none; }
+
+/* The inspector: a bottom sheet over the lower half, scrolling inside itself. */
+html.compact .inspector {
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 55vh;
+  overflow-y: auto;
+  border-left: none;
+  border-top: var(--p) solid var(--copper);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pad));
+  z-index: 40;
+}
+
+/* Every floating panel becomes a sheet: full width, from the bottom, scrolling inside itself. */
+html.compact .look-panel,
+html.compact .palette,
+html.compact .mailbox,
+html.compact .plan-dialog,
+html.compact .keys-panel,
+html.compact .summon-panel,
+html.compact .edge-inspector,
+html.compact .explorer {
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: none;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pad));
+}
+html.compact .keys-backdrop,
+html.compact .explorer-backdrop { align-items: flex-end; }
+html.compact .context-menu { max-width: calc(100vw - 16px); }
+
+@media (pointer: coarse) {
+  html.compact .btn,
+  html.compact .explorer-tool,
+  html.compact .context-item,
+  html.compact .phantom-btn,
+  html.compact .jarvis-tool,
+  html.compact .editor-section,
+  html.compact .look-check {
+    min-height: 44px;
+  }
+  html.compact .phantom-btn,
+  html.compact .jarvis-tool { min-width: 44px; }
+  html.compact .input { min-height: 44px; font-size: 16px; } /* 16px stops iOS zooming into a focused field */
+}
+
+/*
+ * Remote only: what cannot work from another device is hidden rather than left to fail. A drag-out
+ * hands a file on the PC to the PC's own shell; there is nothing on a phone to drop it into.
+ */
+html.remote .drag-badges { display: none; }
+
+/* ── The pairing gate and the offline strip ─────────────────────────────────────────────────── */
+.remote-gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  background: var(--mask-dark);
+  color: var(--silk);
+}
+.remote-card {
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: 16px;
+  border: var(--p) solid var(--signal);
+  background: var(--mask-light);
+}
+.remote-card form { display: flex; flex-direction: column; gap: 8px; }
+.remote-title { color: var(--signal); text-transform: uppercase; letter-spacing: 1px; }
+.remote-note { color: var(--copper); margin: 0; }
+.remote-warn { color: var(--fault); margin: 0; }
+.remote-code { font-size: 22px; letter-spacing: 3px; text-transform: uppercase; text-align: center; }
+.remote-pair { min-height: 44px; }
+.remote-strip {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 6px 12px;
+  text-align: center;
+  color: var(--mask-dark);
+  background: var(--warn);
+  text-transform: uppercase;
+}
+
+/* ── The desktop's REMOTE panel ─────────────────────────────────────────────────────────────── */
+.remote-panel { display: flex; flex-direction: column; gap: var(--gap); }
+.remote-pairbox { display: flex; gap: calc(2 * var(--gap)); align-items: flex-start; flex-wrap: wrap; }
+.remote-qr { image-rendering: pixelated; background: #ffffff; border: var(--p) solid var(--copper); }
+.remote-paircode { font-size: calc(2 * var(--f)); letter-spacing: calc(2 * var(--p)); color: var(--signal); }
+.remote-url { color: var(--silk); overflow-wrap: anywhere; user-select: all; }
+.remote-devices { display: flex; flex-direction: column; gap: calc(0.5 * var(--gap)); }
+.remote-device { display: flex; gap: var(--gap); align-items: center; }
+.remote-device-name { flex: 1; min-width: 0; color: var(--silk); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-device-seen { color: var(--copper-dark); }

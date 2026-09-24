@@ -9,11 +9,13 @@ import { isBroken, needsConfirmation, type TargetInfo } from '@shared/targets.js
 import type { Actor } from '@shared/commands.js';
 import { officeRefusal, officeUri } from '@shared/office.js';
 import { elevatedProgramArgv, toWindowsPath as toWindows } from './launch-script.js';
-import { resolveNodeTarget } from './target-resolver.js';
+import { expandPath, resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
 import { boardWindow } from './main-window.js';
 import { openTerminal } from './terminal.js';
 import { getSettings } from './settings.js';
+import { openWithEditor } from './editors.js';
+import { refuseDialogWhenRemote } from './remote-context.js';
 
 /**
  * Turns a click on a node into a real effect on this machine.
@@ -36,6 +38,7 @@ export interface OpenResult {
 const confirmedBinaries = new Set<string>();
 
 async function confirm(title: string, message: string, detail: string, confirmLabel: string): Promise<boolean> {
+  refuseDialogWhenRemote(`"${title}"`);
   const win = boardWindow();
   const options = {
     type: 'warning' as const,
@@ -211,7 +214,8 @@ async function launchProgram(resolved: string, node: BoardNode, target: TargetIn
   if (!viaShell) {
     try {
       const child = spawn(toWindows(resolved), node.args ?? [], {
-        cwd: toWindows(node.cwd ?? dirname(resolved)),
+        // Expanded: a `%USERPROFILE%/…` cwd handed to spawn as-is is a folder that does not exist.
+        cwd: toWindows(node.cwd ? expandPath(node.cwd) : dirname(resolved)),
         detached: true,
         stdio: 'ignore',
         windowsHide: false
@@ -352,7 +356,7 @@ export async function openTarget(
     }
 
     if (elevated) {
-      const result = await launchElevated(resolved, node.args ?? [], node.cwd ?? dirname(resolved));
+      const result = await launchElevated(resolved, node.args ?? [], node.cwd ? expandPath(node.cwd) : dirname(resolved));
       // No pid: it would be PowerShell's, not the program's, and PowerShell has already exited.
       return result.ok
         ? { ok: true, action: `launched ${resolved} as administrator`, target }
@@ -381,6 +385,18 @@ export async function openTarget(
       if (!url) return { ok: false, action: 'blocked', target, error: 'NO REMOTE URL ON THIS NODE' };
       await shell.openExternal(url);
       return { ok: true, action: `opened in browser: ${url}`, target };
+    }
+
+    // A named editor. Never a silent fallback: a node set to Notepad++ that opened Word would lie.
+    case 'notepadpp':
+    case 'obsidian': {
+      if (target.kind === 'directory') {
+        return { ok: false, action: `${openWith} refused`, target, error: 'THIS NODE POINTS AT A FOLDER — AN EDITOR NEEDS A FILE' };
+      }
+      const result = await openWithEditor(openWith, resolved);
+      return result.ok
+        ? { ok: true, action: result.action ?? `opened in ${openWith}`, target }
+        : { ok: false, action: `${openWith} failed`, target, ...(result.error ? { error: result.error } : {}) };
     }
 
     case 'terminal': {
@@ -413,12 +429,21 @@ export function directoryForNode(node: BoardNode, resolved: string): string | nu
   switch (node.kind) {
     case 'store.repo':
     case 'store.folder':
+    case 'store.explorer':
       return resolved;
+    /*
+     * EXPANDED, never the raw board value. Since the portability work, `cwd` reads
+     * `%USERPROFILE%/…` or `%SKYNET%/…`, and returning it as-is handed spawn() a working directory
+     * that does not exist. spawn died with ENOENT before any window appeared, and every terminal
+     * and admin terminal on such a node silently failed. Sessions used the resolved path, which is
+     * why "resume" kept working while "terminal" did not.
+     */
     case 'agent.code':
+    case 'agent.audit':
     case 'service.process':
-      return node.cwd ?? resolved;
+      return node.cwd ? expandPath(node.cwd) : resolved;
     case 'store.cloud':
-      return node.localPath ?? null;
+      return node.localPath ? expandPath(node.localPath) : null;
     case 'file.document':
     case 'file.exe':
     case 'file.artifact':

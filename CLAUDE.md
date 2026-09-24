@@ -2,7 +2,7 @@
 
 You are building SkynetOS: a Windows desktop app that renders an overhead pixel-art motherboard, where every visual component is bound to a real agent, repo, folder, or file on this machine.
 
-Read `docs/01-ARCHITECTURE.md` through `docs/07-SECURITY.md` before writing code. They are normative, not suggestions.
+Read `docs/01-ARCHITECTURE.md` through `docs/07-SECURITY.md` before writing code. `docs/09-RELEASE.md` is the installed program: where its data lives, and how it updates. They are normative, not suggestions. `docs/08-REMOTE.md` is the design for iPhone remote control (M9): normative for how it must be built, and not yet built.
 
 ---
 
@@ -35,7 +35,9 @@ npm run verify          # typecheck && validate:board && assets:bake && validate
 npm run validate:board  # every board/*.json against schema/board.schema.json
 npm run assets:bake     # vendor sheets + manifest -> assets/atlas/
 npm run validate:assets # pixel purity check on the baked atlas + authored sprites + license trail
-npm run build           # electron-builder, NSIS target, Windows x64
+npm run pack            # fast: unpacked release/win-unpacked/SkynetOS.exe, no installer
+npm run release         # bump the version, verify, build the NSIS installer (docs/09-RELEASE.md)
+npm run build           # the same build for the current version (alias of npm run dist)
 ```
 
 ## Working style

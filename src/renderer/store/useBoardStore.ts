@@ -3,8 +3,16 @@ import type { Board, BoardNode, NodeKind } from '@shared/types.js';
 import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js';
 import type { ArtifactInfo, BoardLoad, IngestSuggestion, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
 import type { UsageRoute } from '@shared/usage.js';
+import { clusterOrigin, copySelection, type BoardClipboard } from '@shared/clipboard.js';
+import { DEFAULT_CHROME_PREFS, EMPTY_PLAN, type ChromePlan, type ChromePrefs } from '../ui/chrome-layout.js';
+import { markAllRead, pushNotification, type NotificationEntry } from '../ui/notification-history.js';
 import type { TargetInfo } from '@shared/targets.js';
+import { refreshChanges, refreshSummary } from '@shared/refresh-summary.js';
 import { freeEdgeId, guessEdgeKind } from '../board/ports.js';
+import type { BoardLook } from '@shared/types.js';
+import { cleanLook } from '@shared/look.js';
+import { VISION_OFF, type GestureStatus } from '@shared/vision.js';
+import { VOICE_OFF, type VoiceMoment, type VoiceStatus } from '@shared/voice.js';
 
 /**
  * Small, boring UI preferences that outlive a reload.
@@ -39,6 +47,20 @@ function save(key: string, value: string): void {
   try { window.localStorage.setItem(key, value); } catch { /* a preference that cannot persist still applies */ }
 }
 
+/** The user's chrome choices (what they collapsed or hid). Unknown keys are dropped, missing ones defaulted. */
+function loadChromePrefs(): ChromePrefs {
+  try {
+    const raw = JSON.parse(window.localStorage.getItem('skynet.chromePrefs') ?? '{}') as Record<string, unknown>;
+    const out = { ...DEFAULT_CHROME_PREFS };
+    for (const key of Object.keys(out) as (keyof ChromePrefs)[]) {
+      if (typeof raw[key] === 'boolean') out[key] = raw[key] as boolean;
+    }
+    return out;
+  } catch {
+    return { ...DEFAULT_CHROME_PREFS };
+  }
+}
+
 /**
  * Renderer state.
  *
@@ -63,6 +85,17 @@ export interface Toast {
   text: string;
 }
 
+/** A right click on the board: where it happened, the tile under it, and what it was on. */
+export interface BoardContextMenu {
+  /** Window coordinates, for placing the menu. */
+  screen: { x: number; y: number };
+  /** The tile under the cursor: where "Paste here" puts the cluster's top-left. */
+  tile: { x: number; y: number };
+  nodeId: string | null;
+  /** What Copy would take: the whole group when the node is in one, else just the node. */
+  ids: string[];
+}
+
 interface BoardState {
   boardId: string;
   load: BoardLoad | null;
@@ -79,6 +112,8 @@ interface BoardState {
   transition: 'closing' | 'opening' | null;
 
   selectedId: string | null;
+  /** The selected wire. A wire and a node are never selected at the same time. */
+  selectedEdgeId: string | null;
   /** Node id whose form is open. Null means the inspector is read-only. */
   editingId: string | null;
   mode: EditMode;
@@ -155,7 +190,19 @@ interface BoardState {
   ascend: () => Promise<void>;
   setTransition: (phase: 'closing' | 'opening' | null) => void;
   refreshTargets: () => Promise<void>;
+  /**
+   * Re-read every file the board points at, now: targets, build outputs, and the watchers
+   * themselves. F5, the command palette, and the window regaining focus all land here. With
+   * `announce`, a toast says what changed, or that nothing did.
+   */
+  refreshFiles: (options?: { announce?: boolean }) => Promise<void>;
   select: (nodeId: string | null) => void;
+  /** Select a wire (or clear with null). Clears any node selection and open form. */
+  selectEdge: (edgeId: string | null) => void;
+  /** Change a wire: kind, colour, outline, width, relation. An `edge.update`, so Ctrl+Z takes it back. */
+  updateEdge: (edgeId: string, patch: Partial<Board['edges'][number]>) => Promise<void>;
+  /** Delete a wire, after the native confirmation docs/07 requires for every deletion. */
+  deleteEdge: (edgeId: string) => Promise<void>;
   setMode: (mode: EditMode) => void;
   beginEdit: (nodeId: string) => void;
   cancelEdit: () => void;
@@ -190,8 +237,111 @@ interface BoardState {
   /** The JARVIS mailbox panel — SkynetOS as the wire between the Face and the Hands. */
   mailboxOpen: boolean;
   setMailboxOpen: (open: boolean) => void;
+  /**
+   * The file explorer window, and which `store.explorer` node it is browsing. Opened by activating
+   * the node. The board id is kept so the window survives a room change without losing its node.
+   */
+  explorer: { boardId: string; nodeId: string } | null;
+  openExplorer: (nodeId: string) => void;
+  closeExplorer: () => void;
+  /**
+   * "Hide Recommended Nodes": JARVIS's phantom proposals stay in the board file but are not drawn.
+   * A view preference, so localStorage, like the minimap's size.
+   */
+  hidePhantoms: boolean;
+  setHidePhantoms: (hide: boolean) => void;
+  /**
+   * Recommendations closed on screen but not (yet) deleted from the board file: the fallback when
+   * the running main process predates `phantom:dismiss`, so the X always does something visible.
+   */
+  closedPhantoms: string[];
 
-  toast: (level: Toast['level'], text: string) => void;
+  /** Every toast, kept after it fades: the notification centre's history, newest first. */
+  notifications: NotificationEntry[];
+  markNotificationsRead: () => void;
+  clearNotifications: () => void;
+  /** Panels any part of the app may open: the keys list, LOOK, the palette, settings, the bell, About. */
+  keysOpen: boolean;
+  setKeysOpen: (open: boolean) => void;
+  lookOpen: boolean;
+  setLookOpen: (open: boolean) => void;
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+  notificationsOpen: boolean;
+  setNotificationsOpen: (open: boolean) => void;
+  aboutOpen: boolean;
+  setAboutOpen: (open: boolean) => void;
+  /** What the user collapsed or hid, persisted (localStorage `skynet.chromePrefs`). */
+  chromePrefs: ChromePrefs;
+  setChromePref: <K extends keyof ChromePrefs>(key: K, value: ChromePrefs[K]) => void;
+  /** The layout manager's current decisions. See ui/chrome-layout.ts. */
+  layout: ChromePlan;
+  setLayout: (plan: ChromePlan) => void;
+
+  /**
+   * Manual control: the cameras' own state, pushed from main (`gesture:state`). Held here for the
+   * indicator only — the gestures themselves are handled in ui/useGesture.ts without going through
+   * React, because a cursor arriving 26 times a second must not re-render the chrome.
+   */
+  gestureStatus: GestureStatus;
+  setGestureStatus: (status: GestureStatus) => void;
+  /** Switch the cameras on or off. Desktop-only channel; also reached by voice. */
+  setGestureEnabled: (on: boolean) => Promise<void>;
+  /** Voice control's own state, pushed from main (`voice:state`). */
+  voiceStatus: VoiceStatus;
+  setVoiceStatus: (status: VoiceStatus) => void;
+  /** Switch voice on or off. Off is the hard mute. Desktop-only channel; also reached by "stop listening". */
+  setVoiceEnabled: (on: boolean) => Promise<void>;
+  /** What the summoned prompt is showing while voice is in play, or null when it is back in its corner. */
+  voiceMoment: VoiceMoment | null;
+  setVoiceMoment: (moment: VoiceMoment | null) => void;
+  /** THE MATRIX: every end product on every board, on a globe (matrix/MatrixView.tsx). G toggles it. */
+  matrixOpen: boolean;
+  setMatrixOpen: (open: boolean) => void;
+  /**
+   * What is driving the board right now, so a command can be attributed to the hand that made it.
+   * `runCommand` reads this: a node dragged by a pinch lands in the history as `gesture`, not as
+   * though William had typed it. It never grants authority — see asWilliam in shared/commands.ts.
+   */
+  inputSource: 'user' | 'gesture';
+  setInputSource: (source: 'user' | 'gesture') => void;
+  /** The user re-opened a minimap the layout manager had collapsed: this session, leave it open. */
+  minimapForced: boolean;
+  setMinimapForced: (forced: boolean) => void;
+  /** Bumped to ask the usage meter to open its plan and calibration dialog (from Settings). */
+  planDialogRequest: number;
+  requestPlanDialog: () => void;
+  /** William's tick on a recommended node: it becomes a real node, wired as sketched. One undo. */
+  approvePhantom: (phantomId: string) => Promise<void>;
+  /** William's cross: the recommendation goes. Nothing real is touched. */
+  dismissPhantom: (phantomId: string) => Promise<void>;
+
+  /** What Ctrl+C or the right-click menu last copied: nodes plus the traces between them. */
+  clipboard: BoardClipboard | null;
+  copyNodes: (ids: string[]) => void;
+  /** Paste the clipboard with its top-left on `tile`, as one undo step. Works across rooms. */
+  pasteNodes: (tile: { x: number; y: number }) => Promise<void>;
+  /** Copy and paste one tile down and right, in one gesture. */
+  duplicateNodes: (ids: string[]) => Promise<void>;
+  /** The right-click menu, while it is open. */
+  contextMenu: BoardContextMenu | null;
+  setContextMenu: (menu: BoardContextMenu | null) => void;
+  /** The node JARVIS is being summoned to, while the directive box is open. */
+  summonTarget: string | null;
+  setSummonTarget: (nodeId: string | null) => void;
+  summonJarvis: (nodeId: string, directive: string) => Promise<void>;
+  /**
+   * The room's look while a LOOK slider is being dragged: drawn live, committed once on release, so
+   * one drag is one undo step rather than fifty. Null whenever nothing is mid-drag.
+   */
+  lookPreview: BoardLook | null;
+  setLookPreview: (look: BoardLook | null) => void;
+  /** Commit a look (null resets it) as one `board.update`, so Ctrl+Z takes it back. */
+  setLook: (look: BoardLook | null) => Promise<void>;
+
+  toast:(level: Toast['level'], text: string) => void;
   dismissToast: (id: number) => void;
 }
 
@@ -208,6 +358,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   stack: [],
   transition: null,
   selectedId: null,
+  selectedEdgeId: null,
   editingId: null,
   mode: 'view',
   targets: {},
@@ -226,6 +377,171 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   pendingIngest: null,
   paletteOpen: false,
   mailboxOpen: false,
+  explorer: null,
+  hidePhantoms: loadBoolean('skynet.hidePhantoms', false),
+  closedPhantoms: [],
+  notifications: [],
+  markNotificationsRead: () => set((state) => ({ notifications: markAllRead(state.notifications) })),
+  clearNotifications: () => set({ notifications: [] }),
+  keysOpen: false,
+  setKeysOpen: (open) => set({ keysOpen: open }),
+  lookOpen: false,
+  setLookOpen: (open) => set({ lookOpen: open }),
+  commandPaletteOpen: false,
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  settingsOpen: false,
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  notificationsOpen: false,
+  setNotificationsOpen: (open) => set((state) => ({
+    notificationsOpen: open,
+    // Opening the list is reading it.
+    notifications: open ? markAllRead(state.notifications) : state.notifications
+  })),
+  aboutOpen: false,
+  setAboutOpen: (open) => set({ aboutOpen: open }),
+  chromePrefs: loadChromePrefs(),
+  setChromePref: (key, value) => {
+    const next = { ...get().chromePrefs, [key]: value };
+    save('skynet.chromePrefs', JSON.stringify(next));
+    set({ chromePrefs: next });
+  },
+  layout: EMPTY_PLAN,
+  setLayout: (plan) => set({ layout: plan }),
+  gestureStatus: VISION_OFF,
+  setGestureStatus: (status) => set({ gestureStatus: status }),
+  setGestureEnabled: async (on) => {
+    const status = await window.skynet['gesture:setEnabled'](on);
+    set({ gestureStatus: status });
+    if (status.error) get().toast('warn', status.error);
+    else get().toast('ok', on ? 'MANUAL CONTROL ON' : 'MANUAL CONTROL OFF');
+  },
+  voiceStatus: VOICE_OFF,
+  setVoiceStatus: (status) => set({ voiceStatus: status }),
+  setVoiceEnabled: async (on) => {
+    const status = await window.skynet['voice:setEnabled'](on);
+    set({ voiceStatus: status });
+    if (status.phase === 'unavailable' && status.error) get().toast('warn', status.error);
+    else get().toast('ok', on ? 'VOICE ON — SAY "HEY JARVIS"' : 'VOICE OFF — THE MICROPHONE IS CLOSED');
+  },
+  voiceMoment: null,
+  setVoiceMoment: (moment) => set({ voiceMoment: moment }),
+  matrixOpen: false,
+  setMatrixOpen: (open) => set({ matrixOpen: open }),
+  inputSource: 'user',
+  setInputSource: (source) => set({ inputSource: source }),
+  minimapForced: false,
+  setMinimapForced: (forced) => set({ minimapForced: forced }),
+  planDialogRequest: 0,
+  requestPlanDialog: () => set((state) => ({ planDialogRequest: state.planDialogRequest + 1 })),
+  setHidePhantoms: (hide) => {
+    save('skynet.hidePhantoms', hide ? '1' : '0');
+    set({ hidePhantoms: hide });
+  },
+  approvePhantom: async (phantomId) => {
+    const { boardId } = get();
+    /*
+     * The bridge is built from CHANNELS once, when the window opens. A SkynetOS started before
+     * recommendations existed has no `phantom:approve` at all, and calling it threw a TypeError
+     * that nothing reported: the tick simply did nothing. Say what is wrong instead.
+     */
+    if (typeof window.skynet['phantom:approve'] !== 'function') {
+      get().toast('fault', 'RESTART SKYNETOS TO APPROVE — THE RUNNING APP PREDATES RECOMMENDED NODES');
+      return;
+    }
+    let result: Awaited<ReturnType<typeof window.skynet['phantom:approve']>>;
+    try {
+      result = await window.skynet['phantom:approve'](boardId, phantomId);
+    } catch (err) {
+      get().toast('fault', `COULD NOT APPROVE THAT — ${(err as Error).message}`);
+      return;
+    }
+    if (!result.ok) { get().toast('fault', result.error ?? 'COULD NOT APPROVE THAT'); return; }
+    // Same refresh as runCommand: the file main just wrote IS the board.
+    const load = await window.skynet['board:load'](boardId);
+    const statuses = await window.skynet['target:resolveBoard'](boardId);
+    const history = await window.skynet['command:history']();
+    set({
+      load,
+      board: load.ok ? load.board : get().board,
+      targets: byNodeId(statuses),
+      history,
+      selectedId: result.nodeId ?? get().selectedId
+    });
+    get().toast('ok', 'recommendation approved · ctrl+z takes it back');
+  },
+  dismissPhantom: async (phantomId) => {
+    const { boardId } = get();
+    // Closed on screen whatever happens next, so the X always responds.
+    const close = (): void => set({ closedPhantoms: [...new Set([...get().closedPhantoms, phantomId])] });
+    if (typeof window.skynet['phantom:dismiss'] !== 'function') {
+      close();
+      get().toast('warn', 'CLOSED FOR NOW — RESTART SKYNETOS AND IT CAN BE DELETED FROM THE BOARD FILE');
+      return;
+    }
+    let result: Awaited<ReturnType<typeof window.skynet['phantom:dismiss']>>;
+    try {
+      result = await window.skynet['phantom:dismiss'](boardId, phantomId);
+    } catch (err) {
+      close();
+      get().toast('warn', `CLOSED ON SCREEN, NOT DELETED — ${(err as Error).message}`);
+      return;
+    }
+    if (!result.ok) { close(); get().toast('warn', `CLOSED ON SCREEN, NOT DELETED — ${result.error ?? 'UNKNOWN ERROR'}`); return; }
+    get().toast('ok', 'recommendation deleted · Ctrl+Z brings it back');
+    const load = await window.skynet['board:load'](boardId);
+    const history = await window.skynet['command:history']();
+    set({ load, board: load.ok ? load.board : get().board, history });
+  },
+
+  clipboard: null,
+  copyNodes: (ids) => {
+    const { board } = get();
+    const clip = board ? copySelection(board, ids) : null;
+    if (!clip) return;
+    set({ clipboard: clip });
+    get().toast('ok', clip.nodes.length === 1 ? `copied ${clip.nodes[0]!.name}` : `copied ${clip.nodes.length} nodes`);
+  },
+  pasteNodes: async (tile) => {
+    const { clipboard, boardId } = get();
+    if (!clipboard) { get().toast('warn', 'NOTHING COPIED YET'); return; }
+    const result = await window.skynet['node:paste'](boardId, clipboard, tile);
+    if (!result.ok) { get().toast('fault', result.error ?? 'COULD NOT PASTE'); return; }
+    await get().loadBoard(boardId);
+    const ids = result.nodeIds ?? [];
+    set({ selectedId: ids.length === 1 ? ids[0]! : null, selectedEdgeId: null, editingId: null });
+    get().toast('ok', ids.length === 1 ? 'pasted 1 node' : `pasted ${ids.length} nodes`);
+  },
+  duplicateNodes: async (ids) => {
+    const { board } = get();
+    const clip = board ? copySelection(board, ids) : null;
+    if (!clip) return;
+    set({ clipboard: clip });
+    const origin = clusterOrigin(clip.nodes);
+    await get().pasteNodes({ x: origin.x + 1, y: origin.y + 1 });
+  },
+  contextMenu: null,
+  setContextMenu: (menu) => set({ contextMenu: menu }),
+  summonTarget: null,
+  setSummonTarget: (nodeId) => set({ summonTarget: nodeId, contextMenu: null }),
+  summonJarvis: async (nodeId, directive) => {
+    const result = await window.skynet['jarvis:summon'](get().boardId, nodeId, directive);
+    if (!result.ok) { get().toast('fault', result.error ?? 'COULD NOT SUMMON JARVIS'); return; }
+    set({ summonTarget: null });
+    get().toast('ok', result.note ?? 'JARVIS PRIME SUMMONED');
+  },
+  lookPreview: null,
+  setLookPreview: (look) => set({ lookPreview: look }),
+  setLook: async (look) => {
+    const sent = get().lookPreview;
+    const clean = cleanLook(look);
+    await get().runCommand(
+      { type: 'board.update', boardId: get().boardId, patch: { look: clean } },
+      clean ? 'change board look' : 'reset board look'
+    );
+    // Drop the preview only if nobody has dragged again while this was in flight: clearing a newer
+    // one would snap the slider back to the committed value under the user's hand.
+    if (get().lookPreview === sent) set({ lookPreview: null });
+  },
 
   loadBoard: async (boardId) => {
     set({ busy: true });
@@ -241,7 +557,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       board: load.ok ? load.board : null,
       stack,
       selectedId: null,
+      selectedEdgeId: null,
       editingId: null,
+      // A menu or a summons opened on the old board has nothing to act on in the new one.
+      contextMenu: null,
+      summonTarget: null,
       busy: false
     });
     if (load.ok) {
@@ -287,6 +607,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       targets: byNodeId(statuses),
       history,
       selectedId: null,
+      selectedEdgeId: null,
       editingId: null,
       transition: 'opening'
     });
@@ -321,6 +642,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       targets: byNodeId(statuses),
       history,
       selectedId: null,
+      selectedEdgeId: null,
       editingId: null,
       transition: 'opening'
     });
@@ -331,15 +653,74 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   setTransition: (phase) => set({ transition: phase }),
 
+  refreshFiles: async (options) => {
+    const { boardId, board, targets: before } = get();
+    if (!board) return;
+    const [statuses] = await Promise.all([
+      window.skynet['target:resolveBoard'](boardId),
+      get().refreshArtifacts()
+    ]);
+    // A room change that landed while this ran: the answer is about a board no longer on screen.
+    if (get().boardId !== boardId) return;
+    const after = byNodeId(statuses);
+    if (JSON.stringify(after) !== JSON.stringify(before)) set({ targets: after });
+    // Re-plan the watchers too: a build folder that did not exist a minute ago may exist now.
+    void window.skynet['watch:board'](boardId);
+    if (options?.announce) {
+      const names: Record<string, string> = {};
+      for (const node of board.nodes) names[node.id] = node.name;
+      const checked = Object.values(after).filter((t) => t.state !== 'none' && t.kind !== 'url').length;
+      const changes = refreshChanges(before, after, names);
+      get().toast(changes.some((c) => c.what === 'gone') ? 'warn' : 'ok', refreshSummary(changes, checked, after));
+    }
+  },
+
   refreshTargets: async () => {
     const { boardId, board } = get();
     if (!board) return;
     const statuses = await window.skynet['target:resolveBoard'](boardId);
-    set({ targets: byNodeId(statuses) });
+    const next = byNodeId(statuses);
+    // An unchanged answer keeps the old object, so nothing downstream re-renders for nothing.
+    if (JSON.stringify(next) === JSON.stringify(get().targets)) return;
+    set({ targets: next });
+  },
+
+  selectEdge: (edgeId) => set({ selectedEdgeId: edgeId, selectedId: null, editingId: null }),
+
+  updateEdge: async (edgeId, patch) => {
+    await get().runCommand({ type: 'edge.update', boardId: get().boardId, edgeId, patch }, `edit trace ${edgeId}`);
+  },
+
+  deleteEdge: async (edgeId) => {
+    const { board, boardId } = get();
+    const edge = board?.edges.find((e) => e.id === edgeId);
+    if (!board || !edge) return;
+    const name = (id: string): string => {
+      const node = board.nodes.find((n) => n.id === id);
+      return node ? (node.designator ? `${node.designator} ${node.name}` : node.name) : id;
+    };
+    // docs/07: deletion always requires explicit approval in the UI, and no policy can skip it.
+    const approved = await window.skynet['command:confirmDestructive'](
+      `Delete trace ${edge.id}?`,
+      `${name(edge.from)} → ${name(edge.to)} (${edge.kind})\n\nOnly the wire is removed. Both nodes stay.`
+    );
+    if (!approved) { get().toast('warn', 'delete cancelled'); return; }
+    const result = await window.skynet['command:apply']({
+      command: { type: 'edge.delete', boardId, edgeId },
+      actor: 'user',
+      approved: true,
+      label: `delete trace ${edgeId}`
+    });
+    if (!result.ok) { get().toast('fault', result.error); return; }
+    set({ selectedEdgeId: null });
+    await get().loadBoard(boardId);
+    get().toast('ok', `deleted trace ${edgeId}`);
   },
 
   select: (nodeId) => set((state) => ({
     selectedId: nodeId,
+    // A node and a wire are never selected together.
+    selectedEdgeId: null,
     // Changing selection abandons an open form rather than silently carrying edits to another
     // node. Losing two keystrokes is better than writing them to the wrong component.
     editingId: state.editingId && state.editingId !== nodeId ? null : state.editingId
@@ -511,7 +892,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ busy: true });
     const result = await window.skynet['command:apply']({
       command,
-      actor: 'user',
+      // A pinch-drag is William's hand, and the history says which hand. Attribution only: the
+      // bus still refuses a destructive command from `gesture` without a dialog.
+      actor: get().inputSource === 'gesture' ? 'gesture' : 'user',
       ...(label ? { label } : {})
     });
     if (!result.ok) {
@@ -601,8 +984,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     if (node?.kind === 'drive.room') { await get().descend(nodeId); return; }
 
     // An agent chip launches or focuses its own Claude Code conversation. This is the click the
-    // whole board exists for.
-    if (node?.kind === 'agent.code') { await get().startSession(nodeId); return; }
+    // whole board exists for. A drive audit is the same machinery, rooted at a drive.
+    if (node?.kind === 'agent.code' || node?.kind === 'agent.audit') { await get().startSession(nodeId); return; }
+
+    // A prompt box has nothing to open: activating it means "let me type". Selecting it is what
+    // puts the cursor in the box (PromptBoxes focuses the selected one outside Edit Board mode).
+    if (node?.kind === 'agent.prompt' || node?.kind === 'agent.prompt-to-node') { get().select(nodeId); return; }
+
+    // A file explorer opens its own window rather than Windows Explorer: browsing is the point of it.
+    if (node?.kind === 'store.explorer') { get().openExplorer(nodeId); return; }
 
     // A service toggles: running -> stop, otherwise start.
     if (node?.kind === 'service.process') {
@@ -622,6 +1012,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setPaletteOpen: (open) => set({ paletteOpen: open }),
 
   setMailboxOpen: (open) => set({ mailboxOpen: open }),
+
+  openExplorer: (nodeId) => set({ explorer: { boardId: get().boardId, nodeId } }),
+  closeExplorer: () => set({ explorer: null }),
 
   addNode: async (kind, pos, fields) => {
     const { boardId } = get();
@@ -646,12 +1039,26 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   toast: (level, text) => {
     const id = toastSeq++;
-    set((state) => ({ toasts: [...state.toasts.slice(-4), { id, level, text }] }));
+    set((state) => ({
+      toasts: [...state.toasts.slice(-4), { id, level, text }],
+      // Kept for the notification centre; already read if the list is open right now.
+      notifications: state.notificationsOpen
+        ? markAllRead(pushNotification(state.notifications, { id, level, text, at: Date.now() }))
+        : pushNotification(state.notifications, { id, level, text, at: Date.now() })
+    }));
     setTimeout(() => get().dismissToast(id), level === 'fault' ? 9000 : 4500);
   },
 
   dismissToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }))
 }));
+
+/*
+ * The store on `window`, for the smoke harness's READ-ONLY layout probes, beside `__skynetCamera`
+ * and `__skynetWire`. It grants nothing the page does not already have: every action here goes
+ * through `window.skynet`, the same bridge and the same allowlist.
+ */
+// Guarded: tests import renderer modules under Node, where there is no window.
+if (typeof window !== 'undefined') (window as unknown as { __skynetStore?: typeof useBoardStore }).__skynetStore = useBoardStore;
 
 function byNodeId(statuses: NodeStatus[]): Record<string, TargetInfo> {
   const out: Record<string, TargetInfo> = {};

@@ -178,6 +178,39 @@ canvas {
   max-width: 70vw;
 }
 
+/*
+ * The key reference (?). Centred by a flex backdrop rather than translate(-50%): a panel an odd
+ * number of pixels wide would land on a half pixel and blur every glyph in it.
+ */
+.keys-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.keys-panel {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(2 * var(--gap)) calc(4 * var(--gap));
+  width: calc(640 * var(--p));
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: var(--pad);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  color: var(--silk);
+  text-transform: uppercase;
+}
+.keys-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; color: var(--signal); }
+.keys-row { display: flex; justify-content: space-between; gap: calc(2 * var(--gap)); }
+.keys-key { color: var(--signal); }
+.keys-what { color: var(--copper); text-align: right; }
+
 .hud .warn,
 .warntext { color: var(--warn); }
 .hud .fault-text { color: var(--fault); }
@@ -416,6 +449,31 @@ canvas {
 
 .editor { display: flex; flex-direction: column; gap: calc(2.5 * var(--gap)); }
 .editor-head { display: flex; justify-content: space-between; color: var(--copper-dark); text-transform: uppercase; }
+
+/*
+ * Section headers in the node editor: a full-width bar you click to open or close its group.
+ * Square, flat, whole pixels, like every other control in the chrome. See SECTION_ORDER in
+ * packages/shared/node-fields.ts.
+ */
+.editor-section {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  margin-top: var(--gap);
+  padding: var(--gap) calc(1.5 * var(--gap));
+  font: inherit;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--signal);
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+}
+.editor-section[aria-expanded='true'] { border-color: var(--copper); }
+.editor-section:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+.editor-section-mark { width: calc(11 * var(--p)); color: var(--copper); }
+.editor-section-count { margin-left: auto; color: var(--copper-dark); }
 
 .field { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: var(--gap); }
 .field-label { display: flex; align-items: baseline; cursor: help; }
@@ -784,23 +842,28 @@ canvas {
  * zoom 3, and `thestalker-0.1.0.jar v0.1.0` at the chrome's 22px does not fit in that — the
  * first version clipped it to `TH`. The badge is chrome pinned to a board position, so it keeps
  * a readable size and lets the label decide the width.
+ *
+ * And it WRAPS. DragBadges.tsx caps its width at the node's on-screen width (with a readable
+ * floor) and gives a file name break points after `.`, `-` and `_`, so a long name becomes a
+ * tidy block under its component instead of a line running off across the board. William:
+ * "sometimes the file names are long and would be more aesthetic if the text wrapped."
  */
 .drag-badge {
   position: absolute;
   top: 0;
   left: 0;
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--gap);
   padding: 0 var(--gap);
-  height: calc(16 * var(--p));
+  min-height: calc(16 * var(--p));
   max-width: calc(320 * var(--p));
   background: var(--mask-dark);
   border: var(--p) solid var(--copper);
   color: var(--silk);
   font-size: var(--f);
   line-height: calc(16 * var(--p));
-  white-space: nowrap;
+  white-space: normal;
   overflow: hidden;
   text-transform: uppercase;
   pointer-events: auto;
@@ -813,9 +876,50 @@ canvas {
 .drag-badge.stale { border-color: var(--warn); }
 .drag-badge.missing { border-color: var(--fault); color: var(--fault); cursor: not-allowed; }
 
-.badge-grip { color: var(--copper); letter-spacing: calc(-1 * var(--p)); }
-.badge-label { overflow: hidden; text-overflow: clip; }
-.badge-stale { color: var(--warn); }
+.badge-grip { color: var(--copper); letter-spacing: calc(-1 * var(--p)); flex: none; }
+.badge-label { min-width: 0; overflow-wrap: anywhere; }
+.badge-stale { color: var(--warn); flex: none; }
+
+/* ---------- the wire inspector ---------- */
+
+/*
+ * Colour swatches: square, whole pixels, the swatch IS the colour. The first in each row is "no
+ * override", marked with a diagonal-free inner square so it cannot be mistaken for a colour.
+ */
+.swatches { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.swatch {
+  width: calc(16 * var(--p));
+  height: calc(16 * var(--p));
+  padding: 0;
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+}
+.swatch.default { box-shadow: inset 0 0 0 calc(4 * var(--p)) var(--mask-dark); }
+.swatch[aria-checked='true'] { border-color: var(--silk); outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+.swatch:disabled { cursor: default; }
+.edge-inspector .dim { color: var(--copper-dark); }
+
+/*
+ * CALIBRATE, in the usage meter's header: warn-coloured, with a stepped pulse (held levels, no
+ * fade) so it is noticed without flickering. Off under reduced motion.
+ */
+.usage-calibrate-flag {
+  margin-left: var(--gap);
+  padding: 0 var(--gap);
+  color: var(--warn);
+  border: var(--p) solid var(--warn);
+  cursor: pointer;
+  animation: calibrate-pulse 2.4s steps(1, end) infinite;
+}
+.usage-calibrate-flag:hover,
+.usage-calibrate-flag:focus-visible { background: var(--warn); color: var(--mask-dark); }
+@keyframes calibrate-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .usage-calibrate-flag { animation: none; }
+}
 
 /* ---------- drop-in wizard ---------- */
 
@@ -952,6 +1056,14 @@ canvas {
 /* Nothing to measure against: the track is drawn, empty, so the row keeps its shape. */
 .meter-bar.unknown .cell { border-style: dotted; }
 
+/*
+ * `.fault` is also the boot and fault SCREEN (above): a full-height centred column with padding. The
+ * meter and its bars wear `fault` as their level class, so a nearly spent pool inherited that screen.
+ * The meter stretched to the bottom of the window and its bars stood on end. Undo the screen here.
+ */
+.usage-meter.fault { display: block; height: auto; text-align: inherit; text-transform: inherit; color: inherit; }
+.meter-bar.fault { flex-direction: row; align-items: normal; justify-content: normal; padding: 0; }
+
 .usage-unset { color: var(--warn); }
 .usage-error { color: var(--fault); overflow-wrap: anywhere; }
 
@@ -972,6 +1084,44 @@ canvas {
 .usage-note.dim { color: var(--copper-dark); }
 .usage-note code { color: var(--copper); }
 .usage-foot { margin-top: var(--gap); color: var(--copper-dark); text-transform: uppercase; }
+
+/* ---------- Fable cores: which model new sessions get, and when Fable returns ---------- */
+
+.cores {
+  margin-bottom: calc(1.5 * var(--gap));
+  padding: var(--gap);
+  border: var(--p) solid var(--copper-dark);
+  text-transform: uppercase;
+}
+.cores.online { display: flex; flex-wrap: wrap; gap: var(--gap); color: var(--copper-dark); }
+.cores.online .cores-model { margin-left: auto; color: var(--copper); }
+.cores.offline { border-color: var(--warn); color: var(--warn); }
+.cores-line { display: flex; gap: var(--gap); align-items: baseline; }
+.cores-state { color: var(--fault); }
+.cores-clock { margin-left: auto; color: var(--silk); white-space: nowrap; }
+.cores-note { margin-top: calc(0.5 * var(--gap)); color: var(--copper-dark); }
+.cores-note.warn { color: var(--warn); }
+.cores-actions { display: flex; gap: calc(2 * var(--gap)); margin-top: calc(0.5 * var(--gap)); }
+.cores-form { display: flex; gap: var(--gap); margin-top: calc(0.5 * var(--gap)); }
+.cores-form .input { flex: 1 1 auto; min-width: 0; }
+
+/*
+ * The pulse, STEPPED. William asked for "a subtle opacity pulse". It holds three brightness levels
+ * and jumps between them; it never fades. A smooth fade is a continuous blend between two states,
+ * which is what docs/02 keeps off this app. The palette-purity guarantee is scoped to the canvas,
+ * but the chrome follows the same rule of whole steps: one pixel of border, one step of light.
+ */
+.cores-pulse { animation: cores-pulse 2400ms steps(1, end) infinite; }
+@keyframes cores-pulse {
+  0% { opacity: 1; }
+  40% { opacity: 0.78; }
+  60% { opacity: 0.6; }
+  80% { opacity: 0.78; }
+  100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cores-pulse { animation: none; }
+}
 
 /* ---------- footprint: two tile counts and a stepper ---------- */
 
@@ -1493,3 +1643,527 @@ canvas {
 .sysmon-missing li { display: flex; flex-direction: column; gap: calc(1 * var(--p)); color: var(--silk); }
 
 .sysmon-foot { color: var(--copper-dark); border-top: var(--p) solid var(--copper-dark); padding-top: var(--gap); }
+
+/* ---------- Prompt nodes: the quick-chat box (PromptBoxes.tsx) ----------
+ *
+ * The box is drawn by the canvas; these are the real controls laid over its pixels. Transparent
+ * wherever the drawing should show through, and the chrome's own font for the text.
+ */
+/*
+ * Recommended nodes (phantoms), ui/Phantoms.tsx: a dashed ghost where the component would go, its
+ * proposed traces dotted to their targets, and a plate with the reason, a tick and a cross. Opaque
+ * palette colours only — a translucent ghost would blend into an off-palette colour.
+ */
+.phantoms {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  overflow: hidden;
+}
+.phantom-wires { position: absolute; top: 0; left: 0; pointer-events: none; }
+.phantom-ghost { fill: none; stroke: var(--signal); }
+.phantom-link { fill: none; stroke: var(--signal); }
+
+.phantom-plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  min-width: calc(140 * var(--p));
+  max-width: calc(220 * var(--p));
+  display: flex;
+  flex-direction: column;
+  gap: var(--p);
+  padding: var(--gap);
+  color: var(--silk);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--signal);
+  pointer-events: auto;
+}
+.phantom-plate:focus-visible { outline: var(--p) solid var(--silk); outline-offset: var(--p); }
+.phantom-plate.busy { border-color: var(--copper-dark); }
+.phantom-head { display: flex; align-items: center; gap: var(--gap); min-width: 0; }
+.phantom-tag { padding: 0 var(--p); color: var(--mask-dark); background: var(--signal); }
+.phantom-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--signal);
+  text-transform: uppercase;
+}
+.phantom-desc { color: var(--silk); overflow-wrap: anywhere; }
+.phantom-meta { color: var(--copper); overflow-wrap: anywhere; }
+.phantom-plate.compact .phantom-desc,
+.phantom-plate.compact .phantom-meta { display: none; }
+
+.phantom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(13 * var(--p));
+  height: calc(13 * var(--p));
+  padding: 0;
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+}
+.phantom-btn.yes { color: var(--ok); }
+.phantom-btn.no { color: var(--fault); }
+.phantom-btn:hover:not(:disabled), .phantom-btn:focus-visible { border-color: currentColor; }
+.phantom-btn:disabled { cursor: default; color: var(--copper-dark); }
+.phantom-glyph { width: calc(7 * var(--p)); height: calc(7 * var(--p)); fill: currentColor; }
+
+.prompt-boxes {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.prompt-box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
+}
+
+/* Edit Board mode: the canvas underneath takes the pointer, so the node drags and resizes. */
+.prompt-box.editing { pointer-events: none; }
+
+.prompt-input {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 calc(1 * var(--p));
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: transparent;
+  color: var(--silk);
+  caret-color: var(--signal);
+  font: inherit;
+  font-size: var(--f);
+  line-height: calc(13 * var(--p));
+}
+
+/* Empty and unfocused: transparent, so the sprite's pixel placeholder shows. Otherwise it covers it. */
+.prompt-input:focus,
+.prompt-input:not(:placeholder-shown) { background: var(--mask-light); }
+.prompt-input::placeholder { color: transparent; }
+
+/* Invisible hit areas sitting exactly on the drawn paperclip and send button. */
+.prompt-hit {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.prompt-hit:focus-visible { outline: var(--p) solid var(--signal); }
+.prompt-hit:disabled { cursor: default; }
+
+.prompt-chips {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: var(--gap);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  max-width: 100%;
+}
+
+.prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap);
+  max-width: calc(180 * var(--p));
+  padding: var(--p) calc(3 * var(--p));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  color: var(--silk);
+}
+.prompt-chip.bad { border-color: var(--fault); color: var(--fault); }
+
+/* A 16px thumbnail at exactly 2x: pixelated, never smoothed. */
+.prompt-thumb {
+  width: calc(32 * var(--p));
+  height: calc(32 * var(--p));
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.prompt-ext { color: var(--copper); }
+.prompt-chip-name { overflow: hidden; white-space: nowrap; text-overflow: clip; }
+.prompt-chip-x {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.prompt-chip-x:hover { color: var(--signal); }
+
+.prompt-status {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  margin-top: var(--gap);
+  padding: 0 calc(3 * var(--p));
+  background: var(--mask-dark);
+  color: var(--signal);
+  white-space: nowrap;
+}
+.prompt-status.fault { color: var(--fault); }
+
+/*
+ * ── Fable countdown: each digit position its own shade of white ─────────────────────────────
+ * William: "a slightly different shade of white / gray for visual clarity and graphical texture."
+ * Chrome-only shades around silk, fixed per POSITION so the clock's texture holds while it ticks.
+ */
+.cores-sep { color: var(--copper-dark); }
+.cores-digit.shade-0 { color: #f4f0e6; }
+.cores-digit.shade-1 { color: #e9e4d6; }
+.cores-digit.shade-2 { color: #d8d3c6; }
+.cores-digit.shade-3 { color: #eeeade; }
+.cores-digit.shade-4 { color: #cbc6b9; }
+.cores-digit.shade-5 { color: #e0dbce; }
+.cores-digit.shade-6 { color: #c2bdb1; }
+
+/*
+ * ── Node editor sections: one earthy tone each ──────────────────────────────────────────────
+ * William: "make tabs / dropdowns for the editable properties different earthy tones so that each
+ * dropdown reads visually different." A thick left bar, the label and a dark tint in the tone.
+ * Chrome-only colours, like the digits above: the board's palette rule is about board pixels.
+ */
+.editor-section[data-section] {
+  color: var(--tone);
+  background: var(--tone-ground);
+  border-color: var(--tone-dim);
+  border-left: calc(4 * var(--p)) solid var(--tone);
+}
+.editor-section[data-section][aria-expanded='true'] { border-color: var(--tone); }
+.editor-section[data-section] .editor-section-mark { color: var(--tone); }
+.editor-section[data-section] .editor-section-count { color: var(--tone-dim); }
+.editor-section[data-section='identity']   { --tone: #c9773f; --tone-dim: #6e4122; --tone-ground: #26170d; }
+.editor-section[data-section='binding']    { --tone: #c29a45; --tone-dim: #6a5424; --tone-ground: #241d0e; }
+.editor-section[data-section='session']    { --tone: #8e9c52; --tone-dim: #4d552c; --tone-ground: #1a1f10; }
+.editor-section[data-section='appearance'] { --tone: #b0603f; --tone-dim: #603422; --tone-ground: #26140e; }
+.editor-section[data-section='text']       { --tone: #b3a176; --tone-dim: #625840; --tone-ground: #221f15; }
+.editor-section[data-section='effects']    { --tone: #97735a; --tone-dim: #523f31; --tone-ground: #201711; }
+
+/* ── Right-click menu ─────────────────────────────────────────────────────────────────────── */
+.context-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: calc(200 * var(--p));
+  padding: var(--p);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(2 * var(--p)) calc(2 * var(--p)) 0 #000;
+  outline: none;
+}
+.context-head {
+  padding: var(--gap) calc(1.5 * var(--gap));
+  color: var(--copper);
+  border-bottom: var(--p) solid var(--copper-dark);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.context-item {
+  display: flex;
+  width: 100%;
+  gap: calc(3 * var(--gap));
+  justify-content: space-between;
+  padding: var(--gap) calc(1.5 * var(--gap));
+  font: inherit;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--silk);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.context-item.active:not(:disabled) { background: var(--copper-dark); }
+.context-item:disabled { color: var(--copper-dark); cursor: default; }
+.context-keys { color: var(--copper); }
+.context-item.active:not(:disabled) .context-keys { color: var(--silk); }
+
+/* ── Summon JARVIS ────────────────────────────────────────────────────────────────────────── */
+.summon-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 50%);
+}
+.summon-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: min(calc(560 * var(--p)), calc(100vw - 32px));
+  padding: var(--pad);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--signal);
+  box-shadow: calc(3 * var(--p)) calc(3 * var(--p)) 0 #000;
+}
+.summon-head { display: flex; justify-content: space-between; align-items: center; color: var(--signal); }
+.summon-target { padding: var(--gap) calc(1.5 * var(--gap)); background: var(--mask-light); border: var(--p) solid var(--copper-dark); }
+.summon-name { color: var(--silk); text-transform: uppercase; }
+.summon-kind { color: var(--copper-dark); }
+.summon-path { color: var(--copper); overflow-wrap: anywhere; }
+.summon-input { resize: vertical; min-height: calc(80 * var(--p)); }
+.summon-foot { display: flex; gap: var(--gap); align-items: center; justify-content: space-between; }
+.summon-note { color: var(--copper-dark); }
+
+/*
+ * ── The bottom-left column: running sessions above, the corner prompt below ─────────────────
+ * One column so the two never overlap: the session dock's height depends on how many sessions are
+ * running, and a fixed offset for the prompt would be wrong whenever that number changed.
+ */
+.left-stack {
+  position: absolute;
+  left: calc(2 * var(--gap));
+  bottom: calc(9 * var(--gap));
+  z-index: 16;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(2 * var(--gap));
+  max-width: 46vw;
+  pointer-events: none;
+}
+.left-stack > * { pointer-events: auto; }
+.left-stack .dock { position: static; }
+
+.jarvis-dock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: calc(340 * var(--p));
+  max-width: 46vw;
+}
+.jarvis-quote {
+  font: inherit;
+  text-align: left;
+  color: var(--silk);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+  border-left: calc(3 * var(--p)) solid var(--signal);
+  padding: var(--gap) calc(1.5 * var(--gap));
+  min-height: calc(30 * var(--p));
+  cursor: pointer;
+}
+.jarvis-quote:hover { border-color: var(--copper); border-left-color: var(--signal); }
+.jarvis-caret {
+  display: inline-block;
+  width: calc(5 * var(--p));
+  height: calc(10 * var(--p));
+  margin-left: var(--p);
+  vertical-align: baseline;
+  background: var(--signal);
+  animation: jarvis-caret 1000ms steps(1, end) infinite;
+}
+@keyframes jarvis-caret { 50% { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .jarvis-caret { animation: none; } }
+
+.jarvis-chips { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.jarvis-box {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--gap);
+  padding: var(--gap) calc(1.5 * var(--gap));
+  background: var(--mask-light);
+  border: var(--p) solid var(--silk);
+  box-shadow: calc(2 * var(--p)) calc(2 * var(--p)) 0 #000;
+}
+.jarvis-box:focus-within { border-color: var(--signal); }
+.jarvis-box.busy { border-color: var(--warn); }
+.jarvis-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: calc(28 * var(--p));
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  line-height: calc(14 * var(--p));
+  color: var(--silk);
+  caret-color: var(--signal);
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  scrollbar-width: none;
+}
+.jarvis-input::placeholder { color: var(--copper-dark); }
+.jarvis-tools { display: flex; gap: var(--gap); }
+.jarvis-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(16 * var(--p));
+  height: calc(16 * var(--p));
+  padding: 0;
+  font: inherit;
+  color: var(--copper);
+  background: transparent;
+  border: var(--p) solid var(--copper);
+  cursor: pointer;
+}
+.jarvis-tool:hover:not(:disabled) { color: var(--mask-dark); background: var(--copper); }
+.jarvis-tool.send { color: var(--mask-dark); background: var(--signal); border-color: var(--signal); }
+.jarvis-tool:disabled { color: var(--copper-dark); background: transparent; border-color: var(--copper-dark); cursor: default; }
+
+/* ---------- File explorer: a store.explorer node's folder (Explorer.tsx) ----------
+ * A retro desktop window. Bevels are hard inset shadows — a light edge top-left and a dark one
+ * bottom-right for anything raised, the reverse for a well — never a gradient, and every size is a
+ * whole multiple of --p. Centred by a flex backdrop rather than translate(-50%), which would land
+ * an odd-width window on a half pixel.
+ */
+.explorer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 61;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.explorer {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--p));
+  width: calc(960 * var(--p));
+  height: calc(640 * var(--p));
+  max-width: 94vw;
+  max-height: 88vh;
+  padding: calc(2 * var(--p));
+  background: var(--mask-light);
+  border: var(--p) solid var(--silk);
+  box-shadow:
+    inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--copper-dark),
+    calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+}
+
+.px-icon { display: block; flex: none; width: calc(32 * var(--p)); height: calc(32 * var(--p)); }
+
+.explorer-title {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: calc(2 * var(--p)) var(--gap);
+  color: var(--mask-dark);
+  background: var(--signal);
+  text-transform: uppercase;
+}
+.explorer-title .px-icon { width: calc(16 * var(--p)); height: calc(16 * var(--p)); }
+.explorer-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.explorer-winbtn,
+.explorer-tool,
+.explorer-crumb {
+  font: inherit;
+  color: var(--silk);
+  background: var(--mask-light);
+  border: none;
+  padding: calc(2 * var(--p)) calc(2 * var(--gap));
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: inset var(--p) var(--p) 0 var(--silk), inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--mask-dark);
+}
+.explorer-winbtn {
+  padding: 0 var(--gap);
+  color: var(--mask-dark);
+  background: var(--silk);
+  box-shadow: inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--copper-dark);
+}
+.explorer-tool.on,
+.explorer-tool:active:not(:disabled),
+.explorer-winbtn:active {
+  box-shadow: inset var(--p) var(--p) 0 var(--mask-dark), inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--silk);
+}
+.explorer-tool.on { color: var(--signal); }
+.explorer-tool:disabled { color: var(--copper-dark); cursor: default; }
+.explorer-tool:focus-visible,
+.explorer-crumb:focus-visible,
+.explorer-winbtn:focus-visible { outline: var(--p) dotted var(--signal); outline-offset: calc(-3 * var(--p)); }
+
+.explorer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(2 * var(--p)); }
+.explorer-sep { align-self: stretch; width: var(--p); margin: 0 var(--gap); background: var(--copper-dark); }
+.explorer-spacer { flex: 1; }
+
+.explorer-address,
+.explorer-grid,
+.explorer-cell {
+  box-shadow: inset var(--p) var(--p) 0 var(--mask-dark), inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--silk);
+}
+.explorer-address { display: flex; align-items: center; gap: var(--gap); padding: calc(2 * var(--p)) var(--gap); background: var(--mask-dark); }
+.explorer-address-label { color: var(--copper); }
+.explorer-crumbs { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; }
+.explorer-crumb-wrap { display: inline-flex; align-items: center; }
+.explorer-crumb { padding: 0 calc(2 * var(--p)); background: transparent; box-shadow: none; text-transform: none; }
+.explorer-crumb:hover { color: var(--signal); }
+.explorer-crumb-sep { color: var(--copper-dark); }
+
+.explorer-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, calc(112 * var(--p)));
+  grid-auto-rows: min-content;
+  align-content: start;
+  justify-content: start;
+  gap: calc(2 * var(--gap)) var(--gap);
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+}
+.explorer-grid:focus-visible { outline: none; }
+.explorer-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2 * var(--p));
+  padding: calc(2 * var(--p));
+  cursor: default;
+  user-select: none;
+}
+.explorer-name {
+  display: -webkit-box;
+  max-width: 100%;
+  padding: 0 calc(2 * var(--p));
+  overflow: hidden;
+  color: var(--silk);
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+/* The era's selection: the name inverted into a solid block. */
+.explorer-item.selected .explorer-name { color: var(--mask-dark); background: var(--signal); }
+.explorer-grid:focus-visible .explorer-item.selected .explorer-name { outline: var(--p) dotted var(--silk); }
+.explorer-empty { grid-column: 1 / -1; padding: calc(2 * var(--gap)); color: var(--copper); }
+.explorer-empty.fault { color: var(--fault); }
+
+.explorer-status { display: flex; gap: calc(2 * var(--p)); }
+.explorer-cell {
+  padding: calc(2 * var(--p)) var(--gap);
+  overflow: hidden;
+  color: var(--copper);
+  background: var(--mask-light);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.explorer-cell.grow { flex: 1; min-width: 0; color: var(--silk); }

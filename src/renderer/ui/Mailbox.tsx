@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MailSide, MailboxMessage } from '@shared/mailbox.js';
 import { forClipboard } from '@shared/mailbox.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+import { Icon } from './Icon.js';
 
 /**
  * The JARVIS mailbox panel. `M`.
@@ -83,7 +84,7 @@ export function Mailbox(): React.JSX.Element | null {
   return (
     <div className="mailbox">
       <div className="mailbox-head">
-        <span>JARVIS MAILBOX</span>
+        <span className="with-icon"><Icon name="mail" />JARVIS MAILBOX</span>
         <button
           type="button"
           className={side === 'hands' ? 'btn primary' : 'btn'}

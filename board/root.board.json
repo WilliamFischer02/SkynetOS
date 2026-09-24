@@ -22,12 +22,12 @@
       "kind": "decor.image",
       "name": "BACKDROP DEMO",
       "pos": {
-        "x": 91,
-        "y": 55
+        "x": 93,
+        "y": 58
       },
       "footprint": {
         "w": 14,
-        "h": 11
+        "h": 16
       },
       "image": "%SKYNET%/assets/sprites/circuittry.jpg",
       "showName": false,
@@ -43,8 +43,8 @@
       "kind": "agent.jarvis",
       "name": "JARVIS",
       "pos": {
-        "x": 92,
-        "y": 57
+        "x": 95,
+        "y": 60
       },
       "url": "https://claude.ai/chat/93fc89d6-6544-4483-9dd1-1641e2c564f6",
       "partition": "persist:jarvis",
@@ -59,13 +59,53 @@
         "creative",
         "jarvis"
       ],
-      "logo": "%SKYNET%/assets/sprites/jarvis-sprite.png",
+      "logo": "%SKYNET%/assets/avatar/jarvis/blink-02.png",
       "footprint": {
-        "w": 11,
+        "w": 10,
         "h": 6
       },
       "frame": "quad",
-      "priority": 5
+      "priority": 5,
+      "logoScale": 165,
+      "showLogo": true,
+      "logoSource": "avatar",
+      "showDesignator": false
+    },
+    {
+      "id": "q_quick_chat",
+      "designator": "P1",
+      "kind": "agent.prompt",
+      "name": "QUICK CHAT",
+      "pos": {
+        "x": 94,
+        "y": 70
+      },
+      "footprint": {
+        "w": 12,
+        "h": 3
+      },
+      "promptTarget": "u1_jarvis",
+      "promptMode": "send",
+      "notes": "Quick chat with the Face. Type, attach files or images, press Enter: the U1 JARVIS conversation opens and the message is sent there. Set promptMode to draft to leave it in the conversation's box instead.",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "q_prompt_node",
+      "designator": "P2",
+      "kind": "agent.prompt-to-node",
+      "name": "PROMPT → NODE",
+      "pos": {
+        "x": 125,
+        "y": 85
+      },
+      "footprint": {
+        "w": 11,
+        "h": 4
+      },
+      "notes": "Describe a node and press Enter: a fresh JARVIS Prime terminal opens with your words as a brief to build it on this board. Nothing goes to claude.ai.",
+      "showName": false,
+      "showDesignator": false
     },
     {
       "id": "u3_jarvis_hands",
@@ -73,7 +113,7 @@
       "kind": "agent.code",
       "name": "JARVIS-PRIME",
       "pos": {
-        "x": 113,
+        "x": 128,
         "y": 55
       },
       "cwd": "C:/dev",
@@ -106,8 +146,8 @@
         "C:/"
       ],
       "footprint": {
-        "w": 6,
-        "h": 7
+        "w": 8,
+        "h": 9
       },
       "textGlow": true,
       "logo": "%SKYNET%/assets/sprites/jarvis-hand.jpg",
@@ -116,7 +156,10 @@
       "priority": 5,
       "mcpServers": [
         "skynet"
-      ]
+      ],
+      "pulseColor": "ok",
+      "chase": true,
+      "logoScale": 185
     },
     {
       "id": "d1_minecraftos",
@@ -126,8 +169,8 @@
       "engraving": "MINECRAFTOS",
       "boardFile": "minecraftos/room.board.json",
       "pos": {
-        "x": 67,
-        "y": 45
+        "x": 64,
+        "y": 50
       },
       "tags": [
         "minecraft",
@@ -143,7 +186,9 @@
       "footprint": {
         "w": 9,
         "h": 13
-      }
+      },
+      "textColor": "ok",
+      "textStroke": "copper"
     },
     {
       "id": "d2_deductionos",
@@ -153,8 +198,8 @@
       "engraving": "DEDUCTIONOS",
       "boardFile": "deductionos/room.board.json",
       "pos": {
-        "x": 91,
-        "y": 38
+        "x": 92,
+        "y": 37
       },
       "tags": [
         "learning",
@@ -165,7 +210,7 @@
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
-      "priority": 2,
+      "priority": 4,
       "logo": "%SKYNET%/assets/sprites/deduction-bg.jpg",
       "footprint": {
         "w": 8,
@@ -180,7 +225,7 @@
       "engraving": "STORYOS",
       "boardFile": "storyos/room.board.json",
       "pos": {
-        "x": 79,
+        "x": 77,
         "y": 71
       },
       "tags": [
@@ -207,8 +252,8 @@
       "engraving": "GAMEOS",
       "boardFile": "gameos/room.board.json",
       "pos": {
-        "x": 102,
-        "y": 81
+        "x": 95,
+        "y": 87
       },
       "tags": [
         "truthquestretro",
@@ -219,12 +264,13 @@
       "size": 22,
       "showDesignator": false,
       "frame": "socket",
-      "priority": 2,
+      "priority": 4,
       "logo": "%SKYNET%/assets/sprites/game-os-bg.jpg",
       "footprint": {
         "w": 9,
         "h": 13
-      }
+      },
+      "logoScale": 130
     },
     {
       "id": "u2_agent_skynet",
@@ -232,8 +278,8 @@
       "kind": "agent.code",
       "name": "CC-SKYNET",
       "pos": {
-        "x": 120,
-        "y": 72
+        "x": 114,
+        "y": 74
       },
       "cwd": "C:/dev/SkynetOS",
       "launch": "popout",
@@ -264,7 +310,9 @@
         "w": 6,
         "h": 5
       },
-      "pulseGlow": true
+      "pulseGlow": true,
+      "pulseColor": "signal",
+      "pulseSpeed": 70
     },
     {
       "id": "s1_repo_skynet",
@@ -272,8 +320,8 @@
       "kind": "store.repo",
       "name": "SkynetOS",
       "pos": {
-        "x": 121,
-        "y": 65
+        "x": 123,
+        "y": 75
       },
       "footprint": {
         "w": 4,
@@ -298,8 +346,8 @@
       "kind": "monitor.system",
       "name": "PSU",
       "pos": {
-        "x": 119,
-        "y": 36
+        "x": 127,
+        "y": 37
       },
       "footprint": {
         "w": 5,
@@ -308,7 +356,8 @@
       "image": "%SKYNET%/assets/sprites/cpu-icon.jpg",
       "showDesignator": false,
       "frame": "rails",
-      "priority": 5
+      "priority": 5,
+      "showSystemGraphics": false
     },
     {
       "id": "n1_title",
@@ -316,21 +365,28 @@
       "name": "title",
       "pos": {
         "x": 88,
-        "y": 32
+        "y": 26
       },
       "text": "SKYNETOS  REV A  //  GOOB ENTERTAINMENT CO.",
-      "size": 11,
+      "size": 22,
       "textColor": "signal",
       "textGlow": true,
-      "textStroke": "mask-dark"
+      "textStroke": "mask-dark",
+      "footprint": {
+        "w": 1,
+        "h": 1
+      },
+      "textPlate": true,
+      "plateColor": "mask-dark",
+      "plateBorder": "copper"
     },
     {
       "id": "n2_jarvis_label",
       "kind": "note.silk",
       "name": "jarvis label",
       "pos": {
-        "x": 92,
-        "y": 64
+        "x": 94,
+        "y": 67
       },
       "text": "PRIMARY JURISDICTION: ALL",
       "size": 11,
@@ -350,8 +406,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 130,
-        "y": 70
+        "x": 131,
+        "y": 74
       },
       "footprint": {
         "w": 3,
@@ -361,7 +417,8 @@
       "image": "%SKYNET%/assets/sprites/github.jpg",
       "showDesignator": false,
       "frame": "fingers",
-      "priority": 1
+      "priority": 1,
+      "chase": true
     },
     {
       "id": "t1_nightly",
@@ -369,8 +426,8 @@
       "kind": "task.scheduled",
       "name": "Nightly journal",
       "pos": {
-        "x": 108,
-        "y": 51
+        "x": 112,
+        "y": 56
       },
       "footprint": {
         "w": 2,
@@ -378,9 +435,65 @@
       },
       "schedule": "0 22 * * *",
       "enabled": true,
+      "journalVault": "%USERPROFILE%/OneDrive/Documents/SolidState Sync",
       "action": {
-        "type": "jarvis.headless",
-        "prompt": "Review today's session events across all rooms. Append a five-line summary to codex/journal/. Update each active project's handoff file. Flag anything blocked on William."
+        "type": "journal.write"
+      }
+    },
+    {
+      "id": "t_morning_maintenance",
+      "designator": "T2",
+      "kind": "task.scheduled",
+      "name": "MORNING MAINTENANCE",
+      "pos": {
+        "x": 110,
+        "y": 59
+      },
+      "footprint": {
+        "w": 4,
+        "h": 1
+      },
+      "schedule": "0 8 * * *",
+      "enabled": true,
+      "action": {
+        "type": "agent.run"
+      },
+      "taskTarget": "u3_jarvis_hands",
+      "taskBrief": "codex/briefs/morning-maintenance.md",
+      "catchUpHours": 4,
+      "notes": "8 am daily while SkynetOS is open: a fresh JARVIS Prime session makes a few small verified improvements, keeps docs/06 current and advances one roadmap item. Commits nothing. Brief: codex/briefs/morning-maintenance.md."
+    },
+    {
+      "id": "u_obsidius",
+      "designator": "U5",
+      "kind": "agent.code",
+      "name": "OBSIDIUS",
+      "pos": {
+        "x": 121,
+        "y": 55
+      },
+      "tags": [
+        "obsidian"
+      ],
+      "cwd": "%USERPROFILE%/OneDrive/Documents/SolidState Sync",
+      "launch": "popout",
+      "addDirs": [
+        "%USERPROFILE%/OneDrive/Documents/WilliamCloud",
+        "%USERPROFILE%/OneDrive/Documents/Obsidian Vault"
+      ],
+      "mcpServers": [
+        "skynet"
+      ],
+      "briefing": "every",
+      "readOnLaunch": [
+        "SolidState Vault.md"
+      ],
+      "notes": "Claude Code agent for William's Obsidian vaults and Obsidian plugin development. Obsidian-aware by its tag and its cwd: every briefing inlines codex/personas/obsidian.md.",
+      "initialPrompt": "You are OBSIDIUS, William's Obsidian agent. Your working directory is his main vault, SolidState Sync; WilliamCloud and the starter Obsidian Vault are granted as extra directories. You help him manage, organise and edit his vaults (notes, properties, tags, links, templates, Dataview, Canvas and Bases) and you develop Obsidian plugins with him, to build new representations of his notes, projects and thoughts. The Obsidian knowledge profile in your briefing is binding: never delete a note, keep frontmatter intact, never rename a linked note from outside the app, and never touch workspace or plugin data while Obsidian may be open. Plugin work lives in its own repo under C:/dev and is tested in a separate dev vault, never in SolidState.",
+      "image": "%SKYNET%/assets/sprites/2023-06-logo.png",
+      "footprint": {
+        "w": 6,
+        "h": 4
       }
     },
     {
@@ -388,8 +501,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 97,
-        "y": 51
+        "x": 99,
+        "y": 57
       },
       "part": "via",
       "showName": false,
@@ -400,8 +513,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 131,
-        "y": 66
+        "x": 106,
+        "y": 63
       },
       "part": "via",
       "showName": false,
@@ -412,8 +525,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 100,
-        "y": 55
+        "x": 102,
+        "y": 58
       },
       "part": "via",
       "showName": false,
@@ -424,8 +537,8 @@
       "kind": "decor.part",
       "name": "VIA",
       "pos": {
-        "x": 94,
-        "y": 63
+        "x": 96,
+        "y": 66
       },
       "part": "via",
       "showName": false,
@@ -437,7 +550,7 @@
       "name": "SCREW",
       "pos": {
         "x": 97,
-        "y": 72
+        "y": 76
       },
       "part": "screw",
       "showName": false,
@@ -452,8 +565,8 @@
       "kind": "decor.part",
       "name": "SCREW",
       "pos": {
-        "x": 99,
-        "y": 64
+        "x": 101,
+        "y": 67
       },
       "part": "screw",
       "showName": false,
@@ -464,8 +577,8 @@
       "kind": "decor.part",
       "name": "LED OK",
       "pos": {
-        "x": 99,
-        "y": 67
+        "x": 94,
+        "y": 75
       },
       "part": "led_ok",
       "showName": false,
@@ -480,8 +593,8 @@
       "kind": "decor.part",
       "name": "LED WARN",
       "pos": {
-        "x": 102,
-        "y": 68
+        "x": 97,
+        "y": 76
       },
       "part": "led_warn",
       "showName": false,
@@ -492,8 +605,8 @@
       "kind": "decor.part",
       "name": "LED IDLE",
       "pos": {
-        "x": 103,
-        "y": 68
+        "x": 98,
+        "y": 76
       },
       "part": "led_idle",
       "showName": false,
@@ -504,8 +617,8 @@
       "kind": "decor.part",
       "name": "FIDUCIAL",
       "pos": {
-        "x": 100,
-        "y": 68
+        "x": 95,
+        "y": 76
       },
       "part": "fiducial",
       "showName": false,
@@ -516,8 +629,8 @@
       "kind": "decor.part",
       "name": "GRILLE",
       "pos": {
-        "x": 106,
-        "y": 56
+        "x": 58,
+        "y": 45
       },
       "part": "grille",
       "showName": false,
@@ -532,8 +645,8 @@
       "kind": "decor.part",
       "name": "CAP",
       "pos": {
-        "x": 100,
-        "y": 68
+        "x": 95,
+        "y": 76
       },
       "part": "cap",
       "showName": false,
@@ -544,16 +657,16 @@
       "kind": "link.url",
       "name": "DIRTY PLUSH (HUD)",
       "pos": {
-        "x": 64,
-        "y": 72
+        "x": 59,
+        "y": 75
       },
       "designator": "J2",
       "provisional": true,
       "url": "https://dirty-plush.vercel.app/",
       "image": "%SKYNET%/assets/sprites/dirty-plush.jpg",
       "footprint": {
-        "w": 9,
-        "h": 5
+        "w": 15,
+        "h": 9
       },
       "showLogo": false,
       "frame": "tabs",
@@ -569,8 +682,8 @@
       "kind": "file.exe",
       "name": "launcher.exe",
       "pos": {
-        "x": 59,
-        "y": 51
+        "x": 56,
+        "y": 56
       },
       "designator": "F1",
       "provisional": true,
@@ -584,15 +697,19 @@
       "showLogo": false,
       "frame": "castellated",
       "priority": 5,
-      "showDesignator": false
+      "showDesignator": false,
+      "textColor": "ok",
+      "plateBorder": "copper",
+      "textStroke": "mask-dark",
+      "plateColor": "mask-dark"
     },
     {
       "id": "u_new_conversation",
       "kind": "agent.chat",
       "name": "MC MIND PALACE",
       "pos": {
-        "x": 60,
-        "y": 39
+        "x": 67,
+        "y": 42
       },
       "designator": "U4",
       "provisional": true,
@@ -601,15 +718,17 @@
       "showLogo": false,
       "frame": "bga",
       "priority": 3,
-      "showDesignator": false
+      "showDesignator": false,
+      "textColor": "silk",
+      "textStroke": "copper"
     },
     {
       "id": "f_new_document",
       "kind": "file.document",
       "name": "PANIC",
       "pos": {
-        "x": 71,
-        "y": 81
+        "x": 79,
+        "y": 87
       },
       "designator": "F2",
       "provisional": true,
@@ -622,7 +741,7 @@
       "image": "%SKYNET%/assets/sprites/Pan_-_Ancient_Greek_god_of_the_shepherds.jpg",
       "showLogo": false,
       "showDesignator": false,
-      "plateBorder": "copper",
+      "plateBorder": "signal",
       "priority": 2
     },
     {
@@ -630,8 +749,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 128,
-        "y": 68
+        "x": 129,
+        "y": 72
       },
       "part": "panel",
       "showName": false,
@@ -640,15 +759,19 @@
       "footprint": {
         "w": 7,
         "h": 8
-      }
+      },
+      "frame": "fingers",
+      "scan": true,
+      "scanSpeed": 25,
+      "scanColor": "signal"
     },
     {
       "id": "f_new_document_2",
       "kind": "file.document",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 60,
-        "y": 83
+        "x": 69,
+        "y": 87
       },
       "designator": "F3",
       "provisional": true,
@@ -665,31 +788,62 @@
       "plateBorder": "ok"
     },
     {
+      "id": "s_research",
+      "kind": "store.explorer",
+      "name": "RESEARCH",
+      "pos": {
+        "x": 58,
+        "y": 93
+      },
+      "designator": "S2",
+      "path": "C:/dev/DirtyPlush/research",
+      "footprint": {
+        "w": 6,
+        "h": 5
+      },
+      "tags": [
+        "dirty-plush",
+        "research"
+      ],
+      "notes": "Dirty Plush research, browsable here: 90s Escondido, California detective training materials, geography (maps) and documents (weather reports). Lives in the DirtyPlush repo under research/.",
+      "plateBorder": "ok"
+    },
+    {
+      "id": "s_dirty_plush_repo",
+      "kind": "store.repo",
+      "name": "DIRTY PLUSH REPO",
+      "pos": {
+        "x": 58,
+        "y": 86
+      },
+      "designator": "S3",
+      "path": "C:/dev/DirtyPlush",
+      "remote": "https://github.com/WilliamFischer02/DirtyPlush",
+      "openWith": "browser",
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "tags": [
+        "dirty-plush",
+        "github"
+      ],
+      "notes": "The Writer's Panel source; the DIRTY PLUSH (HUD) link opens its deployment. Click opens the repo on GitHub; the inspector opens a terminal in the local clone.",
+      "plateBorder": "ok",
+      "image": "%SKYNET%/assets/sprites/github.jpg",
+      "showLogo": false,
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
       "id": "p_part_2",
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 86,
-        "y": 55
-      },
-      "part": "elbow_thin",
-      "showName": false,
-      "showDesignator": false,
-      "provisional": true,
-      "footprint": {
-        "w": 2,
-        "h": 2
-      }
-    },
-    {
-      "id": "p_part_3",
-      "kind": "decor.part",
-      "name": "PART",
-      "pos": {
-        "x": 104,
+        "x": 127,
         "y": 54
       },
-      "part": "tee",
+      "part": "elbow_thin",
       "showName": false,
       "showDesignator": false,
       "provisional": true,
@@ -703,8 +857,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 87,
-        "y": 62
+        "x": 58,
+        "y": 48
       },
       "part": "grille",
       "showName": false,
@@ -720,8 +874,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 106,
-        "y": 62
+        "x": 109,
+        "y": 85
       },
       "part": "pads",
       "showName": false,
@@ -737,8 +891,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 87,
-        "y": 56
+        "x": 106,
+        "y": 85
       },
       "part": "pads",
       "showName": false,
@@ -754,8 +908,8 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 105,
-        "y": 61
+        "x": 92,
+        "y": 57
       },
       "part": "elbow_thin",
       "showName": false,
@@ -771,8 +925,8 @@
       "kind": "file.exe",
       "name": "Truth Quest Retro",
       "pos": {
-        "x": 112,
-        "y": 98
+        "x": 105,
+        "y": 104
       },
       "designator": "F4",
       "provisional": true,
@@ -793,8 +947,8 @@
       "kind": "file.exe",
       "name": "FORGE (ENGINE)",
       "pos": {
-        "x": 101,
-        "y": 98
+        "x": 94,
+        "y": 104
       },
       "designator": "F5",
       "provisional": true,
@@ -811,8 +965,8 @@
       "kind": "link.url",
       "name": "ANKI (WEB)",
       "pos": {
-        "x": 84,
-        "y": 46
+        "x": 80,
+        "y": 36
       },
       "designator": "J3",
       "provisional": true,
@@ -832,8 +986,8 @@
       "kind": "decor.image",
       "name": "BACKDROP",
       "pos": {
-        "x": 57,
-        "y": 67
+        "x": 55,
+        "y": 68
       },
       "showName": false,
       "showDesignator": false,
@@ -843,7 +997,7 @@
       "frame": "fingers",
       "footprint": {
         "w": 33,
-        "h": 27
+        "h": 31
       }
     },
     {
@@ -851,8 +1005,8 @@
       "kind": "decor.image",
       "name": "BACKDROP",
       "pos": {
-        "x": 58,
-        "y": 37
+        "x": 55,
+        "y": 40
       },
       "showName": false,
       "showDesignator": false,
@@ -861,7 +1015,7 @@
       "showLogo": false,
       "footprint": {
         "w": 19,
-        "h": 22
+        "h": 24
       }
     },
     {
@@ -869,7 +1023,7 @@
       "kind": "decor.image",
       "name": "BACKDROP",
       "pos": {
-        "x": 111,
+        "x": 121,
         "y": 31
       },
       "showName": false,
@@ -878,34 +1032,324 @@
       "image": "%SKYNET%/assets/sprites/aa5f785be03ca1b.png",
       "showLogo": false,
       "footprint": {
-        "w": 22,
-        "h": 17
+        "w": 18,
+        "h": 20
       },
-      "pulseGlow": true
+      "pulseGlow": true,
+      "pulseColor": "mask-dark",
+      "chase": true,
+      "pulseSpeed": 50,
+      "chaseSpeed": 55,
+      "priority": 4
     },
     {
       "id": "m_monitor",
       "kind": "monitor.system",
       "name": "MONITOR",
       "pos": {
-        "x": 138,
-        "y": 32
+        "x": 107,
+        "y": 31
       },
       "designator": "M2",
       "footprint": {
-        "w": 11,
+        "w": 12,
+        "h": 11
+      },
+      "frame": "rails"
+    },
+    {
+      "id": "bg_backdrop_4",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 78,
+        "y": 34
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/9781909621770.png",
+      "footprint": {
+        "w": 24,
+        "h": 16
+      },
+      "priority": 4
+    },
+    {
+      "id": "bg_backdrop_5",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 92,
+        "y": 84
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "footprint": {
+        "w": 22,
+        "h": 26
+      },
+      "image": "%SKYNET%/assets/sprites/673d668d4d110306b87ef9a1_unity-game-asset-low-poly-modular-terrain-pack-demo-6.jpg"
+    },
+    {
+      "id": "g_new_cluster",
+      "kind": "group.zone",
+      "name": "MIND TRAINING",
+      "pos": {
+        "x": 77,
+        "y": 33
+      },
+      "footprint": {
+        "w": 26,
+        "h": 18
+      }
+    },
+    {
+      "id": "g_new_cluster_2",
+      "kind": "group.zone",
+      "name": "MODDING & STREAMING",
+      "pos": {
+        "x": 54,
+        "y": 39
+      },
+      "footprint": {
+        "w": 21,
+        "h": 26
+      }
+    },
+    {
+      "id": "g_new_cluster_3",
+      "kind": "group.zone",
+      "name": "MAINBOARD",
+      "pos": {
+        "x": 106,
+        "y": 29
+      },
+      "footprint": {
+        "w": 34,
+        "h": 24
+      }
+    },
+    {
+      "id": "s_wfp_site_ops",
+      "kind": "store.repo",
+      "name": "wfp-site-ops",
+      "pos": {
+        "x": 155,
+        "y": 63
+      },
+      "designator": "S4",
+      "path": "C:/dev/wfp-site-ops"
+    },
+    {
+      "id": "f_documents_index",
+      "kind": "file.document",
+      "name": "DOCUMENTS INDEX",
+      "pos": {
+        "x": 141,
+        "y": 57
+      },
+      "designator": "F6",
+      "path": "%USERPROFILE%/OneDrive/Documents/INDEX.md",
+      "footprint": {
+        "w": 10,
+        "h": 5
+      },
+      "openWith": "office",
+      "image": "%SKYNET%/assets/sprites/officei-365-onedrive.png",
+      "showLogo": false,
+      "priority": 4,
+      "showDesignator": false
+    },
+    {
+      "id": "g_new_cluster_4",
+      "kind": "group.zone",
+      "name": "WRITING & PUBLICATION",
+      "pos": {
+        "x": 54,
+        "y": 67
+      },
+      "footprint": {
+        "w": 35,
+        "h": 34
+      }
+    },
+    {
+      "id": "bg_backdrop_6",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 112,
+        "y": 67
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/skynet-23.jpg",
+      "showLogo": false,
+      "footprint": {
+        "w": 26,
+        "h": 13
+      }
+    },
+    {
+      "id": "g_new_cluster_5",
+      "kind": "group.zone",
+      "name": "SKYNET OS",
+      "pos": {
+        "x": 111,
+        "y": 66
+      },
+      "footprint": {
+        "w": 28,
         "h": 15
       }
+    },
+    {
+      "id": "g_new_cluster_6",
+      "kind": "group.zone",
+      "name": "GAME DEV",
+      "pos": {
+        "x": 91,
+        "y": 83
+      },
+      "footprint": {
+        "w": 24,
+        "h": 28
+      }
+    },
+    {
+      "id": "u_drive_audit",
+      "kind": "agent.audit",
+      "name": "THE AUDITOR",
+      "pos": {
+        "x": 107,
+        "y": 44
+      },
+      "designator": "U6",
+      "provisional": true,
+      "footprint": {
+        "w": 12,
+        "h": 8
+      },
+      "cwd": "D:/",
+      "addDirs": [
+        "C:/",
+        "D:/",
+        "E:/",
+        "G:/",
+        "H:/",
+        "X:/",
+        "Z:/"
+      ],
+      "image": "%SKYNET%/assets/sprites/aa5f785be03ca1b.png",
+      "scan": true,
+      "scanColor": "fault",
+      "chase": true,
+      "chaseColor": "warn",
+      "chaseSpeed": 255,
+      "logo": "%SKYNET%/assets/sprites/inkpendude-threnodyssey-animation1.jpg",
+      "logoScale": 180,
+      "priority": 4,
+      "frame": "socket"
+    },
+    {
+      "id": "p_led_idle",
+      "kind": "decor.part",
+      "name": "LED IDLE",
+      "pos": {
+        "x": 99,
+        "y": 76
+      },
+      "part": "led_idle",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_idle_2",
+      "kind": "decor.part",
+      "name": "LED IDLE",
+      "pos": {
+        "x": 100,
+        "y": 76
+      },
+      "part": "led_idle",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw",
+      "kind": "decor.part",
+      "name": "SCREW",
+      "pos": {
+        "x": 98,
+        "y": 76
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false,
+      "footprint": {
+        "w": 2,
+        "h": 1
+      }
+    },
+    {
+      "id": "f_handoff",
+      "kind": "file.document",
+      "name": "HANDOFF",
+      "pos": {
+        "x": 116,
+        "y": 61
+      },
+      "designator": "F7",
+      "path": "%SKYNET%/handoff.md",
+      "openWith": "default"
+    },
+    {
+      "id": "d5_financeos",
+      "designator": "D5",
+      "kind": "drive.room",
+      "name": "Finance",
+      "engraving": "FINANCEOS",
+      "boardFile": "financeos/room.board.json",
+      "pos": {
+        "x": 121,
+        "y": 92
+      },
+      "footprint": {
+        "w": 9,
+        "h": 13
+      },
+      "tags": [
+        "finance",
+        "money",
+        "debt"
+      ],
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "size": 22,
+      "showDesignator": false,
+      "frame": "socket",
+      "priority": 4,
+      "notes": "FinanceOS: institution links, the private ledger, the finance advisor. Added 2026-09-23. No logo yet; pick one in the editor."
     }
   ],
   "edges": [
+    {
+      "id": "e_morning_prime",
+      "from": "t_morning_maintenance",
+      "to": "u3_jarvis_hands",
+      "kind": "supervises"
+    },
     {
       "id": "e1",
       "from": "u1_jarvis",
       "to": "d1_minecraftos",
       "kind": "supervises",
-      "width": 3,
-      "relation": "minecraftos"
+      "width": 4,
+      "relation": "minecraftos",
+      "color": "copper-dark",
+      "stroke": "ok"
     },
     {
       "id": "e2",
@@ -921,7 +1365,29 @@
       "to": "d3_storyos",
       "kind": "supervises",
       "width": 3,
-      "relation": "storyos"
+      "relation": "storyos",
+      "waypoints": [
+        [
+          85,
+          63
+        ],
+        [
+          85,
+          70
+        ],
+        [
+          82,
+          70
+        ]
+      ],
+      "fromAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "e4",
@@ -929,21 +1395,41 @@
       "to": "d4_gameos",
       "kind": "supervises",
       "width": 3,
-      "relation": "gameos"
+      "relation": "gameos",
+      "waypoints": [
+        [
+          91,
+          64
+        ],
+        [
+          91,
+          94
+        ]
+      ],
+      "fromAnchor": {
+        "side": "left",
+        "offset": 0.5833
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
     },
     {
       "id": "e5",
       "from": "u2_agent_skynet",
       "to": "s1_repo_skynet",
       "kind": "produces",
-      "width": 3
+      "width": 3,
+      "color": "ok"
     },
     {
       "id": "e6",
       "from": "s1_repo_skynet",
       "to": "j1_github",
       "kind": "syncs",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "e7",
@@ -953,23 +1439,41 @@
       "width": 2
     },
     {
-      "id": "e8",
-      "from": "u1_jarvis",
-      "to": "u3_jarvis_hands",
-      "kind": "supervises",
-      "width": 3
-    },
-    {
       "id": "e9",
       "from": "j_new_link",
       "to": "d3_storyos",
-      "kind": "reads"
+      "kind": "reads",
+      "color": "ok",
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.5
+      }
     },
     {
       "id": "e10",
       "from": "f_new_program",
       "to": "d1_minecraftos",
-      "kind": "reads"
+      "kind": "reads",
+      "stroke": "ok",
+      "color": "copper-dark",
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.6667
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.5385
+      },
+      "waypoints": [
+        [
+          61,
+          58
+        ],
+        [
+          61,
+          57
+        ]
+      ]
     },
     {
       "id": "e12",
@@ -981,19 +1485,53 @@
       "id": "e13",
       "from": "u_new_conversation",
       "to": "d1_minecraftos",
-      "kind": "reads"
+      "kind": "reads",
+      "stroke": "ok",
+      "color": "copper-dark",
+      "waypoints": [
+        [
+          69,
+          47
+        ],
+        [
+          63,
+          47
+        ],
+        [
+          63,
+          53
+        ]
+      ],
+      "fromAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.1923
+      }
     },
     {
       "id": "e14",
       "from": "f_new_document",
       "to": "d3_storyos",
-      "kind": "reads"
+      "kind": "reads",
+      "color": "signal"
     },
     {
       "id": "e15",
       "from": "f_new_document_2",
       "to": "j_new_link",
-      "kind": "reads"
+      "kind": "reads",
+      "color": "ok",
+      "toAnchor": {
+        "side": "bottom",
+        "offset": 0.5667
+      },
+      "fromAnchor": {
+        "side": "left",
+        "offset": 0.1875
+      }
     },
     {
       "id": "e16",
@@ -1017,7 +1555,31 @@
       "id": "e19",
       "from": "u2_agent_skynet",
       "to": "u1_jarvis",
-      "kind": "supervises"
+      "kind": "supervises",
+      "width": 3,
+      "color": "ok",
+      "toAnchor": {
+        "side": "right",
+        "offset": 0.8333
+      },
+      "waypoints": [
+        [
+          117,
+          69
+        ],
+        [
+          110,
+          69
+        ],
+        [
+          110,
+          65
+        ]
+      ],
+      "fromAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "e20",
@@ -1029,19 +1591,385 @@
       "id": "e21",
       "from": "f_new_program",
       "to": "u_new_conversation",
-      "kind": "reads"
+      "kind": "reads",
+      "stroke": "ok",
+      "color": "copper-dark"
     },
     {
       "id": "e22",
       "from": "u1_jarvis",
       "to": "s1_repo_skynet",
-      "kind": "reads"
+      "kind": "reads",
+      "width": 3,
+      "color": "ok",
+      "waypoints": [
+        [
+          107,
+          64
+        ],
+        [
+          115,
+          64
+        ],
+        [
+          115,
+          65
+        ],
+        [
+          125,
+          65
+        ]
+      ],
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.5833
+      },
+      "toAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "e11",
       "from": "m1_psu",
       "to": "m_monitor",
+      "kind": "reads",
+      "color": "fault",
+      "width": 4
+    },
+    {
+      "id": "e23",
+      "from": "m1_psu",
+      "to": "u3_jarvis_hands",
+      "kind": "reads",
+      "color": "fault",
+      "width": 3,
+      "toAnchor": {
+        "side": "top",
+        "offset": 0.875
+      }
+    },
+    {
+      "id": "e24",
+      "from": "m1_psu",
+      "to": "u1_jarvis",
+      "kind": "reads",
+      "width": 3,
+      "color": "fault",
+      "waypoints": [
+        [
+          130,
+          48
+        ],
+        [
+          120,
+          48
+        ],
+        [
+          120,
+          54
+        ],
+        [
+          101,
+          54
+        ]
+      ],
+      "fromAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "top",
+        "offset": 0.55
+      }
+    },
+    {
+      "id": "e_research_hud",
+      "from": "s_research",
+      "to": "j_new_link",
+      "kind": "reads",
+      "color": "ok",
+      "waypoints": [
+        [
+          67,
+          96
+        ],
+        [
+          67,
+          90
+        ],
+        [
+          66,
+          90
+        ]
+      ],
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "bottom",
+        "offset": 0.4667
+      }
+    },
+    {
+      "id": "e_research_novel",
+      "from": "s_research",
+      "to": "f_new_document_2",
+      "kind": "reads",
+      "color": "ok",
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.7
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.875
+      },
+      "waypoints": [
+        [
+          68,
+          97
+        ],
+        [
+          68,
+          94
+        ]
+      ]
+    },
+    {
+      "id": "e_repo_hud",
+      "from": "s_dirty_plush_repo",
+      "to": "j_new_link",
+      "kind": "deploys",
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.8333
+      },
+      "color": "ok",
+      "fromAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "waypoints": [
+        [
+          56,
+          88
+        ],
+        [
+          56,
+          83
+        ]
+      ]
+    },
+    {
+      "id": "e_journal_obsidius",
+      "from": "t1_nightly",
+      "to": "u_obsidius",
+      "kind": "syncs"
+    },
+    {
+      "id": "e25",
+      "from": "f_documents_index",
+      "to": "u3_jarvis_hands",
       "kind": "reads"
+    },
+    {
+      "id": "e26",
+      "from": "u_drive_audit",
+      "to": "m1_psu",
+      "kind": "reads",
+      "color": "fault",
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.3125
+      },
+      "waypoints": [
+        [
+          125,
+          47
+        ],
+        [
+          125,
+          40
+        ]
+      ],
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "e27",
+      "from": "s_dirty_plush_repo",
+      "to": "s_research",
+      "kind": "reads",
+      "waypoints": [
+        [
+          60,
+          91
+        ],
+        [
+          56,
+          91
+        ],
+        [
+          56,
+          96
+        ],
+        [
+          58,
+          96
+        ]
+      ],
+      "fromAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.6
+      },
+      "color": "ok"
+    },
+    {
+      "id": "e28",
+      "from": "f_handoff",
+      "to": "u3_jarvis_hands",
+      "kind": "reads",
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.7222
+      },
+      "waypoints": [
+        [
+          124,
+          62
+        ]
+      ],
+      "color": "ok",
+      "width": 3
+    },
+    {
+      "id": "e8",
+      "from": "f_handoff",
+      "to": "u1_jarvis",
+      "kind": "reads",
+      "toAnchor": {
+        "side": "right",
+        "offset": 0.4167
+      },
+      "waypoints": [
+        [
+          108,
+          62
+        ],
+        [
+          108,
+          63
+        ]
+      ],
+      "fromAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "color": "ok",
+      "width": 3
+    },
+    {
+      "id": "e_financeos",
+      "from": "u1_jarvis",
+      "to": "d5_financeos",
+      "kind": "supervises",
+      "width": 3,
+      "relation": "financeos",
+      "waypoints": [
+        [
+          109,
+          64
+        ],
+        [
+          109,
+          82
+        ],
+        [
+          117,
+          82
+        ],
+        [
+          117,
+          99
+        ]
+      ],
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.5833
+      },
+      "toAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    }
+  ],
+  "look": {
+    "vignette": true,
+    "vignetteStrength": 3,
+    "vignetteColor": "mask-light",
+    "tileScale": 2
+  },
+  "phantoms": [
+    {
+      "id": "ph_bitrunners",
+      "kind": "store.repo",
+      "name": "BitRunners",
+      "description": "ASCII multiplayer MMO, live prod deploys (bitrunners.app + Fly). Zero board presence today because no GoobOS room exists yet — this at least makes it clickable. A PR from mega-batch-3 has sat unmerged since 2026-07-12.",
+      "pos": {
+        "x": 165,
+        "y": 35
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-16T03:08:21.083Z",
+      "fields": {
+        "path": "C:/dev/BitRunners",
+        "remote": "https://github.com/WilliamFischer02/BitRunners",
+        "openWith": "terminal"
+      }
+    },
+    {
+      "id": "ph_stackassembler",
+      "kind": "store.repo",
+      "name": "StackAssembler",
+      "description": "Single-player MTG desktop simulator, three-agent studio, pre-alpha. Same GoobOS coverage gap as BitRunners — no room exists to hold it, so this gives it a real node on root instead.",
+      "pos": {
+        "x": 165,
+        "y": 75
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-16T03:08:23.178Z",
+      "fields": {
+        "path": "C:/dev/StackAssembler",
+        "openWith": "terminal"
+      }
+    },
+    {
+      "id": "ph_story_universe_map",
+      "kind": "store.repo",
+      "name": "Story Universe Map",
+      "description": "Obsidian community plugin: force-graph map of a vault's characters/places/groups. Third of the three GoobOS repos with no board presence; its dev harness is obsidian-dev-vault, not a separate project.",
+      "pos": {
+        "x": 175,
+        "y": 95
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-16T03:08:25.353Z",
+      "fields": {
+        "path": "C:/dev/story-universe-map",
+        "openWith": "terminal"
+      }
     }
   ]
 }

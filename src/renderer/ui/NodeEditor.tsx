@@ -1,11 +1,31 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { BoardNode } from '@shared/types.js';
 import { DEFAULT_FOOTPRINT, clampFootprint, footprintOf, maxFootprintFor } from '@shared/types.js';
 import { ROOM_SUFFIX, roomStem } from '@shared/room-title.js';
-import { fieldsFor, isTargetControl, missingRequired, type FieldSpec } from '@shared/node-fields.js';
+import {
+  SECTION_LABELS,
+  SECTION_ORDER,
+  fieldsFor,
+  isTargetControl,
+  missingRequired,
+  sectionOf,
+  type FieldSpec,
+  type SectionId
+} from '@shared/node-fields.js';
 import { PRIME_STEPS, isPrimeStepId } from '@shared/prime-steps.js';
 import { TargetField } from './TargetField.js';
 import { DirListField } from './DirListField.js';
+import { Icon, type IconName } from './Icon.js';
+
+/** A glyph beside each form section's name (ui/Icon.tsx). */
+const SECTION_ICONS: Record<SectionId, IconName> = {
+  identity: 'identity',
+  binding: 'binding',
+  session: 'terminal',
+  appearance: 'colour',
+  text: 'text',
+  effects: 'effects'
+};
 
 /**
  * The node edit interface.
@@ -70,6 +90,11 @@ function defaultBoolean(field: FieldSpec): boolean {
   // which is what every board did before the toggles existed.
   if (field.key === 'showDesignator' || field.key === 'showName') return true;
   if (field.key === 'showThumbnail' || field.key === 'showLogo') return true;
+  if (field.key === 'showSystemGraphics') return true;
+  // Ticked means allowed; the face still appears only on JARVIS nodes (avatar-window.ts).
+  if (field.key === 'avatarWindow') return true;
+  // A GIF plays unless told to hold its first frame.
+  if (field.key === 'imageAnimate') return true;
   return false;
 }
 
@@ -130,7 +155,7 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
       // 100 is the default, so it is stored as absent — a board full of `"logoScale": 100` says
       // nothing and reads as though something was configured.
       next = Number.isInteger(percent) && percent !== 100
-        ? Math.min(300, Math.max(10, percent))
+        ? Math.min(field.max ?? 300, Math.max(field.min ?? 10, percent))
         : undefined;
     } else if (field.control === 'rotation') {
       const degrees = Number.parseInt(String(raw ?? '0'), 10);
@@ -173,6 +198,21 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
 export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEditorProps): React.JSX.Element {
   const [draft, setDraft] = useState<Draft>(() => toDraft(node));
   const fields = useMemo(() => fieldsFor(node.kind), [node.kind]);
+  /*
+   * Which sections are open. Identity and the binding start open, plus any section holding a
+   * required field that is still empty, so the form never hides the thing stopping it saving.
+   */
+  const [openSections, setOpenSections] = useState<Set<SectionId>>(() => new Set<SectionId>([
+    'identity',
+    'binding',
+    ...missingRequired(node).map((f) => sectionOf(f.key))
+  ]));
+  const toggleSection = (section: SectionId): void => setOpenSections((current) => {
+    const next = new Set(current);
+    if (next.has(section)) next.delete(section);
+    else next.add(section);
+    return next;
+  });
 
   const { patch, errors } = useMemo(() => toPatch(node, draft), [node, draft]);
   const changedKeys = Object.keys(patch);
@@ -186,6 +226,13 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
 
   const blocked = errors.length > 0 || missing.length > 0;
 
+  // A modifier stays hidden until the effect it modifies is ticked; the rest are grouped by section.
+  const visible = fields.filter((field) => !field.showWhen || Boolean(draft[field.showWhen]));
+  const grouped = SECTION_ORDER.flatMap((section) => visible.filter((field) => sectionOf(field.key) === section));
+  const counts = Object.fromEntries(
+    SECTION_ORDER.map((section) => [section, grouped.filter((f) => sectionOf(f.key) === section).length])
+  ) as Record<SectionId, number>;
+
   return (
     <form
       className="editor"
@@ -196,24 +243,47 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
         <span className="editor-id">{node.id}</span>
       </div>
 
-      {fields.map((field) => {
+      {grouped.map((field, index) => {
         const value = draft[field.key];
+        const section = sectionOf(field.key);
+        const open = openSections.has(section);
+        // A header before the first field of each section. Keyboard-operable: it is a real button.
+        const header = index === 0 || sectionOf(grouped[index - 1]!.key) !== section ? (
+          <button
+            type="button"
+            className="editor-section"
+            data-section={section}
+            aria-expanded={open}
+            onClick={() => toggleSection(section)}
+          >
+            <span className="editor-section-mark" aria-hidden="true">{open ? '−' : '+'}</span>
+            <Icon name={SECTION_ICONS[section]} />
+            {SECTION_LABELS[section]}
+            <span className="editor-section-count">{counts[section]}</span>
+          </button>
+        ) : null;
+
+        if (!open) return header ? <Fragment key={`section-${section}`}>{header}</Fragment> : null;
 
         if (isTargetControl(field.control)) {
           return (
-            <TargetField
-              key={String(field.key)}
-              field={field}
-              value={String(value ?? '')}
-              context={pending}
-              disabled={saving}
-              onChange={(v) => set(field.key, v)}
-            />
+            <Fragment key={String(field.key)}>
+              {header}
+              <TargetField
+                field={field}
+                value={String(value ?? '')}
+                context={pending}
+                disabled={saving}
+                onChange={(v) => set(field.key, v)}
+              />
+            </Fragment>
           );
         }
 
         return (
-          <div className="field" key={String(field.key)}>
+          <Fragment key={String(field.key)}>
+          {header}
+          <div className="field">
             {/*
               * The help text lives in the tooltip, not under the field.
               *
@@ -265,18 +335,21 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                 className="input"
                 value={String(value ?? '')}
                 disabled={saving}
+                title={field.optionHelp?.[String(value ?? '')]}
                 onChange={(e) => set(field.key, e.target.value)}
               >
                 <option value="">— unset —</option>
-                {field.options?.map((option) => <option key={option} value={option}>{option}</option>)}
+                {field.options?.map((option) => (
+                  <option key={option} value={option} title={field.optionHelp?.[option]}>{field.optionLabels?.[option] ?? option}</option>
+                ))}
               </select>
             ) : field.control === 'percent' ? (
               <div className="percent-field">
                 <input
                   id={`f-${String(field.key)}`}
                   type="range"
-                  min={10}
-                  max={300}
+                  min={field.min ?? 10}
+                  max={field.max ?? 300}
                   step={5}
                   value={Number(value ?? 100)}
                   disabled={saving}
@@ -288,7 +361,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                   className="percent-reset"
                   disabled={saving || Number(value ?? 100) === 100}
                   onClick={() => set(field.key, '100')}
-                  title="Back to the size the footprint suggests"
+                  title="Back to 100%"
                 >
                   RESET
                 </button>
@@ -405,6 +478,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
             )}
 
           </div>
+          </Fragment>
         );
       })}
 

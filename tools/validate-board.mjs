@@ -63,7 +63,7 @@ for (const file of files) {
 
   const ids = new Set();
   const occupied = new Map();
-  const DEFAULT_FOOTPRINT = { 'agent.jarvis': [8, 6], 'agent.code': [3, 3], 'agent.chat': [4, 4], 'drive.room': [6, 4], 'store.repo': [4, 3], 'store.folder': [4, 3], 'store.cloud': [4, 3], 'file.document': [2, 2], 'file.exe': [2, 2], 'file.artifact': [3, 2], 'link.url': [2, 2], 'service.process': [3, 2], 'task.scheduled': [2, 1], 'monitor.system': [4, 4], 'note.silk': [0, 0], 'group.zone': [0, 0], 'decor.image': [12, 8], 'decor.part': [1, 1] };
+  const DEFAULT_FOOTPRINT = { 'agent.jarvis': [8, 6], 'agent.code': [3, 3], 'agent.audit': [4, 4], 'agent.prompt': [11, 3], 'agent.prompt-to-node': [11, 4], 'agent.chat': [4, 4], 'drive.room': [6, 4], 'store.repo': [4, 3], 'store.folder': [4, 3], 'store.explorer': [6, 4],'store.cloud': [4, 3], 'file.document': [2, 2], 'file.exe': [2, 2], 'file.artifact': [3, 2], 'link.url': [2, 2], 'service.process': [3, 2], 'task.scheduled': [2, 1], 'monitor.system': [4, 4], 'note.silk': [0, 0], 'group.zone': [0, 0], 'decor.image': [12, 8], 'decor.part': [1, 1] };
 
   for (const n of board.nodes ?? []) {
     if (ids.has(n.id)) problems.push(`duplicate node id "${n.id}"`);
@@ -103,6 +103,18 @@ for (const file of files) {
   for (const e of board.edges ?? []) {
     if (!ids.has(e.from)) problems.push(`edge "${e.id}" from unknown node "${e.from}"`);
     if (!ids.has(e.to)) problems.push(`edge "${e.id}" to unknown node "${e.to}"`);
+  }
+
+  // Recommended nodes: the schema caps and shapes them; these are the checks it cannot express.
+  for (const p of board.phantoms ?? []) {
+    if (ids.has(p.id)) problems.push(`phantom "${p.id}" shares an id with a node`);
+    for (const link of p.connect ?? []) {
+      if (!ids.has(link.to)) problems.push(`phantom "${p.id}" proposes a trace to unknown node "${link.to}"`);
+    }
+    for (const field of ['path', 'cwd']) {
+      const v = p.fields?.[field];
+      if (typeof v === 'string' && v.includes('..')) problems.push(`phantom "${p.id}" ${field} contains ".." — path traversal is not allowed`);
+    }
   }
 
   if (problems.length) {

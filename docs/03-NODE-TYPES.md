@@ -4,8 +4,13 @@
 
 Each entry: what it is · required fields · primary click · secondary (right-click menu) · live state shown.
 
+> **Built 2026-09-11: the board's right-click menu, the same for every kind.** It offers Copy and
+> Duplicate (the whole group when the node is in one), Paste here, Summon JARVIS, Open and Edit
+> properties. Bare substrate offers Paste. The per-kind items listed below are the intended
+> additions and are not built yet. See docs/DECISIONS.md "Copy and paste nodes" and "Summon JARVIS".
+
 ### `agent.code` — a Claude Code session
-- **Fields:** `cwd`, `launch` (`popout` | `popout-elevated` | `embedded`), `model?`, `resume: true`, `initialPrompt?`, `mcpServers?`, `prelaunch?`, `addDirs?`, `readOnLaunch?`, `briefing?`
+- **Fields:** `cwd`, `launch` (`popout` | `popout-elevated` | `embedded`), `model?`, `resume: true`, `remoteControl?` (start with Claude Code's Remote Control, so the session can be driven from the Claude app on a phone; docs/07), `initialPrompt?`, `mcpServers?`, `prelaunch?`, `addDirs?`, `readOnLaunch?`, `briefing?`
 - **Click:** launch or focus its session. If a session already exists, focus it instead of spawning a second one.
 
 > **Built 2026-09-09 (M3).** `popout`, `popout-elevated` and the resume mechanism are live;
@@ -34,10 +39,158 @@ Each entry: what it is · required fields · primary click · secondary (right-c
 - **Fields:** `url` (a specific conversation or Project URL), `partition` (default `persist:jarvis`), `persona` (path to a markdown brief in `codex/`)
 - **Click:** open the embedded `WebContentsView` panel on that URL, logged in, with a prompt box. Not a fresh Claude — that specific conversation.
 - **Right-click:** Open in real browser · Copy persona brief to clipboard · Reset view
-- **Note:** this is a logged-in webview of my own account. No scraping, no automation through it. Automation goes through `agent.code`/headless.
+- **Note:** this is a logged-in webview of my own account. No scraping, no automation through it. Automation goes through `agent.code`/headless. The one exception is `agent.prompt` below, which types into it only when William presses Enter in a prompt box.
 
 ### `agent.jarvis` — the primary agent (one only, root board)
 Same as `agent.chat` plus a bound headless worker. See `docs/04-JARVIS.md`.
+
+> **The face window (built 2026-09-11).** Every JARVIS iteration opens a small face window beside
+> its own window. That means the Face (this kind), JARVIS Prime's terminals (the Hands chip), any
+> node tagged `jarvis`, and an `agent.chat` named like JARVIS.
+> - It talks while JARVIS responds, and holds still and blinks otherwise, floating a pixel or two.
+> - It comes to the front, hides and closes with the window it belongs to. For the web Face it is
+>   an owned window. For a terminal, a read-only tracker follows the window by its title.
+> - Frames go in `assets/avatar/jarvis/` (see its README). Per node: `avatarWindow: false`.
+>   Globally: LOOK → SYSTEM → "JARVIS face windows".
+> - Code: `packages/shared/avatar.ts` and `avatar-window.ts` (pure),
+>   `src/main/services/avatar-window.ts` and `window-tracker.ts`, `src/renderer/ui/AvatarApp.tsx`.
+
+### `agent.prompt` — a quick-chat box on the board
+William: "a typical empty prompt box that allows for file (image and other file types) upload, and
+whatever is typed into that box is fed to Jarvis Head/Face as a window with Jarvis head / face
+opens."
+
+- **Fields:** `promptTarget` (the `agent.jarvis` or `agent.chat` node it feeds; omit for the board's
+  JARVIS head) and `promptMode` (`send`, the default, or `draft`). Default footprint 11x3, designator
+  `P`. Needs no binding to work, so a new one is not provisional.
+- **Look:** a pixel-art Claude message box drawn by the canvas (stepped corners, caret, dim
+  placeholder, paperclip, send button), with a real textarea and buttons laid over it in the chrome
+  font. Both use `promptLayout` in `packages/shared/prompt.ts`, so they line up to the pixel.
+- **Use:** click in and type. Enter sends and Shift+Enter makes a new line; Esc leaves the box. The
+  paperclip, or dropping files on the box, attaches images and other files, which show as chips
+  with pixel thumbnails. Tab onto the node to put the cursor in the box.
+- **Delivery:** main opens or focuses the target's conversation window, waits for claude.ai's message
+  box, hands over the files, types the text, and in `send` mode presses send and reports "sent" only
+  once the box empties. `draft` mode stops before pressing send. On any failure the window stays
+  open, the text goes on the clipboard, and the toast says exactly where it stopped.
+- **Out of the way:** below 1x zoom the overlay hides and the drawing stands in for it. In Edit
+  Board mode it stops taking the pointer, so the node drags, resizes and wires like any other.
+- **Code:** `packages/shared/prompt.ts` (pure), `src/main/services/prompt-send.ts` and
+  `prompt-page.ts` (delivery), `src/renderer/ui/PromptBoxes.tsx` (overlay), `drawPromptBox` in
+  `component-art.ts` (the pixels). The channels are user-only; see docs/07.
+
+### `agent.prompt-to-node` — PROMPT → NODE, a box that builds a node
+William: "a type of node … that presents a jarvis hand / prime prompt text box like the others …
+but this one prompt-injects Claude Code so it knows to build a node based on what the user wrote in
+the prompt box before hitting send; add titling elements that show a prompt to node isn't a regular
+node."
+
+- **Fields:** none to bind. Default footprint 11x4 (the quick-chat box plus one row for its tab),
+  designator `P`, name and designator not printed.
+- **Look:** the same pixel message box, framed in the room's signal colour instead of silk, under a
+  signal-coloured folder tab across its top left. The tab carries a plus-in-a-square "build" glyph
+  and the words PROMPT → NODE in a 5px pixel font. The canvas draws all of it, so it reads at every
+  zoom, including below 1x where the overlay hides. `promptLayout(w, h, { tab: PROMPT_TO_NODE_TAB })`
+  places the tab and pushes the box under it, and the overlay uses the same call.
+- **Use:** describe the node, attach files if they help, press Enter. Nothing goes to claude.ai.
+  `prompt:build` opens a FRESH JARVIS Prime terminal (the root board's Hands chip) whose opening task
+  is `buildNodePrompt` (packages/shared/node-build.ts). That task holds William's words verbatim, the
+  board id for every skynet tool, where the box is and where to start looking for room, the attached
+  paths, and the procedure: node_fields, bind only verified targets, node_create / node_update /
+  edge_create, phantom_propose when unsure, and a two-line report.
+- **Code:** `packages/shared/node-build.ts` (pure, tested), `src/main/services/node-builder.ts`,
+  `drawPromptToNode` in `component-art.ts`, `PromptBoxes.tsx` (shared with the quick-chat box). The
+  channel is user-only; see docs/07.
+
+### `agent.audit` — a drive auditor
+William: "a drive analyzer and organizer that I can give access to a drive, we discuss the contents
+of the drive and the ai determines what should stay on the drive, what can be cleaned, and how to
+reorganize without breaking my dependencies."
+
+- **Fields:** `cwd` (the starting drive, usually its root), `addDirs` (the other drives it may
+  hop to), `initialPrompt` (notes for this audit), `resume`, `model`.
+- **Click:** launches a Claude Code session exactly as `agent.code` does, rooted at the drive, with
+  `codex/personas/drive-auditor.md` inlined into its briefing. Each drive is confirmed on launch.
+  It never launches elevated.
+- **Rules, in brief:** survey, classify, propose, act only on approved rows; never delete; "clean"
+  means moving into `<drive>:\_skynet-quarantine\<date>\` with a manifest; dependencies checked
+  before any move. The persona file has the full list of what is treated as sacred.
+- **Code:** `packages/shared/drive-audit.ts` (pure, tested), `src/main/services/drive-audit.ts`.
+
+### Obsidian: the journal note, and Obsidian-aware agents (added 2026-09-11)
+- **Journal:** a `task.scheduled` with `journalVault` (a folder holding `.obsidian`) is the
+  journal. A click writes today's note into that vault, into `journalFolder`, or by default the
+  vault's own daily-notes folder plus `/SkynetOS`, named in the vault's daily-notes format.
+  - The frontmatter is typed for the Properties view: `aliases`, `tags`, the vault template's own
+    keys, `date`, `created`, `type: journal`, `source: skynetos`, `projects`, `sessions`, `tokens`
+    and `rooms`.
+  - Tags come from the vault's own vocabulary first, in its own style.
+  - The body is the day's usage per project (with `[[links]]` to notes that exist), sessions,
+    decisions and next items.
+  - It never overwrites: a taken name becomes `<date> (SkynetOS).md`.
+  - `journalVault` is an *optional target*: it is what the node points at only when filled, so a
+    plain cron task never reads as broken.
+  - No scheduler runs it yet (M8).
+- **Awareness:** any node tagged `obsidian`, or with a path (`cwd`, `path`, `journalVault`,
+  `addDirs`) inside a vault, is Obsidian-aware. Its sessions open with
+  `codex/personas/obsidian.md` inlined in the briefing.
+- **OBSIDIUS** (U5, root) is the `agent.code` for the vaults and for Obsidian plugin work, wired
+  to the journal. Code: `packages/shared/obsidian.ts` (pure),
+  `src/main/services/obsidian.ts` and `journal.ts`.
+
+### Logo source, on any kind (added 2026-09-11)
+`logoSource` in the editor's Appearance section, shown there by its label:
+- `file`, **Logo image**: the node's `logo` image. The default, and the behaviour before this field
+  existed.
+- `avatar`, **JARVIS face (still)**: the avatar's still face, `assets/avatar/jarvis/idle.png`. It
+  goes through the same mosaic as any logo: dithered onto the room's palette, cropped to its shape,
+  cached on the file's mtime.
+- `avatar-live`, **JARVIS face (animated)**: the face window's composition in the logo box, drawn
+  live by the board in the frames' own colours (docs/02, rule 2's second exception).
+  - The box is a mask-dark ground with a 1 px copper-dark edge. `logoScale` sizes it as it does any
+    logo. The face sits in it at the largest whole-number scale that fits, or every Nth pixel when
+    the box is smaller than a frame.
+  - It floats and blinks. The mouth moves while that node's JARVIS responds:
+    - a web node (`agent.jarvis`, `agent.chat`) while its conversation window is open and claude.ai
+      is streaming;
+    - a terminal node (`agent.code`, `agent.audit`) while its live session's transcript is being
+      written.
+
+    This works with the face windows switched off. Any other node idles and blinks.
+  - Under reduced motion it neither floats nor blinks, and the mouth runs at half speed, because
+    "responding" is state, not decoration.
+  - Not on printed kinds, nor on a `monitor.system` showing its graphics (the widget owns that face).
+- `none`: no logo.
+
+Both faces are redrawn when the frames folder changes. With no `idle.png` yet the node shows no
+logo and the inspector says so. `showLogo: false` still hides whichever source is chosen. It was
+made for U1, and nothing on the board has been switched to it: that choice is William's.
+
+### GIF wallpapers and logos, on any kind (added 2026-09-11)
+A `.gif` works anywhere a wallpaper (`image`) or a logo (`logo`) does, and it plays.
+- `imageAnimate` (Appearance, **Animate GIFs**, default on) set to false holds the first frame.
+- Every frame is dithered onto the room's palette by the same mosaic as a still, and cached per
+  frame.
+- The board steps the frames on the GIF's own delays. A delay under 20 ms is raised to 20 ms, and
+  0 or 1 cs (browsers' "as fast as you can") plays at 100 ms. A node is redrawn only when its frame
+  changes, and only while it is on screen. Under reduced motion it holds still.
+- Caps, per image:
+  - 120 frames;
+  - 16 MB of decoded output, at the size it is drawn;
+  - 160 megapixels of source decoded.
+
+  Past any of them, the first frames that fit play, and the inspector says how many. It always
+  shows the frame count and the memory in use.
+- A pulse glow skips a playing GIF wallpaper; the GIF is its own motion.
+- A GIF chosen as the room look's tiled floor is a still: its first frame.
+
+Code: `packages/shared/gif.ts` (compositing, caps, scheduling; pure) and `buildGifMosaic` in
+`src/main/services/mosaic.ts`.
+
+### Effects, on any kind (added 2026-09-11)
+Pulse glow, text glow, chase light and scan line. Each has a colour (a palette token) and a speed
+(25–400%), shown in the editor only once the effect is ticked. All are whole pixels and palette
+colours; all stop under reduced motion. See `src/renderer/board/effects.ts`.
 
 ### `drive.room` — a nested board
 - **Fields:** `boardFile` (e.g. `minecraftos/room.board.json`), `engraving` (e.g. `MINECRAFTOS`), `theme`
@@ -51,6 +204,23 @@ Same as `agent.chat` plus a bound headless worker. See `docs/04-JARVIS.md`.
 
 ### `store.folder` — a local folder
 `path`, `openWith`. Click opens it. Live: file count + size, refreshed lazily.
+
+### `store.explorer` — a file explorer over one folder (added 2026-09-11)
+William: "a pixel art representation of file explorer within a folder that actually exists on my
+disk … browsing the files within looks like a pixel art / retro file explorer but references real
+files / folders — the default / resting folder is selectable."
+
+- **Fields:** `path` (the root, required), `restPath` (the folder the window opens at, inside `path`).
+- **Click:** opens the explorer window at `restPath`, or at the root. A folder opens on double-click
+  or Enter; a file opens with its default app, and anything that runs code (`.exe`, `.ps1`, `.lnk`…)
+  is confirmed every time. A file drags straight out into another program. Keys: arrows, Enter,
+  Backspace (up), Alt+Left (back), F5, Esc.
+- **Resting folder:** SET AS RESTING FOLDER writes `restPath` with `node.update`, so Ctrl+Z takes it back.
+- **Scope:** read-only. Every request is relative to the root; `..`, drive letters and stream names are
+  refused by spelling, and a junction or symlink whose real path leaves the root is refused on entry.
+  `explorer:list` is agent-readable; `explorer:open` and `explorer:drag` are user-only.
+- **Code:** `packages/shared/explorer.ts` (pure, tested), `src/main/services/explorer.ts`,
+  `src/renderer/ui/Explorer.tsx`.
 
 ### `store.cloud` — Google Drive / OneDrive / Dropbox folder
 - **Fields:** `url` (cloud web URL), `localPath?` (synced mirror if any)
@@ -85,6 +255,28 @@ Same as `agent.chat` plus a bound headless worker. See `docs/04-JARVIS.md`.
 
 ### `task.scheduled` — a recurring job
 `schedule` (cron string), `action` (any node action or a headless JARVIS prompt), `lastRun`, `enabled`. Renders as a crystal oscillator that ticks. Example: "every morning at 8, run headless JARVIS to summarize what every agent did yesterday and write it to `codex/journal/`."
+
+> **Built 2026-09-11: tasks run on their schedule while SkynetOS is open** (`src/main/services/scheduler.ts`).
+>
+> - **Schedule:** five-field cron in local time (`packages/shared/cron.ts`: lists, ranges, steps,
+>   0 and 7 both Sunday, `@daily` and similar).
+> - **Actions** (`action.type`):
+>   - `agent.run` starts a FRESH session on `taskTarget` (default JARVIS Prime) holding
+>     `taskBrief` (a `.md` in the repo, read at run time) and `taskPrompt`;
+>   - `journal.write` writes the Obsidian journal note;
+>   - `jarvis.headless` and `notify` are valid but inert until the supervision loop and toasts exist.
+> - **Rules:**
+>   - one run per slot;
+>   - a slot missed while the app was closed runs ONCE on opening within `catchUpHours` (default 4);
+>   - a task never catches up the first time it is seen;
+>   - at most 6 scheduled runs a day;
+>   - never elevated.
+> - **Inspector:** the next run, the last run's result, and Run now (user-only `task:runNow`).
+> - **On the root board:** MORNING MAINTENANCE (`t_morning_maintenance`, 8 am →
+>   `codex/briefs/morning-maintenance.md`) and the Nightly journal (`t1_nightly`, 22:00 →
+>   `journal.write`).
+>
+> See docs/DECISIONS.md "The scheduler, and a morning maintenance run".
 
 ### `monitor.system` — the PSU
 Real machine stats. This is the only node showing real hardware numbers; everything else's temperature is explicitly cosmetic.
@@ -145,6 +337,58 @@ element reads as a mistake.
 
 ---
 
+## Board look (added 2026-09-11)
+
+A room-level field, not a node. `look` in the board file, every key optional; absent is the board
+as it always looked. It is changed only through the LOOK panel (`L`, or LOOK in the breadcrumb),
+by a `board.update` command, so Ctrl+Z undoes it.
+
+```jsonc
+"look": {
+  "hue": 40,               // -180..180 degrees, whole-board colour (CSS filter on the canvas)
+  "saturation": 120,       // 0..200 %
+  "brightness": 100,       // 50..150 %
+  "contrast": 100,         // 50..150 %
+  "vignette": true,        // an ordered-dither darkening toward the screen edges
+  "vignetteStrength": 2,   // 1..4
+  "vignetteColor": "ink",  // a wire token: palette token or ink
+  "tileImage": "%USERPROFILE%/Pictures/floor.png",  // must be a perfect square
+  "tileEnabled": true,     // "enable background image tile"; off keeps the path
+  "tileScale": 2           // integer 1..4
+}
+```
+
+- **Failure path:** a tile picture that is missing, undecodable or not square is refused. The room
+  keeps its own procedural substrate and a toast says why ("NOT SQUARE — 640x480"). The panel shows
+  the same check under the path.
+- **Stored clean:** the defaults are never written, and resetting removes `look` entirely.
+- **Hide Recommended Nodes** sits in the same panel. It is a per-viewer preference kept in
+  localStorage, not a board field.
+
+---
+
+## Phantoms — recommended nodes (added 2026-09-11)
+
+A phantom is JARVIS's sketch of a node that should exist: a dashed ghost at the spot it would take,
+a plate with its name, the reason it belongs, what it would bind to and who proposed it, the traces
+it would get drawn dotted to their targets, and a tick and a cross. It lives in the board file under
+`phantoms` (schema `$defs/phantom`), never among `nodes`: it resolves nothing, activates nothing and
+blocks nothing a real node cares about.
+
+- **At most 4 per board.** `MAX_PHANTOMS_PER_BOARD` in `packages/shared/phantoms.ts`, and the
+  schema's `maxItems`. The Hands persona asks JARVIS to keep about four per room, refreshed as the
+  board changes.
+- **Tick** (`phantom:approve`, user only): the real node is built by the same factory as `node:add`,
+  bound with the phantom's `fields`, placed where it was drawn (or the nearest free spot), wired as
+  `connect` says, and the phantom removed — one command, one Ctrl+Z. It arrives provisional only
+  if something its kind requires is still missing.
+- **Cross** (`phantom:dismiss`, user only): the suggestion goes. Nothing real is touched. An agent
+  withdraws its own through `command:apply` `phantom.dismiss`; the bus refuses it for William's.
+- **Keys:** Tab to a plate, Enter approves, Delete dismisses. Shift+H hides every phantom (a view
+  preference; they stay in the file). The HUD counts them: `n RECOMMENDED`.
+- **Agents:** MCP `phantom_list`, `phantom_propose`, `phantom_withdraw`. Every path must exist
+  before it is proposed.
+
 ## Edges (traces)
 
 ```jsonc
@@ -153,19 +397,75 @@ element reads as a mistake.
   "from": "u_agent_stalker",
   "to": "u_art_stalker_jar",
   "kind": "produces",          // produces | reads | depends | deploys | syncs | supervises
-  "width": 3,                  // 2 = normal, 3 = primary
-  "waypoints": [[12,8],[12,14]] // optional manual routing; auto-routed if absent
+  "width": 3,                  // 1 to 4; 2 = normal, 3 = primary
+  "color": "signal",           // optional run colour, a palette token or "ink"; default copper
+  "stroke": "ink",             // optional outline colour, same tokens; default ink (black)
+  "dash": "dashed",            // optional run pattern: solid | dashed | dotted; default by kind
+  "outlineDash": "solid",      // optional outline pattern, same values; default follows the run
+  "outlineWidth": 1,           // optional, 0 to 3 px each side; default 1; 0 = no outline
+  "fromAnchor": { "side": "right", "offset": 0.5 }, // optional pinned end: side + fraction along it
+  "toAnchor": { "side": "top", "offset": 0.25 },    // optional; the router picks the side if absent
+  "waypoints": [[12,8],[12,14]] // optional manual routing, in tiles; auto-routed if absent
 }
 ```
 
 - `produces` — copper, packets flow source→target. The agent→jar wire you described.
 - `reads` — thinner, packets flow target→source.
-- `depends` — dashed copper (drawn as an alternating tile, not a CSS dash).
+- `depends` — dashed copper, 8 on / 8 off, cut into whole-pixel rectangles and never a CSS or
+  Pixi dash. An explicit `dash` overrides it, `solid` included.
 - `deploys` — routes to a `service.process` or a `store.cloud`.
 - `syncs` — bidirectional, packets alternate.
 - `supervises` — JARVIS → other agents. Drawn as a distinct 1px inner-signal-colored trace inside a wider copper run, so the JARVIS network is visually separable at a glance.
 
 Traces that leave the room terminate in a **via** with the destination room's engraving printed beside it.
+
+**Added 2026-09-11.**
+- **Every wire has a one-pixel black outline** (`stroke`, default `ink`). Wires are drawn one at a
+  time, outline, then run, then strand, so a later wire crosses over an earlier one instead of
+  fusing with it.
+- **Wires that share a run are drawn side by side.** The router puts both on the same half-grid
+  line; `wire-lanes.ts` moves each onto its own lane, symmetric about the line and still
+  orthogonal. The couriers walk the lanes.
+- **Click a wire to select it**, in either mode. The trace inspector edits its kind, run colour,
+  outline colour, width (1–4) and the room its strand leads to. It can also delete the wire, with
+  the usual native confirmation. Every change is undoable. Escape deselects.
+
+**Added 2026-09-11: wire patterns and hand routing.**
+- **Patterns.** `dash` sets the run's pattern:
+  - solid;
+  - dashed: 4 on, 3 off;
+  - dotted: 1 on, 2 off.
+
+  The lengths are multiples of the run width. With no `dash`, a `depends` wire is dashed by kind
+  and every other kind is solid. `outlineDash` sets the outline on its own; absent, the outline
+  follows the run, and `solid` gives a continuous black sleeve with the run's dashes inside it.
+  `outlineWidth` is 0–3 px per side, default 1.
+- **Pinned ends.** `fromAnchor` / `toAnchor` name a side of the node and a fraction along it. The end
+  sits there, snapped to the 8 px half-grid, and stays at that place on the node when it is moved
+  or resized. The wire always leaves square to the side.
+- **Waypoints are honoured.** The router runs A* leg by leg through each one in order, with its turn
+  penalty, so the path stays orthogonal.
+- **Handles.** In Edit Board mode, a selected wire shows a handle on each end, on every elbow, and in
+  the middle of every segment 32 px or longer.
+  - Drag an end and it slides round its node's perimeter, corners included.
+  - Drag an elbow or a segment and it moves by whole tiles; the rest of the path stays orthogonal
+    and the ends stay put.
+  - The drop is one undoable `edge.update`.
+- **Keyboard.**
+  - Tab / Shift+Tab cycle the handles, from the start of the wire to its end.
+  - The arrows move the focused handle. An end moves one half-grid step along its side, in the
+    arrow's direction, and past a corner carries on along the next side. An arrow pointing into or
+    out of the node does nothing. An elbow or a segment moves one tile.
+  - The change stays pending on the overlay until Enter keeps it. Escape drops it; a second Escape
+    deselects the wire.
+- **Inspector.** EdgeInspector sets:
+  - the run pattern (AUTO / SOLID / DASHED / DOTTED);
+  - the outline pattern (FOLLOW / SOLID / DASHED / DOTTED);
+  - the outline width.
+
+  It also shows both anchors (`right 50%`, or `auto`) and the number of bends. **Reset route**
+  clears the waypoints and both anchors, back to the router's own choice.
+- **Not built:** dropping an end on another node to re-target the wire. Delete it and draw a new one.
 
 ---
 

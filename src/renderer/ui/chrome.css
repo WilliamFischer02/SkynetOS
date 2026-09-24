@@ -1,0 +1,729 @@
+/*
+ * The chrome's layout manager, its icons, and the app-level panels: the command palette, settings,
+ * notifications, About and first-run hints. Its own file, like look.css, so it does not collide with
+ * other work in styles.css. Imported by main.tsx straight after styles.css, so equal-specificity rules here
+ * win. Every dimension a multiple of --p, per docs/02.
+ */
+
+/* The inspector gives some room back on a narrow window rather than taking half of it. */
+:root { --inspector-width: min(calc(520 * var(--p)), round(down, 44vw, var(--p))); }
+
+/* ── icons ─────────────────────────────────────────────────────────────────────────────────── */
+
+.ui-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: calc(9 * var(--p));
+  height: calc(9 * var(--p));
+  vertical-align: calc(-1 * var(--p));
+}
+.with-icon { display: inline-flex; align-items: center; gap: var(--gap); }
+.btn .ui-icon { margin-right: var(--gap); }
+.btn.icon-only .ui-icon,
+.add-fab.icon-only .ui-icon { margin-right: 0; }
+.add-fab.icon-only { padding-left: var(--gap); padding-right: var(--gap); }
+.add-fab .ui-icon { margin-right: var(--p); }
+
+/* ── the layout manager's variables (useChromeLayout.ts), with the old values as fallbacks ── */
+
+.hud {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: var(--hud-max, 55vw);
+}
+.hud.compact .hud-secondary { display: none; }
+/* An invisible copy of the HUD with every chip, measured for the natural width. */
+.hud.hud-measure {
+  top: -9999px;
+  right: auto;
+  left: 0;
+  max-width: none;
+  overflow: visible;
+  visibility: hidden;
+}
+.hud-more,
+.hud-bell,
+.hud-tool {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--p);
+  padding: 0 var(--gap);
+  font: inherit;
+  color: var(--copper);
+  background: transparent;
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.hud-more:hover,
+.hud-bell:hover,
+.hud-tool:hover { color: var(--signal); border-color: var(--copper); }
+.hud-more:focus-visible,
+.hud-bell:focus-visible,
+.hud-tool:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+.hud-bell.unread { color: var(--warn); border-color: var(--warn); }
+.hud-more-panel {
+  position: absolute;
+  top: calc(9 * var(--gap));
+  right: var(--dodge);
+  z-index: 32;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  max-width: 60vw;
+  padding: var(--gap) calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(2 * var(--p)) calc(2 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+  color: var(--silk);
+  text-transform: uppercase;
+}
+.hud-more-panel .warn { color: var(--warn); }
+.hud-more-panel .ok-text { color: var(--ok); }
+.hud-more-panel .fault-text { color: var(--fault); }
+
+.toasts {
+  bottom: var(--toasts-bottom, calc(34 * var(--gap)));
+  right: var(--toasts-right, var(--dodge));
+  max-width: var(--toasts-max, 45vw);
+}
+.toast { display: flex; align-items: flex-start; gap: var(--gap); }
+/*
+ * `.fault` is also the whole-window board-fault screen (styles.css): a centred column, full height,
+ * padded. A fault toast or notification row is a row like the others, icon beside the words.
+ */
+.toast.fault,
+.notif-row.fault { flex-direction: row; justify-content: flex-start; height: auto; text-align: left; }
+.notif-row.fault { padding: 0; }
+.toast .ui-icon { margin-top: var(--p); }
+.toast-count { color: var(--copper); margin-left: var(--gap); }
+
+.help {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  max-width: var(--help-max, 70vw);
+}
+.help-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+.help-x {
+  pointer-events: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding: 0;
+  font: inherit;
+  color: var(--copper-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.help-x:hover { color: var(--signal); }
+
+.look-panel { max-height: var(--look-max-h, 78vh); }
+
+/* The usage meter, minimised to its header by the user or the layout manager. */
+.usage-meter.minimized > :not(.usage-head-row):not(.plan-dialog) { display: none; }
+.usage-min {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--copper-dark);
+  cursor: pointer;
+}
+.usage-min + .usage-toggle { margin-left: 0; }
+.usage-min:hover,
+.usage-min:focus-visible { color: var(--signal); outline: none; }
+
+/* The session dock, folded to its header. */
+.dock.compact .dock-row { display: none; }
+.dock-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  text-transform: uppercase;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.dock-toggle:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+.dock.compact .dock-head { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+
+/* The corner prompt, folded to one bar. */
+.jarvis-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--gap) calc(1.5 * var(--gap));
+  font: inherit;
+  text-transform: uppercase;
+  color: var(--silk);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+  border-left: calc(3 * var(--p)) solid var(--signal);
+  cursor: pointer;
+}
+.jarvis-fold:hover { border-color: var(--copper); border-left-color: var(--signal); }
+/* The fold control sits in the quote's top-right corner, so it costs no height. */
+.jarvis-dock { position: relative; }
+/*
+ * Summoned by "Hey JARVIS": the prompt and its quote come to the middle of the screen, larger. Sized by
+ * font and width rather than by a transform, so the type stays on whole pixels.
+ */
+.jarvis-dock.summoned {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 30%;
+  margin: 0 auto;
+  width: min(720px, calc(100vw - 64px));
+  z-index: 70;
+  font-size: 1.25em;
+  background: var(--panel, #0e1a14);
+  box-shadow: 0 0 0 var(--p) var(--signal), 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+.jarvis-voice {
+  padding: var(--gap);
+  color: var(--signal);
+  letter-spacing: var(--p);
+  text-transform: uppercase;
+  border-bottom: var(--p) solid var(--copper-dark);
+  overflow-wrap: anywhere;
+}
+.jarvis-voice.asking,
+.jarvis-voice.sending { color: var(--amber); }
+.jarvis-voice.listening::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 8px;
+  background: var(--signal);
+  animation: jarvis-listening 0.8s steps(2) infinite;
+}
+@keyframes jarvis-listening { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .jarvis-voice.listening::after { animation: none; } }
+.jarvis-dock .jarvis-quote { padding-right: calc(5 * var(--gap)); }
+.jarvis-min {
+  position: absolute;
+  top: calc(2 * var(--p));
+  right: calc(2 * var(--p));
+  display: inline-flex;
+  padding: var(--p);
+  font: inherit;
+  color: var(--copper-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.jarvis-min:hover { color: var(--signal); }
+
+/* A minimap the layout manager collapsed shows its button in warn, so it reads as "moved aside". */
+.minimap.collapsed.squeezed { border-color: var(--warn); }
+.minimap.collapsed.squeezed .minimap-toggle { color: var(--warn); }
+
+/* ── notifications ─────────────────────────────────────────────────────────────────────────── */
+
+.notif-panel {
+  position: absolute;
+  top: calc(9 * var(--gap));
+  right: var(--dodge);
+  z-index: 58;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: calc(400 * var(--p));
+  max-width: 90vw;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+  color: var(--silk);
+  pointer-events: auto;
+}
+.notif-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+  color: var(--copper);
+  text-transform: uppercase;
+}
+.notif-head .btn.tiny { margin-left: 0; }
+.notif-head .notif-spacer { flex: 1; }
+.notif-row { display: flex; align-items: flex-start; gap: var(--gap); }
+.notif-row.ok .ui-icon { color: var(--ok); }
+.notif-row.warn .ui-icon { color: var(--warn); }
+.notif-row.fault .ui-icon { color: var(--fault); }
+.notif-row.fault .notif-text { white-space: pre-wrap; }
+.notif-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.notif-meta { color: var(--copper-dark); white-space: nowrap; text-transform: uppercase; }
+.notif-empty { color: var(--copper-dark); text-transform: uppercase; }
+
+/* ── command palette ───────────────────────────────────────────────────────────────────────── */
+
+.cmdk-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 75;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 14vh;
+  background: rgb(0 0 0 / 35%);
+}
+.cmdk {
+  display: flex;
+  flex-direction: column;
+  width: calc(600 * var(--p));
+  max-width: 92vw;
+  max-height: 66vh;
+  background: var(--mask-dark);
+  border: var(--p) solid var(--signal);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+}
+.cmdk-input-row {
+  display: flex;
+  align-items: center;
+  gap: calc(1.5 * var(--gap));
+  padding: calc(2 * var(--gap));
+  border-bottom: var(--p) solid var(--copper-dark);
+  color: var(--copper);
+}
+.cmdk-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--silk);
+  caret-color: var(--signal);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+.cmdk-input::placeholder { color: var(--copper-dark); }
+.cmdk-list { overflow-y: auto; padding: var(--gap); }
+.cmdk-group {
+  padding: var(--gap) calc(1.5 * var(--gap)) var(--p);
+  color: var(--copper-dark);
+  text-transform: uppercase;
+}
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: calc(1.5 * var(--gap));
+  width: 100%;
+  padding: var(--gap) calc(1.5 * var(--gap));
+  font: inherit;
+  text-align: left;
+  color: var(--silk);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.cmdk-item .ui-icon { color: var(--copper); }
+.cmdk-item.active { background: var(--copper-dark); }
+.cmdk-item.active .ui-icon { color: var(--silk); }
+.cmdk-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-transform: uppercase; }
+.cmdk-detail { color: var(--copper); white-space: nowrap; }
+.cmdk-item.active .cmdk-detail { color: var(--silk); }
+.cmdk-empty { padding: calc(2 * var(--gap)); color: var(--copper-dark); text-transform: uppercase; }
+.cmdk-foot {
+  padding: var(--gap) calc(2 * var(--gap));
+  border-top: var(--p) solid var(--copper-dark);
+  color: var(--copper-dark);
+  text-transform: uppercase;
+}
+
+/* ── settings, About, first-run hints ──────────────────────────────────────────────────────── */
+
+.settings-backdrop,
+.about-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 72;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.settings-panel,
+.about-panel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+  color: var(--silk);
+  text-transform: uppercase;
+}
+.settings-panel { width: calc(480 * var(--p)); }
+.about-panel { width: calc(440 * var(--p)); }
+.settings-row { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.about-title { color: var(--signal); font-size: var(--f2); line-height: var(--f2); }
+.about-sub { color: var(--copper); text-transform: none; }
+.about-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--gap) calc(2 * var(--gap));
+  margin: 0;
+}
+.about-grid dt { color: var(--copper-dark); }
+.about-grid dd { margin: 0; color: var(--silk); text-transform: none; overflow-wrap: anywhere; }
+.about-note { color: var(--copper-dark); text-transform: none; }
+
+.firstrun-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 44;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: calc(14 * var(--gap));
+  pointer-events: none;
+}
+.firstrun {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  max-width: min(calc(520 * var(--p)), 80vw);
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--signal);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+  color: var(--silk);
+  text-transform: uppercase;
+}
+.firstrun-head { display: flex; align-items: center; gap: var(--gap); color: var(--signal); }
+.firstrun-row { display: flex; gap: calc(2 * var(--gap)); }
+.firstrun-key { color: var(--signal); min-width: calc(110 * var(--p)); }
+.firstrun-what { color: var(--copper); }
+.firstrun .btn { align-self: flex-end; }
+/* A smoke capture (src/main/index.ts) hides the card without dismissing it, so the capture writes nothing. */
+.smoke-capture .firstrun-wrap { display: none; }
+
+/* ── icons inside existing controls ────────────────────────────────────────────────────────── */
+
+.usage-meter.minimized .usage-head-row { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.usage-calibrate-flag .ui-icon { margin-right: var(--p); }
+.explorer-tool .ui-icon { margin-right: calc(2 * var(--p)); }
+.explorer-winbtn .ui-icon { vertical-align: 0; }
+.context-item .with-icon .ui-icon { color: var(--copper); }
+.context-item.active:not(:disabled) .with-icon .ui-icon { color: var(--silk); }
+.dock-name { display: inline-flex; align-items: center; gap: var(--gap); }
+.dock-name .ui-icon { color: var(--copper); }
+.minimap-grip .ui-icon,
+.minimap-toggle .ui-icon,
+.jarvis-tool .ui-icon { display: block; }
+.keys-head .with-icon,
+.mailbox-head .with-icon { color: inherit; }
+.jarvis-dock.folded { width: auto; }
+
+/* ── Manual control: the gesture cursor, and the board wearing the mode ────────────────────────
+ *
+ * The board is being driven by hands, which is a mode nobody pressed a key to enter, so it has to
+ * be visible without being read: the canvas takes an outline exactly as Edit Board mode does, and
+ * the cursor is drawn the way a mouse pointer is — an arrow, and a closed hand while something is
+ * held (ui/cursor-sprites.ts) — so the node under it stays legible.
+ *
+ * Whole pixels, palette tokens, no blur and no smooth animation — docs/02 applies to the chrome as
+ * much as to the canvas. The pointer is moved by a transform written straight to the element
+ * (ui/useGesture.ts): at 26 events a second, React must not be involved in moving a dot.
+ */
+.app.manual-control .board-host {
+  outline: calc(2 * var(--p)) solid var(--ok);
+  outline-offset: calc(-2 * var(--p));
+}
+
+.gesture-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  /* Above THE MATRIX (50) and the summoned prompt (70): the hands' pointer is never hidden. */
+  z-index: 80;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.gesture-cursor svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  image-rendering: pixelated;
+}
+.gesture-cursor .cursor-grab { display: none; }
+.gesture-cursor[data-grabbing="1"] .cursor-arrow { display: none; }
+.gesture-cursor[data-grabbing="1"] .cursor-grab { display: block; }
+
+/* ── The gesture catalogue (SYSTEM) ────────────────────────────────────────────────────────────
+ *
+ * A row per trained gesture: its name, the words it stands for, and how many examples it has. The
+ * count is the honest part — a gesture with fewer than four examples is not used at all, and the
+ * row says so in warn rather than pretending it works.
+ */
+.gesture-catalogue { display: flex; flex-direction: column; gap: var(--gap); }
+
+.gesture-rows { display: flex; flex-direction: column; gap: var(--p); }
+
+.gesture-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.3fr) auto auto auto;
+  gap: var(--gap);
+  align-items: center;
+  padding: calc(0.5 * var(--gap)) 0;
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+.gesture-row.off { opacity: 0.55; }
+/* A gesture carrying an example that would be misread. Marked, not hidden: it still works, badly. */
+.gesture-row.sick { box-shadow: inset calc(2 * var(--p)) 0 0 var(--amber); padding-left: var(--gap); }
+
+/*
+ * The audit's verdict, above the rows. Loud, because the failure it describes is silent: every
+ * gesture shows its four examples and none of them work.
+ */
+.gesture-alarm {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--gap);
+  border: var(--p) solid var(--amber);
+  color: var(--amber);
+}
+
+.gesture-name {
+  color: var(--silk);
+  text-transform: uppercase;
+  letter-spacing: var(--p);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The words are a button because they are editable, and they must look it. */
+.gesture-words {
+  font: inherit;
+  text-align: left;
+  color: var(--signal);
+  background: none;
+  border: 0;
+  border-bottom: var(--p) dashed var(--copper-dark);
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gesture-words:hover { border-bottom-color: var(--signal); }
+.gesture-words:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+
+.gesture-count { font-variant-numeric: tabular-nums; }
+
+/* What shape the gesture is: a pose, or a movement of two or three keyframes. */
+.gesture-shape {
+  font-size: 0.85em;
+  letter-spacing: var(--p);
+  color: var(--copper-dark);
+  white-space: nowrap;
+}
+
+/* A built-in's meaning is fixed, so it does not pretend to be editable. */
+.gesture-words.built {
+  color: var(--copper);
+  border-bottom-style: dotted;
+  cursor: default;
+}
+
+.gesture-add { display: flex; gap: var(--gap); align-items: center; }
+.gesture-add .input { flex: 1; min-width: 0; }
+
+/* ── The board's own controls: settings, and manual control ────────────────────────────────────
+ *
+ * The settings button was LOOK and opened a colour panel; the same panel now carries audio, video,
+ * gestures and the machine switches, so it is named for what it is and sized for how often it is
+ * used. Manual control sits beside it because it turns the CAMERAS on: switching that off should
+ * never take more than one obvious press.
+ */
+.settings-fab { padding: calc(1.5 * var(--gap)) calc(2.5 * var(--gap)); letter-spacing: var(--p); }
+
+.manual-fab { letter-spacing: var(--p); }
+.manual-fab.live {
+  color: var(--mask-dark);
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.manual-fab.live .ui-icon { color: var(--mask-dark); }
+
+/* ── Audio and video settings ──────────────────────────────────────────────────────────────── */
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--gap);
+  align-items: baseline;
+  padding: calc(0.5 * var(--gap)) 0;
+}
+.setting-row .value { font-variant-numeric: tabular-nums; color: var(--silk); }
+.setting-row .value.ok-text { color: var(--ok); }
+.setting-row .value.warn { color: var(--warn); }
+.setting-path {
+  font-size: 0.9em;
+  color: var(--copper-dark);
+  overflow-wrap: anywhere;
+}
+
+/* ── THE MATRIX (matrix/MatrixView.tsx) ─────────────────────────────────────────────────────────
+ *
+ * The globe covers the board. Its canvas is drawn at a low resolution and scaled up by a whole number
+ * of device pixels, nearest-neighbour. The words over it are chrome text, and take no pointer events so
+ * a drag anywhere turns the globe.
+ */
+.matrix-host {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background: var(--mask-dark);
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.matrix-host.dragging { cursor: grabbing; }
+.matrix-host canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  image-rendering: pixelated;
+}
+.app.matrix-mode .breadcrumb { z-index: 55; }
+.matrix-title,
+.matrix-label,
+.matrix-help,
+.matrix-empty {
+  position: absolute;
+  pointer-events: none;
+  color: var(--signal);
+  letter-spacing: var(--p);
+  text-transform: uppercase;
+}
+.matrix-title {
+  right: var(--pad);
+  top: var(--pad);
+  display: grid;
+  justify-items: end;
+  gap: var(--p);
+}
+.matrix-title strong { color: var(--silk); }
+.matrix-warn { color: var(--warn); }
+.matrix-label {
+  left: var(--pad);
+  right: var(--pad);
+  bottom: calc(var(--pad) * 4);
+  display: grid;
+  justify-items: center;
+  gap: var(--p);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.matrix-label strong { color: var(--silk); font-size: 1.25em; }
+.matrix-project { color: var(--copper); }
+.matrix-help {
+  left: var(--pad);
+  right: var(--pad);
+  bottom: var(--pad);
+  text-align: center;
+  color: var(--copper);
+}
+.matrix-empty {
+  left: var(--pad);
+  right: var(--pad);
+  top: 45%;
+  text-align: center;
+}
+.matrix-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  padding: var(--pad);
+}
+.matrix-sheet-body {
+  display: grid;
+  gap: var(--gap);
+  width: min(calc(640 * var(--p)), 100%);
+  padding: var(--pad);
+  background: var(--mask-dark);
+  border: var(--p) solid var(--silk);
+  color: var(--signal);
+  letter-spacing: var(--p);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.matrix-sheet-name { color: var(--silk); font-size: 1.5em; }
+.matrix-sheet-target { text-transform: none; color: var(--silk); }
+.matrix-sheet-keys { color: var(--copper); }
+/* Words over the hologram sit on the ground colour, or the dither behind them makes them unreadable. */
+.matrix-title,
+.matrix-label > *,
+.matrix-help > span {
+  background: var(--mask-dark);
+  padding: 0 var(--gap);
+}
+.matrix-title { padding: var(--p) var(--gap); }
+
+/* ── The breadcrumb row: the room path, then the switches ──────────────────────────────────────
+ *
+ * It was capped at 26vw with its overflow hidden, which was right for a row of room names and wrong
+ * once SETTINGS, MANUAL, MATRIX and VOICE sat in it: below a 1920-wide window VOICE was cut in half
+ * (smoke layout audit, 2026-09-12). Now only the path is capped. The switches keep their width, the
+ * planner narrows the HUD to fit, and in a compact window the switches show their icons alone — each
+ * keeps its title, which is also its accessible name.
+ */
+.breadcrumb { max-width: none; }
+.breadcrumb .crumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(2 * var(--gap));
+  min-width: 0;
+  max-width: 26vw;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.breadcrumb .add-fab { flex: none; }
+html.compact .app .breadcrumb { max-width: none; }
+html.compact .breadcrumb .crumbs { max-width: 30vw; }
+html.compact .breadcrumb .fab-word { display: none; }
+html.compact .breadcrumb .add-fab .ui-icon { margin-right: 0; }
+/* The usage meter hangs one gap under the breadcrumb row, wherever the planner measured its bottom. */
+.usage-meter { top: var(--usage-top, calc(9 * var(--gap))); }
+html.compact .app .usage-meter { top: var(--usage-top, calc(env(safe-area-inset-top, 0px) + 7 * var(--gap))); }
+/* A switch's border must not make the row taller than its words: the usage meter and LOOK are placed by that height. */
+.breadcrumb .add-fab { margin-block: calc(-1 * var(--p)); }
+/* Too narrow for four labelled switches beside the path: icons only, each keeping its title. */
+@media (max-width: 1100px) {
+  .breadcrumb .fab-word { display: none; }
+  .breadcrumb .add-fab .ui-icon { margin-right: 0; }
+}
+/* On a phone the HUD takes the planner's width as well, so it stops where the breadcrumb row ends. */
+html.compact .app .hud { max-width: min(62vw, var(--hud-max, 62vw)); }
+/* A phone cannot switch the desktop's cameras or microphone (neither channel is in REMOTE_METHODS),
+ * so it is not shown switches that would only be refused, and its HUD gets the room. */
+html.remote .breadcrumb .gesture-fab,
+html.remote .breadcrumb .voice-fab { display: none; }
+/* LOOK hangs where the planner put it: its usual top, or under the usage meter if they would meet. */
+html:not(.compact) .app .look-panel { top: var(--look-top, calc(16 * var(--gap))); }

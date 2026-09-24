@@ -17,6 +17,7 @@ import type { NodeKind, Rotation } from '@shared/types.js';
 import { TILE } from './camera.js';
 import { renderSilkText, measureSilkText } from './silkscreen.js';
 import { COMPONENT_STYLE, depthOffset, drawComponent, drawDepth, drawFrame, frameMargin } from './component-art.js';
+import { LiveSlots } from './live-slots.js';
 import type { NodeFrame } from '@shared/frames.js';
 
 /**
@@ -333,6 +334,8 @@ export class SpriteStore {
   private atlasSource: TextureSource | null = null;
   private readonly cache = new Map<string, Texture>();
   private readonly placeholders = new Map<string, Texture>();
+  /** Which cached texture each live face (a monitor widget) is showing. See live-slots.ts. */
+  private readonly liveSlots = new LiveSlots();
 
   /** Keys asked for that the atlas could not supply. Surfaced in the HUD so it is never a mystery. */
   readonly missing = new Set<string>();
@@ -681,7 +684,41 @@ export class SpriteStore {
     const texture = Texture.from(canvas);
     texture.source.scaleMode = 'nearest';
     this.placeholders.set(key, texture);
+
+    /*
+     * A live face replaces its own previous texture rather than accumulating beside it. A monitor
+     * widget refreshes every couple of seconds; without this every refresh would stay in the cache
+     * (and on the GPU) for as long as the board is open. The caller assigns the returned texture
+     * to the node's sprite in the same synchronous step, so nothing is still drawing the old one
+     * when it is destroyed. `destroy(true)` also frees its source, which drops Pixi's own cache
+     * entry for the canvas.
+     */
+    // An animated GIF logo is live too: its frames carry the same tag, so a node playing a GIF face,
+    // a GIF logo, or both keeps one texture per node rather than one per frame combination.
+    const liveSlot = (spec.face as HTMLCanvasElement | null | undefined)?.dataset?.['liveFace']
+      ?? (spec.logo as HTMLImageElement | null | undefined)?.dataset?.['liveFace'];
+    if (liveSlot) {
+      const stale = this.liveSlots.swap(liveSlot, key);
+      if (stale) {
+        this.placeholders.get(stale)?.destroy(true);
+        this.placeholders.delete(stale);
+      }
+    }
     return texture;
+  }
+
+  /**
+   * A live face's node is gone, or no longer live (a GIF switched off or replaced): free the texture
+   * its slot last showed. `keep` is what the node's sprite draws now. A held GIF's still is the same
+   * pixels as its frame 0, so it can be that very texture, and then it stays as an ordinary cached one.
+   */
+  releaseLive(slot: string, keep?: Texture | null): void {
+    const stale = this.liveSlots.release(slot);
+    if (!stale) return;
+    const texture = this.placeholders.get(stale);
+    if (!texture || texture === keep) return;
+    texture.destroy(true);
+    this.placeholders.delete(stale);
   }
 
   /** Does a designator even fit in this footprint? Used to decide whether to bother. */

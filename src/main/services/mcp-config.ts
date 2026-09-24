@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
+import { programRoot } from './home.js';
 
 /**
  * The `--mcp-config` file that gives an agent the `skynet` tools.
@@ -26,9 +27,7 @@ import { app } from 'electron';
 
 /** Where `tools/skynet-mcp.mjs` actually is, in this build. */
 function mcpScriptPath(): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'tools', 'skynet-mcp.mjs')
-    : join(app.getAppPath(), 'tools', 'skynet-mcp.mjs');
+  return join(programRoot(), 'tools', 'skynet-mcp.mjs');
 }
 
 function configPath(): string {

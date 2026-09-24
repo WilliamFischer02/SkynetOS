@@ -1,9 +1,10 @@
 import { join } from 'node:path';
-import { app, BrowserWindow, screen, shell } from 'electron';
+import { app, BrowserWindow, screen, session, shell } from 'electron';
 import { DEFAULT_FOOTPRINT, type Board, type NodeKind } from '@shared/types.js';
 import { findFreeSpaceOnBoard } from './services/placement.js';
 import { callAsAgent, registerIpc } from './ipc.js';
-import { startControlServer, stopControlServer } from './services/control-server.js';
+import { controlFile, startControlServer, stopControlServer } from './services/control-server.js';
+import { programRoot } from './services/home.js';
 import { writeMcpConfig } from './services/mcp-config.js';
 import { dispatchMail } from './services/mail-dispatch.js';
 import { applyStandingOrders } from './services/face-brief.js';
@@ -15,6 +16,28 @@ import { onServicesChanged, stopAllServices, sweepServices } from './services/se
 import { onFileChanged, stopWatching } from './services/watchers.js';
 import { closeAllChatWindows } from './services/chat-window.js';
 import { setBoardWindow } from './services/main-window.js';
+import { startScheduler, stopScheduler } from './services/scheduler.js';
+import { onUpdateStatus, startUpdater, stopUpdater, updateStatus } from './services/updater.js';
+import { claimSingleInstance } from './services/instance.js';
+import { singleInstanceApplies } from '@shared/boot.js';
+import { onAwayLog, onAwayState, startPresence, stopPresence } from './services/presence.js';
+import { ensureAvatarFolder, stopAvatarWatchers } from './services/avatar-frames.js';
+import { closeAllFaces, initAvatarWindows } from './services/avatar-window.js';
+import { remoteBroadcast, setRemoteDispatch, startRemoteIfEnabled, stopRemote } from './services/remote.js';
+import { callAsRemote } from './ipc.js';
+import { stopNodeMoods } from './services/avatar-mood.js';
+import { stopWindowTracker } from './services/window-tracker.js';
+import { loadWindowState, trackWindowState } from './services/window-state.js';
+import { denyAllPermissions } from './services/permissions.js';
+import { installVisionProtocol, registerVisionScheme, restoreVision, setVisionHandlers, stopVision } from './services/vision.js';
+import { restoreVoice, setVoiceHandlers, stopVoice } from './services/voice.js';
+
+/*
+ * One SkynetOS at a time, newest wins: a copy started while another runs asks it to close and
+ * takes over. Claimed here, at load, because the lock must be taken before any window exists. A
+ * smoke run is exempt, so it never closes the copy William is using. See services/instance.ts.
+ */
+const instanceClaim: Promise<boolean> = singleInstanceApplies(process.env) ? claimSingleInstance() : Promise.resolve(true);
 
 const isDev = !app.isPackaged;
 
@@ -37,6 +60,14 @@ const isDev = !app.isPackaged;
  * goes through renderSilkText, which thresholds alpha to binary and forces one exact palette
  * colour, precisely so it does not depend on any of this.
  */
+/*
+ * The vision page's scheme. Electron accepts privileged scheme registration only before the app is
+ * ready, so it happens here at module load rather than inside whenReady. See services/vision.ts:
+ * MediaPipe cannot load on a file:// page at all, and the page has to be served from its own
+ * origin for its wasm and model to be same-origin.
+ */
+registerVisionScheme();
+
 app.commandLine.appendSwitch('disable-lcd-text');
 app.commandLine.appendSwitch('disable-font-subpixel-positioning');
 
@@ -66,11 +97,20 @@ function neutralizeDisplayScaling(win: BrowserWindow): { scaleFactor: number; ap
 }
 
 function createWindow(): BrowserWindow {
+  /*
+   * Where the window was last left, if that place is still on a screen (services/window-state.ts).
+   * Not in a smoke run: a capture needs a known size, and must not overwrite William's.
+   */
+  const smokeRun = Boolean(process.env['SKYNET_SMOKE_DIR']);
+  const DEFAULT_SIZE = { width: 1600, height: 1000 };
+  const MIN_SIZE = { width: 960, height: 640 };
+  const saved = smokeRun ? { ...DEFAULT_SIZE, maximized: false } : loadWindowState(DEFAULT_SIZE, MIN_SIZE);
   const win = new BrowserWindow({
-    width: 1600,
-    height: 1000,
-    minWidth: 960,
-    minHeight: 640,
+    width: saved.width,
+    height: saved.height,
+    ...(saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y } : {}),
+    minWidth: MIN_SIZE.width,
+    minHeight: MIN_SIZE.height,
     show: false,
     backgroundColor: '#0E1A14', // SKYNET mask-dark, so the first paint is already the board
     title: 'SkynetOS',
@@ -89,8 +129,10 @@ function createWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => {
     neutralizeDisplayScaling(win);
+    if (saved.maximized) win.maximize();
     win.show();
   });
+  if (!smokeRun) trackWindowState(win);
 
   // Re-apply when the window is dragged to a monitor with a different scale factor.
   win.on('moved', () => neutralizeDisplayScaling(win));
@@ -153,6 +195,9 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
 
   try {
     await wait(2500); // font load + Pixi init + first frames
+    // The getting-started card (ui/FirstRunHints.tsx) would sit over every capture on a fresh profile.
+    // Hidden by a class rather than dismissed, so nothing is written; the layout audit shoots it once.
+    await win.webContents.executeJavaScript(`document.documentElement.classList.add('smoke-capture')`).catch(() => undefined);
     const dpr = await win.webContents.executeJavaScript('window.devicePixelRatio');
     console.log(`[smoke] devicePixelRatio = ${String(dpr)} (must be 1 for pixel purity)`);
 
@@ -186,6 +231,308 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
     win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '2' });
     await wait(400);
     await shoot('04-zoom-2x.png');
+
+    /*
+     * SKYNET_SMOKE_SHOTS_ONLY: pictures and nothing that writes.
+     *
+     * Everything past this point edits the real board/ (a node drag, a notes edit, a hand-drawn
+     * wire, each undone) and records a probe row in skynet.db. That is right for a full smoke run
+     * and wrong for "let me see what the screen looks like" while William's own SkynetOS is open
+     * on the same files. This mode takes the whole-board view and the key list, then quits: the
+     * finally below still calls app.quit().
+     */
+    if (process.env['SKYNET_SMOKE_SHOTS_ONLY']) {
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '0' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '0' });
+      await wait(600);
+      await shoot('05-whole-board.png');
+
+      /*
+       * THE MATRIX, opened by its key and looked at twice: at rest, and part-way into the middle file.
+       * Read-only: it loads every board and writes nothing. Escape twice leaves it as it was found.
+       */
+      win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'g' });
+      win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'g' });
+      await wait(1500);
+      await shoot('07-matrix.png');
+      for (let i = 0; i < 3; i++) {
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '=' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '=' });
+      }
+      await wait(1200);
+      await shoot('08-matrix-zoomed.png');
+      for (let i = 0; i < 2; i++) {
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+        await wait(500);
+      }
+
+      /*
+       * Can a recommendation's X actually be clicked? Read-only: find a visible plate, ask the page
+       * what element is under the centre of its X, and check the bridge has the channel it calls.
+       * Nothing is clicked, so nothing is written.
+       */
+      const probe = await win.webContents.executeJavaScript(`(() => {
+        const btn = [...document.querySelectorAll('.phantom-plate')]
+          .filter((p) => getComputedStyle(p).visibility === 'visible')
+          .map((p) => p.querySelector('.phantom-btn.no'))
+          .find((b) => { if (!b) return false; const r = b.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; });
+        if (!btn) return { found: false, plates: document.querySelectorAll('.phantom-plate').length };
+        const r = btn.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return {
+          found: true,
+          clickable: !!hit && (hit === btn || btn.contains(hit)),
+          topmost: hit ? (hit.className && hit.className.baseVal !== undefined ? hit.className.baseVal : hit.className) || hit.tagName : null,
+          dismiss: typeof window.skynet['phantom:dismiss'] === 'function',
+          approve: typeof window.skynet['phantom:approve'] === 'function'
+        };
+      })()`) as { found: boolean; plates?: number; clickable?: boolean; topmost?: string | null; dismiss?: boolean; approve?: boolean };
+      console.log(`[smoke] phantom X probe: ${JSON.stringify(probe)}`);
+
+      /*
+       * The JARVIS face, drawn from the real frames in assets/avatar/jarvis: at rest, then twice
+       * mid-talk. A preview window, so no session and no claude.ai page are involved. It reads
+       * frames and writes nothing.
+       */
+      try {
+        const { createPreviewFace } = await import('./services/avatar-window.js');
+        const face = createPreviewFace();
+        if (face.win.webContents.isLoading()) {
+          await new Promise<void>((resolve) => face.win.webContents.once('did-finish-load', () => resolve()));
+        }
+        face.win.showInactive();
+        const shootFace = async (name: string): Promise<void> => {
+          const image = await face.win.webContents.capturePage();
+          writeFileSync(join(outDir, name), image.toPNG());
+          console.log(`[smoke] ${name}  ${image.getSize().width}x${image.getSize().height}`);
+        };
+        await wait(900);
+        await shootFace('07-face-idle.png');
+        face.setMood('speaking');
+        await wait(170);
+        await shootFace('08-face-talk-a.png');
+        await wait(230);
+        await shootFace('09-face-talk-b.png');
+        face.win.close();
+      } catch (err) {
+        console.log(`[smoke] face preview FAILED: ${(err as Error).message}`);
+      }
+
+      /*
+       * Every room, whole-board zoom, read-only: descend through the store's own action, capture,
+       * come back. Descending reads a board file; it writes nothing.
+       */
+      try {
+        const rooms = await win.webContents.executeJavaScript(
+          `(window.__skynetStore?.getState().board?.nodes ?? []).filter((n) => n.kind === 'drive.room').map((n) => n.id)`
+        ) as string[];
+        for (const id of rooms) {
+          await win.webContents.executeJavaScript(`window.__skynetStore.getState().descend(${JSON.stringify(id)})`);
+          await wait(1400);
+          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: '0' });
+          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: '0' });
+          await wait(700);
+          await shoot(`room-${id}.png`);
+          await win.webContents.executeJavaScript('window.__skynetStore.getState().ascend()');
+          await wait(1200);
+        }
+      } catch (err) {
+        console.log(`[smoke] room capture FAILED: ${(err as Error).message}`);
+      }
+      /*
+       * The chrome layout audit (William: "check ui elements don't overlap or obscure each other").
+       * At four window sizes and in several panel states, a read-only probe measures every docked
+       * chrome panel and logs each pair that intersects and each panel pushed off screen. Panels are
+       * opened through keys and store actions that only change renderer state: nothing is written.
+       * SKYNET_SMOKE_LAYOUT=0 skips it.
+       */
+      const layoutProbe = `(() => {
+          const CHROME = ['.breadcrumb', '.hud:not(.hud-measure)', '.usage-meter', '.left-stack', '.minimap', '.toasts', '.inspector', '.look-panel', '.help', '.notif-panel', '.hud-more-panel'];
+          const MODALS = ['.keys-panel', '.mailbox', '.explorer', '.palette', '.ingest', '.sysmon', '.summon-panel', '.plan-dialog', '.cmdk', '.settings-panel', '.about-panel', '.firstrun'];
+          const vis = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0 ? r : null; };
+          const grab = (list) => { const out = []; for (const s of list) document.querySelectorAll(s).forEach((el) => { const r = vis(el); if (r) out.push({ s, el, r }); }); return out; };
+          const chrome = grab(CHROME);
+          const modals = grab(MODALS);
+          const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+          const overlaps = [];
+          for (let i = 0; i < chrome.length; i++) for (let j = i + 1; j < chrome.length; j++) {
+            const A = chrome[i], B = chrome[j];
+            if (A.el.contains(B.el) || B.el.contains(A.el)) continue;
+            if (hit(A.r, B.r)) overlaps.push(A.s + ' x ' + B.s);
+          }
+          const offscreen = [...chrome, ...modals].filter(({ r }) => r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1).map(({ s }) => s);
+          // A panel whose own content runs past its edge. The usage meter's header lost its fold
+          // arrow that way at iPhone width, and no overlap check could see it.
+          const CLIP = ['.breadcrumb', '.hud:not(.hud-measure)', '.usage-meter .usage-head-row', '.left-stack .dock', '.jarvis-dock'];
+          const clipped = [];
+          for (const s of CLIP) document.querySelectorAll(s).forEach((el) => {
+            const r = vis(el);
+            if (!r) return;
+            for (const child of el.children) {
+              const c = vis(child);
+              if (c && (c.right > r.right + 1 || c.left < r.left - 1)) { clipped.push(s); return; }
+            }
+          });
+          return { view: innerWidth + 'x' + innerHeight, present: chrome.map((c) => c.s), modals: modals.map((m) => m.s), overlaps, offscreen, clipped };
+        })()`;
+      // The same probe audits the phone and tablet windows further down (docs/08).
+      if (process.env['SKYNET_SMOKE_LAYOUT'] !== '0') {
+        const key = (k: string, code: string, shift = false): string =>
+          `window.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, code: ${JSON.stringify(code)}, shiftKey: ${shift}, bubbles: true }));`;
+        const run = (js: string): Promise<unknown> => win.webContents.executeJavaScript(js).catch((err: Error) => `ERR ${err.message}`);
+        const reset = async (): Promise<void> => {
+          await run(`(() => { const s = window.__skynetStore?.getState(); if (!s) return; s.select(null); s.setMailboxOpen(false); s.setPaletteOpen(false); s.setCommandPaletteOpen?.(false); s.setSettingsOpen?.(false); s.setNotificationsOpen?.(false); s.setAboutOpen?.(false); s.setKeysOpen?.(false); s.setLookOpen?.(false); for (const t of s.toasts) s.dismissToast(t.id); if (window.__probeSessions) { window.__skynetStore.setState({ sessions: window.__probeSessions }); window.__probeSessions = null; } window.__skynetAway?.setState({ reportAvailable: false }); if (document.querySelector('.usage-meter .usage-drawer')) document.querySelector('.usage-meter .usage-head-row')?.click(); })()`);
+          // Local panels (LOOK, keys) close on Escape; Escape at the root with nothing selected is a no-op.
+          await run(key('Escape', 'Escape'));
+          await run(key('Escape', 'Escape'));
+          await wait(150);
+        };
+        const states: { name: string; setup: string }[] = [
+          { name: 'base', setup: '' },
+          {
+            name: 'inspector-toasts',
+            setup: `(() => { const s = window.__skynetStore.getState(); const n = s.board.nodes.find((x) => x.kind === 'agent.code') ?? s.board.nodes[0]; s.select(n.id); s.toast('ok', 'LAYOUT PROBE - FIRST TOAST'); s.toast('warn', 'LAYOUT PROBE - A LONGER WARNING TOAST THAT WRAPS ACROSS SEVERAL LINES OF THE CHROME'); s.toast('fault', 'LAYOUT PROBE - FAULT'); })()`
+          },
+          { name: 'look-inspector', setup: `(() => { const s = window.__skynetStore.getState(); const n = s.board.nodes.find((x) => x.kind === 'agent.code') ?? s.board.nodes[0]; s.select(n.id); })(); ${key('l', 'KeyL')}` },
+          { name: 'usage-expanded', setup: `(() => { const h = document.querySelector('.usage-head-row, .usage-head'); if (h) h.click(); })()` },
+          { name: 'keys', setup: key('?', 'Slash', true) },
+          { name: 'mailbox', setup: `window.__skynetStore.getState().setMailboxOpen(true)` },
+          { name: 'explorer', setup: `(() => { const s = window.__skynetStore.getState(); const n = s.board.nodes.find((x) => x.kind === 'store.explorer'); if (n) void s.openNode(n.id); })()` },
+          // Three running sessions in the dock: renderer state only, put back by reset(). Nothing is launched.
+          {
+            name: 'dock-3',
+            setup: `(() => { const s = window.__skynetStore.getState(); window.__probeSessions = s.sessions; const now = new Date().toISOString(); window.__skynetStore.setState({ sessions: [1, 2, 3].map((i) => ({ id: 'probe-' + i, boardId: s.boardId, nodeId: (s.board.nodes[i] ?? s.board.nodes[0]).id, nodeName: 'LAYOUT PROBE SESSION ' + i, cwd: 'C:/dev', mode: 'popout', resumed: i === 2, startedAt: now, state: 'running' })) }); })()`
+          },
+          { name: 'away-chip', setup: `window.__skynetAway?.setState({ reportAvailable: true, view: 'hidden' })` },
+          { name: 'edge-inspector', setup: `(() => { const s = window.__skynetStore.getState(); const e = s.board.edges[0]; if (e) s.selectEdge(e.id); })()` },
+          { name: 'notifications', setup: `(() => { const s = window.__skynetStore.getState(); s.toast('ok', 'LAYOUT PROBE - SAVED'); s.toast('fault', 'LAYOUT PROBE - A FAULT THAT FADED'); s.setNotificationsOpen(true); })()` },
+          { name: 'palette', setup: `window.__skynetStore.getState().setCommandPaletteOpen(true)` },
+          { name: 'settings', setup: `window.__skynetStore.getState().setSettingsOpen(true)` },
+          { name: 'about', setup: `window.__skynetStore.getState().setAboutOpen(true)` }
+        ];
+        const sizes: [number, number][] = [[1280, 720], [1584, 961], [1920, 1080], [1024, 768]];
+        const before = win.getContentSize();
+        const summary: string[] = [];
+        if (await run(`Boolean(document.querySelector('.firstrun'))`) === true) {
+          await run(`document.documentElement.classList.remove('smoke-capture')`);
+          await wait(150);
+          await shoot('L-first-run.png');
+          await run(`document.documentElement.classList.add('smoke-capture')`);
+        }
+        for (const [w, h] of sizes) {
+          win.setContentSize(w, h);
+          await wait(700);
+          for (const state of states) {
+            await reset();
+            if (state.setup) await run(state.setup);
+            await wait(450);
+            const result = await run(layoutProbe) as { view: string; overlaps: string[]; offscreen: string[]; clipped: string[] } | string;
+            if (typeof result === 'string') { console.log(`[smoke] layout ${w}x${h} ${state.name}: ${result}`); continue; }
+            const line = `[smoke] layout ${result.view} ${state.name}: overlaps=${JSON.stringify(result.overlaps)} offscreen=${JSON.stringify(result.offscreen)} clipped=${JSON.stringify(result.clipped)}`;
+            console.log(line);
+            if (result.overlaps.length || result.offscreen.length || result.clipped.length) summary.push(line);
+            await shoot(`L-${w}x${h}-${state.name}.png`);
+          }
+          // The usage meter toggles on click; put it back before the next size.
+          await run(`(() => { const h = document.querySelector('.usage-meter .usage-head-row, .usage-meter .usage-head'); if (h && document.querySelector('.usage-meter.expanded, .usage-meter .usage-projects')) h.click(); })()`);
+        }
+        await reset();
+        win.setContentSize(before[0] ?? 1584, before[1] ?? 961);
+        console.log(`[smoke] layout audit: ${summary.length} state(s) with overlaps or clipping`);
+
+        /*
+         * The command palette end to end: type a node that lives in a room, press Enter, and read back
+         * where the board went. Descending and selecting are renderer state over read-only loads, as in
+         * the room captures above.
+         */
+        await wait(400);
+        const jump = await run(`(async () => {
+          const S = window.__skynetStore;
+          const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+          const root = await window.skynet['board:load']('root');
+          const room = root.ok ? root.board.nodes.find((n) => n.kind === 'drive.room' && n.boardFile) : null;
+          if (!room) return 'no room on the root board';
+          const inner = await window.skynet['board:loadRoom'](room.boardFile);
+          if (!inner.ok) return 'the room did not load';
+          const target = inner.board.nodes.find((n) => n.kind !== 'note.silk' && n.kind !== 'group.zone' && n.name) ?? inner.board.nodes[0];
+          if (!target) return 'the room is empty';
+          const roomWord = (inner.board.engraving ?? inner.board.name).split(/\\s+/)[0];
+          S.getState().setCommandPaletteOpen(true);
+          await pause(500);
+          const input = document.querySelector('.cmdk-input');
+          if (!input) return 'the palette did not open';
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, target.name + ' ' + roomWord);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          await pause(1500);
+          const top = document.querySelector('.cmdk-item.active')?.textContent ?? null;
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+          await pause(2600);
+          const s = S.getState();
+          return { typed: target.name + ' ' + roomWord, top, wantBoard: inner.board.id, wantNode: target.id, boardId: s.boardId, selectedId: s.selectedId, ok: s.boardId === inner.board.id && s.selectedId === target.id };
+        })()`);
+        console.log(`[smoke] palette jump: ${JSON.stringify(jump)}`);
+        await shoot('L-palette-jump.png');
+        for (let i = 0; i < 3; i++) {
+          await run('window.__skynetStore.getState().ascend()');
+          await wait(900);
+        }
+        await reset();
+      }
+
+      /*
+       * Remote (docs/08): the same renderer, served over the remote bridge, in a phone-sized and a
+       * tablet-sized window, paired with a one-time code through the real /pair and /ws. A throwaway
+       * server on a random port with devices held in memory: nothing is written to William's
+       * userData or settings, and remote stays off for his app.
+       */
+      try {
+        const { startRemoteForSmoke } = await import('./services/remote.js');
+        const remote = await startRemoteForSmoke(callAsRemote);
+        const shots: [string, number, number, string][] = [
+          ['10-remote-iphone.png', 390, 844, `#pair=${remote.code}`],
+          ['11-remote-ipad.png', 820, 1180, '']
+        ];
+        for (const [name, width, height, hash] of shots) {
+          // Its own in-memory partition: the board window's session refuses all http(s) by design.
+          const device = new BrowserWindow({
+            width, height, show: false, useContentSize: true,
+            webPreferences: { partition: 'remote-smoke', contextIsolation: true, nodeIntegration: false, sandbox: true }
+          });
+          await device.loadURL(`http://127.0.0.1:${remote.port}/${hash}`);
+          device.webContents.setZoomFactor(1);
+          device.showInactive();
+          let rendered = false;
+          for (let i = 0; i < 60 && !rendered; i++) {
+            await wait(250);
+            rendered = await device.webContents.executeJavaScript(
+              "Boolean(document.querySelector('.hud') && /NODES/.test(document.querySelector('.hud').textContent || ''))"
+            ) as boolean;
+          }
+          await wait(800);
+          const state = await device.webContents.executeJavaScript(
+            "(() => { const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); const c = getComputedStyle(e); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height), c.display, c.flexDirection, c.alignItems, c.writingMode].join(' '); };" +
+            " return { remote: document.documentElement.dataset.remote === '1', compact: document.documentElement.classList.contains('compact'), gate: Boolean(document.querySelector('.remote-gate')), usage: r('.usage-meter'), row: r('.usage-meter .meter-row'), bar: r('.usage-meter .meter-bar'), stack: r('.left-stack') }; })()"
+          ) as { remote: boolean; compact: boolean; gate: boolean };
+          const image = await device.webContents.capturePage();
+          writeFileSync(join(outDir, name), image.toPNG());
+          console.log(`[smoke] ${name}  ${image.getSize().width}x${image.getSize().height}  board rendered over the bridge: ${rendered}  ${JSON.stringify(state)}`);
+          const audit = await device.webContents.executeJavaScript(layoutProbe)
+            .catch((err: Error) => `ERR ${err.message}`) as { overlaps: string[]; offscreen: string[]; clipped: string[] } | string;
+          const verdict = typeof audit === 'string'
+            ? audit
+            : `overlaps=${JSON.stringify(audit.overlaps)} offscreen=${JSON.stringify(audit.offscreen)} clipped=${JSON.stringify(audit.clipped)}`;
+          console.log(`[smoke] layout remote ${name}: ${verdict}`);
+          device.destroy();
+        }
+        await remote.close();
+      } catch (err) {
+        console.log(`[smoke] remote capture FAILED: ${(err as Error).message}`);
+      }
+
+      console.log('[smoke] shots only: stopped before anything that writes');
+      return;
+    }
 
     /*
      * Drag the substrate to pan — the gesture, not the keyboard shortcut.
@@ -1025,8 +1372,10 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
      * changes, and the failure mode is "JARVIS Prime has no tools" with nothing in any log.
      */
     const { spawn: spawnMcp } = await import('node:child_process');
-    const mcp = spawnMcp(process.execPath, [join(app.getAppPath(), 'tools', 'skynet-mcp.mjs')], {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    // programRoot, not getAppPath: in an install the proxy is in resources/, outside app.asar. And
+    // the proxy is told which control file is THIS run's, which is in the capture folder.
+    const mcp = spawnMcp(process.execPath, [join(programRoot(), 'tools', 'skynet-mcp.mjs')], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', SKYNET_CONTROL_FILE: controlFile() },
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
@@ -1102,7 +1451,7 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
      * launches it through the real code path, and checks it actually ran. Deliberately NOT the
      * user's Minecraft shortcut: a smoke run must not open a game on somebody's desktop.
      */
-    const { writeFileSync: writeNow, existsSync: existsNow, rmSync: rmNow } = await import('node:fs');
+    const { existsSync: existsNow, rmSync: rmNow } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const probeDir = tmpdir();
     const probeLnk = join(probeDir, 'skynet-smoke.lnk');
@@ -1251,7 +1600,9 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // A copy that could not take over from a running one starts nothing, and goes.
+  if (!(await instanceClaim)) { app.exit(0); return; }
   const settings = getSettings();
   console.log(`[settings] devRoots=${settings.devRoots.join(', ')} reducedMotion=${settings.reducedMotion} streamMode=${settings.streamMode}`);
   pruneSnapshots(settings.snapshotRetentionDays);
@@ -1266,6 +1617,23 @@ app.whenReady().then(() => {
   restoreSessions();
 
   registerIpc();
+
+  /*
+   * Every OS permission refused, everywhere, before a single window opens. Until 2026-09-11 main
+   * set no permission handlers at all, so Electron's defaults decided whether a page could have the
+   * camera or the microphone. The vision partition grants itself `media` and nothing else does
+   * (services/permissions.ts).
+   */
+  denyAllPermissions(session.defaultSession, 'default session');
+  installVisionProtocol();
+
+  /*
+   * Remote devices (docs/08): the same handlers, reached over the remote bridge through
+   * `callAsRemote`. Listening only if William turned it on, and never during a smoke capture, which
+   * starts its own throwaway server if it wants one.
+   */
+  setRemoteDispatch(callAsRemote);
+  if (!process.env['SKYNET_SMOKE_DIR']) void startRemoteIfEnabled();
 
   /*
    * The control channel: how JARVIS Prime reaches this board.
@@ -1287,19 +1655,77 @@ app.whenReady().then(() => {
   const win = createWindow();
 
   // Push live session and service state to the renderer. The dock must not have to poll.
+  // Every push also goes to connected remote devices (a no-op while remote is off).
   onSessionsChanged((sessions) => {
     if (!win.isDestroyed()) win.webContents.send('sessions:changed', sessions);
+    remoteBroadcast('sessions:changed', sessions);
   });
   onServicesChanged((services) => {
     if (!win.isDestroyed()) win.webContents.send('services:changed', services);
+    remoteBroadcast('services:changed', services);
   });
   onFileChanged((event) => {
     if (!win.isDestroyed()) win.webContents.send('files:changed', event);
+    remoteBroadcast('files:changed', event);
   });
+
+  // The avatar's frames folder changed: the board redraws any logo that shows the avatar's face.
+  void import('./services/avatar-frames.js').then(({ onAvatarChanged }) => {
+    onAvatarChanged((name) => { if (!win.isDestroyed()) win.webContents.send('avatar:changed', { name }); remoteBroadcast('avatar:changed', { name }); });
+  });
+
+  /*
+   * Away (sleep) mode: presence is checked every 30 s, and the away run's status and transcript
+   * are pushed as they happen. Not during a smoke run, whose idle machine would otherwise send the
+   * capture to sleep. See services/presence.ts.
+   */
+  /*
+   * Manual control. Gestures arrive from the vision window as events, never as landmarks, and are
+   * forwarded to the board to be acted on exactly like a keypress. Not broadcast to remote devices:
+   * a hand in front of this desk's cameras is driving THIS screen.
+   */
+  setVisionHandlers({
+    onEvent: (event) => { if (!win.isDestroyed()) win.webContents.send('gesture:event', event); },
+    onStatus: (status) => { if (!win.isDestroyed()) win.webContents.send('gesture:state', status); }
+  });
+  // Manual control comes back on if it was on when the app closed, as remote does.
+  if (!process.env['SKYNET_SMOKE_DIR']) restoreVision();
+  setVoiceHandlers({
+    onStatus: (status) => { if (!win.isDestroyed()) win.webContents.send('voice:state', status); },
+    onWake: (wake) => { if (!win.isDestroyed()) win.webContents.send('voice:wake', wake); },
+    onHeard: (heard) => { if (!win.isDestroyed()) win.webContents.send('voice:heard', heard); }
+  });
+  // Voice, like manual control, comes back on only if it was on when the app closed.
+  if (!process.env['SKYNET_SMOKE_DIR']) restoreVoice();
+
+  onAwayState((status) => { if (!win.isDestroyed()) win.webContents.send('away:state', status); remoteBroadcast('away:state', status); });
+  onAwayLog((event) => { if (!win.isDestroyed()) win.webContents.send('away:log', event); remoteBroadcast('away:log', event); });
+  if (!process.env['SKYNET_SMOKE_DIR']) startPresence();
 
   // A detached popout terminal can be closed in ways that never reach our 'exit' handler, so the
   // dock is reconciled against the OS on a slow timer as well as on events.
   const sweep = setInterval(() => { sweepSessions(); sweepServices(); }, 5000);
+
+  /*
+   * task.scheduled nodes run while the app is open (services/scheduler.ts). Not during a smoke
+   * capture: a screenshot run at 8 am must not start the morning's Prime session.
+   */
+  if (!process.env['SKYNET_SMOKE_DIR']) startScheduler();
+
+  /*
+   * Program updates: an installed copy only, and never during a smoke run. Pushed to the board
+   * window alone, not to remote devices: a phone can do nothing about an update (docs/07).
+   */
+  onUpdateStatus(() => { if (!win.isDestroyed()) win.webContents.send('update:state', updateStatus()); });
+  if (!process.env['SKYNET_SMOKE_DIR']) void startUpdater();
+
+  /*
+   * JARVIS face windows (services/avatar-window.ts): beside the web Face and every JARVIS Prime
+   * terminal. The frames folder always exists, so there is somewhere to drop them. Not during a
+   * smoke capture, which re-adopts William's live sessions and would open their faces over it.
+   */
+  ensureAvatarFolder();
+  if (!process.env['SKYNET_SMOKE_DIR']) initAvatarWindows();
 
   /*
    * Head -> Prime. A message the Face flagged with `run:` starts a real session on the Hands node.
@@ -1322,20 +1748,36 @@ app.whenReady().then(() => {
         if (result.ok) console.log(`[mail] autonomous run started on ${result.nodeId}: ${what}`);
         else console.warn(`[mail] did not run ${what}: ${result.error}`);
         if (!win.isDestroyed()) win.webContents.send('mail:dispatched', result);
+        remoteBroadcast('mail:dispatched', result);
       }
     });
   }, 10_000);
   app.on('will-quit', () => {
     clearInterval(sweep);
     clearInterval(dispatch);
+    stopScheduler();
     // The pipe dies with us; the file naming it must not outlive it, or the next proxy waits on
     // a pipe that is not there rather than reporting that SkynetOS is closed.
     stopControlServer();
+    void stopRemote();
     // Agent popouts are detached on purpose and outlive us. Services do not: a dev server that
     // survives the app that started it is a port you cannot rebind and a process you cannot find.
     stopAllServices();
     // A conversation window is ours, not the OS's — it must not outlive the board it belongs to.
     closeAllChatWindows();
+    // The cameras close with the app, whatever the setting says. A webcam left streaming by a
+    // process that has gone is the one failure mode of this feature nobody would forgive.
+    stopVision();
+    stopVoice();
+    // The faces, the helper that watches terminal windows, and the frames-folder watcher go with it.
+    closeAllFaces();
+    stopWindowTracker();
+    stopAvatarWatchers();
+    // The animated-face logos' mood watch (services/avatar-mood.ts) goes with the board.
+    stopNodeMoods();
+    // An away run is ours: it must not keep working after the board that watches it has closed.
+    stopPresence();
+    stopUpdater();
     void stopWatching();
     closeDb();
   });

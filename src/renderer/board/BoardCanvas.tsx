@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react';
  */
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Sprite, TextureSource } from 'pixi.js';
-import type { Board, BoardNode, Footprint } from '@shared/types.js';
+import type { Board, BoardEdge, BoardNode, Footprint } from '@shared/types.js';
 import { displayOf, footprintOf, isPrinted, maxFootprintFor, spriteKeyOf, type Rotation } from '@shared/types.js';
 import { FAULT, SILK, WARN, hexToNumber } from '@shared/palette.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
@@ -33,9 +33,26 @@ import {
   TILE
 } from './camera.js';
 import { buildSubstrate } from './substrate.js';
+import { Texture, TilingSprite } from 'pixi.js';
+import { resolveLook } from '@shared/look.js';
 import { CourierLayer, courierColor, courierSource, type CourierRoute } from './couriers.js';
 import { courierHub, elbowPath, wirePath, type Wire } from './courier-paths.js';
-import { GLOW_FPS, GLOW_FRAMES, buildGlowFrames } from './glow.js';
+import { separateParallel, wireAt } from './wire-lanes.js';
+import { buildWireHandles, buildWireHighlight, type TraceStyle } from './traces.js';
+import { routeEdge } from './wire-route.js';
+import {
+  anchorPoint,
+  handleAt,
+  moveElbow,
+  moveSegment,
+  nearestAnchor,
+  nudgeAnchor,
+  waypointsFrom,
+  wireHandles,
+  type WireHandle
+} from './wire-geometry.js';
+import { GLOW_FPS, buildGlowFrames } from './glow.js';
+import { EFFECT_FPS, chaseRects, cycleFrame, scanRect } from './effects.js';
 import type { Point } from './traces.js';
 import { SpriteStore, textureOffset } from './sprites.js';
 import { attachEndpoints, buildTraceLayer, routeOrthogonal, styleFor, type RoutedEdge } from './traces.js';
@@ -69,6 +86,12 @@ import fontUrl from '../../../assets/fonts/DepartureMono-1.500/DepartureMono-Reg
 import atlasUrl from '../../../assets/atlas/skynet.json?url';
 import atlasImageUrl from '../../../assets/atlas/skynet.png?url';
 import { ensureSilkFont } from './silkscreen.js';
+import { updateMonitorFace } from './monitor-widget.js';
+import type { BoardContextMenu } from '../store/useBoardStore.js';
+import { TouchGestures } from './touch.js';
+import { isLiveAvatarLogo, logoBoxPx, logoCacheSource } from '@shared/logo-source.js';
+import { gifFrameAt } from '@shared/gif.js';
+import { avatarFrameAt, liveLogoLayout, wobbleOffset, type AvatarMood, type AvatarPayload } from '@shared/avatar.js';
 
 /**
  * The baked atlas. `npm run assets:bake` writes it from assets/sprites/manifest.json.
@@ -82,6 +105,23 @@ const ATLAS_URL: string | null = atlasUrl;
 
 /** Side of the corner resize handle, in world px. Two tiles: findable at 2x, not fat at 4x. */
 const HANDLE_PX = 8;
+
+/**
+ * Every node's target state as one string, so the ticker can tell when the broken set changed.
+ *
+ * Memoised on the object: the store replaces `targets` only when a resolve actually changed
+ * something, so this is built once per change instead of once per frame, which was up to 165
+ * string joins over every node a second.
+ */
+const targetKeys = new WeakMap<Record<string, TargetInfo>, string>();
+function targetsKey(targets: Record<string, TargetInfo>): string {
+  let key = targetKeys.get(targets);
+  if (key === undefined) {
+    key = Object.entries(targets).map(([id, t]) => `${id}:${t.state}`).join('|');
+    targetKeys.set(targets, key);
+  }
+  return key;
+}
 
 export interface BoardCanvasProps {
   board: Board;
@@ -119,6 +159,27 @@ export interface BoardCanvasProps {
   onConnect?: (from: string, to: string) => void;
   /** Say something to the user. Used when a wire is refused, so a dead click explains itself. */
   onToast?: (text: string, level: 'ok' | 'warn' | 'fault') => void;
+  /** The selected wire, if any. A wire and a node are never selected at the same time. */
+  selectedEdgeId?: string | null;
+  /** Select a wire by clicking it, or clear the selection with null. */
+  onSelectEdge?: (edgeId: string | null) => void;
+  /**
+   * Commit a hand-made change to a wire's route: a pinned end, or moved elbows. One `edge.update`,
+   * so one Ctrl+Z puts the wire back.
+   */
+  onUpdateEdge?: (edgeId: string, patch: Partial<BoardEdge>) => void;
+  /**
+   * The room look's whole-board colour transform, as a CSS filter (see packages/shared/look.ts
+   * `lookFilter`). Applied to the board host only, so the chrome keeps its own colours. Empty or
+   * absent means no filter at all.
+   */
+  lookFilter?: string;
+  /** Ctrl+C: the group if there is one, else the selected node. */
+  onCopy?: (ids: string[]) => void;
+  /** Ctrl+V: paste with the cluster's top-left on this tile, under the cursor or at the view's centre. */
+  onPaste?: (tile: { x: number; y: number }) => void;
+  /** A right click: what was under the cursor, and where. */
+  onContextMenu?: (menu: BoardContextMenu) => void;
 }
 
 export interface BoardCanvasStatus {
@@ -213,6 +274,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      * lands. A local here does that; a prop would be re-supplied from outside on every render.
      */
     let group = new Set<string>();
+    /** Where the cursor last was over the canvas, in canvas px: where Ctrl+V pastes. */
+    let lastPointer: { x: number; y: number } | null = null;
+    /** Pinch, long-press and double-tap for touchscreens and the remote iPhone (board/touch.ts). */
+    let touch: TouchGestures | null = null;
 
     /*
      * ── Wiring ────────────────────────────────────────────────────────────────────────────────
@@ -233,6 +298,11 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     let world: Container | null = null;
     let substrateLayer: Container | null = null;
+    /** The procedural substrate, kept while a tiled floor is shown so switching back is instant. */
+    let substrateSprite: TilingSprite | null = null;
+    /** The room's tiled background (Board.look), and the key it was built for. See applyTile. */
+    let tileSprite: TilingSprite | null = null;
+    let tileKey = '';
     let decorLayer: Container | null = null;
     let traceLayer: Container | null = null;
     let zoneLayer: Container | null = null;
@@ -241,14 +311,43 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let noteLayer: Container | null = null;
     let gridLayer: Container | null = null;
     let overlayLayer: Container | null = null;
+    /** Chase and scan lights: one Graphics, cleared and redrawn at EFFECT_FPS. See effects.ts. */
+    let effectLayer: Container | null = null;
+    let effectGraphics: Graphics | null = null;
     let couriers: CourierLayer | null = null;
     /**
      * The traces as last routed, and the obstacle map they were routed against. The couriers'
      * road network, and what the router uses to generate a road where no wire runs.
      */
     let wires: Wire[] = [];
+    /** How each wire was drawn, by edge id: for hit-testing a click and for lighting the selected one. */
+    let wireStyles = new Map<string, TraceStyle>();
     let routeGrid: ReturnType<typeof buildRouteGrid> | null = null;
     let routeObstacles: RouteObstacle[] = [];
+
+    /*
+     * Reshaping the selected wire by hand, in Edit Board mode. William: "reposition both endpoints
+     * of a wire to a desired point along a nodes edge and it sticks to that point, as well as the
+     * ability to reposition elbows". The board is untouched until the drop (or Enter): meanwhile
+     * the wire is drawn where it would go, and the drop is one `edge.update`.
+     */
+    let wireEdit: {
+      edgeId: string;
+      /** The handle being moved, as it was when the gesture began. */
+      handle: WireHandle;
+      /** The route as drawn when the gesture began: what an elbow or segment move reshapes. */
+      base: Point[];
+      /** The route to draw now. */
+      points: Point[];
+      /** What letting go commits. */
+      patch: Partial<BoardEdge>;
+      /** A pointer drag, or a keyboard nudge waiting for Enter. */
+      dragging: boolean;
+      /** The last snapped target, so a move within the same grid step does no work. */
+      key: string;
+    } | null = null;
+    /** The handle Tab has focused on the selected wire. -1: none. */
+    let focusedHandle = -1;
 
     const spriteById = new Map<string, Sprite>();
     /** Decor parts whose atlas key has more than one frame — the LEDs. */
@@ -259,6 +358,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      * operations a second for decoration.
      */
     const glows = new Map<string, HTMLCanvasElement[]>();
+    /** The crest colour each glow cycle was built with, so changing `pulseColor` rebuilds it. */
+    const glowCrest = new Map<string, string>();
+    const crestOf = (node: BoardNode): string => (node.pulseColor ? resolveToken(node.pulseColor, board.theme) : '');
     const faces = new Map<string, ImageCacheEntry>();
     const logos = new Map<string, ImageCacheEntry>();
     let sprites: SpriteStore | null = null;
@@ -316,6 +418,56 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) return;
 
       /*
+       * Ctrl+C / Ctrl+V copy and paste nodes: the group if there is one, otherwise the selection.
+       * Left alone when there is selected TEXT on the page, so copying words out of a panel still
+       * copies words.
+       */
+      if (event.ctrlKey && (event.code === 'KeyC' || event.code === 'KeyV')) {
+        if (window.getSelection()?.toString()) return;
+        event.preventDefault();
+        if (event.code === 'KeyC') {
+          const ids = group.size ? [...group] : live.current.selectedId ? [live.current.selectedId] : [];
+          if (ids.length) live.current.onCopy?.(ids);
+        } else {
+          live.current.onPaste?.(pasteTile());
+        }
+        return;
+      }
+
+      /*
+       * A selected wire in Edit Board mode takes Tab, the arrows and Enter for its handles. Tab
+       * cycles them (from, along the wire, to), the arrows nudge the focused one, Enter keeps the
+       * change; Esc, in the capture listener below, drops it. The keyboard path for everything the
+       * handles do with a mouse. WASD still pans.
+       */
+      const editable = editableWire();
+      if (editable) {
+        if (event.code === 'Tab') {
+          event.preventDefault();
+          const n = editable.handles.length;
+          const start = focusedHandle < 0 ? (event.shiftKey ? n - 1 : 0) : focusedHandle + (event.shiftKey ? -1 : 1);
+          focusedHandle = n ? ((start % n) + n) % n : -1;
+          rebuildOverlay();
+          return;
+        }
+        const arrow = event.code === 'ArrowUp' ? { dx: 0, dy: -1 }
+          : event.code === 'ArrowDown' ? { dx: 0, dy: 1 }
+            : event.code === 'ArrowLeft' ? { dx: -1, dy: 0 }
+              : event.code === 'ArrowRight' ? { dx: 1, dy: 0 } : null;
+        const focused = focusedHandle >= 0 ? editable.handles[Math.min(focusedHandle, editable.handles.length - 1)] : undefined;
+        if (arrow && focused && !event.shiftKey) {
+          event.preventDefault();
+          nudgeHandle(editable, focused, arrow);
+          return;
+        }
+        if (event.code === 'Enter' && wireEdit) {
+          event.preventDefault();
+          commitWireEdit();
+          return;
+        }
+      }
+
+      /*
        * Shift+arrows resize the selection. The keyboard path for scaling, because
        * CLAUDE.md's definition of done requires one and a corner handle is mouse-only.
        * Checked BEFORE the pan keys, which share the arrow codes.
@@ -339,7 +491,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const dir = PAN_KEYS[event.code];
       if (dir) { held[dir] = true; event.preventDefault(); return; }
 
-      if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3' || event.code === 'Digit4') {
+      // 1 to 8 jump straight to that whole-number zoom. 0 is "whole board", handled below.
+      if (/^Digit[1-8]$/.test(event.code)) {
         const z = Number(event.code.slice(-1));
         if (isZoom(z)) cameraStore.current = { ...cameraStore.current, zoom: z };
         event.preventDefault();
@@ -413,9 +566,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      * go first.
      */
     const onEscapeCapture = (event: KeyboardEvent) => {
-      if (event.code !== 'Escape' || !group.size) return;
-      group = new Set();
-      rebuildOverlay();
+      if (event.code !== 'Escape') return;
+      // A wire's handle first: drop an unkept change, or else let go of the focused handle.
+      if (wireEdit || focusedHandle >= 0) {
+        if (!cancelWireEdit()) { focusedHandle = -1; rebuildOverlay(); }
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      // The same reasoning covers a selected wire: nothing NODE-selected, so App would leave.
+      if (group.size) {
+        group = new Set();
+        rebuildOverlay();
+      } else if (live.current.selectedEdgeId) {
+        live.current.onSelectEdge?.(null);
+      } else {
+        return;
+      }
       event.preventDefault();
       event.stopImmediatePropagation();
     };
@@ -488,6 +655,146 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const portUnder = (x: number, y: number): Port | null =>
       portUnderPoint(rects, x, y, portTolerance(), selectedHandle());
 
+    /**
+     * The wire under a world point, or null. Four screen pixels of slack either side, at any zoom,
+     * the same way port hovering is sized, plus the outline.
+     */
+    const wireUnder = (x: number, y: number): string | null =>
+      wireAt(
+        wires.map((w) => {
+          const style = wireStyles.get(w.id);
+          return { id: w.id, points: w.points, width: (style?.width ?? 2) + 2 * (style?.outlineWidth ?? 1) };
+        }),
+        x,
+        y,
+        4 / cameraStore.current.zoom
+      );
+
+    /* ---------------- reshaping the selected wire ---------------- */
+
+    /** The selected wire, in Edit Board mode: the edge, the route as drawn now, and its handles. */
+    const editableWire = (): { edge: BoardEdge; points: Point[]; handles: WireHandle[] } | null => {
+      if (!live.current.editMode) return null;
+      const id = live.current.selectedEdgeId;
+      const edge = id ? board.edges.find((e) => e.id === id) : undefined;
+      if (!edge) return null;
+      const points = wireEdit?.edgeId === edge.id ? wireEdit.points : wires.find((w) => w.id === edge.id)?.points;
+      if (!points || points.length < 2) return null;
+      return { edge, points, handles: wireHandles(points) };
+    };
+
+    /** Six screen pixels of target round a handle, at any zoom, the way ports are sized. */
+    const handleTolerance = (): number => Math.max(3, 6 / cameraStore.current.zoom);
+
+    const rectOfNode = (id: string): NodeRect | null => {
+      const n = nodeById(id);
+      return n ? nodeRect(n) : null;
+    };
+
+    /** The route this edge would have with `patch` applied: what letting go commits, drawn before it is. */
+    const previewRoute = (edge: BoardEdge, patch: Partial<BoardEdge>): Point[] | null => {
+      const from = rectOfNode(edge.from);
+      const to = rectOfNode(edge.to);
+      if (!from || !to || !routeGrid) return null;
+      return routeEdge({ ...edge, ...patch }, from, to, { grid: routeGrid, obstacles: routeObstacles, boardPx, tile: board.grid.tile }).points;
+    };
+
+    /**
+     * What moving one handle to `world` does to the wire: the patch letting go commits, and the route
+     * to draw meanwhile. An end slides round its own node's perimeter and turns its corners; an elbow
+     * or a segment snaps to whole tiles, the unit waypoints are saved in, so what is drawn is what is
+     * saved. Moving a corner pins both ends where they are, so the router brings the wire back
+     * through exactly these corners.
+     */
+    const reshapeWire = (
+      edge: BoardEdge,
+      base: Point[],
+      handle: WireHandle,
+      world: { x: number; y: number }
+    ): { patch: Partial<BoardEdge>; points: Point[] } | null => {
+      if (handle.kind === 'from' || handle.kind === 'to') {
+        const rect = rectOfNode(handle.kind === 'from' ? edge.from : edge.to);
+        if (!rect) return null;
+        const anchor = nearestAnchor(rect, world);
+        const patch: Partial<BoardEdge> = handle.kind === 'from' ? { fromAnchor: anchor } : { toAnchor: anchor };
+        const points = previewRoute(edge, patch);
+        return points ? { patch, points } : null;
+      }
+      const tile = board.grid.tile;
+      const to = { x: Math.round(world.x / tile) * tile, y: Math.round(world.y / tile) * tile };
+      const shaped = handle.kind === 'elbow' ? moveElbow(base, handle.index, to) : moveSegment(base, handle.index, to);
+      const fromRect = rectOfNode(edge.from);
+      const toRect = rectOfNode(edge.to);
+      if (!fromRect || !toRect || shaped.length < 2) return null;
+      const bends = waypointsFrom(shaped, tile);
+      const patch: Partial<BoardEdge> = {
+        waypoints: bends.length ? bends : undefined,
+        fromAnchor: edge.fromAnchor ?? nearestAnchor(fromRect, shaped[0]!),
+        toAnchor: edge.toAnchor ?? nearestAnchor(toRect, shaped[shaped.length - 1]!)
+      };
+      return { patch, points: previewRoute(edge, patch) ?? shaped };
+    };
+
+    /** Keep the change: one edge.update, so one Ctrl+Z puts the wire back. */
+    const commitWireEdit = (): void => {
+      if (!wireEdit) return;
+      const { edgeId, patch } = wireEdit;
+      wireEdit = null;
+      if (Object.keys(patch).length) live.current.onUpdateEdge?.(edgeId, patch);
+      rebuildOverlay();
+    };
+
+    /** Drop an unkept change. Returns whether there was one. */
+    const cancelWireEdit = (): boolean => {
+      if (!wireEdit) return false;
+      wireEdit = null;
+      rebuildOverlay();
+      return true;
+    };
+
+    /**
+     * The keyboard path for a handle: an end slides one grid step round its node the way the arrow
+     * points (an arrow into or out of the node does nothing), an elbow or a segment moves one tile.
+     * Kept as a pending change, drawn, until Enter keeps it or Esc drops it.
+     */
+    const nudgeHandle = (
+      editable: { edge: BoardEdge; points: Point[] },
+      handle: WireHandle,
+      dir: { dx: number; dy: number }
+    ): void => {
+      const { edge } = editable;
+      const pending = wireEdit?.edgeId === edge.id ? wireEdit.patch : {};
+      let world: { x: number; y: number };
+      if (handle.kind === 'from' || handle.kind === 'to') {
+        const rect = rectOfNode(handle.kind === 'from' ? edge.from : edge.to);
+        if (!rect) return;
+        const key = handle.kind === 'from' ? 'fromAnchor' : 'toAnchor';
+        const current = pending[key] ?? edge[key] ?? nearestAnchor(rect, handle);
+        const next = nudgeAnchor(rect, current, dir.dx, dir.dy);
+        if (next === current) return;
+        world = anchorPoint(rect, next);
+      } else {
+        const tile = board.grid.tile;
+        world = { x: handle.x + dir.dx * tile, y: handle.y + dir.dy * tile };
+      }
+      const shaped = reshapeWire(edge, editable.points, handle, world);
+      if (!shaped) return;
+      const patch = { ...pending, ...shaped.patch };
+      const points = previewRoute(edge, patch) ?? shaped.points;
+      // Keep focus on the handle that moved: the nearest one of the same kind to where it went.
+      const handles = wireHandles(points);
+      let best = -1;
+      let bestD = Infinity;
+      handles.forEach((h, i) => {
+        if (h.kind !== handle.kind) return;
+        const d = Math.abs(h.x - world.x) + Math.abs(h.y - world.y);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      focusedHandle = best >= 0 ? best : Math.min(focusedHandle, handles.length - 1);
+      wireEdit = { edgeId: edge.id, handle, base: points, points, patch, dragging: false, key: '' };
+      rebuildOverlay();
+    };
+
     /** Is the cursor claiming the resize handle rather than an edge? */
     const overResizeHandle = (x: number, y: number): boolean => {
       const handle = selectedHandle();
@@ -504,6 +811,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const screen = canvasPoint(event);
       const camera = cameraStore.current;
       const point = screenToWorld(camera, screen.x, screen.y);
+
+      /*
+       * A selected wire's handles come first in Edit Board mode. An end handle sits exactly on a
+       * node's edge, where a press would otherwise start a new wire from that port.
+       */
+      if (live.current.editMode && event.button === 0) {
+        const editable = editableWire();
+        const handle = editable ? handleAt(editable.handles, point.x, point.y, handleTolerance()) : null;
+        if (editable && handle) {
+          wireEdit = { edgeId: editable.edge.id, handle, base: editable.points, points: editable.points, patch: {}, dragging: true, key: '' };
+          focusedHandle = editable.handles.indexOf(handle);
+          try { app.canvas.setPointerCapture(event.pointerId); } catch { /* the window listeners carry it */ }
+          app.canvas.style.cursor = 'grabbing';
+          rebuildOverlay();
+          return;
+        }
+      }
 
       /*
        * Wiring takes precedence over every other gesture, but only in Edit Board mode, only when
@@ -594,6 +918,43 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       }
     };
 
+    /** The tile Ctrl+V pastes onto: under the cursor if it has been over the board, else the view's centre. */
+    const pasteTile = (): { x: number; y: number } => {
+      if (!app) return { x: 0, y: 0 };
+      const bounds = app.canvas.getBoundingClientRect();
+      const screen = lastPointer ?? { x: bounds.width / 2, y: bounds.height / 2 };
+      const world = screenToWorld(cameraStore.current, screen.x, screen.y);
+      return { x: Math.floor(world.x / TILE), y: Math.floor(world.y / TILE) };
+    };
+
+    /*
+     * Right click: the board's menu. On a node that belongs to the group, the menu acts on the
+     * group; on any other node it selects that node and acts on it alone; on bare substrate it
+     * offers Paste. A right press already abandons a half-drawn wire in onPointerDown.
+     */
+    const onContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      if (!app) return;
+      const screen = canvasPoint(event);
+      const point = screenToWorld(cameraStore.current, screen.x, screen.y);
+      const hit = hitTest(rects, point.x, point.y);
+      const nodeId = hit ? hit.nodeId : null;
+      let ids: string[] = [];
+      if (nodeId && group.has(nodeId)) {
+        ids = [...group];
+      } else if (nodeId) {
+        ids = [nodeId];
+        if (group.size) { group = new Set(); rebuildOverlay(); }
+        live.current.onSelect(nodeId);
+      }
+      live.current.onContextMenu?.({
+        screen: { x: event.clientX, y: event.clientY },
+        tile: { x: Math.floor(point.x / TILE), y: Math.floor(point.y / TILE) },
+        nodeId,
+        ids
+      });
+    };
+
     /** Hand a finished wire to the command bus. */
     const commitWire = (from: Port, to: Port): void => {
       live.current.onConnect?.(from.nodeId, to.nodeId);
@@ -602,6 +963,21 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const onPointerMove = (event: PointerEvent) => {
       if (!app) return;
       const screen = canvasPoint(event);
+      if (event.target === app.canvas) lastPointer = screen;
+
+      // A wire handle in hand: reshape, redrawing only when the snapped target changes.
+      if (wireEdit?.dragging) {
+        const editable = editableWire();
+        if (!editable) { wireEdit = null; return; }
+        const world = screenToWorld(cameraStore.current, screen.x, screen.y);
+        const step = wireEdit.handle.kind === 'from' || wireEdit.handle.kind === 'to' ? 8 : board.grid.tile;
+        const key = `${Math.round(world.x / step)},${Math.round(world.y / step)}`;
+        if (key === wireEdit.key) return;
+        const shaped = reshapeWire(editable.edge, wireEdit.base, wireEdit.handle, world);
+        wireEdit = shaped ? { ...wireEdit, key, patch: shaped.patch, points: shaped.points } : { ...wireEdit, key };
+        rebuildOverlay();
+        return;
+      }
 
       /*
        * Port hovering. Only in Edit Board mode, and only when no drag is under way — a glowing dot
@@ -716,6 +1092,15 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     };
 
     const endDrag = (event: PointerEvent) => {
+      // Letting go of a wire handle keeps the change: one edge.update. A press with no move changes nothing.
+      if (wireEdit?.dragging) {
+        if (app) {
+          try { app.canvas.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+          app.canvas.style.cursor = '';
+        }
+        commitWireEdit();
+        return;
+      }
       if (drag.kind === 'none' || !app) return;
       try { app.canvas.releasePointerCapture(event.pointerId); } catch { /* already released */ }
       app.canvas.style.cursor = '';
@@ -730,7 +1115,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           if (hit) toggleInGroup(hit.nodeId);
         } else {
           if (group.size) { group = new Set(); rebuildOverlay(); }
-          live.current.onSelect(hit ? hit.nodeId : null);
+          /*
+           * A click that lands on a wire selects the wire, unless a component is in the way.
+           * Printed things do not count as in the way: a backdrop sits under the wiring, and if it
+           * won, no wire drawn across it could ever be selected in Edit Board mode.
+           */
+          const wire = !hit || isPrinted(hit.kind) ? wireUnder(point.x, point.y) : null;
+          if (wire) live.current.onSelectEdge?.(wire);
+          else live.current.onSelect(hit ? hit.nodeId : null);
         }
       } else if (drag.kind === 'marquee' && drag.currentScreen) {
         const camera = cameraStore.current;
@@ -801,7 +1193,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const nameStyleFor = (node: BoardNode, lift = 0) => {
       const base = resolveToken(node.textColor, board.theme);
       return {
-        color: lift > 0 ? brighten(base, lift, board.theme) : base,
+        // At the peak of the pulse, the node's own glow colour if it names one; otherwise the ramp.
+        color: lift >= 2 && node.textGlowColor
+          ? resolveToken(node.textGlowColor, board.theme)
+          : lift > 0 ? brighten(base, lift, board.theme) : base,
         stroke: node.textStroke ? resolveToken(node.textStroke, board.theme, COPPER_DARK) : null,
         plateFill: resolveToken(node.plateColor, board.theme, board.theme.maskLight),
         plateBorder: resolveToken(node.plateBorder, board.theme, SILK_HEX)
@@ -877,21 +1272,51 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      * A spec assembled in one place cannot disagree with itself. Anything added to a node's
      * appearance from now on is added here, once.
      */
-    const specFor = (node: BoardNode, opts: { face?: HTMLImageElement | HTMLCanvasElement | null; textLift?: number } = {}) => {
+    /*
+     * Animated GIFs (packages/shared/gif.ts): every frame already dithered by main, stepped by the
+     * ticker on the GIF's own delays. `step` is the frame on screen, and specFor draws it, so any
+     * redraw of the node (a text pulse, an edit) shows the current frame rather than snapping to the
+     * first. Each frame image carries `liveFace`, so sprites.ts keeps ONE texture per node however
+     * many frames play (live-slots.ts), rather than one per frame.
+     */
+    interface GifAnim { frames: HTMLImageElement[]; delays: number[]; step: number }
+    const gifAnims = new Map<string, { face?: GifAnim; logo?: GifAnim }>();
+    const gifFrame = (nodeId: string, slot: 'face' | 'logo'): HTMLImageElement | null => {
+      const anim = gifAnims.get(nodeId)?.[slot];
+      return anim ? anim.frames[Math.max(0, anim.step)] ?? null : null;
+    };
+    const dropGif = (nodeId: string, slot: 'face' | 'logo'): void => {
+      const entry = gifAnims.get(nodeId);
+      if (!entry?.[slot]) return;
+      delete entry[slot];
+      if (!entry.face && !entry.logo) gifAnims.delete(nodeId);
+    };
+
+    const specFor = (node: BoardNode, opts: { face?: HTMLImageElement | HTMLCanvasElement | null; logo?: HTMLImageElement | null; textLift?: number } = {}) => {
       const fp = footprintOf(node);
       const show = displayOf(node);
       const lift = opts.textLift ?? 0;
+      /*
+       * A monitor draws the machine on its own face (see the monitor.system block further down).
+       * The widget wins over a wallpaper, a glow frame and a logo, and hides the centred designator
+       * that would sit on top of its readings. Only when it matches the footprint: straight after
+       * a resize the old one would be stretched, so the node shows its ordinary face until the next
+       * refresh repaints the widget at the new size.
+       */
+      // `showSystemGraphics: false` hands the face back to the node's own wallpaper and logo.
+      const widget = node.kind === 'monitor.system' && node.showSystemGraphics !== false ? monitorFaces.get(node.id) : undefined;
+      const live = widget && widget.width === fp.w * TILE && widget.height === fp.h * TILE ? widget : null;
       return {
         w: fp.w,
         h: fp.h,
-        designator: show.designator ? node.designator ?? '' : '',
+        designator: !live && show.designator ? node.designator ?? '' : '',
         name: show.name ? plateTitle(node) : undefined,
         kind: node.kind,
         maskLight: board.theme.maskLight,
         maskDark: board.theme.maskDark,
         signal: board.theme.signal,
-        face: show.thumbnail ? (opts.face !== undefined ? opts.face : faces.get(node.id)?.image ?? null) : null,
-        logo: show.logo ? logos.get(node.id)?.image ?? null : null,
+        face: live ?? (show.thumbnail ? (opts.face !== undefined ? opts.face : gifFrame(node.id, 'face') ?? faces.get(node.id)?.image ?? null) : null),
+        logo: !live && show.logo ? (opts.logo !== undefined ? opts.logo : gifFrame(node.id, 'logo') ?? logos.get(node.id)?.image ?? null) : null,
         nameSize: titleSize(node),
         frame: node.frame,
         priority: node.priority,
@@ -900,13 +1325,18 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       };
     };
 
-    /** Redraw one node's texture from whatever images it currently has. */
-    const drawNode = (nodeId: string, textLift = 0): void => {
+    /**
+     * Redraw one node's texture from whatever images it currently has.
+     *
+     * `place: false` redraws the texture where the sprite already is. The GIF frame stepper needs
+     * that: a node being dragged sits at the drag preview, and snapping it back to its saved
+     * position on every frame of its GIF would make it jerk under the cursor.
+     */
+    const drawNode = (nodeId: string, textLift = 0, place = true): void => {
       const node = nodeById(nodeId);
       const sprite = spriteById.get(nodeId);
       if (!node || !sprite || !sprites) return;
       const fp = footprintOf(node);
-      const show = displayOf(node);
 
       /*
        * A decor part IS its atlas sprite — the first thing on this board whose pixels come from a
@@ -929,8 +1359,11 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         return;
       }
       sprite.texture = sprites.placeholder(specFor(node, { textLift }));
-      placeSprite(nodeId);
+      if (place) placeSprite(nodeId);
     };
+
+    /** Bumped when the avatar's frames folder changes, so a `logoSource: avatar` logo is refetched. */
+    let avatarStamp = 0;
 
     /**
      * Fetch a node's wallpaper and logo, unless the identical ones are already decoded.
@@ -944,7 +1377,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const fp = footprintOf(node);
       const wants: { slot: 'face' | 'logo'; source: string | undefined; store: Map<string, ImageCacheEntry> }[] = [
         { slot: 'face', source: node.image, store: faces },
-        { slot: 'logo', source: node.logo, store: logos }
+        // `logoSource` decides what the logo slot is: the node's file, the avatar's face, or nothing.
+        { slot: 'logo', source: logoCacheSource(node, avatarStamp), store: logos }
       ];
 
       const show = displayOf(node);
@@ -952,16 +1386,18 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         // A slot that is switched off asks main for nothing. The image stays BOUND to the node —
         // only the drawing of it is off — so turning it back on costs a cached mosaic read.
         const wanted = slot === 'face' ? show.thumbnail : show.logo;
-        if (!source || !wanted) { store.delete(node.id); continue; }
+        if (!source || !wanted) { store.delete(node.id); dropGif(node.id, slot); continue; }
         // The rotation is part of the key. Without it, turning a backdrop would leave the old
         // mosaic in the cache and nothing would happen — the same shape as the pulse-glow
         // checkbox that did nothing because its work sat inside a fetch that was being skipped.
         // Everything that changes the pixels is in the key: the file, the box it is drawn into,
         // the rotation, and the logo's own scale. Leave one out and the setting appears to do
         // nothing, because the cached image is returned unchanged — see the pulse-glow checkbox.
-        const key = `${source}@${fp.w}x${fp.h}r${node.rotation ?? 0}s${node.logoScale ?? 100}`;
+        // `imageAnimate` too: ticking "Animate GIFs" off must fetch the still, not keep the frames.
+        const key = `${source}@${fp.w}x${fp.h}r${node.rotation ?? 0}s${node.logoScale ?? 100}a${node.imageAnimate === false ? 0 : 1}`;
         if (store.get(node.id)?.key === key) continue;
         store.set(node.id, { key, image: null });
+        dropGif(node.id, slot);
 
         void window.skynet['mosaic:forNode'](live.current.boardId, node.id, slot).then(async (result) => {
           if (disposed) return;
@@ -969,8 +1405,27 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           const img = new Image();
           img.src = result.dataUrl;
           await img.decode();
+          /*
+           * An animated GIF arrives as frames main has already dithered. All of them are decoded
+           * before the node is redrawn, so it never plays a half-loaded strip.
+           */
+          const animation = result.animation && node.imageAnimate !== false ? result.animation : null;
+          const frames = animation
+            ? await Promise.all(animation.frames.map(async (src) => {
+                const frame = new Image();
+                frame.src = src;
+                await frame.decode();
+                frame.dataset['liveFace'] = `anim:${node.id}`;
+                return frame;
+              }))
+            : [];
           if (disposed || store.get(node.id)?.key !== key) return;
-          store.set(node.id, { key, image: img });
+          if (animation && frames.length > 1) {
+            gifAnims.set(node.id, { ...gifAnims.get(node.id), [slot]: { frames, delays: animation.delays, step: -1 } });
+          } else {
+            dropGif(node.id, slot);
+          }
+          store.set(node.id, { key, image: animation && frames.length > 1 ? frames[0]! : img });
           if (slot === 'face') {
             faceCount++;
             glows.delete(node.id);
@@ -979,14 +1434,264 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
              * along the ramp the mosaic was already quantised onto, so it has to start from the
              * quantised pixels. Built here, once, the moment those pixels exist.
              */
-            if (node.pulseGlow && !live.current.reducedMotion) {
-              const frames = buildGlowFrames(img, board.theme);
-              if (frames.length) glows.set(node.id, frames);
+            // A playing GIF is its own motion; a glow cycle built from frame 0 would fight it.
+            if (node.pulseGlow && !live.current.reducedMotion && !gifAnims.get(node.id)?.face) {
+              const frames = buildGlowFrames(img, board.theme, crestOf(node) || undefined);
+              if (frames.length) { glows.set(node.id, frames); glowCrest.set(node.id, crestOf(node)); }
             }
           }
           drawNode(node.id);
+          // No GIF left on this node (switched off, or replaced by a still): the texture its GIF slot
+          // last showed is no longer drawn, unless the still IS that texture. See releaseLive.
+          if (!gifAnims.has(node.id)) sprites?.releaseLive(`anim:${node.id}`, spriteById.get(node.id)?.texture);
         }).catch((err: unknown) => console.warn(`[mosaic] ${node.id} ${slot} failed`, err));
       }
+    };
+
+    // New or changed avatar frames: refetch only the logos that show the avatar's face.
+    const offAvatar = window.skynet.on('avatar:changed', () => {
+      avatarStamp++;
+      for (const n of board.nodes) if (n.logoSource === 'avatar') loadImages(n);
+      // The animated faces reload their frames and redraw.
+      resetAvatarFrames();
+      if (board.nodes.some((n) => isLiveAvatarLogo(n))) void loadAvatarPayload();
+    });
+
+    /* ---------------- logoSource: avatar-live — the animated JARVIS face as a logo ---------------- */
+
+    /*
+     * William: "on a node I can select the animated robot face as a logo instead of an image file and
+     * it uses the box it generates for the typical window but as a logo graphic."
+     *
+     * So the logo box holds the face window's own composition: its mask-dark ground and copper-dark
+     * edge, the face at the largest whole-number scale that fits (liveLogoLayout), the float, the
+     * blinks, and the mouth while that node's JARVIS is responding (services/avatar-mood.ts pushes
+     * `avatar:nodeMood`). A world-space layer above the components, so it pans, zooms and layers with
+     * the board, and it follows its node's sprite, which is what a drag moves. It is NOT baked into the
+     * node's texture: a face that changes several times a second would otherwise rebuild the whole
+     * component each time. Faces step at most ~30 times a second, and a sprite's texture changes only
+     * when its frame or float does. The frames keep their true colours, the one place docs/02's palette
+     * lock does not hold, recorded there as William's choice. Printed kinds (backdrops, parts, notes,
+     * zones) get no live face.
+     */
+    let avatarLayer: Container | null = null;
+    let avatarPayload: AvatarPayload | null = null;
+    let avatarLoading = false;
+    const avatarImages = new Map<string, HTMLImageElement>();
+    const avatarTextures = new Map<string, Texture>();
+    const nodeMoods = new Map<string, AvatarMood>();
+    interface LiveLogo {
+      box: Container;
+      face: Sprite;
+      /** Whole-number scale of the frame, or 1/divisor. */
+      ratio: number;
+      integer: boolean;
+      /** 1 at a whole scale; N when the box is smaller than a frame and every Nth pixel is taken. */
+      divisor: number;
+      /** The face's size in world pixels when decimated (unused at a whole scale). */
+      w: number;
+      h: number;
+      faceX: number;
+      faceY: number;
+      /** How far the float may move the face and keep it inside the box's edge. */
+      floatMin: number;
+      floatMax: number;
+      /** From the node's sprite (which a drag moves) to the box's top-left. */
+      offX: number;
+      offY: number;
+      /** What is on screen now, so a tick that changes neither frame nor float touches nothing. */
+      lastFile: string | null;
+      lastFloat: number;
+    }
+    const liveLogos = new Map<string, LiveLogo>();
+    let lastWatchKey = '';
+    let lastAvatarTick = -1;
+
+    const offNodeMood = window.skynet.on('avatar:nodeMood', (p) => {
+      if (p.boardId === live.current.boardId) nodeMoods.set(p.nodeId, p.mood);
+    });
+
+    const resetAvatarFrames = (): void => {
+      for (const texture of avatarTextures.values()) texture.destroy(true);
+      avatarTextures.clear();
+      avatarImages.clear();
+      avatarPayload = null;
+      for (const entry of liveLogos.values()) entry.lastFile = null;
+    };
+
+    const loadAvatarPayload = async (): Promise<void> => {
+      if (avatarLoading || typeof window.skynet['avatar:frames'] !== 'function') return;
+      avatarLoading = true;
+      try {
+        const payload = await window.skynet['avatar:frames']();
+        const urls = [payload.idle, ...payload.blink, ...payload.talk].filter((u): u is string => Boolean(u));
+        const decoded = await Promise.all(urls.map(async (url) => {
+          const img = new Image();
+          img.src = url;
+          await img.decode();
+          return [url, img] as const;
+        }));
+        if (disposed) return;
+        resetAvatarFrames();
+        for (const [url, img] of decoded) avatarImages.set(url, img);
+        avatarPayload = payload;
+        buildLiveLogos();
+      } catch (err) {
+        console.warn('[ui] animated face logo: the frames did not load', err);
+      } finally {
+        avatarLoading = false;
+      }
+    };
+
+    /** A frame's texture for this box: the frame itself at a whole scale, a fitted copy otherwise. */
+    const avatarTexture = (url: string, entry: LiveLogo): Texture | null => {
+      const img = avatarImages.get(url);
+      if (!img) return null;
+      const key = entry.integer ? `whole|${url}` : `${entry.w}x${entry.h}|${url}`;
+      let texture = avatarTextures.get(key);
+      if (!texture) {
+        if (entry.integer) {
+          texture = Texture.from(img);
+        } else {
+          /*
+           * Smaller than one frame: every Nth pixel, nearest, from a centred crop that is an exact
+           * multiple of N, so no colour is invented and the sampling phase is the same on every frame.
+           * The overview zooms' rule (docs/02 rule 4), applied once, here.
+           */
+          const n = entry.divisor;
+          const canvas = document.createElement('canvas');
+          canvas.width = entry.w;
+          canvas.height = entry.h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          ctx.imageSmoothingEnabled = false;
+          const sx = Math.floor((img.width - entry.w * n) / 2);
+          const sy = Math.floor((img.height - entry.h * n) / 2);
+          ctx.drawImage(img, sx, sy, entry.w * n, entry.h * n, 0, 0, entry.w, entry.h);
+          texture = Texture.from(canvas);
+        }
+        texture.source.scaleMode = 'nearest';
+        avatarTextures.set(key, texture);
+      }
+      return texture;
+    };
+
+    /** Follow each node every frame (a drag moves its sprite directly); step the faces ~30 times a second. */
+    const stepLiveLogos = (seconds: number, force = false): void => {
+      if (!liveLogos.size || !avatarPayload?.ok) return;
+      for (const [nodeId, entry] of liveLogos) {
+        const sprite = spriteById.get(nodeId);
+        if (!sprite) continue;
+        const x = Math.round(sprite.x + entry.offX);
+        const y = Math.round(sprite.y + entry.offY);
+        if (entry.box.x !== x) entry.box.x = x;
+        if (entry.box.y !== y) entry.box.y = y;
+      }
+      const t = seconds * 1000;
+      const tick = Math.floor(t / 33);
+      if (!force && tick === lastAvatarTick) return;
+      lastAvatarTick = tick;
+      const base = avatarPayload.timing;
+      const timing = live.current.reducedMotion
+        ? { ...base, wobblePx: 0, talkFps: Math.max(1, Math.round(base.talkFps / 2)) }
+        : base;
+      // Under reduced motion the face neither floats nor blinks; the mouth still says "responding".
+      const set = {
+        idle: avatarPayload.idle,
+        blink: live.current.reducedMotion ? [] : avatarPayload.blink,
+        talk: avatarPayload.talk
+      };
+      for (const [nodeId, entry] of liveLogos) {
+        const frame = avatarFrameAt(set, nodeMoods.get(nodeId) ?? 'idle', t, timing);
+        if (!frame.file) continue;
+        const float = Math.max(entry.floatMin, Math.min(entry.floatMax, Math.round(wobbleOffset(t, timing) * entry.ratio)));
+        if (frame.file === entry.lastFile && float === entry.lastFloat) continue;
+        const texture = avatarTexture(frame.file, entry);
+        if (!texture) continue;
+        entry.lastFile = frame.file;
+        entry.lastFloat = float;
+        entry.face.texture = texture;
+        entry.face.y = entry.faceY + float;
+      }
+    };
+
+    const buildLiveLogos = (): void => {
+      if (!avatarLayer) return;
+      clearLayer(avatarLayer);
+      liveLogos.clear();
+      lastAvatarTick = -1;
+      const wanted = board.nodes.filter((n) =>
+        isLiveAvatarLogo(n) && displayOf(n).logo && !isPrinted(n.kind) &&
+        // A monitor's widget owns its face, logo included.
+        !(n.kind === 'monitor.system' && n.showSystemGraphics !== false));
+
+      // Ask main to watch who is talking, only when the set changes. An empty set stops it.
+      const ids = wanted.map((n) => n.id);
+      const watchKey = `${live.current.boardId}|${ids.join(',')}`;
+      if (watchKey !== lastWatchKey && typeof window.skynet['avatar:watchNodes'] === 'function') {
+        lastWatchKey = watchKey;
+        void window.skynet['avatar:watchNodes'](live.current.boardId, ids)
+          .then((r) => { for (const [id, mood] of Object.entries(r.moods)) nodeMoods.set(id, mood); })
+          .catch(() => undefined);
+      }
+      if (!wanted.length) return;
+      if (!avatarPayload) { void loadAvatarPayload(); return; }
+      // No idle.png yet: nothing to draw, and the inspector says so (AvatarLogoNote).
+      if (!avatarPayload.ok) return;
+
+      const frame = { width: avatarPayload.width, height: avatarPayload.height };
+      for (const node of wanted) {
+        const fp = footprintOf(node);
+        const box = logoBoxPx(fp, node.logoScale, TILE);
+        const layout = liveLogoLayout(frame, box, avatarPayload.timing.wobblePx);
+        if (layout.width < 1) continue;
+        const container = new Container();
+        const ground = new Graphics();
+        ground.rect(0, 0, box.width, box.height).fill({ color: hexToNumber(board.theme.maskDark) });
+        // The face window's edge: one whole pixel of copper-dark, four rects, so it never straddles a pixel.
+        ground
+          .rect(0, 0, box.width, 1).rect(0, box.height - 1, box.width, 1)
+          .rect(0, 0, 1, box.height).rect(box.width - 1, 0, 1, box.height)
+          .fill({ color: hexToNumber(COPPER_DARK) });
+        const face = new Sprite();
+        face.roundPixels = true;
+        if (layout.integer) face.scale.set(layout.ratio);
+        container.addChild(ground, face);
+        avatarLayer.addChild(container);
+        const off = textureOffset(displayOf(node).name ? node.name : undefined, titleSize(node), node.frame);
+        const faceX = Math.floor((box.width - layout.width) / 2);
+        const faceY = Math.floor((box.height - layout.height) / 2);
+        const entry: LiveLogo = {
+          box: container,
+          face,
+          ratio: layout.ratio,
+          integer: layout.integer,
+          divisor: layout.divisor,
+          w: layout.width,
+          h: layout.height,
+          faceX,
+          faceY,
+          // Inside the 1 px edge, in whatever room the layout left.
+          floatMin: Math.min(0, 1 - faceY),
+          floatMax: Math.max(0, box.height - 1 - layout.height - faceY),
+          offX: off.x + Math.floor((fp.w * TILE - box.width) / 2),
+          offY: off.y + Math.floor((fp.h * TILE - box.height) / 2),
+          lastFile: null,
+          lastFloat: 0
+        };
+        face.x = entry.faceX;
+        face.y = entry.faceY;
+        liveLogos.set(node.id, entry);
+      }
+      stepLiveLogos(performance.now() / 1000, true);
+    };
+
+    const stopLiveLogos = (): void => {
+      if (lastWatchKey && typeof window.skynet['avatar:watchNodes'] === 'function') {
+        void window.skynet['avatar:watchNodes'](live.current.boardId, []).catch(() => undefined);
+      }
+      liveLogos.clear();
+      resetAvatarFrames();
     };
 
     /**
@@ -1025,32 +1730,27 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
       routedCount = 0;
       fallbackCount = 0;
+      const routeContext = { grid, obstacles, boardPx, tile: board.grid.tile };
       for (const edge of board.edges) {
         const from = rectById.get(edge.from);
         const to = rectById.get(edge.to);
         if (!from || !to) continue;
-
-        let points: Point[] | null = null;
-        if (edge.waypoints?.length) {
-          points = routeOrthogonal(from, to, edge.waypoints, board.grid.tile);
-        } else {
-          const path = routeAStar(
-            { from: { ...from, nodeId: edge.from }, to: { ...to, nodeId: edge.to }, obstacles, boardPx },
-            grid
-          );
-          if (path) { points = attachEndpoints(path, from, to); routedCount++; }
-        }
-        if (!points) {
-          points = routeOrthogonal(from, to, edge.waypoints, board.grid.tile);
-          if (!edge.waypoints?.length) fallbackCount++;
-        }
-
-        routed.push({ edge, points, style: styleFor(edge, board.theme.signal) });
+        // Automatic, or through the ends and elbows pinned by hand. See wire-route.ts.
+        const route = routeEdge(edge, from, to, routeContext);
+        if (route.routed) routedCount++;
+        if (route.fellBack) fallbackCount++;
+        routed.push({ edge, points: route.points, style: styleFor(edge, board.theme.signal, board.theme) });
       }
+      // Wires that share a run get a lane each, so two wires never draw as one. See wire-lanes.ts.
+      const laned = separateParallel(routed.map((r) => ({ id: r.edge.id, points: r.points, width: r.style.width, outline: r.style.outlineWidth })));
+      for (const r of routed) r.points = laned.get(r.edge.id) ?? r.points;
+
       console.info(`[router] ${routedCount} auto-routed, ${fallbackCount} fell back to a direct run`);
       traceLayer.addChild(buildTraceLayer(routed));
-      // The same polylines that were just drawn, so a courier walks exactly the copper on screen.
+      // The same polylines that were just drawn, so a courier walks exactly the copper on screen
+      // and a click lands on exactly the wire it looks like it lands on.
       wires = routed.map((r) => ({ id: r.edge.id, from: r.edge.from, to: r.edge.to, points: r.points }));
+      wireStyles = new Map(routed.map((r) => [r.edge.id, r.style]));
     };
 
     const buildNodes = (): void => {
@@ -1101,9 +1801,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       // Drop cached images for nodes that no longer exist, so a long editing session does not
       // accumulate decoded bitmaps for deleted components.
       const alive = new Set(board.nodes.map((n) => n.id));
+      const gone = new Set<string>();
       for (const store of [faces, logos]) {
-        for (const id of [...store.keys()]) if (!alive.has(id)) store.delete(id);
+        for (const id of [...store.keys()]) if (!alive.has(id)) { store.delete(id); gone.add(id); }
       }
+      for (const id of [...gifAnims.keys()]) if (!alive.has(id)) { gifAnims.delete(id); gone.add(id); }
+      // A GIF node that is gone frees the one texture its slot last showed. Its sprite was destroyed
+      // above, so nothing draws it. A no-op for every node that never played a GIF.
+      for (const id of gone) sprites.releaseLive(`anim:${id}`);
       /*
        * Reconcile the glow cycles against what the board now says.
        *
@@ -1114,16 +1819,18 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        */
       for (const id of [...glows.keys()]) {
         const node = nodeById(id);
-        if (!alive.has(id) || !node?.pulseGlow) glows.delete(id);
+        // A changed crest colour is a different cycle: drop it and let the loop below rebuild it.
+        if (!alive.has(id) || !node?.pulseGlow || glowCrest.get(id) !== crestOf(node)) glows.delete(id);
       }
       for (const node of board.nodes) {
-        if (!node.pulseGlow || glows.has(node.id)) continue;
+        if (!node.pulseGlow || glows.has(node.id) || gifAnims.get(node.id)?.face) continue;
         if (live.current.reducedMotion) continue;
         const face = faces.get(node.id)?.image;
         if (!face) continue; // The image is still loading; its own arrival will build the cycle.
-        const frames = buildGlowFrames(face, board.theme);
-        if (frames.length) glows.set(node.id, frames);
+        const frames = buildGlowFrames(face, board.theme, crestOf(node) || undefined);
+        if (frames.length) { glows.set(node.id, frames); glowCrest.set(node.id, crestOf(node)); }
       }
+      buildLiveLogos();
     };
 
     const buildZones = (): void => {
@@ -1142,15 +1849,44 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      */
     let glowingPlates: string[] = [];
 
-    const buildNotes = (glowStep = 0): void => {
+    /** `liftFor` gives each glowing note its own pulse step, since each has its own speed. */
+    const buildNotes = (liftFor?: (node: BoardNode) => number): void => {
       if (!noteLayer) return;
       clearLayer(noteLayer);
       glowingNotes = [];
       for (const node of board.nodes) {
         if (node.kind !== 'note.silk') continue;
-        const note = buildSilkNote(node, board.theme, node.textGlow ? glowStep : 0);
+        const note = buildSilkNote(node, board.theme, node.textGlow ? (liftFor?.(node) ?? 0) : 0);
         if (note) noteLayer.addChild(note);
         if (node.textGlow) glowingNotes.push(node.id);
+      }
+    };
+
+    /**
+     * Chase and scan lights, for every node that has them on. One Graphics, cleared and redrawn:
+     * a handful of rects per lit node, twenty times a second, and nothing at all when no node has
+     * an effect. Geometry and speeds are effects.ts; this only places and colours them.
+     */
+    const drawEffects = (seconds: number): void => {
+      const g = effectGraphics;
+      if (!g) return;
+      g.clear();
+      if (live.current.reducedMotion) return;
+      for (const node of board.nodes) {
+        if (!node.chase && !node.scan) continue;
+        const r = nodeRect(node);
+        if (node.chase) {
+          const lit = chaseRects(r.w, r.h, seconds, (node.chaseSpeed ?? 100) / 100);
+          for (const p of lit) g.rect(r.x + p.x, r.y + p.y, p.w, p.h);
+          if (lit.length) g.fill({ color: hexToNumber(resolveToken(node.chaseColor ?? 'signal', board.theme)) });
+        }
+        if (node.scan) {
+          const line = scanRect(r.w, r.h, seconds, (node.scanSpeed ?? 100) / 100);
+          if (line) {
+            g.rect(r.x + line.x, r.y + line.y, line.w, line.h);
+            g.fill({ color: hexToNumber(resolveToken(node.scanColor ?? 'signal', board.theme)) });
+          }
+        }
       }
     };
 
@@ -1209,6 +1945,17 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        * group is being dragged, a ghost where each member would land instead, in fault red if the
        * group as a whole cannot land there.
        */
+      // The selected wire, redrawn with a halo in the room's signal colour.
+      const edgeId = live.current.selectedEdgeId;
+      const selectedWire = edgeId ? wires.find((w) => w.id === edgeId) : undefined;
+      const selectedStyle = edgeId ? wireStyles.get(edgeId) : undefined;
+      if (selectedWire && selectedStyle) {
+        // Mid-reshape, the wire is drawn where it would go if let go now.
+        const shown = wireEdit && wireEdit.edgeId === edgeId ? wireEdit.points : selectedWire.points;
+        overlayLayer.addChild(buildWireHighlight(shown, selectedStyle, board.theme.signal, 2));
+        if (live.current.editMode) overlayLayer.addChild(buildWireHandles(wireHandles(shown), focusedHandle, board.theme.signal));
+      }
+
       const draggingGroup = drag.kind === 'group' && drag.exceeded && drag.members && drag.delta;
       if (!draggingGroup) {
         for (const id of group) {
@@ -1422,6 +2169,59 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
      * changes it unless the room itself changed — in which case the whole application is being
      * recreated anyway.
      */
+    /*
+     * The room's tiled floor. William: "select an image that is a perfect square and that image can
+     * be tiled as the board background, or else it defaults to what it already is. enable background
+     * image tile is a toggle."
+     *
+     * The picture comes through main's mosaic, square-checked and dithered onto the room's palette
+     * like any backdrop, and is tiled across the whole board in WORLD space at an integer scale, so
+     * it pans and zooms with everything else and stays pixel-exact. The procedural substrate is only
+     * hidden: the toggle going off, or a picture that fails its check, puts it straight back. Keyed,
+     * so the rebuild after every ordinary edit costs one string comparison.
+     */
+    const applyTile = (): void => {
+      if (!substrateLayer || !substrateSprite) return;
+      const look = resolveLook(board.look);
+      const key = look.tileEnabled && look.tileImage
+        ? [look.tileImage, look.tileScale, boardPx.width, boardPx.height, board.theme.maskDark, board.theme.maskLight, board.theme.signal].join('|')
+        : '';
+      if (key === tileKey) return;
+      tileKey = key;
+      const restoreSubstrate = (): void => {
+        tileSprite?.destroy({ texture: true, textureSource: true });
+        tileSprite = null;
+        if (substrateSprite) substrateSprite.visible = true;
+      };
+      if (!key) { restoreSubstrate(); return; }
+      const refuse = (why: string): void => {
+        restoreSubstrate();
+        live.current.onToast?.(`BACKGROUND TILE NOT USED — ${why}. SHOWING THE ROOM'S OWN SUBSTRATE.`, 'warn');
+      };
+      void window.skynet['mosaic:boardTile'](live.current.boardId).then(async (result) => {
+        if (disposed || tileKey !== key) return;
+        if (!result.ok) { refuse(result.error); return; }
+        if (result.width !== result.height) { refuse(`NOT SQUARE — ${result.width}x${result.height}`); return; }
+        const img = new Image();
+        img.src = result.dataUrl;
+        try { await img.decode(); } catch { refuse('COULD NOT DECODE IT'); return; }
+        if (disposed || tileKey !== key || !substrateLayer) return;
+        // Through a canvas, the same path the substrate's own texture takes.
+        const canvas = document.createElement('canvas');
+        canvas.width = result.width;
+        canvas.height = result.height;
+        canvas.getContext('2d')?.drawImage(img, 0, 0);
+        const sprite = new TilingSprite({ texture: Texture.from(canvas), width: boardPx.width, height: boardPx.height });
+        sprite.tileScale.set(look.tileScale, look.tileScale);
+        restoreSubstrate();
+        tileSprite = sprite;
+        substrateLayer.addChild(sprite);
+        if (substrateSprite) substrateSprite.visible = false;
+      }).catch((err) => {
+        if (!disposed && tileKey === key) refuse((err as Error).message);
+      });
+    };
+
     const rebuild = (next: Board): void => {
       board = next;
       // A member deleted, or moved to another room by an agent, leaves the group rather than
@@ -1437,8 +2237,66 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       rebuildOverlay();
       applyFocus();
       buildCourierRoutes();
+      applyTile();
       builtRef.current = next;
     };
+
+    /* ---------------- monitor.system: a live widget on the node itself ---------------- */
+
+    /*
+     * William: "I want the actual node to be a monitor / show live update data like a widget."
+     *
+     * Every monitor.system node paints the machine's readings onto its own face, refreshed every
+     * two seconds. Only while this board has such a node and the window is visible: on every other
+     * board, and while minimised, the timer asks main for nothing. A widget whose pixels would come
+     * out the same is not repainted, and sprites.ts keeps ONE texture per widget rather than one per
+     * refresh (live-slots.ts). The drawing is monitor-widget.ts; double-click still opens the full
+     * panel. Self-contained: the timer clears itself once the effect is disposed.
+     */
+    const monitorFaces = new Map<string, HTMLCanvasElement>();
+    let monitorSnapshot: Parameters<typeof updateMonitorFace>[2] = null;
+    let monitorBusy = false;
+
+    const paintMonitors = (): void => {
+      if (!sprites) return; // The font and the sprite store are not ready yet.
+      const monitors = board.nodes.filter((n) => n.kind === 'monitor.system');
+      for (const id of [...monitorFaces.keys()]) {
+        if (!monitors.some((n) => n.id === id)) monitorFaces.delete(id);
+      }
+      for (const node of monitors) {
+        const fp = footprintOf(node);
+        const { canvas, changed } = updateMonitorFace(
+          monitorFaces.get(node.id), node.id, monitorSnapshot, fp.w * TILE, fp.h * TILE, board.theme
+        );
+        monitorFaces.set(node.id, canvas);
+        if (changed) drawNode(node.id);
+      }
+    };
+
+    const pollMonitors = async (): Promise<void> => {
+      if (disposed || monitorBusy || document.hidden) return;
+      // Only while a monitor is actually on screen: a reading nobody can see is PowerShell for nothing.
+      // Off screen, the face keeps its last reading and refreshes within one tick of coming back.
+      const view = viewport();
+      if (!rects.some((r) => r.kind === 'monitor.system' && isVisible(r, cameraStore.current, view))) return;
+      // Dashes straight away, rather than the ordinary face, while the first reading is taken.
+      if (!monitorSnapshot) paintMonitors();
+      monitorBusy = true;
+      try {
+        monitorSnapshot = await window.skynet['hardware:snapshot']({ light: true });
+      } catch (err) {
+        // Keep the last reading. A widget that blanks on one failed refresh reads as a crash.
+        console.warn('[ui] monitor widget: hardware snapshot failed', err);
+      } finally {
+        monitorBusy = false;
+      }
+      if (!disposed) paintMonitors();
+    };
+
+    const monitorTimer = setInterval(() => {
+      if (disposed) { clearInterval(monitorTimer); return; }
+      void pollMonitors();
+    }, 2000);
 
     /* ---------------- build the scene ---------------- */
 
@@ -1472,14 +2330,15 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
         // Layer 0 — substrate. Built once; see rebuild().
         substrateLayer = new Container();
-        substrateLayer.addChild(buildSubstrate(
+        substrateSprite = buildSubstrate(
           {
             maskDark: board.theme.maskDark,
             maskLight: board.theme.maskLight,
             seed: board.theme.substrateSeed ?? 1
           },
           boardPx
-        ));
+        );
+        substrateLayer.addChild(substrateSprite);
         world.addChild(substrateLayer);
 
         /*
@@ -1518,6 +2377,13 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         partLayer = new Container(); world.addChild(partLayer);
         couriers = new CourierLayer(); world.addChild(couriers.container);
         nodeLayer = new Container(); world.addChild(nodeLayer);
+        // The animated JARVIS-face logos (logoSource: avatar-live), on the components they belong to.
+        avatarLayer = new Container(); world.addChild(avatarLayer);
+        // Effects light the components, so they sit directly over them and under the notes.
+        effectLayer = new Container(); world.addChild(effectLayer);
+        effectGraphics = new Graphics();
+        effectGraphics.roundPixels = true;
+        effectLayer.addChild(effectGraphics);
         noteLayer = new Container(); world.addChild(noteLayer);
         gridLayer = new Container(); world.addChild(gridLayer);
         overlayLayer = new Container(); world.addChild(overlayLayer);
@@ -1557,6 +2423,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         let fpsAccum = 0;
         let fps = 0;
         let lastSelection: string | null = null;
+        let lastEdgeSelection: string | null = null;
         let lastBrokenKey = '';
         let lastFocus = false;
         let lastEditMode = live.current.editMode;
@@ -1565,8 +2432,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         let lastRouteKey = '';
         let pulse = 0;
         let lastPulseStep = -1;
-        let lastGlowStep = -1;
-        let lastTextGlow = -1;
+        /** The glow frame and text lift each node is showing, so a node is redrawn only when its own step changes. */
+        const glowSteps = new Map<string, number>();
+        const plateLifts = new Map<string, number>();
+        let lastNoteLifts = '';
+        let lastEffectTick = -1;
+        const TEXT_LIFTS = [0, 1, 2, 2, 1, 0] as const;
+        const liftOf = (node: BoardNode, seconds: number): number =>
+          TEXT_LIFTS[cycleFrame(seconds, TEXT_LIFTS.length, TEXT_LIFTS.length, (node.textGlowSpeed ?? 100) / 100)] ?? 0;
 
         app.ticker.add((ticker) => {
           const view = viewport();
@@ -1645,20 +2518,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
            * The pulse glow. One texture swap per glowing node per glow frame — the frames are
            * already built, so this costs a texture assignment and nothing else.
            */
+          const seconds = performance.now() / 1000;
+
+          // Per node, because each has its own `pulseSpeed`: a node is redrawn only when ITS frame
+          // changes, so a slow pulse costs a slow node's worth of texture swaps and no more.
           if (glows.size && !live.current.reducedMotion) {
-            const step = Math.floor(pulse / Math.max(1, Math.round(60 / GLOW_FPS))) % GLOW_FRAMES;
-            if (step !== lastGlowStep) {
-              lastGlowStep = step;
-              for (const [nodeId, frames] of glows) {
-                const sprite = spriteById.get(nodeId);
-                const glowFrame = frames[step % frames.length];
-                if (!sprite || !glowFrame || !sprites) continue;
-                const node = nodeById(nodeId);
-                if (!node) continue;
-                // Only the FACE differs from a normal draw. Everything else comes from the one
-                // spec builder, so a pulse can never strip a node of its frame again.
-                sprite.texture = sprites.placeholder(specFor(node, { face: glowFrame }));
-              }
+            for (const [nodeId, frames] of glows) {
+              const node = nodeById(nodeId);
+              const sprite = spriteById.get(nodeId);
+              if (!node || !sprite || !sprites || !frames.length) continue;
+              const step = cycleFrame(seconds, GLOW_FPS, frames.length, (node.pulseSpeed ?? 100) / 100);
+              if (glowSteps.get(nodeId) === step) continue;
+              glowSteps.set(nodeId, step);
+              const glowFrame = frames[step];
+              if (!glowFrame) continue;
+              // Only the FACE differs from a normal draw. Everything else comes from the one
+              // spec builder, so a pulse can never strip a node of its frame again.
+              sprite.texture = sprites.placeholder(specFor(node, { face: glowFrame }));
             }
           }
 
@@ -1675,13 +2551,55 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
            * a six-colour ramp is as much brightness as this palette has to give.
            */
           if ((glowingNotes.length || glowingPlates.length) && !live.current.reducedMotion) {
-            const step = Math.floor(pulse / 10) % 6;
-            const lift = [0, 1, 2, 2, 1, 0][step] ?? 0;
-            if (lift !== lastTextGlow) {
-              lastTextGlow = lift;
-              if (glowingNotes.length) buildNotes(lift);
-              for (const id of glowingPlates) drawNode(id, lift);
+            // Each glowing node on its own `textGlowSpeed`; redrawn only when its own lift changes.
+            for (const id of glowingPlates) {
+              const node = nodeById(id);
+              if (!node) continue;
+              const lift = liftOf(node, seconds);
+              if (plateLifts.get(id) === lift) continue;
+              plateLifts.set(id, lift);
+              drawNode(id, lift);
             }
+            if (glowingNotes.length) {
+              const lifts = glowingNotes.map((id) => { const n = nodeById(id); return n ? liftOf(n, seconds) : 0; }).join('');
+              if (lifts !== lastNoteLifts) {
+                lastNoteLifts = lifts;
+                buildNotes((node) => liftOf(node, seconds));
+              }
+            }
+          }
+
+          /*
+           * Animated GIFs, on their own delays (gif.ts). A node is redrawn only when one of its GIFs
+           * changes frame, and only while it is on screen; under reduced motion they hold frame 0.
+           */
+          if (gifAnims.size && !live.current.reducedMotion && sprites) {
+            const ms = seconds * 1000;
+            for (const [nodeId, anim] of gifAnims) {
+              const node = nodeById(nodeId);
+              const sprite = spriteById.get(nodeId);
+              if (!node || !sprite) continue;
+              const rect = rects.find((r) => r.nodeId === nodeId);
+              if (rect && !isVisible(rect, camera, view)) continue;
+              let changed = false;
+              for (const a of [anim.face, anim.logo]) {
+                if (!a) continue;
+                const step = gifFrameAt(a.delays, ms);
+                if (step !== a.step) { a.step = step; changed = true; }
+              }
+              // Through drawNode, the one redraw path (test/render-invariants), without re-placing the sprite.
+              if (changed) drawNode(nodeId, plateLifts.get(nodeId) ?? 0, false);
+            }
+          }
+
+          // The animated JARVIS-face logos: follow their nodes, and step their faces.
+          stepLiveLogos(seconds);
+
+          // Chase and scan lights, at EFFECT_FPS. See effects.ts.
+          const effectTick = Math.floor(seconds * EFFECT_FPS);
+          if (effectTick !== lastEffectTick) {
+            lastEffectTick = effectTick;
+            drawEffects(seconds);
           }
 
           if (animated.length && !live.current.reducedMotion) {
@@ -1709,18 +2627,28 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             hoverPort = null;
             // A group only means something in Edit Board mode, where it can be moved.
             if (!lastEditMode) group = new Set();
+            // So do wire handles; leaving the mode drops an unkept reshape.
+            wireEdit = null;
+            focusedHandle = -1;
             buildGrid();
             rebuildOverlay();
           }
 
-          const brokenKey = Object.entries(live.current.targets).map(([id, t]) => `${id}:${t.state}`).join('|');
+          const brokenKey = targetsKey(live.current.targets);
           const dragKey = drag.exceeded && (drag.kind === 'move' || drag.kind === 'resize')
             ? `${drag.kind}:${drag.nodeId}:${drag.currentTile?.x},${drag.currentTile?.y}:${drag.currentFootprint?.w}x${drag.currentFootprint?.h}:${drag.valid}`
             : drag.exceeded && drag.kind === 'group'
               ? `group:${drag.delta?.dx},${drag.delta?.dy}:${drag.valid}`
               : '';
-          if (live.current.selectedId !== lastSelection || brokenKey !== lastBrokenKey || dragKey !== lastDragKey) {
+          const edgeSelection = live.current.selectedEdgeId ?? null;
+          if (
+            live.current.selectedId !== lastSelection || edgeSelection !== lastEdgeSelection ||
+            brokenKey !== lastBrokenKey || dragKey !== lastDragKey
+          ) {
+            // Another wire, or none: a half-made change and the focused handle belong to the old one.
+            if (edgeSelection !== lastEdgeSelection) { wireEdit = null; focusedHandle = -1; }
             lastSelection = live.current.selectedId;
+            lastEdgeSelection = edgeSelection;
             lastBrokenKey = brokenKey;
             lastDragKey = dragKey;
             rebuildOverlay();
@@ -1780,6 +2708,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         window.addEventListener('pointerup', endDrag);
         window.addEventListener('pointercancel', endDrag);
         app.canvas.addEventListener('dblclick', onDoubleClick);
+        app.canvas.addEventListener('contextmenu', onContextMenu);
+        // Touch: two-finger pinch through the exact zoom levels, long-press for the menu, double-tap to open.
+        touch = new TouchGestures(app.canvas, {
+          zoomStep: (direction, anchor) => {
+            const camera = cameraStore.current;
+            const next = stepZoom(camera.zoom, direction);
+            if (next !== camera.zoom) cameraStore.current = clampCamera(setZoom(camera, next, viewport(), anchor), boardPx, viewport());
+          },
+          panBy: (dx, dy) => {
+            const camera = cameraStore.current;
+            cameraStore.current = clampCamera({ ...camera, x: camera.x - dx / camera.zoom, y: camera.y - dy / camera.zoom }, boardPx, viewport());
+          },
+          cancelDrag: (pointerId) => window.dispatchEvent(new PointerEvent('pointercancel', { pointerId, button: -1 })),
+          longPress: (clientX, clientY) => onContextMenu({ clientX, clientY, preventDefault: () => undefined } as unknown as MouseEvent),
+          doubleTap: (clientX, clientY) => onDoubleClick({ clientX, clientY } as MouseEvent),
+          toCanvas: (clientX, clientY) => canvasPoint({ clientX, clientY })
+        });
         // Middle-drag pans, and the browser's default for middle-click is autoscroll.
         app.canvas.addEventListener('auxclick', (e) => e.preventDefault());
       } catch (err) {
@@ -1790,6 +2735,9 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     return () => {
       disposed = true;
+      offAvatar();
+      offNodeMood();
+      stopLiveLogos();
       rebuildRef.current = null;
       builtRef.current = null;
       window.removeEventListener('keydown', onEscapeCapture, true);
@@ -1802,8 +2750,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       host.removeEventListener('wheel', onWheel);
       couriers?.destroy();
       couriers = null;
+      // The tile's texture is ours, made per room; the app's teardown frees children, not textures.
+      tileSprite?.destroy({ texture: true, textureSource: true });
+      tileSprite = null;
       if (app) {
         app.canvas.removeEventListener('pointerdown', onPointerDown);
+        touch?.dispose();
+        touch = null;
+        app.canvas.removeEventListener('contextmenu', onContextMenu);
         app.canvas.removeEventListener('dblclick', onDoubleClick);
         app.destroy(true, { children: true });
       }
@@ -1826,5 +2780,5 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       </div>
     );
   }
-  return <div className="board-host" ref={hostRef} />;
+  return <div className="board-host" ref={hostRef} style={props.lookFilter ? { filter: props.lookFilter } : undefined} />;
 }

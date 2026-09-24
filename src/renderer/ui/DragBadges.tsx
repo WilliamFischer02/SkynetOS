@@ -3,6 +3,7 @@ import type { Board } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
 import type { ArtifactInfo } from '@shared/ipc.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+import { plateOrder, pushBelow, type PlateBox } from './stack-plates.js';
 
 /**
  * The drag-out handles — and the answer to CLAUDE.md's `startDrag` landmine.
@@ -32,6 +33,21 @@ export interface DragBadgesProps {
 /** Kinds that resolve to a single real file, and can therefore be dragged into another program. */
 const DRAGGABLE = new Set(['file.artifact', 'file.document', 'file.exe']);
 
+/** The narrowest a badge is allowed to wrap to, in chrome pixels before the UI scale. */
+const MIN_BADGE_WIDTH = 120;
+
+/**
+ * A file name with places to break it.
+ *
+ * William: "sometimes the file names are long and would be more aesthetic if the text wrapped."
+ * File names rarely have spaces, so a browser left to itself either never wraps them or breaks
+ * them mid-word. A zero-width space after every `.`, `-` and `_` gives it the natural break
+ * points, so `Dirty Plush - Novel 063026.docx` and `thestalker-0.1.0.jar` wrap at their joints.
+ */
+function wrappable(name: string): string {
+  return name.replace(/([._-])/g, '$1​');
+}
+
 export function DragBadges({ board, artifacts, cameraRef }: DragBadgesProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const boardId = useBoardStore((s) => s.boardId);
@@ -54,12 +70,31 @@ export function DragBadges({ board, artifacts, cameraRef }: DragBadgesProps): Re
     const place = () => {
       const cam = cameraRef.current;
       if (cam) {
-        for (const el of Array.from(host.children) as HTMLElement[]) {
+        /*
+         * Badges never sit on one another. Seen in a screenshot: at overview zoom DIRTY PLUSH and
+         * PANIC sit a few tiles apart on the board but each badge keeps its readable chrome size,
+         * so the upper one covered the lower one's grip. The same rule as the phantom plates:
+         * top to bottom, each badge is pushed below any badge already placed that it would cover.
+         */
+        const badges = (Array.from(host.children) as HTMLElement[])
+          .sort((a, b) => plateOrder(
+            { x: Number(a.dataset['bx']), y: Number(a.dataset['by']) },
+            { x: Number(b.dataset['bx']), y: Number(b.dataset['by']) }
+          ));
+        const placed: PlateBox[] = [];
+        for (const el of badges) {
           const bx = Number(el.dataset['bx']);
           const by = Number(el.dataset['by']);
           // Whole device pixels, same rule as the board: round after scaling, never before.
           const sx = Math.round((bx - cam.x) * cam.zoom);
-          const sy = Math.round((by - cam.y) * cam.zoom);
+          // As wide as the node it sits under, so a long name wraps into a block under its
+          // component instead of running off across the board. Never narrower than a readable
+          // minimum, or a small cartridge at 1/4x would wrap one letter per line.
+          const bw = Number(el.dataset['bw']);
+          el.style.maxWidth = `${Math.max(MIN_BADGE_WIDTH * uiScale, Math.round(bw * cam.zoom))}px`;
+          const box: PlateBox = { x: sx, y: Math.round((by - cam.y) * cam.zoom), w: el.offsetWidth, h: el.offsetHeight };
+          const sy = pushBelow(box, placed, uiScale);
+          placed.push({ ...box, y: sy });
           const onScreen = sx > -400 && sy > -40 && sx < cam.viewW && sy < cam.viewH;
           el.style.transform = `translate(${sx}px, ${sy}px)`;
           el.style.visibility = onScreen ? 'visible' : 'hidden';
@@ -88,6 +123,7 @@ export function DragBadges({ board, artifacts, cameraRef }: DragBadgesProps): Re
             className={missing ? 'drag-badge missing' : stale ? 'drag-badge stale' : 'drag-badge'}
             data-bx={node.pos.x * board.grid.tile}
             data-by={(node.pos.y + fp.h) * board.grid.tile}
+            data-bw={fp.w * board.grid.tile}
             /*
              * draggable + preventDefault + IPC is the required shape. Returning without
              * preventDefault would let Chromium start its own HTML drag, which carries no file
@@ -105,7 +141,7 @@ export function DragBadges({ board, artifacts, cameraRef }: DragBadgesProps): Re
           >
             <span className="badge-grip" aria-hidden="true">⠿</span>
             <span className="badge-label">
-              {missing ? 'NO BUILD' : label ?? 'FILE'}
+              {missing ? 'NO BUILD' : label ? wrappable(label) : 'FILE'}
               {info?.version ? ` v${info.version}` : ''}
             </span>
             {stale ? <span className="badge-stale">STALE</span> : null}

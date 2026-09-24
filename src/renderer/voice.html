@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      The voice window's own policy (src/main/services/voice.ts).
+
+        - It never shows anything and it never talks to a network. connect-src 'self' is the least a
+          module page can have; there is no fetch in this page, and the sentence it records leaves by
+          IPC to main, which sends it to whisper-server on 127.0.0.1 and nowhere else.
+        - media-src covers the microphone stream. The partition this window runs in grants a
+          microphone and refuses a camera (services/permissions.ts, allowMicrophoneOnly).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self';
+               connect-src 'self';
+               media-src 'self' blob: mediastream:;
+               style-src 'self' 'unsafe-inline';
+               object-src 'none';
+               base-uri 'none';
+               form-action 'none'"
+    />
+    <title>SkynetOS — voice</title>
+  </head>
+  <body>
+    <script type="module" src="./voice.ts"></script>
+  </body>
+</html>

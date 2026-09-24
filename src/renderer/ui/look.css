@@ -1,0 +1,121 @@
+/*
+ * The room look: the vignette overlay and the LOOK panel. Its own file so the panel's styles do not
+ * collide with other work in styles.css; imported by BoardLook.tsx and Vignette.tsx.
+ */
+
+/* Screen space, above the board and below every piece of chrome that comes after it in the DOM. */
+.board-vignette {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.board-vignette canvas {
+  position: absolute;
+  top: 0;
+  image-rendering: pixelated;
+}
+
+.look-fab { pointer-events: auto; }
+.look-fab[aria-pressed='true'] { background: var(--signal); color: var(--mask-dark); }
+
+.look-panel {
+  position: absolute;
+  top: calc(16 * var(--gap));
+  right: var(--dodge);
+  z-index: 55;
+  width: calc(330 * var(--p));
+  max-width: 90vw;
+  max-height: 78vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: calc(2 * var(--gap));
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  box-shadow: calc(4 * var(--p)) calc(4 * var(--p)) 0 0 rgba(0, 0, 0, 0.6);
+  color: var(--silk);
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+
+.look-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  color: var(--copper);
+  padding-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+.look-head .btn.tiny { margin-left: auto; }
+
+.look-section {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  margin-top: var(--gap);
+  padding: var(--gap) calc(1.5 * var(--gap));
+  font: inherit;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--signal);
+  background: var(--mask-light);
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+}
+.look-section[aria-expanded='true'] { border-color: var(--copper); }
+.look-section:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+.look-section-mark { width: calc(22 * var(--p)); color: var(--copper); }
+
+.look-body { display: flex; flex-direction: column; gap: var(--gap); padding: var(--gap) 0; }
+
+.look-slider {
+  display: grid;
+  grid-template-columns: calc(84 * var(--p)) 1fr calc(48 * var(--p));
+  align-items: center;
+  gap: var(--gap);
+  color: var(--copper);
+}
+.look-slider input[type='range'] { width: 100%; min-width: 0; }
+.look-slider-value { text-align: right; color: var(--silk); }
+
+.look-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
+.look-row-label { color: var(--copper); min-width: calc(84 * var(--p)); }
+
+.look-check { display: flex; align-items: center; gap: var(--gap); cursor: pointer; }
+.look-check input { margin: 0; }
+
+.look-step[aria-pressed='true'] { background: var(--signal); color: var(--mask-dark); }
+
+.look-swatch {
+  width: calc(14 * var(--p));
+  height: calc(14 * var(--p));
+  padding: 0;
+  border: var(--p) solid var(--copper-dark);
+  cursor: pointer;
+}
+.look-swatch[aria-pressed='true'] { outline: var(--p) solid var(--silk); outline-offset: var(--p); }
+.look-swatch:focus-visible { outline: var(--p) solid var(--signal); outline-offset: var(--p); }
+
+.look-path {
+  color: var(--silk);
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+.look-note { color: var(--copper-dark); text-transform: none; }
+.look-note.ok { color: var(--ok); }
+.look-note.warn { color: var(--warn); }
+
+.look-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  margin-top: var(--gap);
+  padding-top: var(--gap);
+  border-top: var(--p) solid var(--copper-dark);
+  color: var(--copper-dark);
+  text-transform: none;
+}

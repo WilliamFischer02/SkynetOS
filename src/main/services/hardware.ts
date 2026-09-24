@@ -37,6 +37,13 @@ import {
  */
 
 const SENSOR_TTL_MS = 3000;
+/**
+ * The board's monitor widgets ask for a LIGHT snapshot: sensors at most every 15 s. Their CPU,
+ * thread and RAM figures come from `os` and stay live either way. Without this, a PSU on the board
+ * kept a PowerShell CIM query (about 1.3 s of CPU) running every 3 s for as long as the app was
+ * open. That undid the "an idle board costs zero" rule above.
+ */
+const LIGHT_SENSOR_TTL_MS = 15_000;
 const GPU_TTL_MS = 2000;
 /** A failed inventory is retried, but not on every request: a broken PowerShell would spawn forever. */
 const INVENTORY_RETRY_MS = 60_000;
@@ -142,8 +149,8 @@ function refreshInventory(now: number): void {
     .finally(() => { inventoryJob = null; });
 }
 
-function refreshSensors(now: number): void {
-  if (sensorsJob || (sensors && now - sensors.at < SENSOR_TTL_MS)) return;
+function refreshSensors(now: number, ttl: number): void {
+  if (sensorsJob || (sensors && now - sensors.at < ttl)) return;
   sensorsJob = runPowerShell(SENSOR_SCRIPT)
     .then((raw) => { sensors = { at: Date.now(), value: parseSensors(raw) }; sensorsError = null; })
     .catch((err: unknown) => { sensorsError = message(err); })
@@ -183,10 +190,10 @@ function delay(ms: number): Promise<void> {
  * Cold: waits (up to 10 s) for the first readings, because an empty first answer would render
  * as a panel full of dashes and read as broken.
  */
-export async function hardwareSnapshot(): Promise<HardwareSnapshot> {
+export async function hardwareSnapshot(options: { light?: boolean } = {}): Promise<HardwareSnapshot> {
   const now = Date.now();
   refreshInventory(now);
-  refreshSensors(now);
+  refreshSensors(now, options.light ? LIGHT_SENSOR_TTL_MS : SENSOR_TTL_MS);
   refreshGpu(now);
 
   const cold: Promise<void>[] = [];

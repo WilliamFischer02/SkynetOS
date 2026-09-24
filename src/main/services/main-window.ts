@@ -13,9 +13,16 @@ import type { BrowserWindow } from 'electron';
  * button that does nothing. Reported: "the browse button is also not working … I can't select
  * images … perhaps even directories". Drag-out and `display:info` took the same wrong window.
  *
- * Only the board window can call into main at all, since the conversation windows have no
- * preload. So "the window that asked" and "the board window" are always the same window.
+ * Conversation windows have no preload, so they cannot call into main at all.
  * test/window-parent.test.ts keeps `getAllWindows()[0]` from coming back.
+ *
+ * **Amended 2026-09-11:** this used to say that the board window was the ONLY window able to call
+ * into main, which made "the window that asked" and "the board window" the same thing by
+ * construction. Gesture control added a second window with the bridge — the vision page, which has
+ * to report what it sees (services/vision.ts). So that equivalence is now enforced rather than
+ * assumed: `registerIpc` in src/main/ipc.ts refuses every channel but `vision:*` from the vision
+ * window, and refuses `vision:*` from everything else. Dialogs still find their parent through
+ * `boardWindow()` here, never through the sender.
  */
 
 let board: BrowserWindow | null = null;

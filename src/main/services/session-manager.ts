@@ -17,10 +17,15 @@ import {
   setSessionPid
 } from './db.js';
 import { resolveMcpConfigs } from './mcp-config.js';
+import { launchModelNow } from './model-availability.js';
+import { awaySessionModel } from './activity.js';
 import { conversationExists } from './conversations.js';
 import { mailForBriefing } from './mailbox.js';
 import { standingOrdersForBriefing } from './face-brief.js';
 import { boardWindow } from './main-window.js';
+import { refuseDialogWhenRemote } from './remote-context.js';
+import { auditLaunchNode } from './drive-audit.js';
+import { obsidianBriefing } from './obsidian.js';
 import { pickHandsNode } from '@shared/face-brief.js';
 import { openTerminal, readLivePid, stagePrompt } from './terminal.js';
 import { resolveNodeTarget } from './target-resolver.js';
@@ -175,6 +180,8 @@ export async function startSession(
    */
   options: { fresh?: boolean; prompt?: string } = {}
 ): Promise<SessionStartResult> {
+  // A drive audit is a chip rooted at a drive, launched by the same machinery. See drive-audit.ts.
+  if (node.kind === 'agent.audit') node = auditLaunchNode(node);
   if (node.kind !== 'agent.code') {
     return { ok: false, error: `${node.kind} IS NOT A CLAUDE CODE AGENT` };
   }
@@ -279,7 +286,11 @@ export async function startSession(
     addDirs: addDirs.granted,
     // "skynet" becomes the generated config that points Claude Code at tools/skynet-mcp.mjs, so
     // this session can read and change the board it was launched from. See services/mcp-config.ts.
-    mcpConfigs: resolveMcpConfigs(node.mcpServers)
+    mcpConfigs: resolveMcpConfigs(node.mcpServers),
+    // Fable while it is available, Opus while it is out. Decided now, per launch: a terminal that
+    // is already open keeps the model it started with, because nothing can reach into it.
+    // During an away run, the sessions it starts open on the away model: low-resource by design.
+    launchModel: node.model ? null : (awaySessionModel() ?? launchModelNow())
   });
 
   const { reading, missing } = resolveReading(node, cwd);
@@ -311,8 +322,14 @@ export async function startSession(
   const isHands = !!load && load.ok && pickHandsNode(load.board.nodes)?.id === node.id;
   const standing = isHands ? standingOrdersForBriefing() : null;
   const mail = briefing ? mailForBriefing() : null;
+  /*
+   * Obsidian knowledge, built in. William: "any agentic or node otherwise compatible with obsidian
+   * should have that knowledge profile built-in." An agent tagged `obsidian`, or bound inside a
+   * vault, opens holding codex/personas/obsidian.md, right after who-and-where it is.
+   */
+  const obsidian = briefing ? obsidianBriefing(node) : null;
   const withMail = briefing
-    ? [briefing, standing, mail].filter((part): part is string => Boolean(part)).join('\n\n---\n\n')
+    ? [briefing, obsidian, standing, mail].filter((part): part is string => Boolean(part)).join('\n\n---\n\n')
     : briefing;
 
   /*
@@ -331,10 +348,16 @@ export async function startSession(
     ? `${withMail ?? ''}\n\n---\n\n## YOUR TASK\n\n${task}\n`
     : withMail;
 
-  const key = `${boardId}.${node.id}`;
+  const rowId = randomUUID();
+  /*
+   * One set of staged files per chip, unless the chip already has a live session. Then this launch
+   * (a fresh session, a summons, a PROMPT → NODE build) gets files of its own. Sharing them meant
+   * the new launch deleted the running session's pid file and overwrote its script, so the old
+   * session looked dead and the new one was waited for on a file two shells were fighting over.
+   */
+  const key = existing ? `${boardId}.${node.id}.${rowId.slice(0, 8)}` : `${boardId}.${node.id}`;
   const promptFile = fullBriefing ? stagePrompt(key, fullBriefing) : undefined;
 
-  const rowId = randomUUID();
   const startedAt = new Date().toISOString();
 
   // Recorded BEFORE the launch. If the machine dies mid-launch the conversation id is still on
@@ -527,6 +550,7 @@ export function briefingActive(node: BoardNode): boolean {
 }
 
 async function confirm(title: string, message: string, detail: string): Promise<boolean> {
+  refuseDialogWhenRemote(`"${title}"`);
   const win_ = boardWindow();
   const options = {
     type: 'warning' as const,

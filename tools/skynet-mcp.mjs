@@ -185,7 +185,7 @@ const NODE_FIELDS = {
   provisional: { type: 'boolean', description: 'This node does not point at anything yet: renders as an unpopulated footprint, a TODO on the board. A node without its target field MUST set this.' },
 
   // What it binds to.
-  path: { type: 'string', description: 'Absolute path. For store.repo, store.folder, file.document, file.exe.' },
+  path: { type: 'string', description: 'Absolute path. For store.repo, store.folder, store.explorer (its root), file.document, file.exe.' },
   url: { type: 'string', description: 'For link.url, store.cloud, agent.chat, agent.jarvis.' },
   glob: { type: 'string', description: 'For file.artifact: the build output pattern, e.g. C:/dev/Thing/build/libs/*.jar' },
   cwd: { type: 'string', description: 'Working directory. Required for agent.code and service.process.' },
@@ -539,6 +539,73 @@ const TOOLS = [
       required: ['side', 'file']
     },
     run: ({ side, file }) => call('mailbox:archive', [side, file])
+  },
+  {
+    name: 'phantom_list',
+    description:
+      'The recommended nodes ("phantoms") on a board: suggestions drawn on the board with a tick and a ' +
+      'cross that William has not yet approved or dismissed. At most 4 per board. Read this before ' +
+      'proposing, so you refresh the set instead of repeating it.',
+    inputSchema: {
+      type: 'object',
+      properties: { boardId: { type: 'string' } },
+      required: ['boardId']
+    },
+    run: ({ boardId }) => call('phantom:list', [boardId])
+  },
+  {
+    name: 'phantom_propose',
+    description:
+      'Sketch a recommended node on a board: a phantom with a name and a one- or two-sentence reason, ' +
+      'which William approves with a tick (it becomes a real node, bound and wired exactly as you ' +
+      'proposed, in one undoable step) or dismisses with a cross. You cannot approve your own.\n\n' +
+      'Keep about four per room, consistently: when the board changes, withdraw what no longer ' +
+      'applies (phantom_withdraw) and propose what now does. A fifth is refused. Bind to reality: ' +
+      'every path, cwd or url you put in `fields` must exist — check it first. Place it in free ' +
+      'space near what it relates to; it is nudged to the nearest free spot if the one you asked ' +
+      'for is taken.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        boardId: { type: 'string' },
+        kind: { type: 'string', description: 'Node kind, e.g. store.repo, file.document, link.url, agent.code.' },
+        name: { type: 'string', description: 'What the node would be called. Uppercase reads best. Max 40.' },
+        description: { type: 'string', description: 'Why it belongs here, for William. Max 400 characters.' },
+        pos: { type: 'object', properties: { x: { type: 'integer' }, y: { type: 'integer' } }, required: ['x', 'y'] },
+        footprint: { type: 'object', properties: { w: { type: 'integer' }, h: { type: 'integer' } } },
+        fields: { type: 'object', description: 'Fields the real node gets on approval (path, url, cwd, frame, priority…). See node_fields.', properties: NODE_FIELDS },
+        connect: {
+          type: 'array',
+          description: 'Traces to draw on approval, from the new node to existing ones. At most 4.',
+          items: {
+            type: 'object',
+            properties: {
+              to: { type: 'string', description: 'An existing node id.' },
+              kind: { type: 'string', description: 'produces, reads, depends, deploys, syncs or supervises.' }
+            },
+            required: ['to', 'kind']
+          }
+        },
+        proposedBy: { type: 'string', description: 'Your name as it should appear on the phantom, e.g. "U3 JARVIS-PRIME".' }
+      },
+      required: ['boardId', 'kind', 'name', 'description', 'pos']
+    },
+    run: ({ boardId, ...proposal }) => call('phantom:propose', [boardId, proposal])
+  },
+  {
+    name: 'phantom_withdraw',
+    description:
+      'Withdraw a recommendation that no longer applies. Only ones an agent proposed: William\'s own ' +
+      'are his to dismiss. Nothing real is touched — a phantom is a suggestion, not a node.',
+    inputSchema: {
+      type: 'object',
+      properties: { boardId: { type: 'string' }, phantomId: { type: 'string' } },
+      required: ['boardId', 'phantomId']
+    },
+    run: ({ boardId, phantomId }) => call('command:apply', [{
+      command: { type: 'phantom.dismiss', boardId, phantomId },
+      label: `withdraw recommendation ${phantomId}`
+    }])
   },
   {
     name: 'history',

@@ -118,7 +118,7 @@ describe('target controls', () => {
     // or the right url to function." These are the kinds that point at something.
     const linkable: NodeKind[] = [
       'agent.code', 'agent.chat', 'agent.jarvis', 'drive.room',
-      'store.repo', 'store.folder', 'store.cloud',
+      'store.repo', 'store.folder', 'store.explorer', 'store.cloud',
       'file.document', 'file.exe', 'file.artifact',
       'link.url', 'service.process'
     ];
@@ -127,6 +127,39 @@ describe('target controls', () => {
       expect(fields.length, `${kind} has no pickable target field`).toBeGreaterThan(0);
       expect(primaryTargetField(kind), `${kind} has no primary target`).toBeDefined();
     }
+  });
+
+  it('offers the rotation control only on kinds whose pixels it turns', () => {
+    /*
+     * docs/06 "Known issues" 1: the quarter-turn control rotates `decor.part` atlas sprites and
+     * baked backdrops, and a component's drawn package ignores it. The honest fix is not to offer
+     * it there: a control that does nothing reads as broken. If rotation is ever taught to
+     * component-art.ts, add the kind here and to node-fields.ts together.
+     */
+    const rotatable: NodeKind[] = ['decor.part', 'decor.image'];
+    for (const kind of NODE_KINDS) {
+      const offered = fieldsFor(kind).some((f) => f.control === 'rotation');
+      expect(offered, `${kind} ${offered ? 'offers' : 'lacks'} a rotation control`).toBe(rotatable.includes(kind));
+    }
+  });
+
+  it('says what each frame does, for every frame the select offers', () => {
+    /*
+     * FRAME_BLURB was written "for the editor's tooltip" and nothing read it until 2026-09-19, so
+     * the Frame select offered nine words (dip, quad, bga…) and no way to learn what they draw.
+     * `optionHelp` carries it to the editor. A frame added without a line, or a line left behind
+     * for a frame that has gone, fails here.
+     */
+    for (const kind of NODE_KINDS) {
+      for (const field of fieldsFor(kind)) {
+        if (!field.optionHelp) continue;
+        expect(field.control, `${kind}.${String(field.key)} has optionHelp but is not a select`).toBe('select');
+        expect(Object.keys(field.optionHelp).sort(), `${kind}.${String(field.key)}`).toEqual([...(field.options ?? [])].sort());
+        for (const line of Object.values(field.optionHelp)) expect(line.trim().length).toBeGreaterThan(0);
+      }
+    }
+    const frame = fieldsFor('agent.code').find((f) => f.key === 'frame');
+    expect(frame?.optionHelp?.['castellated']).toMatch(/half-holes/i);
   });
 
   it('gives the kinds that point at nothing no primary target', () => {

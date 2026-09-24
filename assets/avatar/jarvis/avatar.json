@@ -1,0 +1,11 @@
+{
+  "talkFps": 9,
+  "blinkEveryMs": [
+    2600,
+    6800
+  ],
+  "blinkFrameMs": 55,
+  "wobblePx": 2,
+  "wobblePeriodMs": 2600,
+  "scale": 0
+}

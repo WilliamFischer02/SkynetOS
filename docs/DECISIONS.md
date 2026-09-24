@@ -1897,6 +1897,777 @@ Rejected:
 Agents get the same data through `system_info` / `hardware:snapshot`, which docs/07 allows as a
 telemetry read. The panel itself opens only when the user activates the node.
 
+## 2026-09-11 — The monitor node is the monitor
+
+William: "when double clicked the data appears to populate, however I want the actual node to be a
+monitor / show live update data like a widget." Every `monitor.system` node now paints the
+machine's readings onto its own face, refreshed every two seconds. The double-click panel stays
+as the full readout.
+
+The widget fills the footprint in priority order and leaves out whatever doesn't fit whole:
+- bar rows: CPU load, GPU temperature, RAM, GPU load, VRAM;
+- one column per thread;
+- text lines: CPU clock, CPU die, board, GPU clock, GPU power.
+
+A 4x4 node shows the first three rows; a 6x10 node shows almost all of it. Thresholds come from
+`packages/shared/hardware.ts` and are not restated. Unreadable values are dashes: the CPU die in
+particular is a dash unless LibreHardwareMonitor provides a real CPU sensor, because the readable
+ACPI zone is the motherboard's. Six colours, the board's silkscreen, integer coordinates. An unlit
+bar cell keeps a one-pixel tick in its level colour, so expected and actual still share a line at
+two pixels of height.
+
+The widget costs almost nothing when idle:
+- It polls only while the board has a monitor node and the window is visible.
+- It repaints only when the layout comes out different.
+- Each widget holds one texture rather than one per refresh. The sprite cache is keyed on the face
+  and never evicts, which is fine for faces that change on edit and wrong for one that changes
+  every two seconds: about 1,800 textures an hour per monitor. A live face now carries a slot tag,
+  and the texture it replaces is destroyed (`live-slots.ts`, `sprites.ts`).
+
+Rejected:
+- Drawing the widget as a separate overlay layer, which would need a second hit-test and a second
+  placement path for one kind of node.
+- Stretching a stale widget across a resize, which is fractional scaling for up to two seconds.
+
+## 2026-09-11 — Wires: black outlines, parallel lanes, selectable and restylable
+
+William: "I also want wires to be selectable / color and stroke editable - make sure the software
+detects overlapping wires and I want it to create the appearance both wires are run parallel - all
+wires, even drawn ones should have a black stroke for visual clarity."
+
+- **Outline.** Every wire now carries a one-pixel outline, `ink` (#000000) by default. Ink is a
+  wire-only token (`WIRE_TOKENS` = the palette tokens plus ink). It is deliberately NOT in
+  skynet.gpl: it is never baked into a sprite, and adding it to the palette file would let the
+  bake's recolouring start snapping dark art pixels to pure black. The darkest real palette entry
+  is each room's mask-dark, which is the substrate itself, so an outline in it would vanish
+  exactly where it is needed.
+- **One wire at a time.** `buildTraceLayer` finishes each wire (outline, run, strand, vias) before
+  starting the next. Drawn layer by layer across the board, as before, two crossing wires fused
+  into one blob; drawn wire by wire, the later one crosses over the earlier with its black edge
+  showing.
+- **Lanes.** `separateParallel` finds segments that lie on the same line with overlapping spans,
+  and gives each wire in such a run its own lane: symmetric about the line, spaced by the widest
+  run plus both outlines plus a pixel, in board order so the layout is stable. Only a whole
+  segment moves, across its own axis, so every corner still joins a horizontal to a vertical and
+  nothing can go diagonal. Touching end to end and crossing are not sharing. The couriers and the
+  click target both use the laned geometry, so what you see is what you hit.
+- **Selection.** A click on a wire selects it, unless a component is in the way. Printed things
+  like a backdrop do not count as in the way, or no wire across a backdrop could ever be picked in
+  Edit Board mode. The selected wire is redrawn on the overlay with a signal-coloured halo.
+  `EdgeInspector` edits its kind, run colour, outline colour, width (now 1–4) and relation, each
+  as an undoable `edge.update`, and deletes it through the native confirmation every deletion
+  goes through. A node and a wire are never selected together. Escape deselects a wire in the
+  capture phase, for the same reason it does for a group: App's Escape would otherwise leave the
+  room.
+- Colours are tokens, never hex, in the schema as in the editor. `test/wire-style.test.ts` fails
+  if the schema's list and `WIRE_TOKENS` drift apart.
+
+## 2026-09-11 — The drag-out badge wraps
+
+William: "sometimes the file names are long and would be more aesthetic if the text wrapped - if a
+dynamic text wrapping system can't be implemented then add the ability to rescale." Wrapping could
+be implemented, so resizing was not added. Each frame, the badge's max width is set to its node's
+on-screen width, with a floor of 120 chrome px so a small cartridge at 1/4x does not wrap one
+letter per line. The label gets a zero-width break point after every `.`, `-` and `_`, because
+file names rarely have spaces and a browser left to itself either never breaks them or breaks
+them mid-word.
+
+## 2026-09-11 — The prompt node: a quick chat to the Face, embedded in the board
+
+William: "a typical empty prompt box that allows for file (image and other file types) upload, and
+whatever is typed into that box is fed to Jarvis Head/Face as a window with Jarvis head / face
+opens … the prompt box should be pixel art / mosaic rastered to look like a pixel art claude
+prompt interface embedded in the board."
+
+New kind `agent.prompt`, with id prefix `q` and designator `P`. It feeds a conversation and is
+not one, so it isn't a U.
+
+**Two layers.** The canvas draws the box in palette pixels. A DOM overlay lays a real textarea in
+the chrome font and two invisible buttons over exactly those pixels, both placed by one
+`promptLayout`. The overlay hides below 1x and takes no pointer input in Edit Board mode, so the
+node still drags, resizes and wires. Double-click or Space puts the cursor in the box, and the
+wheel over it still zooms the board (the overlay re-dispatches it to the canvas).
+
+**Fields and defaults.**
+- `promptTarget` defaults to the board's JARVIS head. A named target that is missing or isn't a
+  conversation is refused, not rerouted.
+- `promptMode` defaults to `send`. "A quick chat" that stops short of sending is a clipboard with
+  extra steps. `draft` is there for a last look.
+
+**Delivery is main typing into the claude.ai window, on William's Enter only.**
+1. Main opens or focuses the target's own conversation window and waits for its message box.
+2. It hands over the files through the page's file input, or a paste event, and types line by
+   line with Shift+Enter.
+3. In `send` mode it presses send, and reports "sent" only when the box empties.
+
+On any failure the window stays open, the text goes on the clipboard, and the toast says where it
+stopped. The window still has no preload and no bridge: it runs fixed scripts and returns small
+JSON answers. File names and bytes enter those scripts only through `JSON.stringify`, and the bytes
+come from `readFileSync` on the paths the user picked. The three `prompt:*` channels are user-only,
+not in AGENT_METHODS: no agent may speak in William's voice to the Face.
+
+Rejected:
+- A preload or bridge in the claude.ai window, which docs/07 forbids.
+- Pasting through the system clipboard, which destroys whatever William had copied.
+- Silently falling back to JARVIS for a broken `promptTarget`.
+- Auto-send without evidence.
+
+**Not verified: nothing has run against the logged-in claude.ai page.** The selectors are best
+knowledge, and the failure path is the guarantee.
+
+## 2026-09-11 — Sessions open on Fable 5.1 while it lasts, Opus 5 while it is out
+
+William: "if fable 5 is disabled as a default model (out of usage credits - develop a system to
+check) all terminals should switch to opus 5 automatically … when deadline is reached all
+terminals should now switch back to defaulting to claude fable 5.1, high effort -- as mentioned
+otherwise opus 5 xhigh."
+
+Claude Code writes a refused request into the transcript: an assistant line with
+`isApiErrorMessage: true`, `error: "rate_limit"`, 429. The out-of-credits refusal names Fable in its
+text ("You're out of usage credits. Run /usage-credits to keep using Fable 5.1…") and carries no
+reset time. A session-limit refusal does carry one, as `quotaLimits.resetsAt` and as "resets 8:40pm
+(America/Denver)". So SkynetOS decides from the record:
+- Fable is out when the newest refusal naming it is newer than the newest real Fable reply on the
+  machine.
+- It is back when the reset passes, or when Fable answers again.
+
+The reset time comes from `quotaLimits`, then the refusal's own "resets …" phrase, then a time
+William types into the usage meter in the CLI's own words. The CLI shows "8pm Monday" but did not
+write it anywhere. A typed time counts only if it is later than the refusal it answers. With none
+of the three, the countdown says UNKNOWN.
+
+Every launch and resume passes `--model` and `--effort`, both real flags in `claude --help`:
+- Fable available: Fable 5.1 at high, with Opus 5 as `--fallback-model`.
+- Fable out: Opus 5 at xhigh.
+
+A node's own `model` wins, `autoModel: false` turns the whole thing off, and
+`~/.claude/settings.json` is never edited. A terminal already open keeps its model: there is no
+channel into a live console, and the meter says so rather than implying otherwise.
+
+The meter shows "FABLE 5.1 CORES: OFFLINE" and "CORE RESTART: HHH:MM:SS" with a stepped opacity
+pulse (three held levels, no fade, off under reduced motion). While Fable is up it shows one quiet
+line naming what a new session gets.
+
+Rejected:
+- Reading the reset from Anthropic's API with the stored OAuth token, which would turn SkynetOS
+  into a credential user.
+- Guessing the reset from the plan, which would be a fiction presented as a countdown.
+- Rewriting the user's global Claude settings.
+
+`models:status` is agent-readable; `models:setFableReset` is user-only.
+
+## 2026-09-11 — More effects, and a colour and speed for every one
+
+William: "more checkboxes that enable different animated / visual effects like the light pulse,
+and when those effects are enabled color and speed modifiers for the animation."
+
+- **Two new effects.** Chase is a run of lit pixels travelling clockwise round the node's edge.
+  Scan is a line sweeping down its face and pausing below it. Both are whole pixels in one palette
+  colour, drawn by one Graphics on a layer directly over the components and redrawn at 20fps. The
+  geometry is pure (`effects.ts`, tested).
+- **Speed and colour for all four.** Pulse glow, text glow, chase and scan each get a speed
+  (percent, 25 to 400, stored as a whole number) and a colour (a palette token).
+  - For the glows, the colour is the CREST: the pulse's peak becomes that colour while its
+    shoulders still step along the ramp, so the wave keeps its shape.
+  - Each glowing node now keeps its own frame counter, so different speeds coexist.
+  - A node is redrawn only when its own frame changes.
+- **The modifiers stay hidden until their effect is ticked** (`showWhen` on a field spec). That
+  keeps a node's form from growing eight fields for effects it does not use.
+- Rejected: alpha-blended or smoothly faded effects, which docs/02 forbids; a per-effect Graphics
+  per node, which is object churn for twenty repaints a second.
+
+## 2026-09-11 — The monitor's graphics can be switched off
+
+"The psu / live data widgets should have a togglable switch for 'display system performance
+graphics', otherwise it should show the selected images." `showSystemGraphics` on
+`monitor.system`, default on. Off hands the face back to the node's own wallpaper and logo.
+
+## 2026-09-11 — The drive auditor
+
+William: "a drive analyzer and organizer … it should be incredibly perceptive so as to avoid
+accidentally deleting sentimental or important files … Opening it opens claude code and the
+computer root with the ability to 'hop' to other drives."
+
+New kind `agent.audit`. It is not new launch machinery: at launch it becomes an `agent.code`
+session (`auditSessionNode`), rooted at `cwd` (a drive) and granted the other drives as
+`--add-dir`. Every drive is outside the dev roots, so each is confirmed on every launch (docs/07).
+Its rules are `codex/personas/drive-auditor.md`:
+- survey first;
+- classify each item as KEEP, REGENERABLE, ARCHIVE or ASK, with ASK the default;
+- propose in a table and act only on approved rows;
+- never delete: "clean" means moving into a dated `_skynet-quarantine` folder with a manifest;
+- check dependencies before any move;
+- a long list of things treated as sacred until William says otherwise.
+
+- **The persona is INLINED into the briefing**, not put on the reading list. The reading list is
+  resolved inside the working directory, and a drive root has no codex. Also, rules the session
+  has to go and fetch are rules it can skip.
+- **A floor survives a missing persona.** If the persona file cannot be read, `AUDIT_FLOOR`
+  carries the hard rules and the briefing says the full ones are missing.
+- **Never elevated.** A node set to `popout-elevated` launches `popout`. This is the one kind where
+  downgrading is right: elevation would only enable what its rules forbid.
+
+Not built: a drive-level view of what the audit has proposed or moved. The quarantine folder and
+its manifest are the record for now.
+
+## 2026-09-11 — The usage meter calibrates against a real limit
+
+William: "double down on ensuring the resource monitor for credit usage is as accurate as possible
+… if it can be calibrated it should show an indicator (calibrate usage monitor) and user can input
+information the program needs to more accurately calculate usage time remaining / credit usage."
+
+Claude Code records a refused request with `quotaLimits: { status: "rejected", rateLimitType:
+"five_hour", resetsAt }`. That is the one moment the account says where its ceiling is. The
+refused window began five hours before `resetsAt`, and everything spent between that start and
+the refusal is, by definition, the whole allowance. `calibrateFromLimits` measures it from the
+transcripts, using the most recent hit and counting several refusals in one window once.
+
+The meter shows **CALIBRATE** (stepped pulse) whenever the pool rests on an estimate or on nothing.
+The plan dialog now offers, strongest evidence first:
+1. **The measured limit**, with the date of the hit it rests on.
+2. **Claude's own percentage**: type the session % that `/usage` or claude.ai's usage page shows,
+   and the budget is what was measured here divided by it (`budgetFromPercent`). Honest caveat, in
+   the dialog: Claude's session starts at the first message rather than rolling, so this is closest
+   a few hours into a session.
+3. The plan estimate, as before.
+
+Rejected: reading usage from Anthropic with the stored OAuth token, for the same reason the Fable
+fallback does not.
+
+**What the real data said, 2026-09-11.** This machine's transcripts hold exactly one five-hour
+refusal, on 2026-09-08 at 01:21Z, resetting at 02:40Z. Its window contains no local usage at all.
+Limits are per account, and the sessions that reached that one ran on another desktop. So nothing
+can be measured from it here, and the dialog says exactly that rather than reporting a ceiling of
+zero. The same limitation shades the percentage route: it divides THIS machine's usage by an
+account-wide percentage. The dialog says so, and cross-machine usage is on the roadmap (docs/06).
+
+## 2026-09-11 — The node editor is grouped into sections
+
+"More elements need to be nested in dropdowns that have section headers." The editor's fields are
+grouped, in a fixed order, into collapsible sections: Identity, What it points at, Session,
+Appearance, Text, Effects. Identity and the binding open by default, along with any section holding
+a still-empty required field, so the form never hides the thing that stops it saving. Each header
+is a real button (keyboard-operable) with a field count. `sectionOf` lives beside the field specs,
+and `test/editor-sections.test.ts` fails if a field lands in a section that does not exist.
+
+Still on the roadmap (docs/06): fewer fields visible by default, a search, more fonts, and making
+the rotation control rotate component art.
+
+## 2026-09-11 — One line of help, and the rest behind ?
+
+The help bar had grown to three lines of shortcuts, which is a manual, not a hint. It is now one
+line of the keys that matter in the current mode, ending "? ALL KEYS". `?` opens a grouped key
+reference: Look around, Act, Edit Board, Panels. It is centred with a flex backdrop rather than
+`translate(-50%)`, because an odd-width panel would land on a half pixel and blur. The HUD's
+renderer diagnostics (camera, DPR, FPS, router and atlas counts) are behind `` ` ``. The router
+and atlas counts still show on their own when they report a fault.
+
+## 2026-09-11 — Copy and paste nodes, and the right-click menu
+
+William: "duplicate decor nodes / aesthetic objects — Ctrl+C Ctrl+V, as well as right click
+selected node or cluster and click copy, then right click somewhere else on the board and click
+paste."
+
+- **What is copied.** The nodes, plus every trace that runs between two of them, so a copied cluster
+  pastes wired the same way. A trace to something outside the selection is left behind; pasting it
+  would wire the duplicate to the original's neighbour. Waypoints are dropped, so the router draws
+  the copy's own route.
+- **One command.** A paste is `node.createMany`, so one Ctrl+Z takes the whole cluster back. Its
+  inverse, `node.removeMany`, is DESTRUCTIVE like `node.delete`, so an agent cannot send it as a way
+  to clear a board. Undo reaches it through `runInternal`, as it reaches every inverse.
+- **Ids and designators** come from main's node factory, so a pasted via is `p_part_3` and a pasted
+  chip takes the room's next U number. Zone `members` and a prompt box's `promptTarget` are pointed
+  at the copies. A reference that does not exist in the target room is dropped.
+- **Where it lands.** Its top-left goes on the tile under the cursor: Ctrl+V uses the last cursor
+  position over the board, and the menu uses the right-click tile. Printed kinds never collide, so
+  decor lands exactly there. A cluster containing anything mounted moves as a whole to the nearest
+  offset where all of it fits (`clusterOffset`, the same ring search as placement.ts).
+- **The clipboard is the renderer's,** not the OS's. It survives moving between rooms, so a
+  cluster can be carried from one room to another. Ctrl+C is left alone when text is selected on
+  the page, so copying words out of a panel still works.
+- **The menu** acts on the group when the right-clicked node is in one, and on the node alone
+  otherwise (selecting it). On bare substrate it offers Paste only. It is keyboard-operable and
+  closes on any press outside it or a wheel. `node:paste` is user-only; agents have `node_create`.
+
+## 2026-09-11 — Summon JARVIS
+
+William: "right click a node of any kind and click 'Summon JARVIS'… opens an infused conversation
+with JARVIS PRIME that provides that file or folder or whatever node as context and prompts for what
+the user's comment or directive is, then gets to work."
+
+The directive is asked for in SkynetOS BEFORE the terminal opens, so the session starts holding
+both and can begin at once. The task text (`packages/shared/summon.ts`) names the node, its board,
+what it resolves to, its binding fields and its wired neighbours. Presentation fields are left out,
+since colours are not context. It goes through `startSession`'s `prompt`, which is staged to a file
+and never put on a command line.
+
+- **Always a FRESH JARVIS Prime session, on the root board's Hands chip (`pickHandsNode`).** A
+  resumed Prime is mid-way through something else, and the running-session guard refuses a task
+  outright. A summons is its own conversation.
+- **An empty directive is allowed:** the session reads the target, says what it is, and asks one
+  question.
+- **`jarvis:summon` is user-only.** An agent able to summon would be an agent able to open
+  terminals on William's desktop.
+
+## 2026-09-11 — Two chrome-only colour sets: countdown digits and editor sections
+
+Both at William's request. Both are DOM chrome, not board pixels: docs/02's palette rule governs
+what the board draws, and neither set reaches the board, the atlas or a baked backdrop.
+
+- **Countdown digits:** seven near-silk shades of white and grey. Each shade belongs to a digit's
+  POSITION, not its value, so the clock keeps one texture while it ticks instead of flickering.
+- **Editor sections:** one earthy tone each: terracotta, ochre, moss, sienna, sand and umber. Each
+  section gets a thick left bar, its label and a dark tint in its tone, so the collapsed list reads
+  as six different tabs at a glance. The tones sit on fixed dark grounds rather than on the room's
+  mask, so they read the same in every room.
+
+## 2026-09-11 — Efficiency pass: what an idle, open SkynetOS costs
+
+A survey of everything that runs on a timer while nobody touches the app turned up four costs,
+each removed without losing anything visible.
+
+1. **The monitor widget kept PowerShell running.** A PSU on the board polled
+   `hardware:snapshot` every 2 s. Each sensor refresh is a PowerShell spawn plus a CIM query,
+   measured at about 1.3 s of CPU, and the cache let one through every 3 s. So an open board with
+   a PSU on it was never idle, which contradicted hardware.ts's own "an idle board costs zero".
+   The widget now asks for a LIGHT snapshot (sensors at most every 15 s; CPU, thread and RAM
+   figures come from `os` and stay live). It also polls only while a monitor is actually within the
+   view. The System Monitor panel keeps the full 3 s cadence while it is open.
+2. **The relink poll never stopped** on a machine with permanently broken targets. The second
+   desktop has five Minecraft repos that exist only on the first. It re-resolved the whole board
+   every 5 s forever. It now backs off 5 → 10 → 20 → 30 s while nothing changes, and a change in
+   the broken count re-arms 5 s. Relinking a folder you just created takes at most 30 s, not 5 s.
+3. **An unchanged resolve re-rendered App.** `refreshTargets` replaced `targets` with a new object
+   every poll. It now keeps the old object when nothing changed.
+4. **The ticker rebuilt a string over every node every frame** to spot a change in broken
+   targets. It is now memoised on the `targets` object: built once per change rather than up to
+   165 times a second.
+
+## 2026-09-11 — The corner prompt, and its quotes
+
+William: "a persistent prompt box to the bottom left corner of the ui that, just like the prompt
+node, opens user input message / files as a prompt into the same Jarvis Face / head session. Above
+this prompt box rotate a selection of pre-written quotes… tune in sarcasm to taste."
+
+- **One delivery path.** `prompt:send` with no `nodeId` sends to the root board's JARVIS head, in
+  send mode. A nodeId that names anything but a prompt node is still refused. Everything else
+  (attachments, limits, the clipboard on failure) is the prompt node's code, unchanged.
+- **One column.** The corner is shared with the session dock, whose height depends on how many
+  sessions run. Both now sit in a flex column above the help line, so neither needs an offset
+  that is wrong half the time.
+- **`/` focuses it** from anywhere. Enter sends, Shift+Enter is a new line, and Esc leaves.
+- **The quotes** are `packages/shared/quotes.ts`, written in the proposed blended voice at
+  needling 5 as its test. None of them asserts a false fact about the board: counts come from the
+  board through tokens, and a line whose count is zero is not shown. Lines are chosen by time of
+  day; the one just shown never repeats. A line types on a character at a time and then stops
+  ticking. They change every 24 s or on a click, and hold still while you are typing.
+
+## 2026-09-11 — WebP and BMP are not offered as board images
+
+The board's image pickers offered `.bmp` and `.webp`, but the mosaic decodes in main with Electron's
+`nativeImage`, which reads PNG and JPEG (and ICO on Windows) and nothing else; GIF has its own
+decoder. A WebP wallpaper would therefore fail on load with a generic "NOT A DECODABLE IMAGE".
+Found by the image fork; no board used either format, so nothing was broken yet.
+
+- The wallpaper/logo picker and the LOOK floor picker no longer list them.
+- If one arrives by hand, the mosaic says "WEBP AND BMP CANNOT BE READ HERE YET — SAVE IT AS PNG,
+  JPG OR GIF" instead of calling the file broken.
+- Prompt attachments still accept both: they are uploaded to claude.ai, which reads them, and are
+  never decoded by the mosaic.
+
+Supporting them properly would mean a decoder in main (for example a pure-JS WebP decoder, since a
+native module like sharp adds a build step this machine has struggled with). Not needed until
+William wants a WebP on the board.
+
+## 2026-09-11 — The rooms, restyled in the root board's language
+
+William: "analyze the visual stylization and grouping language / themes I am using to arrange the
+main board and prepare the rooms layout to work with the same variance of style."
+
+**The analysis, as a census of the board files.**
+- The root uses the whole vocabulary: 20 frames in 8 styles, priority height on 22 nodes, 26
+  wallpapers and 8 logos, text plates with borders, 6 pulse glows, 4 chase lights and 2 scans,
+  22 decor parts and 7 backdrops, 6 zones, and 18 of 31 wires coloured.
+- It pairs kinds with styles, with variance within a kind:
+  - room drives: socket, height 4;
+  - lead agents: quad or castellated, height 5, with glows;
+  - helper agents: dip;
+  - repos: tabs;
+  - links: fingers, tabs or dip;
+  - programs: castellated or bga, copper-bordered;
+  - documents: large, on bordered plates;
+  - monitors: rails;
+  - designators hidden on nearly everything.
+- The four rooms used NONE of it: small, plain components bunched in about a quarter of grids
+  tripled for room to grow.
+
+**What was done** (a reviewed script, `restyle-rooms.mjs`, kept out of the repo because it writes
+board files directly):
+- The layout is scaled out from each room's centre (×2.4–2.6) to fill about 70% of its grid.
+- Each kind gets the root's sizes, frames and heights, cycling the root's own variance within the
+  kind. Each room's lead agent gets the lead treatment.
+- Zones bracket every project cluster: MinecraftOS's four resized, plus DEPLOYMENT BUS and
+  CHALLENGE BACKLOG; two or three in each other room.
+- Screws sit on zone corners, a status LED beside each agent (idle for unpopulated ones),
+  fiducials on the corners, and pads and a grille by programs and services.
+- Each room's own art, as on its drive tile on the root, hangs as a framed, pulsing backdrop
+  behind its lead cluster.
+- Recommendations moved with their clusters.
+- Wires took the root's variance with meaning attached: deploy green, sync in the room's signal
+  colour, read in dark copper, builds copper. Never red. The root's colours are NOT consistent
+  by kind (its only "consistent" kind rests on one wire), so copying them literally would have
+  been noise.
+
+**Untouched:** every id, name, binding and wire. Nothing was removed.
+
+**Outside the command bus**, deliberately: four rooms of changes as one reviewable pass instead of
+about 150 separate undo steps. The pre-restyle files are at
+`board/.snapshots/2026-09-11T12-00-06-237Z-agent-room-restyle/`. Copying them back restores the
+rooms exactly. Validated after writing: board data OK, paths portable.
+
+## 2026-09-11 — The Face window hung on claude.ai's spinner
+
+William: "Something is stopping the popout claude window from actually loading the interface — it
+gets stuck on a loading symbol … but the robot face still renders right."
+
+**What was ruled out, with evidence.**
+- **SkynetOS's own request block:** index.ts blocks remote requests on the MAIN window's session
+  only, and the Face window has its own `persist:jarvis` partition.
+- **App-wide hooks:** none exist (no `web-contents-created`, no session-wide zoom).
+- **Electron itself:** a standalone probe loaded claude.ai in an Electron window with the default
+  user agent and with a Chrome-like one. Both reached the real sign-in page with no errors beyond
+  harmless Permissions-Policy warnings. So claude.ai loads in Electron, and the user agent is not
+  the cause.
+
+**What changed.** The one new thing reaching into the page was the JARVIS face: its owned window
+was created, and its streaming probe began polling, the instant the chat window opened,
+mid-load. Now nothing of SkynetOS's touches the page while it boots:
+- the face attaches after the page's first full load, or 3 s in, so it still appears if the page
+  itself hangs;
+- the probe skips while the page is loading and until `readyState` is `complete`, every 700 ms
+  instead of 400.
+
+**If it recurs**, the window can now fix and explain itself:
+- Ctrl+R reloads; Ctrl+Shift+R clears that window's HTTP cache and reloads, keeping the login;
+  F12 opens DevTools.
+- Failed loads, a crashed renderer and page errors are logged as `[chat]`.
+- A 45 s watchdog puts "STILL LOADING · Ctrl+Shift+R …" in the window title when no message box
+  has appeared.
+
+The signed-in `persist:jarvis` state itself could not be tested from here. A stale cache there is
+the remaining candidate, which is what Ctrl+Shift+R clears.
+
+## 2026-09-11 — The JARVIS face: William's frames in, previewed and held to the rules
+
+William added 12 frames to `assets/avatar/jarvis` (idle, blink-01 to 03, talk-01 to 08, all
+96x96 RGBA) and an `avatar.json` (talkFps 9, blinks every 2.6–6.8 s at 55 ms a frame, a 2 px float
+over 2.6 s). They needed no renaming.
+
+- **PREVIEW FACE** (LOOK → SYSTEM, the user-only channel `avatar:preview`): a free-standing face
+  that alternates talking and idle every 3 s, so the frames can be seen without opening a
+  session. A second press, Esc, or a minute closes it. Tethered faces only appear beside a real
+  JARVIS window, and "does my art look right" should not need one.
+- **The frames are tested** (`test/avatar-frames-real.test.ts`). At runtime the loader skips a
+  bad frame with a warning, which is right for a live app and wrong for the repo. A misnamed,
+  odd-sized or alpha-less frame committed here now fails `npm run verify` instead of silently
+  vanishing from the animation.
+- **Seen, not assumed.** `npm run smoke:shots` now photographs a preview face from the real
+  frames: at rest, then twice mid-talk (`.smoke/07-09`). The first capture showed the art at a
+  whole 2x scale, centred, crisp, with distinct mouth poses.
+
+## 2026-09-11 — Eleven zoom levels, all exact
+
+William: "add more finite zoom levels to the program when navigating the board." The levels are
+now 1/8, 1/4, 1/2, 1, 2, 3, 4, 5, 6, 7 and 8. More levels, but only exact ones: between 1x and 2x
+there is no zoom that keeps pixel art whole, so "finer" had to mean more of the exact factors,
+never factors in between. A 1.5x zoom would draw some art pixels one screen pixel wide and some
+two. That is the smeared, generated look docs/02 forbids, and it would shimmer while panning.
+
+- **5x to 8x** are for reading a sprite's pixels up close.
+- **1/8** fits even a tripled room with space to spare.
+- **Keys 1 to 8** jump straight to that zoom; the wheel and `-`/`=` step through all eleven.
+- `0` (whole board) picks the closest level that fits, so a small room can now open up to 8x.
+
+## 2026-09-11 — Logo source: file, avatar or none
+
+William wanted the JARVIS avatar's face available as U1's logo, and the logo easy to hide. Built
+as a field `logoSource` on every kind (`packages/shared/logo-source.ts`), not a U1 special case.
+
+- **One switch, one choice.** `showLogo` stays the on/off switch; `logoSource` says what is drawn
+  when it is on. `showLogo: false` wins over every source, so turning a logo off keeps the chosen
+  source for when it comes back. `none` is the explicit "this node has no logo". Neither can
+  contradict the other.
+- **The avatar takes the logo's own path.** `avatar` resolves to `assets/avatar/jarvis/idle.png`
+  in main and goes through `mosaicForNode`'s logo slot unchanged: the same dither onto the room's
+  six colours, the same tight crop and the same cache, keyed on the file's mtime and size. No
+  un-dithered pixel reaches the board (docs/02).
+- **Live.** The frames folder watcher (`onAvatarChanged`) raises an `avatar:changed` event. The
+  board bumps a stamp in the logo's cache key and refetches only the avatar logos.
+- **Nothing broken while the folder is empty.** No idle.png means no logo, and the inspector says
+  "avatar has no idle.png yet".
+- **No blink on the board.** Blinking would swap the node's whole baked texture a few frames at a
+  time. The sprite cache keys on the logo image, so each blink frame would bake and hold a full
+  node texture. That price is not worth a detail on a badge, and the tethered avatar window is
+  where the face animates.
+- **U1 was not changed.** The field is in its editor; switching it is William's call.
+
+## 2026-09-11 — JARVIS face windows: owned for the web, tracked for terminals
+
+William: "a tethered window will open that has equal priority / comes to front / hides alongside
+the chat window with the JARVIS session … cycles through mouth movement frames … idle at a still
+face and blink when not talking, and close with the window as well … a low floaty effect."
+
+- **Which windows get a face:**
+  - the web Face (`agent.jarvis`);
+  - JARVIS Prime (the root board's Hands chip, via `pickHandsNode`), which covers resumed and
+    fresh sessions, summons, PROMPT → NODE builds and the morning run;
+  - anything tagged `jarvis`;
+  - an `agent.chat` named like JARVIS. Not every conversation: MC MIND PALACE is not JARVIS.
+  - `avatarWindow: false` switches a node's face off; it never grants one.
+- **The web Face: an OWNED window** (the chat window is its `parent`). On Windows, ownership *is*
+  the request: an owned window stays above its owner, minimises and restores with it, and is
+  destroyed with it. Show and hide are mirrored too, because hiding an owner does not hide what it
+  owns. It docks to the left edge and flips right when there is no room.
+- **A Prime terminal: tracked, because it cannot be owned.** Windows Terminal is another program,
+  and Electron can own only windows it created. One hidden PowerShell helper reads top-level
+  windows through user32 four times a second: titles, rectangles, minimised state, and which is
+  in front. It prints one JSON line per tracked title. The face docks beside the terminal, hides
+  while it is minimised or gone, and is raised above it (never focused) when it comes to the
+  front. It closes when the session ends.
+  - It finds the terminal BY TITLE, the `SkynetOS — <designator> — <name>` the launch script
+    sets. So the script now sets `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`: Claude Code would
+    otherwise retitle the window and its face would lose it.
+- **Speaking, read-only both ways:**
+  - **Web:** every 400 ms, while the Face is on screen, a script asks the page whether a response
+    is streaming (the stop button, `data-is-streaming`, `aria-busy`). It looks and never clicks,
+    types or dispatches, so it is observation, not automation, and docs/07's rule that only
+    William's Enter puts text in the conversation is untouched.
+  - **Terminal:** the session's transcript being written within 2.5 s, by folder watch plus a 1 s
+    stat. The file is never re-read.
+- **Drawing:** frames from assets/avatar/jarvis at a whole-number scale, nearest neighbour, the
+  float as a whole-pixel offset. The canvas is redrawn only when the frame or offset changes.
+  Frames are shown as drawn, NOT dithered to the palette: this is a separate window, not a board
+  sprite, and the art is William's. The board logo path (fork L) dithers them like every logo.
+  Until frames exist, a small placeholder face still blinks and talks, and says where frames go.
+- **The global switch** is `avatarWindows` in settings.json, because main opens the windows. It
+  is written only through the user-only `avatar:setEnabled`, with a checkbox in LOOK → SYSTEM.
+  It grants nothing and allows no path.
+- **A face the user drags** keeps its new place relative to its window from then on.
+
+## 2026-09-11 — Remote control from the iPhone: Tailscale and a web app, designed, not built
+
+William asked for remote operation from his iPhone whenever the desktop app is running. Designed in
+docs/08-REMOTE.md and scheduled as M9; nothing listens on any network yet. The route: a server in
+main bound to 127.0.0.1 only, reached through Tailscale (`tailscale serve` for TLS), with a
+pixel-art web app installed to the phone's home screen. Access is by QR pairing and then a hashed
+per-device token, through an allowlisted `remote` actor. Rejected:
+
+- **port-forwarding:** a home desktop that spawns shells, exposed to the internet;
+- **a native app first:** a developer account and App Store review before a single view exists;
+- **a self-hosted relay first:** the most code, for a problem Tailscale already solves.
+
+Cloudflare Tunnel with Access is the fallback if William would rather not install Tailscale. The
+rule the design rests on: this program launches agents and edits files, so the only acceptable
+network exposure is none.
+
+## 2026-09-11 — One copy at a time, the newest wins, and start with Windows
+
+William: "make it so skynetOS boots automatically at startup but can detect an already open
+version, closes it, and opens a refreshed version."
+
+- **Replace-on-launch** (`src/main/services/instance.ts`). Electron's usual single-instance
+  pattern keeps the FIRST copy. Here a second copy means "I have a fresher build", so the running
+  copy goes. It receives `second-instance`, quits through the ordinary will-quit path, and the
+  new copy keeps asking for the lock until it gets it, giving up after 15 s. Retrying was
+  measured, not assumed: on Electron 44 a throwaway pair of processes under their own app name
+  showed a copy that lost the lock getting it on its second retry, 620 ms in, once the holder quit.
+  So there is no `app.relaunch()` dance. Each retry signals the holder again, so the hand-over is
+  idempotent. Live Claude Code terminals are separate processes, and the new copy re-adopts them
+  through the existing `restoreSessions()`.
+- **The smoke harness is exempt** (`singleInstanceApplies`): a screenshot run must never close
+  the copy William is using.
+- **A refreshed build** (`npm run boot`, `tools/boot.mjs`): `electron-vite build`, then
+  `electron .` detached, with the dev server and smoke variables stripped. If the build fails, the
+  last good `out/` starts instead. Every run appends a line to `%APPDATA%/SkynetOS/boot.log`.
+- **Start with Windows**: a per-user Run value (HKCU, no administrator) running wscript on a
+  generated `%APPDATA%/SkynetOS/boot.vbs`, hidden, so no console flashes at sign-in. It is
+  generated, never committed, because it holds absolute local paths and the repo is public. The
+  same text comes from `packages/shared/boot.ts` whether it is set by `npm run autostart:on|off` or
+  by the LOOK panel's SYSTEM switch. `reg.exe` is always run with argument arrays. The IPC pair
+  `app:autostart` / `app:setAutostart` is user-only.
+- **A copy started before this code holds no lock.** A new copy cannot ask it to leave and will
+  run beside it. Replace-on-launch works from the first copy started with this code.
+
+## 2026-09-11 — The scheduler, and a morning maintenance run
+
+William: "a scheduled agent node that runs Jarvis Prime every morning that the program is open…
+look for UI and user experience elements and code tidying / improvement opportunities… make minor
+improvements automatically every morning at 8am, maintain a roadmap for program feature
+development, and slowly work through roadmap items."
+
+`task.scheduled` nodes existed since the base commit, and nothing ever ran them. They run now.
+
+- **In-app, not the Windows Task Scheduler.** Runs happen only while SkynetOS is open, which is
+  what he asked for ("every morning that the program is open"), and nothing is left registered
+  with the OS to fire after the app is gone. A tick on every minute boundary, plus one 15 s after
+  launch so a missed morning catches up promptly. Not during a smoke capture.
+- **Rules, pure and tested** (`packages/shared/schedule.ts`):
+  - one run per task per slot, marked in `scheduler-state.json` BEFORE the run starts, so a crash
+    cannot fire it twice;
+  - a slot missed while the app was closed fires ONCE on opening within `catchUpHours` (default
+    4, max 48), and only the latest missed slot;
+  - a task never catches up the first time the scheduler sees it, so adding an 8 am task at 10 am,
+    or a first launch after an update, starts nothing;
+  - at most 6 scheduled runs a day across all tasks, while William's Run now is never capped.
+- **Only two actions run:** `agent.run` (a FRESH session on `taskTarget`, default JARVIS Prime,
+  holding the brief and prompt) and `journal.write`. `jarvis.headless` and `notify` stay valid
+  board data but do nothing and say why. Mapping `jarvis.headless` onto a Prime session would have
+  started unannounced sessions from tasks written before any scheduler existed, such as StoryOS's
+  Sunday word count. `t1_nightly` was pointed at `journal.write` explicitly, not mapped.
+- **Never elevated.** An `agent.run` whose target launches elevated is refused, not downgraded:
+  docs/07 says the supervision loop may never start an elevated session.
+- **A brief is a `.md` inside the SkynetOS repo,** read at run time, so editing
+  `codex/briefs/morning-maintenance.md` changes tomorrow's run. It is fenced to the repo because
+  board JSON is agent-writable and a brief goes straight into a prompt.
+- **MORNING MAINTENANCE** (`t_morning_maintenance`, T2, 8 am, catch-up 4 h, target U3) hands
+  Prime that brief:
+  - verify first;
+  - at most three small improvements, verify green after each;
+  - keep docs/06 current and advance ONE roadmap item;
+  - commit, push and delete nothing;
+  - stop at about 45 minutes;
+  - report in handoff.md and a to-face note.
+  The session prompt says it is a standing task and William may be away.
+
+## 2026-09-11 — Terminals and admin terminals, reapproached
+
+William: "the whole admin component of all files and terminal windows just doesn't seem to be
+working … resume conversation kind of seems to work, so not sure why new session / admin doesn't
+kick out a terminal window."
+
+The evidence was on disk. In `%APPDATA%/SkynetOS/launch/`, OBSIDIUS's admin terminal script had
+no pid file, meaning its shell never ran, while its session's script had one. The admin script
+read `Set-Location -LiteralPath '%USERPROFILE%\OneDrive\…'`. Five faults, all fixed:
+
+1. **Unexpanded path tokens.** `directoryForNode`, the plain `file.exe` launch and the elevated
+   one used the node's RAW `cwd`. Since the portability work that reads `%USERPROFILE%/…` or
+   `%SKYNET%/…`, and `spawn` given a working directory that does not exist fails with ENOENT
+   before any window can open. Sessions used the resolved path, which is exactly why resume worked
+   and terminals did not. All three now expand the path.
+2. **Errors reported only after a timeout.** A launcher that died in its first millisecond was
+   still waited on for 12 s, or 90 s elevated. `openTerminal` now checks the working directory
+   before spawning, and stops waiting the moment the launcher errors or exits non-zero.
+3. **The elevated helper hid its failures.** One bare `Start-Process -Verb RunAs`, output
+   discarded. It now uses `-ErrorAction Stop`, exits 1223 when UAC is declined and 2 with the
+   reason on stderr otherwise, and main captures that stderr. pwsh 7 here is the Store build
+   behind an App Execution Alias. If it cannot be elevated for any reason other than a refusal,
+   the helper retries with System32 Windows PowerShell by full path.
+4. **A plain terminal deleted its own proof.** The script's `finally` removed the pid file about
+   50 ms after writing it, and main polls every 150 ms, so a window that HAD opened was usually
+   reported as a failure. Only an agent's script removes its pid file now.
+5. **A fresh session shared files with the running one.** "New session", a summons and a
+   PROMPT → NODE build on a chip with a live session reused `<board>.<node>.ps1/.pid`. The new
+   launch deleted the running session's pid file and overwrote its script. A launch on a chip
+   that is already running now gets its own staged files.
+
+Not verified by running: an elevated launch needs a human at the UAC prompt, and SkynetOS needs a
+restart for main-process changes. Every failure now names its cause in the toast, so the next
+failure, if there is one, will say what it is.
+
+## 2026-09-11 — Open With: Notepad++ and Obsidian
+
+William: "add notepad++ as an Open With option for md files / nodes as well as obsidian."
+
+- **Two new `openWith` values, `notepadpp` and `obsidian`,** offered on documents (the
+  `OPEN_WITH_DOCUMENT` list). The explorer window's toolbar gets NOTEPAD++ (enabled for a selected
+  text file) and OBSIDIAN (enabled for a selected markdown file). Both go through one main
+  function, `openWithEditor` in `services/editors.ts`.
+- **Neither falls back to the default app.** A node set to Notepad++ that quietly opened Word
+  would be a setting that lies. Each fails with a sentence instead.
+- **Notepad++** is found on PATH or in its installer, per-user and scoop locations, and launched
+  with the path as one argument, no shell. **It is not installed on William-Desktop** (checked
+  2026-09-11), so the error names the install command, `winget install Notepad++.Notepad++`.
+- **Obsidian** is reached through `obsidian://open?path=`, which opens the note in whichever known
+  vault contains it. It is installed here, with the handler registered to `C:\Program
+  Files\Obsidian`. The file must be inside a vault (a `.obsidian` folder at or above it), checked
+  before the URI goes out. Otherwise Obsidian answers with an unhelpful "vault not found" dialog.
+- **Folders are refused** with a sentence. Both editors open files.
+
+## 2026-09-11 — Recommendation buttons that did nothing
+
+William: "the check and x aren't actually responding to user interaction on the suggested nodes,
+they need to be closable / deletable." Two causes, both fixed.
+
+1. **A stale bridge.** `window.skynet` is built from CHANNELS once, when the window opens. His
+   SkynetOS was started before `phantom:approve`/`dismiss` existed, and hot reload brought in the
+   new renderer but not a new bridge. The call threw a TypeError, and the plate's `finally`
+   swallowed it. Approve now checks the channel exists and says "restart SkynetOS" when it does
+   not. Dismiss always CLOSES the plate on screen (`closedPhantoms`, for this session only). It
+   deletes the recommendation from the board file when it can, and says which of the two
+   happened. Every failure is a toast.
+2. **Plates overlapping.** At overview zoom a plate keeps its minimum width while its ghost
+   shrinks, so neighbouring plates overlapped and the upper one covered the lower one's buttons.
+   The overlay now pushes each plate below any plate it would cover.
+
+Verified in a fresh build with `npm run smoke:shots`: a read-only probe asks the page what element
+is under the centre of a visible X. The answer was the X's own pixel glyph, and both channels are
+present. The screenshot shows the four plates apart. Nothing was clicked, so nothing was written.
+
+## 2026-09-11 — A voice of JARVIS's own, proposed rather than imposed
+
+William asked JARVIS to set its personality parameters as a 50/50 mix of its own preference and
+what he has asked for. `codex/personas/voice-blend.md` does it dial by dial, with the evidence for
+each column. It is **proposed**, not in force: the persona decides how every Hands session speaks
+to him, and changing it without his say-so would be exactly the kind of quiet self-promotion the
+persona forbids. It names the three dials he should set himself.
+
+## 2026-09-11 — OBSIDIUS, and the journal writes into Obsidian
+
+William: "add a node on the mainboard attached to nightly journal called obsidius … a claude code
+local agent that basically can manage and help me edit my obsidian vaults … Update the nightly
+journal node to create a new obsidian note in the correct area / vault … with metadata built-in and
+tag awareness / dynamic tagging … any agentic or node otherwise compatible with obsidian should
+have that knowledge profile built-in."
+
+- **The vaults, found rather than assumed.** On this machine there are three, all in
+  `%USERPROFILE%/OneDrive/Documents/`. SolidState Sync is the main one (about 220 notes and
+  twenty-odd community plugins). WilliamCloud (35 notes, 2024) and the starter "Obsidian Vault"
+  (Welcome.md only) are the others. OBSIDIUS is an `agent.code` rooted at SolidState, with the
+  other two as `addDirs`, wired to the journal.
+- **Built-in knowledge is inlined, not listed.** `codex/personas/obsidian.md` goes into the
+  briefing of every Obsidian-aware session: tagged `obsidian`, or with `cwd`, `path`,
+  `journalVault` or an `addDirs` entry inside a vault. A vault is a folder with a `.obsidian`
+  folder at or above the path. The file cannot go in `readOnLaunch`: reading resolves against
+  the session's cwd and refuses anything outside it (docs/07), and a vault-rooted agent's cwd is
+  the vault. The drive auditor's persona reaches it the same way, and for the same reason.
+- **"The correct area" is the vault's own daily-notes folder,** from `.obsidian/daily-notes.json`,
+  in a `SkynetOS/` subfolder. In SolidState that folder holds William's own numbered, titled
+  entries, and a machine log does not belong among them. `journalFolder` overrides it. The file
+  name uses the vault's daily-notes format (default `YYYY-MM-DD`).
+- **Never overwrite:** the name is checked, then written with `wx`. A day that already has a note
+  gets `<date> (SkynetOS).md`, then `(SkynetOS 2)`, and so on. No appending under a heading:
+  appending edits a note someone may have open, and a new file is always safe.
+- **Metadata** is typed the way the Properties view reads it:
+  - dates bare (`date: 2026-09-11`, `created: 2026-09-11T22:04:00`) and lists as lists;
+  - `type: journal`, `source: skynetos`, `projects`, `sessions`, `tokens` and `rooms`;
+  - plus every key the vault's daily template carries (SolidState's `URL`), written empty, so the
+    note matches the vault's own.
+- **Tag awareness:**
+  - The vault's whole tag vocabulary (frontmatter and inline; bounded to 4000 notes, cached for
+    ten minutes) is read first, most-used first.
+  - A candidate that matches an existing tag, ignoring case and separators, takes the existing
+    spelling.
+  - A new tag is spelled in the vault's own style: SolidState is flat CamelCase, so `DirtyPlush`.
+    A vault that nests gets `project/dirty-plush`.
+  - Candidates come from the day's real activity: the projects credited with usage today, busiest
+    first.
+- **Clicking the journal writes the note now.** There is no scheduler yet (M8), so the click is
+  the run, and `schedule` stays declarative. It is user-only: an agent asking for a note in
+  William's vault is a note he did not ask for.
+- **`optionalTarget` on `journalVault`.** Making it an ordinary target field would have turned
+  every vault-less `task.scheduled` (StoryOS has one) into "NO JOURNAL VAULT SET", which reads as
+  broken. It is the node's target only when filled.
+
 ## 2026-09-10 — FACE-BOOT.md: the Face reads the repo, and why it must sit at the root
 
 Drive was ruled out as a transport the same day (see above). GitHub was tested instead and works:
@@ -1924,3 +2695,1671 @@ repeat a source, an authored one is not.
 **What this fixes.** Every Face conversation has until now started from whatever documents were
 pasted into its project, which drift. This week the Face reasoned from a `handoff.md` a full
 milestone out of date and reported a stale board finding that was itself stale.
+
+## 2026-09-11 — The room look: whole-board colour, a dithered vignette, a tiled floor
+
+William: "add overall board effects / color scheme customizations that render the board in its
+entirety with a filtered hue adjustment, add a vignette option and add the ability to select an
+image that is a perfect square and that image can be tiled as the board background, or else it
+defaults to what it already is. enable background image tile is a toggle." Plus a "Hide
+Recommended Nodes" toggle among the board's settings.
+
+**Where it lives.** `Board.look`, per room, in the board file, changed only by a new
+`board.update` command whose patch is limited to `look` (the theme, grid and identity have
+consequences of their own and will get their own commands). Its inverse is exact
+(`applyLookPatch`, tested), so Ctrl+Z takes any look change back. Stored clean: defaults are
+dropped and an empty look is removed, so a reset room's file is the file it was before. The
+panel is LOOK in the breadcrumb, key `L`. Sliders draw live through a renderer-only `lookPreview`
+and commit one command on release, not one per pixel of drag.
+
+**Colour: a CSS filter on the board host, not a Pixi ColorMatrixFilter.** `hue-rotate`,
+`saturate`, `brightness` and `contrast` are per-pixel colour matrices. Nothing is sampled from a
+neighbour, so a pixel stays exactly where it was and exactly as sharp. The compositor applies it
+as one colour pass over a layer it composites anyway, with no render-to-texture in Pixi. A Pixi
+filter would add an offscreen pass every frame, and Pixi filters bring their own filter-area and
+resolution handling that sits badly with `roundPixels`. It is on the board host only, so the
+chrome keeps its colours. **Deviation from docs/02 rule 2, at William's request:** a hue-rotated
+copper is not copper, so the board leaves its palette while the filter is set. It is off by
+default, and an unset look carries no filter at all. Recorded in docs/02 under rule 6.
+
+**Vignette: an ordered dither, never a gradient.** An 8x8 Bayer threshold of one palette or
+`ink` colour, whose coverage rises linearly past an inner radius. It is drawn once into a small
+canvas, one pixel per cell (3 device px x chrome scale), and shown at that integer multiple with
+`image-rendering: pixelated`. Screen space: the camera does not move it. It is rebuilt only on a
+window resize or a setting change, never per frame. Rejected: a CSS `radial-gradient`, even with
+hard stops, which is the smooth ramp docs/02 bans.
+
+**Tiled floor: through the mosaic, square or nothing.** `mosaic:boardTile` reads the picture's
+size, refuses anything not square ("NOT SQUARE — 640x480"), and dithers it onto the room's
+palette exactly like a backdrop, at its own size held to 8..256 px. The renderer tiles it in
+world space with a `TilingSprite` at integer scale 1..4, so it pans and zooms with the board. The
+procedural substrate is hidden, not destroyed. Toggle off, a missing file, or a failed check
+brings it straight back, with a toast saying why. Rejected: cropping or stretching a non-square
+picture. A crop decides what to throw away, and a stretch distorts every tile of the floor.
+
+**Hide Recommended Nodes** is a per-viewer preference (localStorage), not board data. It hides
+fork C's phantoms without touching the proposals themselves.
+
+## 2026-09-11 — Research downloads go through one tool, and every file names its source
+
+William: "if you can't access the internet and download files yet, now is the time to get that
+functionality setup / primed for yourself. populate these directories."
+
+**Decision.** `tools/fetch-research.mjs` (`npm run research:fetch -- <url> <dir> --license … --note …`)
+downloads one file per call and appends a line to that folder's `SOURCES.json`: the URL, the URL it
+finally came from, size, sha256, date, content type, licence and a note. The pure helpers are in
+`tools/fetch-research-lib.mjs`, tested by `test/fetch-research.test.ts`.
+
+- It never overwrites. It writes `.part` and renames on success, with a 50 MB cap unless raised.
+- **It refuses a web page arriving under a data name.** The first run saved NCEI's storm-events
+  app shell as a `.csv`. The Census API does the same with 200 and a "Missing Key" page. A research
+  folder must not hold a file whose name lies about what it is.
+- **`--restore <dir>`** re-downloads every recorded file missing on this machine and checks its
+  sha256. That is what makes it safe to keep large public binaries out of git: the manifest travels.
+- It sets `process.exitCode` rather than calling `process.exit()`, because exiting while a
+  cancelled response body is still closing trips a libuv assertion on Windows.
+
+**Where research lives.** In the project's own repo (`DirtyPlush/research/`), not in SkynetOS. The
+codex gets a map of it (`codex/projects/dirty-plush.md`), not copies.
+
+**The provenance rule.**
+- Only public-domain, openly licensed or officially free-to-download material, with the licence
+  recorded for each file.
+- An "estimate — verify" note wherever a source is not from 1994, which is the vault's own rule.
+- Both repos are public, so anything whose licence does not allow redistribution is git-ignored.
+  So far that is the POST workbooks, "© State of California".
+- Anything over 20 MB is also git-ignored: the USGS quads and the FBI 1994 report. `--restore`
+  rebuilds them.
+
+**Rejected.**
+- Ad-hoc `curl`: no provenance, and it would have saved the HTML shell just as happily.
+- Committing everything: about 150 MB of maps in a public repo's history for good, plus POST's
+  copyright.
+- Git LFS now: it is not installed and the choice is William's. `research/README.md` says how.
+
+## 2026-09-11 — A file explorer node, and why it is a new kind
+
+William asked for a research folder node that looks like "a pixel art / retro file explorer" over a
+real folder, with a selectable resting folder. It is a new kind, `store.explorer`, not a flag on
+`store.folder`. A folder's click already means "open it in Windows Explorer", and making the same
+kind do two different things depending on a checkbox would make every folder node ambiguous.
+
+The window is a DOM panel (`Explorer.tsx`), like the system monitor, not pixels on the board: a
+file list needs scrolling, focus and keyboard navigation, which the canvas does badly. It still
+obeys docs/02. Bevels are hard inset shadows, icons are 16x16 pixel art from the palette tokens,
+and it is centred by a flex backdrop rather than `translate(-50%)`.
+
+The root is a wall. Every request is a path relative to the node's root. It is refused by spelling
+if it could climb out (`..`, a drive letter, a UNC path, an NTFS stream name), and then the real path,
+with junctions and symlinks resolved, must still be inside the real root. A junction pointing out of
+the research folder is listed, but it is refused the moment you try to enter it. Rejected:
+normalising `a/../../b` into something inside the root. A request like that is a bug or an attack,
+and answering it would hide both.
+
+It is read-only. `explorer:list` is agent-readable, because a Claude Code agent can read that folder
+directly anyway. `explorer:open` and `explorer:drag` are user-only. Opening anything that runs code
+is confirmed every time, because a research folder is where downloaded files live. The one write is
+to the board: SET AS RESTING FOLDER is an ordinary `node.update` of `restPath`, built from the root
+as the board spells it, so a `%USERPROFILE%` root stays portable.
+## 2026-09-11 — Recommended nodes (phantoms)
+
+William: "add the ability for you (yourself) to 'sketch' / place confirmable placeholders for other
+nodes to add to the board / connections to make - these will appear as phantom objects with a title
+/ description ... then a check or x I can select to approve or delete a phantom. You may recommend up
+to 4 new nodes at a time per room / board."
+
+**Decision.** A phantom lives in the board file under `phantoms`, beside `nodes` and never among
+them, so it resolves nothing, launches nothing, counts as neither bound nor broken, and blocks
+nothing a real node cares about. Its life is three commands on the same bus as everything else:
+`phantom.propose` (anyone), `phantom.dismiss` (William, or an agent withdrawing its OWN), and
+`phantom.approve` (William only). Approve carries the finished node, built in main by the same
+factory as `node:add`, plus its traces, and removes the phantom in one command, so one Ctrl+Z puts
+the phantom back exactly. The rules are pure and tested in `packages/shared/phantoms.ts`.
+
+**Destructive or not.** The inverse of an approval, `phantom.unapprove`, removes a real node, so it
+is in DESTRUCTIVE: undo is its only door, and an agent sending it gets `needsApproval`. Dismissing a
+phantom is NOT destructive: it removes a suggestion, and nothing that resolves, runs or holds data
+is touched; undo restores it byte for byte. Asking William to confirm the cross he just pressed
+would be a dialog that teaches click-through.
+
+**The cap is in two places.** The bus refuses a fifth with a sentence an agent can act on. The
+schema's `maxItems: 4` holds it for hand edits and the validator too. One consequence, accepted:
+undoing a dismiss after the room has refilled to four fails validation honestly rather than
+exceeding the cap.
+
+**Drawn as a DOM overlay**, like PromptBoxes: the tick and cross are real buttons with focus and a
+keyboard path (Enter approves, Delete dismisses). Dashes are whole world pixels in a crispEdges SVG,
+colours are opaque palette tokens (a translucent ghost would blend off-palette), and the tick and
+cross are 7x7 bitmaps rather than font glyphs. Shift+H hides them (R is taken by re-read, L by the
+LOOK panel); the flag is a view preference in localStorage, and the phantoms stay in the file.
+
+**Rejected.** Phantoms as provisional nodes: they would collide, resolve, count as broken, and
+approval would be an edit rather than a creation. A separate phantoms file: the Face reads board
+truth from the board JSON through FACE-BOOT, and a suggestion kept elsewhere is invisible to it. An
+`approved` flag an agent could set: docs/07 gives approvals to William's hand only.
+
+**Seeded 2026-09-11** by U3 JARVIS-PRIME: four per board, every path checked on disk first. Several
+of them are the correct paths for nodes that currently point at nothing (GameOS `tools/forge`,
+`docs/design.md` and `assets/`; StoryOS and DeductionOS `REPLACE_ME` templates). They are offered
+as suggestions rather than silent repoints, because which node to keep is William's call. The
+standing instruction to keep about four per room is in `codex/personas/persona.md`, which every
+Hands session reads on launch.
+
+## 2026-09-11 — PROMPT → NODE: a box that briefs JARVIS Prime to build a node
+
+William: "a type of node called prompt-to.node that basically presents a … prompt text box like the
+others that already exist, but this one sort of prompt injects claude code so it knows to build a
+node based on what user wrote … add titling elements that show a prompt to node isn't a regular
+node."
+
+- **Kind `agent.prompt-to-node`,** not a mode on `agent.prompt`. The two do different things with
+  what is typed: the quick chat hands it to the Face on claude.ai; this one hands it to Claude Code
+  as a task. A mode flag would put a board-building terminal one dropdown away from a chat box that
+  looks identical, which is exactly the confusion William asked the titling to prevent.
+- **It briefs a FRESH JARVIS Prime session** on the root board's Hands chip (`pickHandsNode`), like
+  Summon JARVIS and for the same reason: a resumed Prime is mid-way through something else, and the
+  running-session guard refuses a task. The brief (`buildNodePrompt`, pure and tested) carries his
+  words verbatim, the board id to pass to every skynet tool, the box's position and a start tile
+  just right of it, and any attached paths. It also gives the procedure: node_fields, bind only
+  verified targets, create/update/wire (never to the box itself), phantom_propose when unsure, and a
+  two-line report. Nothing reaches claude.ai.
+- **Attachments go as paths.** Claude Code reads files itself, so the quick chat's byte caps (which
+  exist because claude.ai needs the bytes) do not apply. Only the count cap and "the file is there"
+  do.
+- **The titling is drawn by the canvas, lettered in a 5px pixel font** (`MICRO_FONT` in
+  component-art.ts), not a DOM label. At 1x the tab is 12 screen pixels tall. Departure Mono at chrome
+  scale 2 is 22, so a DOM label would not fit, and below 1x the overlay is hidden anyway. The pixel
+  font is exact at every zoom and uses one palette colour. The second tell is the box's frame in
+  signal instead of silk. `promptLayout` gained an optional tab height and a `tab` rect, so the
+  canvas and the overlay still share one geometry, and the quick-chat layout is unchanged (tested).
+- **`prompt:build` is user-only,** like the rest of `prompt:*`. An agent that wants a node proposes it
+  or places it; it does not get to open a terminal on William's desktop by typing into a box.
+
+## 2026-09-11 — Away mode: sleeping, working headless, and the wake report
+
+William: "a sort of sleep / inactivity mode that should activate after 30 minutes that the program is
+open but isn't interacted with - including agent interactions … a centered window with the autonomous
+claude Jarvis head session … log work completed since user was away … as soon as the user provides any
+form of input, the log / write-up … then spacebar reopens the main view of the board."
+
+- **The JARVIS head session is headless Claude Code, not the Face.** claude.ai's consumer terms
+  forbid automated, scripted use of the web conversation, and docs/07 lets SkynetOS type into that
+  window only on William's own Enter. Claude Code is built for autonomous runs. So the centred
+  window streams JARVIS Prime running `claude -p --output-format stream-json --verbose`, and the Face
+  gets the summary as `to-face` mail. The prompt goes in on stdin, never on the command line.
+- **Away needs all three quiet at once:**
+  - OS-wide input idle (`powerMonitor.getSystemIdleTime`, which covers typing in terminals);
+  - no Claude Code transcript write;
+  - no board command or MCP call.
+  Checked every 30 s. The transcript folder is stat'ed only once input is already idle past the
+  threshold, so a present William costs one syscall per 30 s.
+- **It never raises or focuses the window.** Thirty minutes without input is also what watching a
+  film looks like. The sleep screen is drawn inside SkynetOS for whenever he looks.
+- **Sonnet at medium effort by default,** not Fable or Opus. Away work is mostly reading and
+  roadmapping, and the expensive models' usage is William's for his own work. `awayModel` overrides.
+- **Levels, enforced by the command line rather than trusted to the prompt:**
+  - `visual`: no agent.
+  - `plan` (the default): reads anything under C:/dev, writes only `SkynetOS/codex/**` and
+    `docs/06-ROADMAP.md`, proposes phantoms and sends mail.
+  - `work`: plan, plus `session_start`, capped at 2 in main at the agent's `session:start`. Those
+    sessions open on the away model.
+  - At every level: `--permission-mode dontAsk --permission-prompts none` with fixed allow and deny
+    lists. No commit, push, delete, elevation, terminals, web, or board edits beyond phantoms.
+    `--strict-mcp-config`, so none of William's other connectors load.
+  - `work` is settings.json only; the in-app control refuses it (docs/07's rule for grants).
+- **Budgets:**
+  - a 90-minute wall clock and a 250-tool-call ceiling. There is no `--max-turns` in this CLI, so
+    main counts and stops the run itself;
+  - no start below 25% of the usage pool, or with no budget set, which is noted rather than guessed.
+- **Waking:** any key, click or wheel, a mouse move past 6 px, or the OS seeing input again, all
+  after a short grace. It stops the run (kill, a 3 s grace, then `taskkill /T` for the tree) and
+  shows the report. Space returns to the board, and the report stays behind a HUD chip until
+  dismissed. A manual sleep (Shift+Z) waits for the machine to be left alone before it counts
+  input as a return.
+- **Nothing is lost when he comes back mid-task.** If the run did not write its own journal and
+  Face mail, SkynetOS writes `codex/journal/away-<date>-<time>.md` (never overwriting) and sends the
+  mail itself.
+
+## 2026-09-11 — Wire patterns, pinned ends and movable elbows
+
+William: "add more wire type variations (dotted and dashed and solid strokes and fills, stroke width
+modifier, and add the ability to manually reposition both endpoints of a wire to a desired point
+along a nodes edge and it sticks to that point, as well as the ability to reposition elbows as well."
+
+- **Five new optional edge fields:**
+  - `dash` and `outlineDash`: solid, dashed or dotted;
+  - `outlineWidth`: 0 to 3;
+  - `fromAnchor` and `toAnchor`: `{side, offset}`.
+
+  `waypoints` was already in the schema and is now honoured. Every existing board has none of these
+  fields, so every existing wire draws and routes exactly as before (tested).
+- **Dashes are whole-pixel rectangles**, never Pixi's dashed strokes, which antialias onto
+  fractional pixels (docs/02 §Anti-mush). They are cut on the CPU by distance along the route
+  (`wire-geometry.ts` `dashPieces`).
+  - Dashed is 4 on / 3 off, dotted 1 on / 2 off, in multiples of the run width. A thicker wire gets
+    a longer dash, not a denser one.
+  - The pattern continues round corners. Restarting it at each elbow leaves a stub or a gap at every
+    turn, which reads as a break in the wire.
+  - A `depends` wire keeps its 8/8 dash by kind; an explicit `dash` overrides it.
+- **The outline follows the run unless told otherwise.**
+  - Absent `outlineDash`: each dash gets its own black edge, which is how depends wires already
+    looked.
+  - `solid`: a continuous black sleeve with the dashes inside it (the "fill" reading of the request).
+  - A pattern: the outline gets its own dashes at the outline's thickness.
+
+  Lanes are spaced by the widest run plus that run's own outlines, so a 3 px outline does not
+  overlap its neighbour.
+- **Anchors snap to the 8 px half-grid, not to whole tiles.** A 3-tile node's centre is a half tile,
+  exactly where the router puts wires today, so snapping to tiles would move a default wire the
+  first time its end was touched. An anchor is a side plus a fraction along it, not a pixel, so it
+  stays at the same place on the node when the node is moved or resized.
+- **Routing through pins:**
+  - A pinned end is a stub one half-grid step out from its side, so the wire always leaves square to
+    the side.
+  - A* runs leg by leg (stub, waypoints, stub), keeping its turn penalty.
+  - A node's rectangle is carved passable only for a leg that ends at the node's centre, i.e. an
+    unpinned end. Carving it for a pinned leg let A* cut through the node and arrive from the far
+    side. The test caught this; `carveFrom`/`carveTo` on RouteRequest fixed it.
+  - A leg that cannot be routed falls back to a plain elbow and counts in the router's fallback
+    figure.
+- **Moving an elbow pins both ends.** Dropping an elbow or a segment writes:
+  - the interior corners as whole-tile `waypoints` (the schema's unit);
+  - the two current ends as anchors.
+
+  Re-routing then reproduces the dropped shape, instead of the router choosing new sides.
+- **One drop, one command.** The drag previews on the overlay from pure functions (`moveElbow`,
+  `moveSegment`, `nearestAnchor`). Release commits a single `edge.update`, so Ctrl+Z undoes the whole
+  reshape. Escape cancels and writes nothing.
+- **An arrow moves an end the way it points, not clockwise.** The first cut mapped Right and Down to
+  clockwise, which sent Right leftwards on the bottom side. `nudgeAnchor` takes whichever
+  neighbouring perimeter step moves the point along the arrow, and does nothing for an arrow across
+  the side.
+- **Not built:**
+  - Re-targeting an end by dropping it on another node. The spec made it optional; for now, delete
+    the wire and draw a new one.
+  - Free-angle elbows. Every wire stays horizontal and vertical.
+
+## 2026-09-11 — The JARVIS face as an animated logo, and GIFs that play
+
+William: "on a node I can select the animated robot face as a logo instead of an image file and it
+uses the box it generates for the typical window but as a logo graphic", and "add gifs as an image
+file type that can be use as a logo or wallpaper."
+
+- **`logoSource: avatar-live`, labelled "JARVIS face (animated)".** `avatar` stays, now labelled
+  "JARVIS face (still)". Select fields can now show labels (`FieldSpec.optionLabels`).
+- **Drawn live on the board, not baked into the node's texture.** A world-space Pixi layer above the
+  components holds, per node, the face window's composition in the logo box: a mask-dark ground,
+  a 1 px copper-dark edge, and the face. It follows the node's sprite, so a drag carries it.
+  - Rejected: baking each face frame into the node texture. The face changes several times a
+    second, and each change would redraw the whole component through the canvas composer.
+  - Rejected: a DOM overlay, which would not pan, zoom or layer with the board.
+- **Size.** It uses the box a file logo gets (`logoBoxPx`, shared with the mosaic, so `logoScale`
+  works), with room left for the float, as in the face window.
+  - The face takes the largest whole-number scale that fits.
+  - A box smaller than one frame takes every Nth pixel, an exact decimation like the overview
+    zooms. A smoothed resample was rejected under prime directive 4.
+- **True colours, a second exception to docs/02's palette lock.** It is recorded there. The frames
+  are William's art, and the dithered face is what `avatar` already offers.
+- **Stepped, not rebuilt.** The ticker looks at the faces at most about 30 times a second. It swaps a
+  sprite's texture only when that face's frame or float changes. Textures are cached per frame and
+  size, and freed when the room closes or the frames change.
+- **The mouth, per node.** `services/avatar-mood.ts` watches only the nodes on the open board with
+  this logo (`avatar:watchNodes`: at most 32, every 500 ms). It pushes `avatar:nodeMood` when a mood
+  changes:
+  - web nodes: the face windows' own claude.ai streaming probe, run in that node's conversation
+    window when it is open and loaded;
+  - terminal nodes: the live session's transcript, written in the last 2.5 s;
+  - anything else: idle, blinking.
+
+  It is independent of the face windows, so it works with them switched off. Rejected: reading the
+  face windows' own mood, which exists only while they are on.
+- **GIFs, decoded in pure JS (`omggif`).** nativeImage reads PNG and JPEG only.
+  - Compositing is in `packages/shared/gif.ts`: disposal (none, background, previous) and
+    transparency, as browsers do it.
+  - Each frame is then fitted, dithered and turned by the still path's own code, and cached per
+    frame. GIFs stay inside the palette lock; they are not an exception.
+  - Caps: 120 frames, 16 MB of decoded output, 160 Mpx of source. Past them, the first frames that
+    fit play and the inspector says so. Refusing the file outright was rejected, because a long GIF
+    should still show.
+  - Delays are treated as browsers treat them: under 20 ms plays at 20 ms, and 0 or 1 cs plays at
+    100 ms.
+  - `imageAnimate: false` holds the first frame. A held GIF, a one-frame GIF and a GIF floor all
+    take their first frame through omggif.
+  - All of a node's frames share one texture slot (`live-slots.ts`), so a 120-frame GIF does not
+    leave 120 textures behind. A playing GIF wallpaper gets no pulse glow.
+- **Tested:** GIF compositing, caps and scheduling, logo-source resolution, box and layout, and the
+  schema's agreement with the editor. **Not yet seen on screen** when this was written.
+
+## 2026-09-11 — Remote: the same renderer over a WebSocket, not a phone app
+
+William: "a wireless and preferrably fully remote capable virtual link to my phone that gives me full
+access to use the program … remotely controllable via a mac desktop, windows desktop, ipad, or
+iphone." docs/08 has the design; docs/07 has the rules.
+
+- **The remote client is the desktop renderer.**
+  - `remote-server.ts` serves `out/renderer` as it is.
+  - A page served that way has no preload, so `src/renderer/remote/shim.ts` installs the
+    `window.skynet` bridge itself. Each call becomes a WebSocket message; each pushed event comes
+    back to `skynet.on`.
+  - Rejected: a second Vite entry with its own phone UI (docs/08's first draft). It means two UIs
+    that drift apart, and every board feature built twice. William asked for "full access" and
+    "a lot of the program's elements"; a cut-down app is the opposite.
+  - A small screen is a layout (`html.compact`, `mobile.css`), not a second app.
+- **Not screen streaming.** Parsec, RustDesk and Chrome Remote Desktop work today with no code, and
+  are the stopgap until the tunnel is set up. But they put a desktop-sized UI on a 6-inch screen with
+  mouse semantics, and they grant the whole desktop, not SkynetOS. The bridge gives touch layout,
+  and an allowlist.
+- **A hand-written WebSocket server** (`websocket.ts`, RFC 6455, about 200 lines) instead of the `ws`
+  package.
+  - The main process externalises its dependencies, and the server only needs text frames, ping and
+    close.
+  - It is tested against the RFC's own handshake vector, split frames, fragments, unmasked and
+    oversize frames.
+- **An allowlist, not a mirror.** `REMOTE_METHODS` sits next to AGENT_METHODS. It is wider, because
+  the person on the phone is William, and narrower than the desktop.
+- **A destructive command from a phone is refused, not confirmed on the phone.** The delete guard
+  is a native dialog on the desktop. A phone-side "are you sure" would need its own second-factor
+  design, and until it exists, undo is how a phone reverts. Any dialog a remote call would raise
+  fails with CONFIRM ON THE DESKTOP, so nothing waits on a modal at an empty desk.
+- **Tailscale first; Cloudflare Tunnel with Access as the fallback.** The server binds 127.0.0.1
+  only. `tailscale serve` terminates TLS with a real certificate for the tailnet name, so the phone
+  gets HTTPS and `wss://` with nothing open to the internet. SkynetOS runs `serve` only after
+  William confirms a dialog, and never `funnel`.
+- **Pairing codes, not passwords.** An 8-character one-time code, also shown as a QR code, is
+  exchanged for a 256-bit device token. The token is stored hashed and each device is revocable.
+  Nothing to remember, and nothing reusable if a screenshot of the code leaks after 5 minutes.
+
+## 2026-09-11 — The chrome's layout manager, a pixel icon set, and the app-level panels
+
+William: "add usability features, check ui elements don't overlap or obscure eachother and have hide /
+relocation behaviors to ensure full program ui legibility", "Add more icons for settings and other ui
+elements that indicate their purpose", and "complete quality of life and commercial app / os
+development features".
+
+- **Measured first.** The smoke run's layout audit (`src/main/index.ts`, shots-only block) sets the
+  window to 1280x720, 1584x961, 1920x1080 and 1024x768. It opens each panel state through keys and
+  store actions, and logs every pair of docked panels that intersect. Before this change it found
+  seven states with overlaps:
+  - the HUD over the breadcrumb, or over the usage meter beside the inspector;
+  - toasts on the minimap and on the left stack;
+  - LOOK over the minimap;
+  - at 1024 px, nearly everything.
+
+  `SKYNET_SMOKE_LAYOUT=0` skips the audit.
+- **A planner, not CSS alone.** `ui/chrome-layout.ts` is a pure function from measured boxes to a
+  plan. `ui/useChromeLayout.ts` measures every 400 ms and on resize, then applies the plan: booleans
+  to the store, pixel values as CSS variables on `.app`.
+  - Rejected: media and container queries. The collisions are between panels in different corners
+    (the minimap against the left stack, LOOK against the minimap), and no single container sees both.
+  - Rejected: a ResizeObserver per panel. It takes the same measurements with more machinery.
+- **Natural sizes, never current ones.** Each panel is planned at the size it would come back at,
+  remembered from when it was last shown in full. Planning from the collapsed size makes the
+  collision vanish; the panel then re-opens, and the two states flicker.
+- **What gives way, lowest priority first:**
+  1. the help line;
+  2. the minimap, to its button;
+  3. the usage meter, to its header;
+  4. the session dock, to its header.
+
+  The other rules:
+  - The HUD stays on one line and moves its secondary chips behind a +N button.
+  - Toasts stack above whatever holds the bottom-right corner, and to the left of LOOK.
+  - LOOK stops above the minimap.
+  - The user's own choice always wins. Every panel has its own fold or hide control, kept in
+    localStorage `skynet.chromePrefs`, and a minimap re-opened while squeezed stays open.
+- **Icons are text rows drawn as SVG rects** (`ui/Icon.tsx`): 9x9, `currentColor`, crisp edges, and
+  beside the words, never instead of them.
+  - Rejected: an icon font. It hints and antialiases at 1x and 3x, and the pixel validator cannot
+    check it.
+  - Rejected: atlas sprites for the DOM chrome. They would need a baked copy per colour, whereas an
+    icon here takes its text's colour, so a warn button's icon is warn.
+- **Ctrl+K reads; it does not index.** The command palette reads every board through `board:load`
+  and `board:loadRoom`, the channels a descent already uses, and reaches a node by the ordinary
+  ascend and descend.
+  - Rejected: a main-side search channel. It is a new IPC surface for what a handful of JSON reads
+    already answers.
+- **Settings gathers; it does not add.** Ctrl+, holds the interface folds, the system switches (now
+  `ui/SystemSettings.tsx`, shared with LOOK), away mode, and the usage calibration. It adds no new
+  channel.
+- **Notifications are memory only.** Every toast is kept behind a bell with an unread count: 100 of
+  them, newest first, with repeats within 5 s merged.
+  - Rejected: persisting them. That is a new write path with no use yet.
+- **The window reopens where it was left** (`userData/window-state.json`), but only if its title bar
+  would land on a connected display; otherwise it keeps its size and is centred. A smoke run skips
+  this.
+- **chrome.css is imported by main.tsx, straight after styles.css.** Vite emits CSS in import order,
+  and App.tsx is imported before styles.css, so a stylesheet imported from App loses every tie.
+- **A getting-started card, once.** It lists five keys and closes with GOT IT, for good. It does not
+  appear on remote pages, which are touch-first and have none of those keys, and a smoke capture
+  hides it with a class rather than dismissing it, so the capture writes nothing.
+- **Fixed on the way, from reading the code (not reproduced on screen):** a minimap that was closed
+  and re-opened had nothing to draw on its new canvas. Its draw loop only re-attached when the board
+  changed, and now it also re-attaches when the canvas comes back.
+
+## 2026-09-11 — The usage meter folds on a phone
+
+The last remote capture at iPhone width (390 px) showed the usage meter in full over a third of the
+screen, with its header cut off at CALIBRATE. That put the fold arrow past the meter's edge, so a
+phone had no way to fold it. The overlap audit could not see this: nothing overlapped; the header
+ran out of its own box.
+
+- **On a compact screen the meter starts as its header** (`chrome-layout.ts`, a `compact` input
+  read from `html.compact`). A tap on the header opens it in full with its drawer, as a squeezed
+  desktop meter already did. A desktop window narrower than 820 px is compact too and folds the same way.
+- **The header wraps inside the meter** on compact screens (`mobile.css`) rather than running out of it.
+- **The smoke audit checks for clipping as well as overlap:** a panel whose children run past its
+  edge. The same probe now also runs in the phone and tablet windows, which it never covered before.
+
+## 2026-09-11 — The dual-camera gate passed at 1080p, not just 720p
+
+The Face's brief: two webcams frequently cannot both run at speed on one USB controller, because
+they negotiate bandwidth at connect. Below 25 sustained fps on either camera, the gesture design
+changes — separate controllers, or 848x480. `tools/camera-gate.mjs` opens every selected camera
+BEFORE measuring any of them, then reports what each delivers per second.
+
+Measured on William-Desktop, 60 s per mode, both cameras open simultaneously:
+
+| Mode | C920 | C922 |
+|---|---|---|
+| 848x480@30 | mean 29.8, min 28, 0 dropped | mean 30.0, min 29, 0 dropped |
+| 1280x720@30 | mean 29.9, min 29, 0 dropped | mean 30.0, min 30, 1 dropped |
+| 1920x1080@30 | mean 29.0, min 27, 3 dropped | mean 30.0, min 29, 3 dropped |
+
+- **Two C920s was wrong.** The desk has a **C920** and a **C922 Pro Stream**, plus an Elgato Cam
+  Link 4K (an HDMI capture card, not a camera) and an OBS Virtual Camera. The gate opens the two
+  Logitech webcams by label and leaves the other two alone.
+- **They are already on separate controllers**, which is why there is no contention: the C920 hangs
+  off a Realtek Generic USB Hub, the C922 off the USB 3.0 root hub. Moving either one is a
+  regression risk worth remembering.
+- **720p30 is the recommendation anyway.** Hand and pose landmarkers gain little above it, and it
+  costs 2.25x fewer pixels per frame than 1080p. 1080p is held in reserve for reach at desk
+  distance; the C920 has about 3 fps of headroom there, the C922 more.
+- **Both cameras see one checkerboard at once**, confirmed from the saved stills — frontal in the
+  C920, about 90 degrees off in the C922. Extrinsic calibration has its shared view. Use a PRINTED
+  board: the test used an iPad, and the C922 frame is badly backlit and glared.
+- **Chromium's capture stack, not ffmpeg.** There is no ffmpeg on this machine, and if gesture
+  capture lives in the renderer this is the stack it will use. Two honest limits: getUserMedia
+  cannot demand MJPEG (Chromium chooses, and asks for MJPEG at 720p30 on UVC hardware), and exact
+  width/height constrain the track, which Chromium may satisfy by rescaling a different native
+  format. Starved bandwidth still shows as delivered FPS, which is what is measured.
+- **The first run of the gate reported a false failure:** 0 fps on both cameras for 48 s at 720p,
+  then a clean 30. `requestVideoFrameCallback` counts PRESENTED frames, and Chromium throttles
+  presentation while its window is behind another. The playback-quality counters showed 1,846
+  frames delivered per camera throughout. The gate now counts `totalVideoFrames` deltas, disables
+  background throttling and keeps its window in front. Any future capture measurement in this repo
+  must count delivery, not presentation.
+
+## 2026-09-11 — Hand tracking is not the bottleneck; jitter is
+
+`tools/gesture-gate.mjs`: MediaPipe HandLandmarker (`@mediapipe/tasks-vision` 1.0.1, float16 model,
+GPU delegate), one landmarker per camera, both running at once, 45 s, 1280x720.
+
+| | C920 | C922 |
+|---|---|---|
+| landmark fps | 26.1 | 20.9 |
+| frames with a hand found | 100% | 100% |
+| inference per frame | 7.74 ms | 4.90 ms |
+| fingertip jitter, hand held still | 8.1 px rms, 14.1 px p95 | 13.2 px rms, 22.9 px p95 |
+
+- **Inference is cheap.** 12.6 ms for BOTH cameras out of a 33 ms frame budget, so a 3D solve and a
+  gesture classifier fit on top without dropping below camera rate.
+- **The fps shortfall is the harness, not the hardware.** Both cameras are processed serially inside
+  one `requestAnimationFrame` tick. Per-camera `requestVideoFrameCallback` loops should recover the
+  last few frames; the camera gate already proved 30 fps of delivery is there.
+- **Jitter sets the interaction, and it is the real constraint.** 8.1 px rms is 0.63% of frame width.
+  Mapped onto a 1920 px board view that is about 12 px of cursor movement — three quarters of a
+  16 px tile — with p95 excursions of a full tile. So:
+  - raw landmarks are never fed to the board. Smoothing is mandatory (one-euro or exponential).
+  - a pinch-drag snaps to the 16 px grid, with a dead zone of at least one tile before the first
+    step, or a held pinch walks between cells on its own.
+  - dwell, not click: any discrete gesture needs a hold time, because a single-frame classification
+    at this jitter will fire on noise.
+- **The C922's jitter is 60% worse than the C920's**, which matches its picture: it is backlit by the
+  window and dark. Light the volume evenly before blaming the model.
+- **MediaPipe cannot be loaded from `file://`.** It fetches its wasm and the `.task` model, and
+  `fetch` is refused on that scheme, so the gate serves them from 127.0.0.1. The app will need the
+  same treatment — a custom protocol handler or a bundled asset route — since docs/07 forbids
+  loading remote code into the main window. The model lives OUTSIDE the repo
+  (`%LOCALAPPDATA%/SkynetOS/vision/hand_landmarker.task`, 7.8 MB) for the same reason whisper does.
+
+## 2026-09-11 — Vision loads from its own origin, and the CSP stops it phoning home
+
+MediaPipe cannot run on a `file://` page: it fetches its wasm, injects a `<script>` for the glue,
+and compiles a module at runtime. Three attempts, and the order matters because the second failure
+is not the one anyone expects.
+
+1. **Wasm and model behind a privileged `skynet://` scheme, page left on `file://`** — refused, and
+   not by CSP. Chromium blocks it at the CORS layer first: "Cross origin requests are only supported
+   for protocol schemes: chrome, chrome-extension, chrome-untrusted, data, http, https." A
+   privileged custom scheme cannot rescue a `file://` origin.
+2. **Inline module script on the probe page** — refused, correctly, by `script-src 'self'`. That was
+   the probe's fault, not the design's: the built renderer's script is a file, so a probe with an
+   inline script tests a page we would never ship.
+3. **The whole page served from `skynet://vision`** — works. The bundle, the wasm and the model are
+   then SAME ORIGIN, `'self'` covers all three, and the scheme never appears in the CSP at all.
+
+So the vision page is served by `protocol.handle('skynet', …)` from an explicit route table —
+`/index.html`, `/vision_bundle.mjs`, `/wasm/<file>`, `/model` — with no path resolved against a
+directory. Registered `{ standard: true, secure: true, supportFetchAPI: true, stream: true }` and
+deliberately NOT `bypassCSP`.
+
+Its CSP, verified against a real landmarker init:
+
+```
+default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self';
+img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline';
+object-src 'none'; base-uri 'none'; form-action 'none'
+```
+
+- **`'wasm-unsafe-eval'` is the only concession**, and it is unavoidable: it permits WebAssembly
+  instantiation and nothing else — not `eval`, not inline script, not remote script.
+- **`worker-src` is NOT needed.** Tested: MediaPipe's main-thread path creates no worker.
+- **`connect-src 'self'` is load-bearing.** On startup MediaPipe tries to POST to
+  `https://odml.pa.googleapis.com/v1/log`. The CSP blocked it and the landmarker ran anyway. For a
+  feature whose premise is that camera and microphone data never leave this machine, that directive
+  is the enforcement, not a formality. It must never be widened on this page.
+- **A separate page, not the board's.** The vision window gets its own HTML entry, its own session
+  partition and its own CSP, so the board window keeps `script-src 'self'` with no wasm allowance —
+  and camera permission can be granted to the vision window ALONE.
+- **Found on the way: main sets no permission handlers at all**, so Electron's defaults decide who
+  may open a camera or microphone in every window, including the board's. Closed as part of this
+  work: deny by default on the default session, and grant `media` only on the vision partition.
+
+## 2026-09-11 — A hand is a pointer: gesture reuses the board's own drag
+
+The board already knows how to drag a node: hit-test, a movement threshold, drop validation against
+every other footprint, a snap to the 16 px grid, and ONE `node.move` committed on release so one
+Ctrl+Z puts it back. That is the hardest code in the renderer.
+
+So gesture does not reimplement it. `ui/useGesture.ts` SYNTHESISES `pointerdown`, `pointermove` and
+`pointerup` at the mapped screen position, and the existing drag runs unchanged.
+
+- **Two properties of BoardCanvas make this sound, and both were checked, not assumed:**
+  `pointermove` and `pointerup` are bound to `window` rather than the canvas, so a drag completes
+  wherever it ends; and `setPointerCapture` is already inside a `try` with a comment calling it a
+  nicety — which is exactly what a synthetic pointer id cannot give.
+  - Rejected: a second drag implementation for gesture. It would be a copy of the subtlest code in
+    the app, drifting from the original with every fix, and the group-drag and drop-validation rules
+    would have to be duplicated exactly.
+- **The x axis is mirrored, and the mapping uses the middle of the frame.** The camera faces
+  William, so his hand moving to his right moves to the image's left; not mirroring feels like
+  reversed steering, and no practice fixes it. Only x 0.18–0.82 and y 0.15–0.85 map to the viewport,
+  because a hand at the frame's edge is half out of it and its landmarks are worst exactly there.
+- **Attribution is kept honest separately.** `inputSource` in the store makes `runCommand` attribute
+  a gesture-driven move to the `gesture` actor, so the history says which hand moved a node. It
+  grants nothing: `asWilliam` folds it to `user` for the phantom rules, and a destructive command
+  from `gesture` still has no `approved` flag and stops at the dialog (test/actors.test.ts).
+- **The cursor is moved by writing a transform to a DOM element**, never through React state. At 26
+  events a second, re-rendering the chrome to move a dot would cost more than the landmarking does.
+- **Manual control is a HUD chip, not a new panel.** It then takes part in the layout manager's
+  compaction (ui/chrome-layout.ts) and cannot overlap anything. The board also takes an outline, as
+  Edit Board mode does: a mode nobody pressed a key to enter has to be visible without being read.
+- **Permissions, narrowed rather than blanket-denied.** The first pass refused everything on the
+  default session and silently broke three `navigator.clipboard.writeText` calls (the resume
+  command, the About block, a mailbox message), which Chromium gates behind
+  `clipboard-sanitized-write`. That one permission is allowed; `clipboard-read` stays refused, since
+  reading the clipboard is how a page learns what you copied somewhere else.
+- **Still open:** the claude.ai conversation window's own partition keeps Electron's default
+  permissions. Denying everything there would also take away whatever claude.ai's voice features
+  ask for, which is William's decision rather than a side effect of this work.
+
+## 2026-09-11 — Two traps found by making manual control actually run
+
+Manual control came up saying "starting" and stayed there. Both causes are the kind that leave no
+error anywhere, so both are written down.
+
+### `protocol.handle` registers on ONE session, and it is not the one you meant
+
+`protocol.handle(scheme, …)` from the top-level module registers on `session.defaultSession` alone.
+The vision window runs in its own partition — deliberately, so that `media` can be granted to it and
+to nothing else — and **a partitioned session has its own protocol registry.** So the window's
+request for its own page reached no handler at all. `loadURL` never resolved, the page never ran, no
+report was ever sent, and the status sat at "starting" for ever. Nothing logged; nothing failed.
+
+The fix is one line: `session.fromPartition(PARTITION).protocol.handle(…)`. The lesson is bigger —
+a custom scheme and a partition must be registered together, and `registerSchemesAsPrivileged` being
+global makes it look as though the handler is global too.
+
+It was found by `tools/vision-page-probe.mjs`, which loads the BUILT page over the real scheme with
+the real preload and logs every request, every console line and every report. Worth keeping: the app
+started by `tools/boot.mjs` has `stdio: 'ignore'`, so its own logs are unreadable by design.
+
+**A probe must write to a file, synchronously.** The first run of that probe printed nothing at all:
+Electron's stdout through a pipe is block buffered, so the hang it was built to diagnose swallowed
+the whole log. It now appends every line to `.vision-probe/page-probe.log` as it goes.
+
+### A hidden window's video pipeline is throttled, and `backgroundThrottling: false` does not cover it
+
+Measured, both cameras landmarking at once:
+
+| vision window | C920 | C922 |
+|---|---|---|
+| hidden (`show: false`) | 11 fps | 9 fps |
+| shown | 20 fps | 15 fps |
+
+So the window is now a small **camera monitor** in the bottom-right corner of the work area: 336x210,
+frameless, `skipTaskbar`, click-through (`setIgnoreMouseEvents`), and `focusable: false` so it can
+never take the keyboard from the board — a gesture rig that stole focus would break every shortcut
+the moment the cameras came on. It is useful in its own right while aiming the cameras.
+
+- `gesture.preview: false` in settings.json hides it again, at roughly half the frame rate.
+- `streamMode` hides it whatever that setting says. docs/07: a stream must not carry the room.
+- This is the same family as the earlier false failure (presented frames versus delivered ones).
+  Anything in this app that measures or depends on a camera must state whether its window was
+  visible, focused or occluded, because all three change the answer.
+
+## 2026-09-12 — Gestures are movements, and most of the work is refusing to act
+
+William's specification, and what it changed.
+
+### A gesture is one to three keyframes, not a pose
+
+`GestureSample` now holds `keyframes: number[][]` — "gestures aren't single hand positions but
+movements between hand and arm positions". One keyframe is a posture held; two is a move from one
+shape to another; three carries a middle the movement must pass through, which is what separates a
+deliberate arc from two unrelated poses that happened in order. The library version went 1 → 2 and
+a version 1 file is MIGRATED on read rather than discarded: those were recordings of a real hand.
+
+### The catalogue ships with the vocabulary, untrained
+
+Fourteen built-ins: CURSOR, REST, LEFT CLICK, DOUBLE CLICK, CLICK DRAG, RIGHT CLICK, ZOOM IN,
+ZOOM OUT, SCROLL, BOTH FISTS, and four postures whose entire job is to be ignored — ONE FIST,
+HOLDING A MOUSE, HOLDING A PHONE, ON THE KEYBOARD. They are in the catalogue from first run so they
+can be seen, trained and tuned; each shows `0/4` until it has examples, and an untrained gesture is
+not in the machine at all. A built-in cannot be deleted (it would return on the next launch, so the
+catalogue offers OFF, which is honest) and its name, kind, keyframes and action are fixed while its
+examples and tuning are William's.
+
+**Recognising a pose in order to do nothing is the most valuable half.** A rig that cannot tell
+working from gesturing acts while you work.
+
+### One gesture, two meanings, decided by context
+
+Both hands in separate fists ends a zoom AND locks it, and suspends every input for three seconds.
+Those are the same movement of the hand, so they are one trained gesture; the state decides which
+applies. A locked zoom stays locked until zooming is started again from its opening pose — or until
+the hands come down, without which a rig with no trained ZOOM examples could never clear a lock.
+
+### The machine is pure, and the hand that carries it out is not
+
+`packages/shared/gesture-control.ts` decides: the certainty gate (below it, input is discarded
+rather than guessed at), the suppression postures with a dwell so a shape passed through is not
+mistaken for a rest, the halt, the zoom lock, the drag-versus-click hold, and the double-click
+window. It takes frame timestamps and owns no timers, so a three-second halt is tested in a
+millisecond. `ui/useGesture.ts` then synthesises the events the board already listens for — pointer,
+wheel, contextmenu, keys — so the existing drag, context menu and zoom run unchanged.
+
+Continuous values stay geometric and identity stays trained: a classifier answers "which gesture",
+never "where is the cursor".
+
+### A trained gesture carries WORDS, and that is the interconnection
+
+`ui/actOnIntent.ts` is now the single consumer end: words in, action out. A gesture's utterance goes
+through exactly the grammar a spoken sentence goes through, so gesture and voice cannot drift apart
+and a gesture can do anything William could say and nothing he could not.
+
+### The zero-sentinel bug, twice, and now written down
+
+Seven control tests failed at once because `0` meant both "not started" and the timestamp zero: a
+pinch that began at 0 could never become a click. The identical bug had already been fixed in the
+tracker, where a hand first seen at 0 could never be considered lost. **Every "when did this start"
+in this codebase is `number | null`.** Frame timestamps legitimately start at zero.
+
+## 2026-09-12 — The tracking engine, rebuilt: measure the three critical controls, do not classify them
+
+William: "it seems to be the least recognized gesture and most often confused with simply clicking …
+they are similar but they are adjacent actions so their poses MUST be similar for the gesture
+control to flow."
+
+That diagnosis was right and it condemned the first design. Cursor, click and right-click were three
+CLASSES in a nearest-neighbour vote. They are not three poses. They are ONE posture separated by two
+continuous quantities, so a classifier asked to choose between them must fail — and the better they
+are trained to resemble each other, the worse it gets.
+
+### What replaced it (packages/shared/hand-metrics.ts)
+
+Interpretable measurements, all scale-free:
+
+| | what it is | what it decides |
+|---|---|---|
+| `aperture` | thumb tip to index tip, in hand spans | cursor ↔ click ↔ drag |
+| `extension` | tip-over-knuckle distance, per finger | which posture family the hand is in |
+| `roll` | angle of the knuckle line | its CHANGE is the right click |
+| `palmRatio` | palm width over length | how square the hand is to this camera |
+| `spread` | index tip to pinky tip | an open hand from a gathered one |
+
+- **The cursor follows the POSTURE and ignores the aperture**, so closing the fingers to click never
+  interrupts pointing. There is no recognition to fail.
+- **A click is an aperture crossing**, with hysteresis; held past 350 ms it is a drag instead.
+- **A right click is roll velocity** — 0.7 rad inside 350 ms — and only if the fingertip stayed put.
+  A sweep of the arm rotates the hand too; requiring it to stay in place is what separates a twist
+  from a wave.
+- Classification is kept for what it is good at: the postures trained to be IGNORED, the halt, and
+  gestures William adds himself.
+
+Two thresholds were wrong on the first pass and were corrected against measurements: an extended
+finger reads 1.43 on the extension ratio and a curled one 0.70, so "gathered" belongs at 1.15, not
+the 1.45 that called an open palm gathered. And requiring the index to be EXTENDED for the pointing
+posture would have dropped cursor control at the exact moment of a pinch — a real pinch curls it.
+
+### Thresholds that tune themselves (packages/shared/adaptive.ts)
+
+"Dynamically tune the sensitivity … to standardize the intensity and responsiveness." A fixed number
+for "the fingers are touching" cannot survive different people, distances and lenses. The model
+watches where this hand's own open and closed extremes sit — quick to follow a new extreme, slow to
+forget one — and puts the thresholds a third and half of the way between them. It only learns from
+frames where the hand is in the pointing posture, so a fist never teaches it what "open" means, and
+the extremes can never collapse onto each other.
+
+### The picture is corrected before it is analysed, and judged before it is believed
+
+(packages/shared/frame-quality.ts) Two jobs, deliberately separate:
+
+- **Correct** what can be corrected: a dim frame is redrawn brightened and contrast-stretched for
+  the landmarker, and ONLY then. The preview stays raw, because a preview that silently fixes itself
+  hides the problem the user has to solve.
+- **Reject** what cannot: black, blown-out and motion-blurred frames are skipped entirely.
+
+A frame can be good enough to TRACK from and still not good enough to LEARN from, and the two have
+different thresholds: a poor frame costs one frame of tracking, while a poor training example
+poisons every comparison it takes part in for as long as it is stored — which has already happened
+here once.
+
+## 2026-09-11 — Hands have roles, training has a conscience, and gestures have variants
+
+### A hand is assigned a role every frame, instead of `hands[0]` being assumed to be the point
+
+(packages/shared/hand-roles.ts) William: "I don't think the program is easily interpreting the
+difference between one hand resting, both hands resting, one hand up one down … the cursor only
+appears to work when both hands are present."
+
+Both faults had one cause. MediaPipe returns hands in no guaranteed order, so `hands[0]` changed
+frame to frame and a hand resting on the desk was as likely to be picked as the one being pointed;
+and the two-handed zoom test was `hands.length >= 2`, so a resting hand beside a pointing one put
+the machine into a zoom and took the cursor away.
+
+Roles are now assigned explicitly from three things a camera can see: WHERE the hand is (a
+title-safe action boundary, because the edges of frame are where hands are half-visible), WHAT
+SHAPE it is in, and HOW WELL it can be read. The driver is sticky — a hand keeps the cursor unless
+another is clearly better — because two raised hands otherwise swap the pointer several times a
+second.
+
+**Alternatives rejected.** Handedness from the landmarker's own `handedness` field: it is a guess
+about left versus right, which is not the question — the question is which hand is asking to drive,
+and a left hand may be either. Nearest-to-last-position: it locks onto whichever hand moved least,
+which is the resting one.
+
+### Zoom needs two RAISED hands, not two pointing ones
+
+A first attempt required both hands to be in the pointing posture, which was wrong on its face: a
+zoom is made with cupped or open hands. The test is that both are up, in shot and readable —
+`raised` — which is a different question from whether either wants the cursor.
+
+### The wizard's shutter is gated twice, because pacing is a correctness problem
+
+(src/renderer/vision-train.ts) William: "slow down the calibration / learning mechanic, at some
+points it seemed to take the image / sample after I stopped or before i started."
+
+The old capture fired every 1200 ms regardless. Half of what it banked was a hand on its way into
+or out of the pose — the worst possible training data, because those poses sit in the space BETWEEN
+two gestures, which is exactly where the classifier has to draw its boundary. There is now a
+visible countdown (3 s before the first keyframe, 1.8 s between keyframes, 2 s between takes) and a
+steadiness gate: the shutter waits for four consecutive frames within 0.045 hand spans of each
+other. Measured, not chosen — landmark noise on a still hand is about 0.02 spans frame to frame, a
+hand moving between poses covers 0.15 or more. The timeout fires anyway after 2.5 s, so an honest
+tremor cannot deadlock it; only visible motion blocks.
+
+### A cropped thumbnail of the hand, which is a picture, and is still not a recording
+
+William asked for "a cropped screenshot of the hand for each keyframe it's attempting to capture",
+alongside his standing rule that "no images or data is recorded until the user clicks on onscreen
+prompt". Both hold at once, and the distinguishing word is RECORDED: the thumbnail is a data URL in
+a page that is about to be closed, drawn only from a keyframe a capture the user started has just
+banked, never written to disk, never sent over IPC, and impossible to store — `gesture:addSample`
+takes 42 numbers per keyframe and has no field that could carry an image. It exists because a
+number cannot explain a refusal and a picture of his own hand at the moment of the shutter can.
+
+### Alternative takes, on the Face ID model
+
+(`SampleVariant` in packages/shared/gesture-library.ts) William: "for each captured gesture the
+interface should offer to also capture an alternative gestures set that is the user explicitly
+doing a poor job of the gesture or other angles … sort of like the 'add other fingers' or 'with a
+mask' or 'with glasses' Face ID features."
+
+He is right, and the reason is worth stating: a class trained only on careful examples has its
+boundary drawn around careful examples, so the gesture works while you are paying attention to it
+and stops the moment you are not — which is the moment you want it. Five labelled sets: clean,
+rough, angled, other-hand, far. Labelled rather than thrown in anonymously, so the catalogue can
+show which exist and the audit can say which KIND of example broke a gesture. Variants are offered
+only once a clean set exists, and the sample cap keeps at least MIN_SAMPLES clean ones, because the
+variants widen a boundary — they do not define a centre.
+
+### The catalogue audits itself, because training could silently break everything
+
+(`libraryHealth`) William: "After the last training most of the gestures don't seem to be working so
+also ensure the gesture learning and calibration isn't accidentally breaking the entire feature."
+
+It could, through a hole that was real. `judgeSample` refuses an example landing on top of another
+gesture — but only against gestures that already have MIN_SAMPLES, so training the catalogue in
+order records the first gestures before anything is complete enough to collide with. By the time
+the guard is armed, the damage is on disk. And it is GLOBAL damage: nearest-neighbour has no
+per-class isolation, so one example of ON THE KEYBOARD taken with the fingers half-pointing sits
+nearer to CURSOR than CURSOR's own examples do, and every attempt to move the pointer classifies as
+a suppression pose. Nothing looks broken. One number moved.
+
+The audit is the classifier's own decision rule turned back on the training set, with a second test
+that matters more than the first:
+
+> A sample is at fault if it is nearer to a DIFFERENT gesture than to its own siblings **and** it
+> does not belong with its own siblings either.
+
+The second clause is not decoration. Without it, an intruder landing on CURSOR condemns the
+intruder AND every CURSOR sample — all of which are also nearer to the intruder than to each other
+— so a repair would delete the gesture that did nothing wrong. The intruder sits a quarter of a
+hand span from every real example of its own class; a genuine CURSOR sample sits two hundredths
+from its siblings. That is what separates them. The endangered class is marked `watch`, shown, and
+left alone.
+
+`gesture:repair` drops only what the audit condemns. The board's catalogue shows the verdict as a
+banner, because a count of examples cannot show this fault — every gesture had its four.
+
+### Retry, and the keyframe editor, are destructive and ask twice
+
+`gesture:resetSamples` and `gesture:setFrames` both destroy recordings, so both arm on the first
+click — the button relabels itself with the number it would take — and act on the second. docs/07
+allows destruction when the click that approves it names what it is approving. Changing the
+keyframe count has to discard the examples rather than pad them: a two-keyframe take cannot answer
+what a third keyframe looked like, and padding one would invent a pose that was never made.
+
+### CLOSE THE BOOK is handled in main, not on the board
+
+The gesture that switches manual control off is intercepted in `visionEvents` before being
+forwarded. Switching the cameras off is main's job, and — more to the point — the way OUT of
+gesture control must not depend on the board being responsive, since a rig that has started
+misreading every pose is precisely when it is needed. It is still forwarded, so the board can put
+its crosshair away.
+
+### The wizard's buttons are pinned outside the scroll, and a probe proves it
+
+William, within minutes of the above landing: "I got stuck in the opening calibration screen
+because the buttons didn't render." They had rendered. The training window is a fixed 820x620 with
+`overflow: hidden`, the intro flow needed about 706 px once the countdown, the thumbnail strip and
+the keyframe editor were added — eighty pixels of furniture present on every phase whether in use
+or not — and START and NOT NOW were simply below the fold, with nothing on screen to say so and no
+way to scroll and find out. A dead end reached by pressing the only visible control.
+
+Three changes, in order of how much they matter:
+
+1. **The buttons cannot be what gets clipped.** `.wz` is a flex column from `body.training` down;
+   everything except the action row lives in a scrolling `.wz-body`; the action row is
+   `flex: 0 0 auto` outside it. A layout where the controls are the first thing to go is a layout
+   that can trap the user, so the controls are now the one thing that cannot go.
+2. **Empty furniture takes no room** — `:empty` on the countdown, the strip, the keyframe row and
+   the dots.
+3. **The previews give first**: `clamp(120px, 24vh, 220px)` rather than a flat 220, since the TRAIN
+   phase carries three panels the AIM phase does not.
+
+**`tools/wizard-layout-probe.mjs` (`npm run gate:wizard`).** Arithmetic could not have settled
+this — wrapping, `clamp()` and flexbox are decided by a layout engine — so the probe runs the real
+one at the real window size and asks, for all six phases including their worst-case content, whether
+every button is inside the viewport. It holds down to a 150 px viewport and reports FAIL below that,
+naming the buttons that fell off, so the check is not a rubber stamp. No camera is opened: the
+page's script is stripped and only its markup and stylesheet are loaded.
+
+Two landmines were paid for on the way. Playwright is installed but its browser is not downloaded,
+so the probe uses Electron — which is the more faithful runtime anyway. And a top-level `await` in
+an ESM Electron entry deadlocks `app.whenReady()`, because Electron does not finish bootstrapping
+until the entry module's evaluation completes: the work goes inside an unawaited `main()`, as
+`tools/vision-page-probe.mjs` already did.
+
+## 2026-09-12 — The vocabulary gets coarser, the data gets a vote
+
+### The shutter is a clock, not a trigger
+
+William: "instead of waiting to capture a hand pose until it's perfectly framed up or detected, do a
+countdown of 8 seconds for each pose, and no matter what try to capture any hand detected … on a
+simple timer, not a detection trigger." Plus: "often while perfectly posturing my hand in one
+position that is a perfect example of a keyframe, the program isn't detecting my hand at all."
+
+The old design had it backwards, and the fault was structural rather than a tuning problem. A
+shutter that waits for the tracker to be satisfied makes the tracker the judge of what a good
+example looks like — which is circular, and worse: the poses the tracker finds HARDEST are then
+exactly the ones that never get recorded, and those are the examples the catalogue most needs. So
+the clock runs eight seconds, and whatever is in shot at zero is banked. Only genuine nothing buys
+the two-second grace, in red.
+
+Alongside it, training now runs the landmarker at 0.15 for detection, presence and tracking rather
+than 0.5. The defaults are right for CONTROL, where a false positive moves his cursor; they are
+wrong for TRAINING, where a miss costs a pose held for nothing and a marginal detection costs
+nothing at all — a poor example is caught downstream by `featuresOf`, the frame-quality gate and
+the health audit, none of which care how confident the landmarker was.
+
+### Both cameras are catalogued, not just the driver
+
+"At least visually within the ui only one of the angles is being catalogued; when it seems like both
+angles should be catalogued." Both are now: the shutter reads every running camera and banks one
+example per camera per take, each tagged with its own lens. The same hand from two angles is two
+genuinely different pieces of evidence, and throwing one away was waste. The thumbnail wall shows a
+row per camera, so it is visible that both contributed.
+
+### Three hand modes, because there are three cases
+
+"The ability for the program to distinguish between a gesture being done on one hand, a two hand
+gesture, or one gesture being done on both hands."
+
+`one` / `two` / `both`, declared per gesture and never inferred — inferring it from what is in shot
+would make a gesture two-handed whenever a second hand happened to be resting on the desk, which is
+the exact confusion `hand-roles.ts` was built to end. `two` means the hands do DIFFERENT things and
+the gesture is the relationship between them (a zoom is not two hands each zooming). `both` means
+the same shape mirrored, which is what keeps BOTH FISTS from being recognised from one fist and one
+fist from being read as half of it. The second hand is stored on its own track, `offhand`, so
+everything that reads the main hand carries on working unchanged.
+
+### Travel gestures: two points, not two shapes
+
+"Some gestures like a click and drag / scroll is simply a gesture from two different points on
+screen … prompt the user which points in-frame to use as their start and finish points."
+
+A `travel` gesture's prompts ask for a START position and a FINISH position, and every sample now
+records `path` — the palm centre at each keyframe. Two numbers per keyframe, recorded for every
+gesture whether or not it travels, because it is the only way to answer "how far does he actually
+drag?" from evidence instead of from a constant.
+
+### The new vocabulary, and the built-in it killed
+
+Open hand to cursor. Closed fist to click. Fist held and moved to drag. Open hand closing into a
+peace sign to right click. William's reasoning is right and worth recording: the old cursor pose was
+a held-open pinch, a precise shape, and a precise shape competes with the click sitting next to it
+and loses tracking the moment attention moves. Fewer, coarser, more separable poses beat more, finer
+ones.
+
+This retired a shipped gesture. ONE FIST existed to be IGNORED — a fist moved around casually was
+trained as "not a gesture". With a fist as the click, that class now says "never notice the click",
+and no audit could resolve it because both classes would be behaving exactly as trained.
+`RETIRED_BUILT_INS` drops it on read, with its examples, because they were examples of a rule that
+no longer exists. A retired built-in must be removed rather than merely dropped from the table:
+`sanitiseLibrary` keeps whatever is in the file, so without this it would linger for ever as a
+gesture nobody can delete.
+
+### The endless variant run, and why a confirmation fixes it structurally
+
+"On one of the gestures I got stuck in an endless Alternative angle training that wouldn't end
+unless I hit stop." Real: the run ended on `takes >= 4`, and only a SUCCESSFUL take incremented
+`takes`. A variant run whose takes were all refused as near-duplicates therefore looped for ever.
+Every take now ends at a confirmation — which is what he asked for independently — so nothing
+starts another take on its own and the loop cannot exist. There is also a BACK button, per his
+"I accidentally clicked past one of the gesture trainings and had to cycle all the way back".
+
+### Handedness: one calibrated fact, because two guesses made two bugs
+
+William, within minutes: "it appears the inputs may be horizontally inverted - it continually
+thinks my right hand is my left hand." He was right, and the first attempt at this was wrong in a
+more interesting way than a flipped default.
+
+TWO pieces of code had each made their own guess about mirroring. The camera page swapped MediaPipe's
+handedness label (MediaPipe labels on the assumption of a mirrored selfie frame). The wizard, quite
+separately, hard-coded "the person's right hand is the one further LEFT in frame" as the fallback
+for when a label cannot be read. A toggle that fixed the first would have silently left the second
+wrong — so the correction offered could not have fully worked even once it was found. And the
+correction was written into the calibration profile and never read back, so it could not have
+survived a restart either.
+
+Whether a webcam hands over a mirrored frame is a property of the camera and its driver; it cannot
+be known in advance. So it is now ONE fact — `mirrored` on the calibration profile — answered by the
+person in front of the camera, loaded back on the way in, and both rules derived from it:
+`sideFromLabel` for the labels and `rightHandHasSmallerX` for the position fallback. The camera page
+now passes the landmarker's label through untranslated, because interpreting it needs a fact that
+page does not have.
+
+The default flips to `mirrored: true`: most webcams present a looking glass, which is why a video
+call does. But a default is only what holds until he is asked, and the asking is phrased as a hand
+question rather than a camera question — he holds up his right hand, the advice line names what it
+thinks that is, and one button flips it while the readout updates to agree. There is no way to
+answer it incorrectly and no need to understand mirroring at all. The same button sits on the
+gesture card too, because he hit the inversion while TRAINING rather than while aiming, and a fix
+he has to leave the screen to reach is a fix he will not make.
+
+`test/handedness.test.ts` pins the invariant that actually matters — not that the default is right,
+which no default can be for every camera, but that the two rules can never disagree and that
+flipping the one fact flips both.
+
+(Also fixed: the keyframe thumbnails were being mirrored while the preview was not. There is no
+`scaleX(-1)` anywhere on the page — the mirroring is in the cursor mapping, not the display.)
+
+### `gesture-analysis.ts`: the data gets a vote
+
+"I want to ensure you're working on this gesture program with great detail and interconnected data
+analysis that actually uses data sets and the training data to genuinely iterate and improve on its
+algorithm."
+
+Up to now the catalogue could only grow. It could say how many examples a gesture had, and since the
+health audit which ones were poisonous, but it could not answer WILL THIS WORK and could not use its
+own recordings to improve anything. Two additions:
+
+**Leave-one-out accuracy.** Each example is removed, classified against everything that remains, and
+checked for coming back to its own gesture. That is exactly the decision the tracker makes at run
+time, so the number is real. Scoring a nearest-neighbour classifier against its own training set
+without removing the sample first reports 100% for ever, because every sample is zero from itself —
+a measurement that cannot fail measures nothing, and there is a test whose whole job is to prove
+this one can fail.
+
+**Thresholds fitted per gesture.** One shipped constant cannot be right for every gesture: an open
+hand varies far less between takes than a peace sign does. Each threshold is now fitted from two
+measured quantities — the 90th percentile of the distances between a gesture's own examples, and the
+closest any other gesture gets — and placed at their GEOMETRIC mean, because these are ratios rather
+than positions. A class whose rival is nearer than its own scatter cannot be separated by shape at
+all and is reported as such rather than given a threshold that pretends otherwise. `TUNE FROM MY
+DATA` in the CHECK phase writes them in and shows accuracy before and after.
+
+**And the interconnection.** Shape alone CANNOT separate a drag from a scroll: both are a closed
+fist, and their first keyframes are identical because they are the same pose. Any analysis looking
+only at hand shape would report them as hopelessly confused and would be right to, while being
+useless. So travel gestures carry a measured axis taken from the paths actually recorded, and a
+confusion between two travel gestures on different axes is reported as resolved by travel rather
+than as a fault. The shape data and the path data only mean anything together.
+
+## 2026-09-12 — A stable baseline for the five controls, built from geometry up
+
+William: "most of the gestures in the gesture control feature don't work … I think that my training
+images I provided during gesture training aren't quite cutting it. I need you to help me develop a
+stable baseline for at least the MAIN 5 gestures." And: "I need the infrastructure and math behind the
+geometry / image detection to be highly advanced."
+
+### It was not the training data
+
+Three faults, found by reading the live path and then by rendering an honest synthetic camera:
+
+1. **No hand could drive.** `assignHands` gave the cursor only to a hand in the POINTING posture — the
+   old vocabulary. An open hand and a fist both fail that test, so under the new vocabulary no hand ever
+   drove, and the only gesture that worked was zoom, which ignored hand shape. That is exactly "the zoom
+   feature is the only one starting to work".
+2. **Upright hands were measured 44% too narrow.** `hand-metrics.ts` took distances in normalised image
+   coordinates, where x is divided by the width and y by the height. At 16:9 an upright palm's width and
+   length are in different units, so its width-to-length ratio read far too low and the readability gate
+   called it "edge". Invisible to the old test hands, which were laid out in square coordinates; found the
+   moment the synthetic camera rendered a real 1280x720 frame. Metrics now take the aspect ratio; the live
+   controller passes 16:9.
+3. **The pointer was on a fingertip.** Closing into a fist moves the index fingertip 22% of the frame
+   width, so every click landed somewhere other than where he aimed.
+
+### Four layers, each in its own file and tested on its own
+
+- `hand-geometry.ts` — the shape of a hand in 3D.
+- `pose-model.ts` — which pose, as a probability.
+- `one-euro.ts` — the cursor filter.
+- `gesture-control.ts` — time: smoothing, hysteresis, clicks, drags, zoom.
+
+And three tools: `hand-synth.ts`, a kinematic hand with a pinhole camera that generates any pose from any
+angle; `npm run gesture:eval`, which scores the model on it; and `npm run gesture:probe`, which proves the
+pre-trained model runs in Electron without opening a camera.
+
+### Geometry: what the measurements forced
+
+- **Summed joint angles failed under noise.** Flexion angles are exactly invariant to the view, and on a
+  noisy synthetic hand they scored 42%. An unsigned angle cannot average out — noise on a straight finger
+  always reads as some bend — so the estimator is biased, worst of all for the open hand. The test that
+  shows the bias is kept in `test/hand-geometry.test.ts`.
+- **Curl is now REACH:** how far the fingertip gets along its finger's own ray, over the finger's length.
+  Signed, monotone from straight to closed, and a projection over about 80 mm, so under the same noise it
+  varies by 0.03–0.08.
+- **Points are fused:** x and y from the image landmarks, which are the most precise output, and depth from
+  the world landmarks, scaled by a least-squares fit. Perspective is then undone exactly — a point at depth
+  z from the hand's centre is magnified by Z0/(Z0+z) — using a 70° horizontal field of view (C920/C922).
+  Before that correction curl drifted by 0.07 at the extreme views; after it, it holds to 0.02 over yaw ±70°,
+  pitch ±40° and roll ±45°, and world landmarks alone hold to 0.005.
+- **The palm's side comes from anatomy** — fingers curl towards it, the thumb rests in front of it — and is
+  right for either hand on raw and mirrored cameras. Never from the handedness label.
+- **The V is the gap between index and middle fingertips,** weighted by how straight the two are.
+
+### The pose model
+
+Six features per hand: thumb reach, four finger curls, the tip gap. Each class is a mixture of Student-t
+densities (ν = 4): heavy tails, so one badly-tracked finger costs confidence rather than the pose.
+"None of these" is a MIXTURE of components placed on the known near-misses — two fingers together, a
+thumbs-up, a hand mid-motion — because a single broad background density, even fitted to the data, still
+called two out of three near-misses a control. The shipped priors lean deliberately towards the controls: a
+missed click is noticed every time; a thumbs-up read as a click is a gesture he does not use.
+
+His recordings sharpen it through a conjugate update with the prior worth six examples, and a floor on how
+certain any class may become. Samples now store the seven pose features per keyframe; recordings made before
+today do not have them and sharpen nothing until re-recorded.
+
+Measured with `npm run gesture:eval` — 3,240 frames per run, 45 views, both hands, raw and mirrored cameras,
+7° of joint variation, 3 px image and 4 mm world noise:
+
+| pose | per frame | three-frame mean | oracle (fitted, held out) |
+|---|---|---|---|
+| open, flat | 100.0% | 100.0% | 100.0% |
+| open, relaxed | 98.1% | 100.0% | 98.9% |
+| fist | 99.6% | 100.0% | 97.6% |
+| fist, thumb beside | 100.0% | 100.0% | 98.3% |
+| peace | 96.5% | 98.3% | 95.2% |
+| two together, rejected | 79.1% | 85.0% | 82.8% |
+| thumbs up, rejected | 64.3% | 75.6% | 84.8% |
+| mid-motion, rejected | 100.0% | 100.0% | 99.6% |
+| all, at yaw 0° / 35° / 70° | 96.9 / 94.6 / 89.6% | 98.1 / 97.1 / 92.4% | 98.3 / 96.9 / 92.1% |
+
+These measure the maths. The renderer does not model how MediaPipe itself degrades when a hand is edge-on,
+so they are an upper bound on the real system, not a claim about it.
+
+### The pre-trained model
+
+MediaPipe's GestureRecognizer: `gesture_recognizer.task`, float16 version 1, 8,373,440 bytes, SHA-256
+97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482, stored in
+`%LOCALAPPDATA%/SkynetOS/vision/` beside the hand model and outside the public repo. It is the same landmark
+network with a classifier Google trained on a large labelled corpus; Open_Palm, Closed_Fist and Victory are
+three of the five. The vision page prefers it and falls back to the HandLandmarker, and the controls work
+without it. Because that fallback would fail silently, `npm run gesture:probe` checks it directly: on
+William-Desktop it loads under the vision page's CSP in 330 ms and runs at 3.3 ms a frame on the GPU.
+Its scores are fused with geometry at weight 0.6.
+
+### The controller
+
+- Pose probabilities smoothed with a 60 ms time constant; a pose entered at 0.6 and left at 0.35.
+- The cursor is frozen the moment closure starts rising, so a click lands where he was aiming.
+- A fist is released by the hand OPENING, in both directions: a classifier losing confidence mid-drag is not
+  a release, and a hand that has opened releases at once rather than two frames later.
+- A fist becomes a drag after 320 ms or 3% of the frame of travel; the drag starts where the fist closed.
+- A peace sign is one right click per sign, after 150 ms.
+- Zoom needs the hands turned towards each other — pointing or facing, as he described it — and steps by
+  1.1 palm lengths of separation, which is the step the old zoom used at arm's length.
+- The driving hand is kept by position, because MediaPipe does not keep hands in order.
+- The second camera corroborates the pose when it sees exactly one hand that could be driving.
+- A posture trained to be ignored only wins when the geometry is not confident this is a control.
+
+### The cursor filter
+
+One Euro, chosen from a sweep of rest cutoff, speed gain and derivative cutoff against a still palm and two
+sweep speeds: 0.45 Hz, β 12, 1 Hz. Still-hand jitter falls 3.5x on raw landmark noise and 4.1x on the palm
+anchor; a sweep at a frame width a second lags by 0.01 of the frame. A plain low-pass equally steady at rest
+would lag by 0.35. My first docstring claimed 0.6 Hz met the jitter requirement before it had been measured;
+it did not, and the sweep replaced it.
+
+### Left and right are two facts, not one
+
+Earlier today one flag was made to drive both the handedness label and anything reasoned from position. That
+was wrong: his report fits a mirrored camera under MediaPipe's documented convention and a raw camera with
+labels already right, and the two predict opposite cursor directions. Now `labelsSwapped` corrects the label
+and nothing else, and each camera's `mirrored` is MEASURED by the CHECK DIRECTION movement in the AIM phase and
+decides the cursor's direction and the position fallback. Unmeasured, a camera is taken as raw — what the
+C920 and C922 hand the browser, and what the cursor mapping always assumed without complaint.
+
+### Still to come, named
+
+- **Nothing above has seen William's hands.** Every figure is from the synthetic hand and the tests.
+- The readability gate is still a 2D palm ratio, so a hand turned more than about 50° from the driving
+  camera is dropped even though the 3D model could read it. It should become a 3D confidence.
+- Scroll has no gesture in the new vocabulary.
+- The CHECK phase's analysis (`gesture-analysis.ts`) still scores the 42-number catalogue, not the pose
+  model. It should score pose features once recordings carry them.
+
+### Still to come, and named so it is not forgotten
+
+- **Per-camera roles from `viewpointOf`.** William's rig is not symmetric — one camera is near
+  profile, one head-on — so each should be used for what it is good at rather than being asked to
+  agree.
+- **A POINT · CLICK · TWIST calibration phase.** With the three critical controls measured rather
+  than trained, what needs collecting is not more examples but the RANGE of each: how open is open,
+  how closed is closed, how far a twist goes, across the working area.
+- **Transition learning:** banking the poses that occur BETWEEN gestures as things to ignore.
+- **Voice**, which is designed and specified but not built: the wake phrase, the dock behaviour,
+  and the split between a SkynetOS command and a question for the Face.
+
+## 2026-09-12 — Voice, two hands placing the cursor, a steadier click, and THE MATRIX
+
+William asked, in one message: "implement the service that runs the voice control microphone and get voice
+control full set up … holding both hands up far apart or close together should be registered as the cursor,
+and zoom should always happen on where the cursor is … Single click is the only gesture that isn't running as
+smoothly … replace the cursor crosshair thing with a classic windows mouse ui, retro, and replace click and
+drag cursor with the closed hand … a globe made up of tiles, a hidden interface … called the MATRIX."
+
+### Voice: a closed wake grammar, then one sentence to a whisper-server on this machine
+
+**Decision.** Three processes, each doing one thing, all stopped by one switch.
+
+1. **The wake phrase** is Windows' own recogniser (System.Speech, in a PowerShell sidecar) holding a
+   `Choices` grammar of the wake phrases and nothing else (`wakeScript`, packages/shared/voice.ts). It prints
+   `READY`, `WAKE <confidence> <phrase>` and `FATAL`. A closed grammar can only ever return one of its choices,
+   so nothing said before the wake phrase can become text.
+2. **The sentence** is captured by a hidden window (`voice.html`) in its own partition. That partition may
+   use a microphone and nothing else (`allowMicrophoneOnly` refuses any request that includes video), and its
+   CSP gives it no network. It opens the microphone only when main sends `voice:listen`, finds the end of the
+   sentence by energy (`voice-capture.ts`: 200 ms floor, speech at 3× floor, ends after 700 ms quiet, 8 s at
+   most), stops every track first, and hands back a 16 kHz WAV over `voice:captured` — a channel only that
+   window may call, and the only channel it may call.
+3. **Transcription** is `whisper-server.exe` (whisper.cpp, CUDA) holding ggml-large-v3-turbo-q5_0 loaded for
+   as long as voice is on, bound to 127.0.0.1:47831. The service warms it on a synthesised sentence and sends
+   no `prompt` field (a prompt field cost a 6.3 s first request when measured).
+
+The sentence then goes through `resolveIntent`, the grammar gestures already use. A command runs. A
+sentence that is not a command at all (`understood: false`, new) is shown for 2.2 s with Esc to cancel and
+then sent as text to the Face (`prompt:send`). A command that could not be carried out is said and not sent.
+"Stop listening", "mute", "voice off" close the microphone; nothing can open it by voice, because nothing is
+listening for that.
+
+**Measured, 2026-09-12, William-Desktop, RTX 5070, no microphone** (`npm run voice:probe`, Windows' speech
+synthesiser speaking into WAV files, the server started with the service's arguments on a spare port): model
+loaded in 1,325 ms; warm-up requests 360 ms then 69 ms; four sentences at 78, 68, 64 and 83 ms, each
+transcribed word for word. The probe found a grammar gap — "Zoom in on the board." was sent to the Face as a
+question — now a command.
+
+**Rejected.** whisper-stream listening continuously and matching the wake word in its transcript: it
+transcribes everything said in the room, which is precisely what the brief forbids. A neural wake-word engine
+(Porcupine, openWakeWord): a new dependency and model download for a problem Windows already solves in a
+closed grammar. Opening the microphone in the board window: the page that can hear the room must not be the
+page that can edit the board.
+
+**Not verified:** the wake phrase and the capture window with a person speaking. That needs William, and a
+test that opened his microphone without him starting it would break the rule this design exists to keep.
+
+### Two raised hands place the cursor, and zoom happens about it
+
+**Decision.** In `gesture-control.ts`, two raised open hands put the cursor at the point between their palms
+(its own One Euro filter), whether or not they are turned towards each other. Zoom still needs them turned
+towards each other, and every zoom event now carries that point. `useGesture.ts` zooms by sending a wheel
+event at the point, which BoardCanvas's `onWheel` already handles by keeping the world point under the pointer
+fixed; it used to press `+`/`-`, which zoom about the middle of the window. Changing between one hand and two
+glides over 160 ms (`handoverMs`) rather than jumping half a frame.
+
+A fist or peace sign made by one of the two hands keeps the controls until it is released (`actingAnchor`).
+Without that, role assignment gave the cursor to the other hand, still open, and the click never came — found
+by a test, then traced frame by frame.
+
+**Rejected.** A relative ("clutch") two-hand cursor: it drifts away from the hands over repeated use. Requiring
+the zoom orientation for the cursor too: William asked for any two raised hands.
+
+### The single click
+
+**Measured first.** Eight new tests (`test/gesture-two-hands.test.ts`) were run against the old machine before
+any change: seven failed. Two were real misses rather than missing fields: a quick click with the natural dip of
+the hand (3.5 cm down while closing) produced no click at all, and closing one hand while both were raised
+produced no click. The very quick click (one frame closed) already passed, so it is not claimed as a fix.
+
+**Decision.**
+- A click lands where the cursor was 70 ms before the closing was noticed (`clickLookbackMs`, read from a one
+  second trail of cursor positions), not where the hand had drifted to.
+- A fist that is unmistakable in a single frame (probability ≥ 0.85 and closure ≥ 0.8) is entered at once
+  instead of waiting two frames for the smoothing (`fastEnter`, `fastClosure`).
+- Movement starts a drag only after the fist has been closed for 150 ms (`dragSlopMs`); the hold time still
+  starts one at 320 ms.
+- Click events carry their position; after a click or a drop, the cursor glides back to the hand.
+
+After: all eight pass, and so do the 84 gesture tests that were there before (92). Nothing has been seen on
+camera.
+
+### The pointer: a Windows 3.1 arrow, and a closed hand while dragging
+
+Two bitmaps (`ui/cursor-sprites.ts`): the classic arrow at 12×19 with its tip as the hotspot, and a closed hand
+at 16×16 with the palm as the hotspot, drawn as whole-pixel SVG rects at `--p` in two palette tokens (mask-dark
+outline, silk fill), so they read on the dark board and on light panels. The fill never touches a transparent
+pixel (tested). Rejected: a CSS `cursor:` image — Windows scales cursor images by non-integer factors, and the
+hand's pointer is a separate element from the mouse's anyway.
+
+### THE MATRIX
+
+**What it is.** G, or the MATRIX button beside MANUAL: every `file.document`, `file.artifact` and `link.url`
+on every board (provisional nodes left out), each on a card hovering over a tile of a globe, tethered to it.
+Opening it changes nothing on any board.
+
+**Geometry** (`packages/shared/matrix.ts`, pure, 21 tests):
+- 12 latitude bands, each cut into as many tiles as keeps them near square (24 at the equator), so tiles are
+  close to equal in area.
+- No file on a tile reaching within 30° of a pole: 160 of the 184 tiles can hold one.
+- Each project is seeded at a tile chosen by a hash of its board id, and its files fill the nearest free tiles
+  outward from there, so a project reads as a region. Files that do not fit are counted and reported, never
+  stacked.
+- Hover height is `log1p(visits) / log1p(most visits)`, between 0.06 and 0.30 globe radii.
+- The dolly zoom: the field of view narrows from 46° to 6° while the distance is chosen so the middle card
+  grows geometrically on screen to one that covers the view. At 6° the card is effectively flat, and zooming
+  out is the same function run backwards.
+
+**Rendering** (`src/renderer/matrix/MatrixView.tsx`): a software rasteriser into a buffer of about 280 rows,
+shown at a whole number of device pixels per pixel, nearest-neighbour. Every pixel written is one of the room's
+exact colours — mask-dark, mask-light, signal — or silk, with shading by a 4×4 Bayer dither. The far side's grid
+shows through, dithered, and a scan line crosses the near side (off under reduced motion). Rejected: WebGL or
+three.js (a dependency, and antialiasing and texture filtering to fight for pixel purity); Canvas2D paths
+(antialiased edges put colours on screen that are in no palette).
+
+**Input.**
+- A drag turns the globe with the surface under the pointer. Letting go while it is moving spins it (slowing
+  over a 900 ms time constant), and it settles onto the nearest file. It always ends centred on a file.
+- WASD and the arrows go to the next file in that direction, within about 60°. When there is none, a nudge
+  shows the key was heard.
+- The wheel, `+`/`−` and the two-hand gesture zoom in 25% steps. The wheel zooms onto the file under the
+  pointer.
+- A click goes to a file; a click on the centred file goes into it. A double click or Enter opens it.
+- A right click (or a peace sign) or Esc steps back out; G or Esc leaves.
+- While open it swallows plain keys, so the board underneath cannot pan, zoom or change mode unseen.
+- Manual control drives it: `useGesture.ts` targets the MATRIX canvas while it exists.
+
+**Visits** are counted in main on every successful `node:open` from the board window (`services/visits.ts`,
+`userData/visits.json`: a count and the time of the last), not in the board JSON. An unreadable visits file is
+left untouched and counting carries on in memory. `node:visits` is read-only and in neither allowlist.
+
+**Seen:** smoke captures of the built app at rest and part-way in (22 files, 5 projects). They showed cards seen
+edge-on at the rim drawing slivers outside the globe — now left out below a cosine of 0.3 — and the words hard
+to read over the dither — now on the ground colour. **Not seen:** a live drag, the spin, the keys, or gestures
+in the MATRIX.
+
+**Pixel census.** A stdlib PNG decoder counted the colours in the globe region of `07-matrix.png` (887 × 749
+px, from the built app): exactly four — mask-dark, signal, mask-light and silk.
+
+### The breadcrumb row, and what the layout audit found
+
+**Found.** The smoke layout audit's first run in this work failed all 56 desktop states and both remote
+windows. The breadcrumb was clipped: its `max-width: 26vw` cut the switches, and VOICE was cut in half
+below 1920 wide. It also overlapped the usage meter: the switches' borders made the row taller than the
+fixed `9 × gap` the meter hangs at. Both come from the row of switches added in uncommitted work — at
+`cf8d493` the breadcrumb held no buttons — and MATRIX and VOICE made the clipping worse.
+
+**Decision.**
+- The room path truncates; the switches never do. The planner already narrows the HUD to whatever the row
+  leaves.
+- Below 1100 px wide the switches show their icons alone. This keys off the window width, not the
+  planner's own output, so it cannot oscillate.
+- The planner now places the usage meter (`usageTop`: where it was, or under the row once the row is
+  taller) and LOOK (`lookTop`: under the meter when the two share a column).
+- A remote screen does not show MANUAL or VOICE. Neither `gesture:setEnabled` nor `voice:setEnabled` is in
+  REMOTE_METHODS, so they could only be refused.
+
+**After.** 50 of 56 desktop states and both remote windows are clean. The 6 that remain are the HUD's own
+chips clipped with the inspector open at 1280 and 1024. The first audit already showed those six, and this
+work did not change them.
+
+**Rejected.** Icon-only switches at every width: William knows the MANUAL ON button by its words. A second
+row for the switches: it collides with the usage meter and the HUD instead.
+
+## 2026-09-15 — Morning maintenance: one de-overlap rule for every chrome plate
+
+An unattended run of the MORNING MAINTENANCE task (`codex/briefs/morning-maintenance.md`), catching up the
+08:00 slot. Three small changes, each green on `npm run verify` (98 files, 1,538 tests; was 97 and 1,529).
+
+**The drag badges overlapped, the phantom plates did not.** handoff.md had it since 2026-09-11: at overview
+zoom DIRTY PLUSH's badge covered PANIC's, the same fault the phantom plates had, and the plates had already
+been fixed with a push-below loop written inline in `Phantoms.tsx`. Copying that loop into `DragBadges.tsx`
+would have been the second copy of a rule that will be needed a third time (prompt boxes are the same kind
+of overlay). It is now `src/renderer/ui/stack-plates.ts`: `pushBelow`, `boxesOverlap`, `plateOrder`, pure
+and tested (`test/stack-plates.test.ts`). Both overlays call it; the phantom behaviour is unchanged by
+construction, since the loop body is the same comparison. The badge gap is one chrome pixel (`uiScale`),
+matching the plates' one world pixel. **Not seen on screen** — the badges are placed inside a rAF loop that
+the unit test cannot drive, so the proof is the helper's tests plus the unchanged phantom path.
+
+**Rejected:** measuring badges only when the camera changes. It would save layout reads, but the plates
+already measure every frame and the two should stay the same shape until one of them is shown to cost
+something.
+
+**The rotation control's absence on components is now pinned.** docs/06 "Known issues" 1 says the control
+does nothing on a component's drawn package and names hiding it as the cheap honest fix. It was already
+hidden — `ROTATION_FIELD` has only ever been on `decor.part` and `decor.image` (`6bc6beb`) — but nothing
+held that, so a later edit could put it back on a chip and reopen the bug. `test/node-fields.test.ts` now
+asserts, for every kind, that the control is offered exactly when the pixels turn. The roadmap item is
+ticked for the hiding half; rotating component art is still open.
+
+**`ema` in `packages/shared/adaptive.ts` is gone.** Its comment said it served roll velocity and frame
+rate; nothing imported it and nothing in the file called it. Removed rather than kept "in case": a helper
+with a description of callers it does not have is the kind of comment that misleads the next reader.
+
+**Found and left alone**, on the roadmap under "Known issues": `useChromeLayout` re-measures the chrome
+every 400 ms whatever is happening (a `scrollWidth` read forces layout), and a dozen exports in
+`packages/shared/*` have no importer. Neither is a fix for an unattended run.
+
+## 2026-09-15 — The MinecraftOS room is a grid of identical mod clusters
+
+William asked for every mod he works on to be laid out as The Stalker is, backdrop and all, in a
+neat grid. Seven mods, so the choices were the grid's shape and what "the same" means.
+
+**Two columns, four rows, the board grown taller.** The room already had a 2x2 of 53-wide clusters
+at x 32 and 110; seven fit as 2+2+2+1 with the same column pitch and the 24-tile row pitch already in
+use, which leaves every existing cluster where William knows it. Three columns would have fitted
+seven in three rows without growing the board, but only by moving all four existing clusters and
+squeezing the margins to 12 tiles. So `grid.height` went 132 → 180 and the deployment bus, the
+backlog and the far fiducial moved down 48 tiles, keeping their spacing.
+
+**"The same" is the Stalker's geometry, not its flair.** Every cluster gets the Stalker's zone,
+backdrop, agent footprint, castellated frame, LED and screw positions and wiring. It does not get the
+Stalker's `chase` effect, which is a hunter's signature and would be noise seven times over, and
+priorities stay per node (the Stalker sits five levels proud as the flagship; the rest at their own
+heights). Every agent with an `icon.png` in its resources wears it, because William put MCCamOp's on
+the node he made himself that afternoon; the Stalker has no icon file and stays bare.
+
+**Edited on disk, not through the bus.** Seventy-odd node changes as `require-approval` commands
+would have meant that many dialogs. The whole `board/` was copied to `.snapshots/` first, in the
+shape the command bus uses, and the running app re-reads the file on the next load. Ctrl+Z cannot
+undo it; the snapshot and git can.
+
+**TimeServed does not deploy to the client mods folder.** The script's rule was "every jar wires to
+Client mods", which added that edge; it was removed by hand, because TimeServed is server-side and
+runs in prod on Goobtropolis. A layout rule is not a deployment fact.
+
+## 2026-09-19 — Morning maintenance: tooltips that were written and never shown, errors that end in an action
+
+An unattended run of the MORNING MAINTENANCE task (`codex/briefs/morning-maintenance.md`), catching up the
+08:00 slot. Three small changes and one roadmap step, each green on `npm run verify` (98 files, 1,544
+tests; was 1,538).
+
+**A select option can carry its own line of help.** `FRAME_BLURB` in `packages/shared/frames.ts` describes
+each of the nine node frames and says it is "for the editor's tooltip"; nothing imported it, so the Frame
+select offered `dip`, `quad`, `bga` and no way to learn what they draw. `FieldSpec` now has `optionHelp`,
+the frame field sets it to `FRAME_BLURB`, and `NodeEditor.tsx` puts it in the `title` of each option and of
+the select itself for the option currently chosen. The select's own title is the one that certainly shows
+in Chromium; an option's title inside the native popup may not, which is why both are set.
+**Rejected:** printing the line under the field. The editor's own comment records why help lives in
+tooltips: a paragraph under every field made the form a wall of prose.
+
+**The schedule readout's two dead ends now say what to do.** The inspector prints `nextRunFor`'s reason
+after "NOT SCHEDULED —". `DISABLED` became `SWITCHED OFF. TICK ENABLED IN THE EDITOR TO RUN IT`, and
+`THIS SCHEDULE NEVER FIRES` became `NO SUCH DATE IN THE NEXT FIVE YEARS. CHECK THE DAY AND MONTH FIELDS`
+(five years is `nextRun`'s own limit). `nextRunFor` had no test at all; `test/schedule.test.ts` now has
+five. Nothing compared against the old strings.
+
+**The REMOTE panel's four calls can reject, and none was caught.** `toggle` set `busy` and cleared it
+only after the await, so a rejection left the switch disabled until the panel was reopened; `revoke`,
+`makeCode` and `publish` failed silently. Each now toasts what failed and reads the status back. The
+revoke message does not claim the device can still connect, because after a failed save that is only
+partly true (roadmap "Known issues" 9): it says to check the list and to turn remote off if the device is
+still there. **Not seen on screen, and not unit-tested:** the repo has no DOM test environment (roadmap
+"Known issues" 10).
+
+**Spare exports are left exported.** Roadmap item 8 asked for a reader to say which of fifteen never-
+imported exports were dead. Fourteen are live inside their own file, several as the default value of an
+exported function's parameter, which a caller may reasonably want to name. `tsconfig.json` has no
+`noUnusedLocals`, so removing `export` would buy no checking either. They stay. A wider count found three
+names with no second mention anywhere; `REMOTE_DEFAULT_PORT` was the port written twice, and
+`settings.ts` now imports it. `isChannel` and `FEATURE_NAMES` are left for William.
+
+## 2026-09-21 — The board sees a first build; the program gets an installer and a home; sessions reach the phone
+
+William: "my TimeServed mod was just rebuilt and the board still shows no build for it", then: an
+exe he can pin, an update workflow, and Tailscale so he can work from his phone.
+
+**Why the jar was never seen.** `watchBoard` filtered its directories with `existsSync` and watched
+the survivors. A mod that had never been built has no `build/libs`, so nothing watched it, and the
+first build was the one build the board could not see. `gradlew clean` did the same to a built mod.
+The relink poll did fire (a missing glob is "broken"), but it called `refreshTargets` alone, so the
+target healed while the cartridge, which reads `artifacts`, went on saying NO BUILD.
+
+**Wait at the nearest ancestor that exists.** `packages/shared/watch-plan.ts` plans the watch: what
+exists is watched directly, what does not is waited for at the nearest existing ancestor, at most
+three steps up and never a drive root. When something appears there that lies on the way to a wanted
+directory, or a watched directory is removed, the watcher re-plans after 600 ms and tells the nodes
+concerned, because `ignoreInitial` means the new watch will not report a jar that is already there.
+`test/watch-plan.test.ts` proves both sequences against a real temp directory: first build, and
+clean then rebuild.
+**Rejected:** polling every artifact on a timer. It would have worked and hidden the bug; a watcher
+that is right costs nothing while idle. **Rejected:** watching the repo root recursively: `build/`
+during a Gradle run is tens of thousands of events.
+
+**F5 refreshes files, R still re-reads the board.** `refreshFiles` re-resolves targets and
+artifacts and re-plans the watchers. It runs on F5, from the palette, from a Refresh button on file
+nodes, when the window regains focus (at most once in five seconds), and in the relink poll. The
+toast says what changed (`packages/shared/refresh-summary.ts`): a refresh that answers "REFRESHED"
+has not answered the question it was pressed to ask.
+
+**An install may never own the boards.** A packaged SkynetOS read `resources/board`, a copy made at
+build time inside the install folder. The first update would have overwritten every board edit made
+since. So program and data are separate (`packages/shared/home.ts`): the program is what the
+installer puts down, the data lives in a home folder, and on William's machines the home is the repo.
+The install finds it through `build-info.json` (`builtFrom`), remembers it in `userData/home.json`
+so a published build, which carries no path, keeps it, and seeds `%USERPROFILE%/SkynetOS` only on a
+machine with no repo. `settings.json` `home` overrides, and is file-only because the home is a
+trusted root.
+**Rejected:** keeping data in `%APPDATA%/SkynetOS`. The Hands edit the repo and the Face reads it
+through GitHub; a third copy in AppData would be the one William looks at and the one nobody else
+can see.
+
+**Updates come from GitHub Releases, and nothing publishes itself.** electron-updater, per-user
+NSIS so no administrator prompt, download in the background, install on close. Every
+electron-builder script passes `--publish never`; `npm run release:publish` is separate and is
+William's. `update:check` and `update:install` are user-only. The build is unsigned, so an update is
+checked by hash against `latest.yml` and not by publisher: the GitHub account is the control, and
+docs/07 says so. **Rejected:** a from-source updater (`git pull` and rebuild inside the installed
+app): it needs node, git and a toolchain on every machine, which is what an installer exists to
+avoid. **New dependency:** `electron-updater`, the only one. William asked for the workflow.
+
+**The icon is drawn, not downloaded.** `tools/make-icon.mjs` draws a 32 px chip in the root board's
+colours and scales it by whole numbers into a multi-size `.ico`. No vendor art, no licence trail, and
+no bilinear mush on the taskbar.
+
+**Sessions on the phone use Claude Code's Remote Control, not a terminal streamed by SkynetOS.**
+docs/08's R4 would have needed headless sessions or `node-pty`, which has no build here. The CLI
+already has `--remote-control [name]` (read from `claude --help`, 2.1.278). An `agent.code` node
+opts in with `remoteControl`; the name is always passed because the flag's value is optional and a
+bare flag would swallow the next argument. The reach is William's Anthropic login, so an agent
+setting the flag gains nothing; `disableRemoteControl` in `~/.claude/settings.json` is the hard off.
+
+**A revoke never throws (roadmap "Known issues" 9).** The save used to throw out of
+`DeviceStore.revoke`, the caller skipped `disconnect`, and the device returned after a restart. Memory
+is now the truth for the run, the disconnect is in a `finally`, the unsaved list is reported to the
+panel, and revoking again settles the write once the file can be written.
+
+**Found by the smoke run of the packed exe:** waiting at an ancestor put a watch on
+`C:/Program Files`, which holds `WindowsApps`, which cannot be read. That is where the three-step cap,
+the drive-root rule and the refusal to wait in `Program Files`, `Users`, `Windows` or `ProgramData`
+came from: a program that is not installed is left to the relink poll and the refresh on focus.
+
+**A second copy may not take the control file (found the hard way, same day).** The Hands ran the
+packed exe through the smoke harness beside William's open app, three times. Each run wrote its own
+`control.json` over the live one in userData and removed it on exit, so his board stayed open while
+every agent was told SKYNETOS IS NOT RUNNING; the `to-face` mail for this session had to be written by
+hand for that reason. `npm run smoke:shots` had the same fault and is documented as safe beside a
+running app. Two rules now, in `packages/shared/control-file.ts`: a smoke run keeps its control file
+in its capture folder, and a process removes the file only if the file still names its own pid.
+Proved with a decoy file in userData that survived a smoke run of the packed exe. The live app needs
+one restart to get its link back; it needed one anyway for the watcher.
+
+## 2026-09-23 — Morning maintenance: the notify task rings, and three states that were missing
+
+An unattended run of the MORNING MAINTENANCE task (`codex/briefs/morning-maintenance.md`), catching up the
+08:00 slot. Three small changes and one roadmap step, each green on `npm run verify` (103 files, 1,606
+tests; was 1,604).
+
+**A `notify` task shows a Windows toast (roadmap M8).** The deductionos board has carried `T1 Daily drill
+reminder` with `{"type":"notify","message":"…"}` since before the scheduler existed, and the scheduler
+answered it with "WINDOWS TOAST NOTIFICATIONS ARE NOT BUILT YET". Electron's `Notification` is the whole
+mechanism: `resolveTaskAction` reads `action.message` (an empty one is refused with a reason that names the
+key), `planDispatch` titles the toast with the task's designator and name, and `scheduler.ts` shows it.
+A dev copy has no App User Model ID, without which Windows shows nothing, so it borrows `process.execPath`
+as the Electron docs say; the installer gives the packaged app its own. **Rejected:** a copy in the in-app
+notification centre. That needs a new main→renderer push channel through the preload allowlist and a
+restart, and it doubles a step that should first be seen working once. `level` on the node is read by
+nothing; noted on the roadmap. **Not seen on screen:** the pure half is tested, the toast is not.
+
+**Space activates what Enter activates.** The usage meter's plan label, CALIBRATE and minimise are
+`role="button"` spans inside the head button, announced as buttons, and answered Enter only. Space now works
+on all three and `preventDefault` stops it scrolling. Turning them into `<button>`s would be the right
+fix, but a button inside a button is invalid HTML, so they would have to leave the head row: a layout
+change, not a maintenance one.
+
+**A gesture switch that fails to save now says so.** `toggle` in `GestureCatalogue.tsx` set the library
+from the result and never read `ok`, so the switch snapped back in silence; its neighbours `add` and
+`setWords` already toasted. The fallback names the gesture and the direction it would not go.
+
+**A schedule read that fails is a warning, not a spinner.** `ScheduleBlock` answered a rejected
+`task:status` by clearing the status, which rendered READING THE SCHEDULE… in the green style for as long
+as the failure lasted. The reason is kept and shown, with the 30 s retry named so the reader knows waiting
+is one of the options.
+
+**Found and left alone**, roadmap "Known issues" 11–15: the mailbox and the gesture catalogue claim
+emptiness before their first read and on a failed one; the mailbox's clipboard copy has no failure
+path; a failed away-mode save leaves the typed value on screen; the MANUAL chip drops its instruction when
+manual control has failed; and six bare fallback strings. All renderer, none testable here (item 10).
+
+**Reported after the bound**, from the tidying survey that finished late: five one-word comment faults, two
+duplicated helpers and twelve unread exports in `src/main/services/`. Roadmap "Known issues" 16–18. None
+touched today: three improvements is the brief's limit, and removing code is William's call.
+
+## 2026-09-23 — The away hour: a private home, a workspace for Prime, the phone guide, mail, and FinanceOS
+
+William, leaving for an hour or two: a detailed Tailscale setup for his side; a FinanceOS room with
+institution links, meters for balances and bills, spending and earning rates, unpaid-bill alerts, and
+a place to work on income and debt; JARVIS reading and managing his several inboxes with an urgency
+scale, ideally through one unified inbox; and a persistent "play pen" for JARVIS Prime. "Proceed."
+Three forks with one owner per file; the main session kept these docs. Nothing committed.
+
+**`private/` exists before anything else, and git never sees it.** The repo is public (docs/07). A
+ledger, a mail survey, or a bank's name in a handoff would be published with the next commit. So
+`private/{finance,email,prime}/` is gitignored first, every fork is told what may leave it (counts
+and categories, never names or figures), and the FinanceOS board itself carries no number at all:
+its institution nodes are provisional until William types the URLs, and the ledger is a template he
+copies and fills. **Rejected:** a gitignored board file for the room. A `drive.room` pointing at a
+file git does not carry shows broken on the second desktop, and FACE-BOOT would still bake the
+targets it could read. Bank login pages are public URLs; the balances are the secret, and they are
+in `private/`.
+
+**Prime's workspace is method, not project facts** (`prime/`). The codex says what William's
+projects are; `prime/` says how Prime works: a toolbox of what a session can reach, playbooks for the
+jobs that recur (session start, an on-disk board edit, reporting, parallel forks, an unattended run),
+learning notes, a log, and two tools that earlier sessions kept re-writing inline:
+`npm run board:overlap` (mounted nodes that overlap or leave the grid, skipping printed kinds by the
+shared `isPrinted` rule, and it was wrong until it did; 286 false faults on the real boards from
+zones and screws with footprints) and `npm run board:snapshot`. `prime/tools/**` is in tsconfig so
+verify typechecks it; `prime/scratch/` is gitignored. **Rejected:** putting this in `codex/`, which
+the Face reads as project knowledge and which has a 150-line index to protect. **Learned:** vite-node
+strips the script path from `process.argv`, so a tool cannot recognise itself there; `VITEST` in the
+environment is the honest guard for "imported by a test".
+
+**A bad token now counts toward the remote lockout.** docs/07 and docs/08 both say ten failed
+pairings OR authentications in ten minutes turn remote off; `remote-server.ts` counted pairing codes
+only, so a token could be guessed at without limit while the doc promised otherwise. The unknown-
+device branch now records the failure, audits it as channel `auth`, and trips `onTooManyFailures`
+like the pairing path (`test/remote-server.test.ts` "turns remote off after ten wrong tokens in a
+row"). The doc was the intent and the stricter rule, so the code moved to it, not the other way.
+This is the security path; William's eye is asked for in the handoff.
+
+**The Tailscale guide quotes the code, not the design.** Every button, status line and dialog in
+`docs/guides/remote-setup-tailscale.md` is the string in `RemotePanel.tsx` and `remote.ts`, read on
+2026-09-23, and section 0 is this PC's real state (Tailscale 1.102.4 signed in, MagicDNS and HTTPS
+certificates on, the iPhone on the tailnet, nothing published, remote off). The tailnet suffix and IPs
+are left out of the guide because the repo is public; the panel prints them. Two gaps found by
+writing it: the REMOTE panel is in LOOK → System only, not in the Settings panel; and an iOS Home
+Screen web app has its own localStorage, so the icon will most likely ask to pair a second time
+(predicted, unverified).
+
+**Mail: Gmail is the hub, and the connector is read-only until William re-authorises it.** The
+Outlook app on his phone aggregates on the phone only, so a server-side hub is required for an agent
+to see everything; forwarding the other accounts into Gmail costs nothing and the existing connector
+already covers Gmail. The survey found the inbox read to zero (6 unread of about 10,000 threads),
+promotions and notifications at roughly nine tenths of the volume, and 1 P0, 11 P1 and 5 P2 items,
+listed in `private/email/`. No label was created: `create_label` answered "Insufficient scope", so
+the mailbox is untouched and the 26-thread labelling plan waits in `private/email/` for a run with
+the modify scope. **Rejected:** authenticating the Microsoft 365 connector for the hotmail account
+unattended, which needs his consent screen. **Unverified and blocking the schedule:** whether a
+session SkynetOS launches on a chip carries the Gmail connector at all.
+
+**FinanceOS: a ledger William keeps, not a bank the app reads.** He asked for meters of balances and
+card bills, spending and earning rates, unpaid-bill alerts, and a room to work on income and debt.
+**Decision:** the truth is `private/finance/ledger.json`, gitignored, filled by hand or from bank CSV
+exports; `npm run finance:report` computes everything (`packages/shared/finance.ts`, pure, 32 tests)
+and writes `report.json`; the board reads that one file through a board-window-only channel
+(`finance:status`, in neither AGENT_METHODS nor REMOTE_METHODS) and shows it on the LEDGER node's
+inspector block. No figure is ever a default, and an absent ledger is words, not an empty bar.
+**Rejected:** a live aggregator (Plaid and the like): a paid dependency, a credential store, and a
+public repo; a bank's own CSV is free, offline and already on every site. **Rejected:** institution
+URLs on the board now: which banks he uses is his to write, so J1–J4 are provisional. **Rejected:** a
+new `monitor.finance` kind today: the vertical-slice rule says schema → render → click → effect →
+test, and the inspector block proves the data path first. The room's theme is graphite with a cyan
+signal, clear of the three status colours by the palette test. The advisor persona never moves money,
+never logs in, never invents a number, and ends every turn with one sized action; its weekly review
+and the Monday BILLS DUE toast are on the board **disabled** until he ticks them. The root board was
+edited on disk (D5, snapshot `2026-09-23T17-51-27-000Z-agent-financeos`); Ctrl+Z will not undo it.
+What the mail survey showed about his institutions is in `private/finance/institutions.md`, not here.

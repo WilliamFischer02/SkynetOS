@@ -21,15 +21,34 @@
   ],
   "nodes": [
     {
+      "id": "bg_room_art",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 30,
+        "y": 23
+      },
+      "footprint": {
+        "w": 112,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/game-os-bg.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "The room's own art, as on its drive on the root board. Restyle of 2026-09-11; delete or repoint freely."
+    },
+    {
       "id": "n0",
       "kind": "note.silk",
       "name": "header",
       "pos": {
-        "x": 58,
-        "y": 37
+        "x": 35,
+        "y": 19
       },
       "text": "GAMEOS  //  TRUTHQUESTRETRO · ENGINE · FORGE · HANDHELD",
-      "size": 11
+      "size": 22
     },
     {
       "id": "u1_engine",
@@ -37,18 +56,25 @@
       "kind": "agent.code",
       "name": "CC-TQR-ENGINE",
       "pos": {
-        "x": 60,
-        "y": 40
+        "x": 35,
+        "y": 29
       },
       "footprint": {
-        "w": 3,
-        "h": 3
+        "w": 8,
+        "h": 7
       },
       "cwd": "C:/dev/TruthQuestRetro",
       "launch": "popout",
       "resume": true,
       "codexRef": "codex/projects/truthquest-retro.md",
-      "notes": "C++ engine, 3D terraced-hill platformer, 2.5D presentation. Windows/Steam first."
+      "notes": "C++ engine, 3D terraced-hill platformer, 2.5D presentation. Windows/Steam first.",
+      "frame": "castellated",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "chase": true,
+      "chaseColor": "signal",
+      "chaseSpeed": 75
     },
     {
       "id": "u2_forge",
@@ -56,17 +82,20 @@
       "kind": "agent.code",
       "name": "CC-FORGE",
       "pos": {
-        "x": 60,
-        "y": 48
+        "x": 35,
+        "y": 50
       },
       "footprint": {
-        "w": 3,
-        "h": 3
+        "w": 7,
+        "h": 6
       },
       "cwd": "C:/dev/TruthQuestRetro/tools/forge",
       "launch": "popout",
       "resume": true,
-      "notes": "Forge: the William-only level/asset editor. Biggest focus of the project."
+      "notes": "Forge: the William-only level/asset editor. Biggest focus of the project.",
+      "frame": "quad",
+      "priority": 3,
+      "showDesignator": false
     },
     {
       "id": "s1_repo_tqr",
@@ -74,15 +103,18 @@
       "kind": "store.repo",
       "name": "TruthQuestRetro",
       "pos": {
-        "x": 70,
-        "y": 41
+        "x": 61,
+        "y": 32
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "path": "C:/dev/TruthQuestRetro",
-      "openWith": "vscode"
+      "openWith": "vscode",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "s2_assets",
@@ -90,15 +122,18 @@
       "kind": "store.folder",
       "name": "Models & assets",
       "pos": {
-        "x": 68,
-        "y": 48
+        "x": 55,
+        "y": 50
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "path": "C:/dev/TruthQuestRetro/assets",
-      "openWith": "explorer"
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "a1_game_exe",
@@ -106,14 +141,17 @@
       "kind": "file.artifact",
       "name": "TruthQuestRetro.exe",
       "pos": {
-        "x": 78,
-        "y": 41
+        "x": 81,
+        "y": 32
       },
       "footprint": {
-        "w": 3,
-        "h": 2
+        "w": 5,
+        "h": 3
       },
-      "glob": "C:/dev/TruthQuestRetro/build/**/TruthQuestRetro.exe"
+      "glob": "C:/dev/TruthQuestRetro/build/**/TruthQuestRetro.exe",
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false
     },
     {
       "id": "a2_forge_exe",
@@ -121,14 +159,17 @@
       "kind": "file.artifact",
       "name": "Forge.exe",
       "pos": {
-        "x": 78,
-        "y": 48
+        "x": 81,
+        "y": 50
       },
       "footprint": {
-        "w": 3,
-        "h": 2
+        "w": 5,
+        "h": 3
       },
-      "glob": "C:/dev/TruthQuestRetro/build/**/Forge.exe"
+      "glob": "C:/dev/TruthQuestRetro/build/**/Forge.exe",
+      "frame": "fingers",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "e1_run",
@@ -136,15 +177,19 @@
       "kind": "file.exe",
       "name": "Run latest build",
       "pos": {
-        "x": 88,
-        "y": 41
+        "x": 107,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
       "path": "C:/dev/TruthQuestRetro/build/Release/TruthQuestRetro.exe",
-      "confirmBeforeLaunch": false
+      "confirmBeforeLaunch": false,
+      "frame": "castellated",
+      "priority": 1,
+      "plateBorder": "copper",
+      "showDesignator": false
     },
     {
       "id": "e2_forge",
@@ -152,15 +197,19 @@
       "kind": "file.exe",
       "name": "Open Forge",
       "pos": {
-        "x": 88,
-        "y": 48
+        "x": 107,
+        "y": 50
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
       "path": "C:/dev/TruthQuestRetro/build/Release/Forge.exe",
-      "confirmBeforeLaunch": false
+      "confirmBeforeLaunch": false,
+      "frame": "bga",
+      "priority": 3,
+      "plateBorder": "copper",
+      "showDesignator": false
     },
     {
       "id": "j1_steam",
@@ -168,14 +217,17 @@
       "kind": "link.url",
       "name": "Steamworks",
       "pos": {
-        "x": 98,
-        "y": 41
+        "x": 133,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://partner.steamgames.com/"
+      "url": "https://partner.steamgames.com/",
+      "frame": "fingers",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "j2_tripo",
@@ -183,14 +235,17 @@
       "kind": "link.url",
       "name": "Tripo3D",
       "pos": {
-        "x": 98,
-        "y": 45
+        "x": 133,
+        "y": 42
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://www.tripo3d.ai/"
+      "url": "https://www.tripo3d.ai/",
+      "frame": "tabs",
+      "priority": 2,
+      "showDesignator": false
     },
     {
       "id": "d1_handheld",
@@ -200,15 +255,18 @@
       "engraving": "HANDHELDOS",
       "boardFile": "gameos/handheld/room.board.json",
       "pos": {
-        "x": 60,
-        "y": 58
+        "x": 35,
+        "y": 76
       },
       "footprint": {
-        "w": 6,
-        "h": 4
+        "w": 9,
+        "h": 12
       },
       "provisional": true,
-      "notes": "5 self-built units, ESP32-S3 route, 3.5in screen, appliance OS. Fork: platform decision pending."
+      "notes": "5 self-built units, ESP32-S3 route, 3.5in screen, appliance OS. Fork: platform decision pending.",
+      "frame": "socket",
+      "priority": 4,
+      "showDesignator": false
     },
     {
       "id": "f1_design",
@@ -216,14 +274,258 @@
       "kind": "file.document",
       "name": "TQR design doc",
       "pos": {
-        "x": 78,
-        "y": 58
+        "x": 81,
+        "y": 76
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/dev/TruthQuestRetro/docs/design.md"
+      "path": "C:/dev/TruthQuestRetro/docs/design.md",
+      "priority": 2,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "showDesignator": false
+    },
+    {
+      "id": "z_engine",
+      "kind": "group.zone",
+      "name": "ENGINE",
+      "pos": {
+        "x": 33,
+        "y": 26
+      },
+      "footprint": {
+        "w": 106,
+        "h": 12
+      },
+      "members": [
+        "u1_engine",
+        "s1_repo_tqr",
+        "a1_game_exe",
+        "e1_run",
+        "j1_steam"
+      ]
+    },
+    {
+      "id": "z_forge",
+      "kind": "group.zone",
+      "name": "FORGE",
+      "pos": {
+        "x": 33,
+        "y": 39
+      },
+      "footprint": {
+        "w": 106,
+        "h": 19
+      },
+      "members": [
+        "u2_forge",
+        "s2_assets",
+        "a2_forge_exe",
+        "e2_forge",
+        "j2_tripo"
+      ]
+    },
+    {
+      "id": "z_hardware",
+      "kind": "group.zone",
+      "name": "HARDWARE",
+      "pos": {
+        "x": 33,
+        "y": 73
+      },
+      "footprint": {
+        "w": 13,
+        "h": 17
+      },
+      "members": [
+        "d1_handheld"
+      ]
+    },
+    {
+      "id": "z_design",
+      "kind": "group.zone",
+      "name": "DESIGN",
+      "pos": {
+        "x": 79,
+        "y": 73
+      },
+      "footprint": {
+        "w": 9,
+        "h": 12
+      },
+      "members": [
+        "f1_design"
+      ]
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 33,
+        "y": 26
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 138,
+        "y": 37
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 33,
+        "y": 39
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 138,
+        "y": 57
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 33,
+        "y": 73
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 45,
+        "y": 89
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_7",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 79,
+        "y": 73
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_8",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 87,
+        "y": 84
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 43,
+        "y": 29
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 42,
+        "y": 50
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 36
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 54
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 23
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 141,
+        "y": 92
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
     }
   ],
   "edges": [
@@ -260,14 +562,16 @@
       "from": "a1_game_exe",
       "to": "e1_run",
       "kind": "deploys",
-      "width": 3
+      "width": 3,
+      "color": "ok"
     },
     {
       "id": "g6",
       "from": "a2_forge_exe",
       "to": "e2_forge",
       "kind": "deploys",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "g7",
@@ -288,14 +592,102 @@
       "from": "a1_game_exe",
       "to": "j1_steam",
       "kind": "deploys",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "g10",
       "from": "u1_engine",
       "to": "f1_design",
       "kind": "reads",
-      "width": 2
+      "width": 2,
+      "color": "copper-dark"
+    }
+  ],
+  "phantoms": [
+    {
+      "id": "ph_game_design_doc",
+      "kind": "file.document",
+      "name": "Game design doc",
+      "description": "Where the design doc actually is. TQR DESIGN DOC points at docs/design.md, which does not exist; approve this, then retire that one.",
+      "pos": {
+        "x": 92,
+        "y": 76
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "C:/dev/TruthQuestRetro/docs/design/game-design.md"
+      },
+      "connect": [
+        {
+          "to": "u1_engine",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_content",
+      "kind": "store.folder",
+      "name": "Content",
+      "description": "Where the game's art, data and pixel fonts actually live; MODELS & ASSETS points at assets/, which does not exist. content/gfx/fonts holds the fonts wanted for the board's text.",
+      "pos": {
+        "x": 55,
+        "y": 61
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "C:/dev/TruthQuestRetro/content"
+      },
+      "connect": [
+        {
+          "to": "u1_engine",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_assets_inbox",
+      "kind": "store.folder",
+      "name": "Assets inbox",
+      "description": "Incoming art waiting to be sorted into content/. A real folder this room has no view of.",
+      "pos": {
+        "x": 71,
+        "y": 61
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "C:/dev/TruthQuestRetro/assets-inbox"
+      },
+      "connect": [
+        {
+          "to": "s1_repo_tqr",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_forge_source",
+      "kind": "store.folder",
+      "name": "Forge source",
+      "description": "The editor's real source folder. CC-FORGE's working directory is tools/forge, which does not exist, so that chip cannot launch; this is where it should point.",
+      "pos": {
+        "x": 35,
+        "y": 61
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "C:/dev/TruthQuestRetro/forge"
+      },
+      "connect": [
+        {
+          "to": "u2_forge",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

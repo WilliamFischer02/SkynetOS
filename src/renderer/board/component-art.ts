@@ -1,6 +1,7 @@
 import type { NodeKind } from '@shared/types.js';
 import { COPPER, COPPER_DARK, SILK } from '@shared/palette.js';
 import type { NodeFrame } from '@shared/frames.js';
+import { PROMPT_TO_NODE_TAB, promptLayout, type PromptLayout, type PromptRect } from '@shared/prompt.js';
 
 /**
  * Per-kind component silhouettes.
@@ -35,6 +36,9 @@ export interface ComponentStyle {
     | 'vreg'       // service.process — a voltage regulator with a tab
     | 'crystal'    // task.scheduled — a crystal oscillator can
     | 'psu'        // monitor.system — a PSU block with gauges
+    | 'prompt'     // agent.prompt — a pixel-art Claude message box
+    | 'promptToNode' // agent.prompt-to-node — the same box, signal-framed, under a PROMPT → NODE tab
+    | 'explorer'   // store.explorer — a little desktop window full of folders
     | 'plain';     // anything without a vocabulary entry yet
   /** Inset of the body from the footprint edge, in px. Leaves room for legs. */
   inset: number;
@@ -42,11 +46,17 @@ export interface ComponentStyle {
 
 export const COMPONENT_STYLE: Record<NodeKind, ComponentStyle> = {
   'agent.code': { silhouette: 'dip', inset: 4 },
+  // A drive under a chip: it reads as storage first, because that is what it works on.
+  'agent.audit': { silhouette: 'drive', inset: 2 },
   'agent.chat': { silhouette: 'qfp', inset: 4 },
   'agent.jarvis': { silhouette: 'cpu', inset: 3 },
+  // Inset 0: the box places itself with promptLayout, which the DOM overlay shares.
+  'agent.prompt': { silhouette: 'prompt', inset: 0 },
+  'agent.prompt-to-node': { silhouette: 'promptToNode', inset: 0 },
   'drive.room': { silhouette: 'ssd', inset: 2 },
   'store.repo': { silhouette: 'drive', inset: 2 },
   'store.folder': { silhouette: 'drive', inset: 2 },
+  'store.explorer': { silhouette: 'explorer', inset: 2 },
   'store.cloud': { silhouette: 'jack', inset: 2 },
   'file.document': { silhouette: 'eprom', inset: 2 },
   'file.exe': { silhouette: 'switch', inset: 2 },
@@ -272,11 +282,208 @@ export function drawComponent(d: DrawContext, style: ComponentStyle): void {
       for (let pxx = bx + 4; pxx < bx + bw - 4; pxx += 3) px(d.ctx, COPPER_DARK, pxx, by + bh - 4, 1, 2);
       break;
     }
+    case 'prompt':
+      drawPromptBox(d);
+      break;
+    case 'promptToNode':
+      drawPromptToNode(d);
+      break;
+    case 'explorer': {
+      body(d, bx, by, bw, bh);
+      // Title bar: a signal strip with a close box — the one thing every desktop window had.
+      const th = Math.max(3, Math.floor(bh / 6));
+      px(d.ctx, d.signal, bx + 2, by + 2, bw - 4, th);
+      px(d.ctx, COPPER_DARK, bx + bw - 2 - th, by + 2, th, th);
+      // Folders in rows under it, each a tab and an outlined body. Rectangles only.
+      for (let fy = by + th + 5; fy + 6 <= by + bh - 3; fy += 9) {
+        for (let fx = bx + 4; fx + 8 <= bx + bw - 3; fx += 11) {
+          px(d.ctx, COPPER, fx, fy, 4, 1);
+          outline(d, COPPER, fx, fy + 1, 8, 5);
+        }
+      }
+      break;
+    }
     case 'plain':
     default:
       body(d, bx, by, bw, bh);
       break;
   }
+}
+
+/* ────────────────────────── the prompt box ────────────────────────── */
+
+/** Stamp a little bitmap: `#` is a pixel, anything else is left alone. Clipped to `clip`. */
+function glyph(ctx: CanvasRenderingContext2D, color: string, clip: PromptRect, rows: readonly string[]): void {
+  const cols = Math.max(...rows.map((r) => r.length));
+  const gx = clip.x + Math.floor((clip.w - cols) / 2);
+  const gy = clip.y + Math.floor((clip.h - rows.length) / 2);
+  rows.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      const x = gx + c;
+      const y = gy + r;
+      if (row[c] !== '#' || x < clip.x || y < clip.y || x >= clip.x + clip.w || y >= clip.y + clip.h) continue;
+      px(ctx, color, x, y, 1, 1);
+    }
+  });
+}
+
+/** A rounded rectangle in whole pixels: the corners stepped off, never curved. */
+function roundedBox(ctx: CanvasRenderingContext2D, fill: string, edge: string, r: PromptRect): void {
+  const { x, y, w, h } = r;
+  if (w < 6 || h < 6) { px(ctx, fill, x, y, w, h); return; }
+  px(ctx, fill, x + 2, y, w - 4, h);
+  px(ctx, fill, x, y + 2, w, h - 4);
+  px(ctx, fill, x + 1, y + 1, w - 2, h - 2);
+  px(ctx, edge, x + 2, y, w - 4, 1);
+  px(ctx, edge, x + 2, y + h - 1, w - 4, 1);
+  px(ctx, edge, x, y + 2, 1, h - 4);
+  px(ctx, edge, x + w - 1, y + 2, 1, h - 4);
+  for (const [cx, cy] of [[x + 1, y + 1], [x + w - 2, y + 1], [x + 1, y + h - 2], [x + w - 2, y + h - 2]] as const) {
+    px(ctx, edge, cx, cy, 1, 1);
+  }
+}
+
+const PAPERCLIP = [
+  '.###.',
+  '#...#',
+  '#.#.#',
+  '#.#.#',
+  '#.#.#',
+  '#.#.#',
+  '#.#.#',
+  '.#.#.',
+  '..#..'
+] as const;
+
+const SEND_ARROW = [
+  '..#..',
+  '.###.',
+  '#.#.#',
+  '..#..',
+  '..#..',
+  '..#..'
+] as const;
+
+/** Word lengths for the dim placeholder line — the shape of "How can I help you today?". */
+const PLACEHOLDER_WORDS = [3, 3, 1, 4, 3, 6];
+
+/**
+ * The prompt node: a Claude-style message box, drawn in pixels.
+ *
+ * William: "the prompt box should be pixel art / mosaic rastered to look like a pixel art claude
+ * prompt interface embedded in the board." A rounded box with a stepped-corner edge, a caret and a
+ * dim placeholder line where the text goes, a paperclip bottom left and a filled send button bottom
+ * right. The real textarea and buttons are DOM laid over exactly these pixels by
+ * src/renderer/ui/PromptBoxes.tsx, using the same `promptLayout`. Below 1x zoom the overlay steps
+ * aside and this drawing is all there is, which is why it has to read as a prompt box on its own.
+ */
+function drawPromptBox(d: DrawContext): void {
+  drawPromptBody(d, promptLayout(d.w, d.h), SILK);
+}
+
+/**
+ * The 5px-tall pixel letters the PROMPT → NODE tab is lettered in. Only the glyphs that label
+ * needs. Drawn like PAPERCLIP: whole pixels, one palette colour, exact at every zoom, which the
+ * chrome font could not be at 1x inside a 12px tab.
+ */
+const MICRO_FONT: Record<string, readonly string[]> = {
+  P: ['##.', '#.#', '##.', '#..', '#..'],
+  R: ['##.', '#.#', '##.', '#.#', '#.#'],
+  O: ['###', '#.#', '#.#', '#.#', '###'],
+  M: ['#...#', '##.##', '#.#.#', '#...#', '#...#'],
+  T: ['###', '.#.', '.#.', '.#.', '.#.'],
+  N: ['#..#', '##.#', '#.##', '#..#', '#..#'],
+  D: ['##.', '#.#', '#.#', '#.#', '##.'],
+  E: ['###', '#..', '##.', '#..', '###'],
+  '→': ['..#..', '...#.', '#####', '...#.', '..#..'],
+  ' ': ['..', '..', '..', '..', '..']
+};
+
+/** Letter a line of MICRO_FONT from (x, y), one pixel between glyphs, clipped at `maxX`. */
+function microText(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, text: string, maxX: number): void {
+  let cx = x;
+  for (const ch of text) {
+    const rows = MICRO_FONT[ch] ?? MICRO_FONT[' ']!;
+    const width = rows[0]?.length ?? 2;
+    rows.forEach((row, r) => {
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] === '#' && cx + c < maxX) px(ctx, color, cx + c, y + r, 1, 1);
+      }
+    });
+    cx += width + 1;
+  }
+}
+
+/** "Build": a plus in a square. The tab's icon, beside the words. */
+const BUILD_GLYPH = [
+  '#######',
+  '#.....#',
+  '#..#..#',
+  '#.###.#',
+  '#..#..#',
+  '#.....#',
+  '#######'
+] as const;
+
+const PROMPT_TO_NODE_LABEL = 'PROMPT → NODE';
+
+/**
+ * PROMPT → NODE: the message box, framed in the room's signal colour instead of silk, under a signal
+ * folder tab lettered PROMPT → NODE with a build glyph.
+ *
+ * William: "add titling elements that show a prompt to node isn't a regular node." Two tells, both
+ * drawn here so they survive every zoom, including below 1x where the overlay hides: the tab, and
+ * the frame colour. The tab runs down over the box's top edge, so the two read as one part.
+ */
+function drawPromptToNode(d: DrawContext): void {
+  const layout = promptLayout(d.w, d.h, { tab: PROMPT_TO_NODE_TAB });
+  drawPromptBody(d, layout, d.signal);
+
+  const tab = { x: d.x + layout.tab.x, y: d.y + layout.tab.y, w: layout.tab.w, h: layout.tab.h };
+  if (tab.w < 8 || tab.h < 6) return;
+  // Stepped top corners, then solid down to and over the box's top edge.
+  px(d.ctx, d.signal, tab.x + 2, tab.y, tab.w - 4, 1);
+  px(d.ctx, d.signal, tab.x + 1, tab.y + 1, tab.w - 2, 1);
+  px(d.ctx, d.signal, tab.x, tab.y + 2, tab.w, tab.h - 1);
+  // Square off the box's top-left step under the tab, so the join has no notch.
+  px(d.ctx, d.signal, tab.x, tab.y + tab.h, 1, 3);
+
+  const inner = { x: tab.x + 3, y: tab.y + 2, w: tab.w - 6, h: tab.h - 2 };
+  glyph(d.ctx, d.maskLight, { x: inner.x, y: inner.y, w: BUILD_GLYPH[0].length, h: inner.h }, BUILD_GLYPH);
+  microText(
+    d.ctx,
+    d.maskLight,
+    inner.x + BUILD_GLYPH[0].length + 3,
+    inner.y + Math.floor((inner.h - 5) / 2),
+    PROMPT_TO_NODE_LABEL,
+    inner.x + inner.w
+  );
+}
+
+/** The message box itself, shared by both prompt kinds. `edge` is its frame colour. */
+function drawPromptBody(d: DrawContext, layout: PromptLayout, edge: string): void {
+  const at = (r: PromptRect): PromptRect => ({ x: d.x + r.x, y: d.y + r.y, w: r.w, h: r.h });
+  const box = at(layout.box);
+  const text = at(layout.text);
+  const clip = at(layout.clip);
+  const send = at(layout.send);
+
+  roundedBox(d.ctx, d.maskLight, edge, box);
+
+  // The caret, and the placeholder as dim word-shaped dashes on the first line.
+  const lineY = text.y + Math.min(4, Math.max(0, text.h - 1));
+  px(d.ctx, d.signal, text.x, text.y + 1, 1, Math.max(1, Math.min(7, text.h - 1)));
+  let wx = text.x + 3;
+  for (const word of PLACEHOLDER_WORDS) {
+    const len = word * 2;
+    if (wx + len > text.x + text.w) break;
+    px(d.ctx, COPPER_DARK, wx, lineY, len, 1);
+    wx += len + 2;
+  }
+
+  glyph(d.ctx, COPPER, clip, PAPERCLIP);
+  roundedBox(d.ctx, d.signal, d.signal, send);
+  glyph(d.ctx, d.maskLight, send, SEND_ARROW);
 }
 
 /* ────────────────────────── node frames and depth ────────────────────────── */

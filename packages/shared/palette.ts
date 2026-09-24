@@ -43,7 +43,8 @@ export const ROOM_THEMES = {
   minecraftos: { maskDark: '#14261A', maskLight: '#1D3524', signal: '#A8E85C' },
   deductionos: { maskDark: '#201A12', maskLight: '#2E2619', signal: '#FFD866' },
   storyos: { maskDark: '#1B1420', maskLight: '#271C2E', signal: '#A87BD6' },
-  gameos: { maskDark: '#101C26', maskLight: '#182734', signal: '#4FA8D8' }
+  gameos: { maskDark: '#101C26', maskLight: '#182734', signal: '#4FA8D8' },
+  financeos: { maskDark: '#1A1B22', maskLight: '#26272F', signal: '#5CDCD0' }
 } as const satisfies Record<string, { maskDark: Hex; maskLight: Hex; signal: Hex }>;
 
 export type RoomId = keyof typeof ROOM_THEMES;
@@ -117,6 +118,35 @@ export type PaletteToken = (typeof PALETTE_TOKENS)[number];
 
 export function isPaletteToken(value: string): value is PaletteToken {
   return (PALETTE_TOKENS as readonly string[]).includes(value);
+}
+
+/**
+ * The black edge every wire carries. William: "all wires, even drawn ones should have a black
+ * stroke for visual clarity."
+ *
+ * Geometry only, like the courier outlines: it is never baked into a sprite, so it is not in
+ * skynet.gpl, the atlas check never sees it, and the bake's recolouring cannot start snapping dark
+ * art pixels to it. Pure black, because the darkest palette entry is each room's mask-dark, which
+ * IS the substrate. An outline in it would vanish exactly where it is needed.
+ */
+export const INK = '#000000' as const;
+
+/** The colours a wire's run and outline may be given in board JSON: the palette tokens, plus ink. */
+export const WIRE_TOKENS = [...PALETTE_TOKENS, 'ink'] as const;
+export type WireToken = (typeof WIRE_TOKENS)[number];
+
+export function isWireToken(value: string): value is WireToken {
+  return (WIRE_TOKENS as readonly string[]).includes(value);
+}
+
+/** Resolve a wire token. `ink` is black; everything else resolves as an ordinary palette token. */
+export function resolveWireToken(
+  token: string | undefined,
+  theme: { maskDark: string; maskLight: string; signal: string },
+  fallback: string
+): string {
+  if (token === 'ink') return INK;
+  return token ? resolveToken(token, theme, fallback) : fallback;
 }
 
 /** Resolve a token against a room's theme. Anything unrecognised falls back to silk. */

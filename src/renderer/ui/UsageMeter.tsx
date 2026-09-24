@@ -3,6 +3,9 @@ import type { UsageSummary } from '@shared/usage.js';
 import { formatDuration, formatTokens, fraction, readout, weightedTokens } from '@shared/usage.js';
 import { PLAN_SPECS, planFromPeak, type PlanId } from '@shared/plans.js';
 import { PlanDialog } from './PlanDialog.js';
+import { FableCores } from './FableCores.js';
+import { useBoardStore } from '../store/useBoardStore.js';
+import { Icon } from './Icon.js';
 
 /**
  * The usage meter, top-left, always on.
@@ -48,6 +51,25 @@ export function UsageMeter(): React.JSX.Element | null {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
+
+  /*
+   * Minimised to its header: by the user (the arrow in the header, persisted), or by the layout
+   * manager when the full meter would run into the left-hand stack (ui/chrome-layout.ts). An open
+   * drawer is never minimised away, since it was asked for.
+   */
+  const userMinimized = useBoardStore((s) => s.chromePrefs.usageMinimized);
+  const layoutMinimized = useBoardStore((s) => s.layout.usageMinimized);
+  const setChromePref = useBoardStore((s) => s.setChromePref);
+  const minimized = !open && (userMinimized || layoutMinimized);
+  const toggleMinimized = (): void => {
+    if (!minimized) { setChromePref('usageMinimized', true); setOpen(false); return; }
+    if (userMinimized) setChromePref('usageMinimized', false);
+    // Minimised for want of room: opening the drawer is asking for all of it, and the plan yields to that.
+    if (layoutMinimized) setOpen(true);
+  };
+  // Settings and the command palette ask for the plan dialog through the store.
+  const planDialogRequest = useBoardStore((s) => s.planDialogRequest);
+  useEffect(() => { if (planDialogRequest) setAsking(true); }, [planDialogRequest]);
 
   useEffect(() => {
     let live = true;
@@ -99,17 +121,18 @@ export function UsageMeter(): React.JSX.Element | null {
   const busiest = summary.projects.filter((p) => weightedTokens(p.window) > 0).slice(0, 6);
 
   return (
-    <div className={`usage-meter ${budgeted ? level(poolFill) : ''}`}>
+    <div className={`usage-meter ${budgeted ? level(poolFill) : ''}${minimized ? ' minimized' : ''}`}>
       <button
         type="button"
         className="usage-head-row"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (minimized) toggleMinimized(); else setOpen((v) => !v); }}
         title={
           `Measured from ~/.claude/projects over the last ${summary.windowHours}h. ` +
           'Weighted tokens: input + output + cache writes + cache reads at one tenth, because ' +
           'cache reads are priced at a tenth and would otherwise dominate every figure.'
         }
       >
+        <Icon name="usage" />
         <span className="usage-title">USAGE</span>
         <span className="usage-window">{summary.windowHours}H</span>
         {plan ? (
@@ -117,7 +140,7 @@ export function UsageMeter(): React.JSX.Element | null {
             role="button"
             tabIndex={0}
             onClick={(e) => { e.stopPropagation(); setAsking(true); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setAsking(true); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setAsking(true); } }}
             className={summary.budgetSource === 'plan' ? 'usage-plan est' : 'usage-plan'}
             title={
               summary.budgetSource === 'plan'
@@ -128,8 +151,43 @@ export function UsageMeter(): React.JSX.Element | null {
             {plan.label}{summary.budgetSource === 'plan' ? '~' : ''}
           </span>
         ) : null}
-        <span className="usage-toggle">{open ? '−' : '+'}</span>
+        {/*
+          * The calibration flag: shown whenever the pool and time left rest on an estimate or on
+          * nothing, rather than on a budget you set. William: "if it can be calibrated it should show
+          * an indicator (calibrate usage monitor)."
+          */}
+        {summary.budgetSource !== 'setting' ? (
+          <span
+            role="button"
+            tabIndex={0}
+            className="usage-calibrate-flag"
+            onClick={(e) => { e.stopPropagation(); setAsking(true); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setAsking(true); } }}
+            title={
+              summary.calibration?.measuredBudget
+                ? `A real limit hit measured your ceiling at ${formatTokens(summary.calibration.measuredBudget)}. Click to meter against it.`
+                : "The pool and time left are estimates. Click to calibrate against Claude's own usage percentage."
+            }
+          >
+            <Icon name="calibrate" />CALIBRATE
+          </span>
+        ) : null}
+        <span
+          role="button"
+          tabIndex={0}
+          className="usage-min"
+          aria-label={minimized ? 'Show the whole usage meter' : 'Minimise the usage meter to this line'}
+          title={minimized ? 'Show the whole meter' : 'Minimise to this line'}
+          onClick={(e) => { e.stopPropagation(); toggleMinimized(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleMinimized(); } }}
+        >
+          <Icon name={minimized ? 'add' : 'up'} />
+        </span>
+        {minimized ? null : <span className="usage-toggle">{open ? '−' : '+'}</span>}
       </button>
+
+      {/* Which model a new terminal gets, and when Fable comes back if it is out. */}
+      <FableCores />
 
       <div className="meter-row" title="Weighted tokens per hour, measured. The bar is graded against the pace that would spend exactly one window's budget in exactly one window.">
         <div className="meter-line">
@@ -176,6 +234,8 @@ export function UsageMeter(): React.JSX.Element | null {
         <PlanDialog
           peakWindowTokens={summary.peakWindowTokens}
           windowHours={summary.windowHours}
+          usedTokens={usedTokens}
+          calibration={summary.calibration}
           onClose={() => setAsking(false)}
           onSaved={() => refreshRef.current()}
         />

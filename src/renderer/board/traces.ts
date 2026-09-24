@@ -24,7 +24,10 @@
 
 import { Container, Graphics } from 'pixi.js';
 import type { BoardEdge, EdgeKind } from '@shared/types.js';
-import { COPPER, COPPER_DARK, hexToNumber, signalOf } from '@shared/palette.js';
+import { COPPER, COPPER_DARK, INK, SILK, hexToNumber, resolveWireToken, signalOf } from '@shared/palette.js';
+import type { WireHandle } from './wire-geometry.js';
+import { OUTLINE_PX } from './wire-lanes.js';
+import { LEGACY_DEPENDS, dashPattern, dashPieces, type DashPattern } from './wire-geometry.js';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Point { x: number; y: number }
@@ -42,7 +45,7 @@ function centre(r: Rect): Point {
  * Exit point on a rect's boundary, on the face pointing at `toward`. Traces should leave a
  * component from its edge, the way a pin does, not from inside its body.
  */
-function exitPoint(r: Rect, toward: Point, horizontalFirst: boolean): Point {
+export function exitPoint(r: Rect, toward: Point, horizontalFirst: boolean): Point {
   const c = centre(r);
   if (horizontalFirst) {
     return { x: toward.x >= c.x ? snap(r.x + r.w) : snap(r.x), y: c.y };
@@ -153,47 +156,122 @@ export function segmentRects(points: Point[], width: number): Rect[] {
 export interface TraceStyle {
   /** Outer copper run width in px. */
   width: number;
+  /** The run's colour, resolved to hex. Copper unless the edge names another token. */
+  color: string;
+  /** The outline's colour, resolved to hex. Ink (black) unless the edge names another token. */
+  stroke: string;
   /** Draw a 1px inner strand, and in what colour. */
   innerColor?: string;
-  /** Draw the run as alternating on/off tiles rather than solid. */
+  /** The run is drawn in a pattern rather than solid. For callers that only ask "is it dashed". */
   dashed?: boolean;
+  /** The run's pattern, or null for solid. */
+  dash: DashPattern | null;
+  /** The outline's pattern: `follow` outlines each piece of the run, null is a solid sleeve. */
+  outlineDash: DashPattern | null | 'follow';
+  /** The black edge's width on each side, in px. 0 draws no outline. */
+  outlineWidth: number;
 }
 
-export function styleFor(edge: BoardEdge, roomSignal: string): TraceStyle {
+type KindStyle = Omit<TraceStyle, 'dash' | 'outlineDash' | 'outlineWidth'>;
+
+/**
+ * How one edge is drawn.
+ *
+ * `theme` resolves the edge's own `color` and `stroke` tokens, where `signal` and the masks mean
+ * something different in every room. Without it, a `signal` token falls back to `roomSignal` and
+ * the masks to ink.
+ *
+ * The kind sets the width and the strand; the edge's own `dash`, `outlineDash` and `outlineWidth`
+ * go on top. A `depends` wire has always been dashed by kind, and an explicit `dash`, including
+ * `solid`, overrides that.
+ */
+export function styleFor(
+  edge: BoardEdge,
+  roomSignal: string,
+  theme?: { maskDark: string; maskLight: string; signal: string }
+): TraceStyle {
+  const base = kindStyle(edge, roomSignal, theme);
+  const outlineWidth = edge.outlineWidth ?? OUTLINE_PX;
+  const dash = edge.dash ? dashPattern(edge.dash, base.width) : base.dashed ? LEGACY_DEPENDS : null;
+  const outlineDash = edge.outlineDash ? dashPattern(edge.outlineDash, base.width + 2 * outlineWidth) : 'follow';
+  return { ...base, dashed: dash !== null, dash, outlineDash, outlineWidth };
+}
+
+function kindStyle(
+  edge: BoardEdge,
+  roomSignal: string,
+  theme?: { maskDark: string; maskLight: string; signal: string }
+): KindStyle {
   const base = edge.width ?? 2;
   const kind: EdgeKind = edge.kind;
+  const palette = theme ?? { maskDark: INK, maskLight: INK, signal: roomSignal };
+  const paint = {
+    color: resolveWireToken(edge.color, palette, COPPER),
+    stroke: resolveWireToken(edge.stroke, palette, INK)
+  };
 
   switch (kind) {
     case 'supervises':
       // "Drawn as a distinct 1px inner-signal-colored trace inside a wider copper run, so the
       // JARVIS network is visually separable at a glance." docs/03. With a relation, the inner
       // strand takes the destination room's colour instead of this room's.
-      return { width: Math.max(3, base + 1), innerColor: signalOf(edge.relation, roomSignal) };
+      return { ...paint, width: Math.max(3, base + 1), innerColor: signalOf(edge.relation, roomSignal) };
     case 'produces':
-      return { width: base + 1, innerColor: edge.relation ? signalOf(edge.relation, roomSignal) : undefined };
+      return { ...paint, width: base + 1, innerColor: edge.relation ? signalOf(edge.relation, roomSignal) : undefined };
     case 'reads':
-      return { width: Math.max(2, base - 1) };
+      return { ...paint, width: Math.max(2, base - 1) };
     case 'depends':
-      return { width: base, dashed: true };
+      return { ...paint, width: base, dashed: true };
     case 'deploys':
-      return { width: base + 1, innerColor: signalOf(edge.relation, roomSignal) };
+      return { ...paint, width: base + 1, innerColor: signalOf(edge.relation, roomSignal) };
     case 'syncs':
-      return { width: base + 1, innerColor: COPPER_DARK };
+      return { ...paint, width: base + 1, innerColor: COPPER_DARK };
   }
 }
 
-/** Split a rect into 8-on / 8-off tiles along its long axis, for `depends`. */
-function dashRects(rect: Rect): Rect[] {
-  const out: Rect[] = [];
-  const horizontal = rect.w >= rect.h;
-  const length = horizontal ? rect.w : rect.h;
-  for (let offset = 0; offset < length; offset += HALF_GRID * 2) {
-    const run = Math.min(HALF_GRID, length - offset);
-    out.push(horizontal
-      ? { x: rect.x + offset, y: rect.y, w: run, h: rect.h }
-      : { x: rect.x, y: rect.y + offset, w: rect.w, h: run });
+/** The run as rectangles: solid segments, or the pattern's pieces carried continuously round every corner. */
+export function runPieces(points: Point[], style: TraceStyle): Rect[] {
+  return style.dash ? dashPieces(points, style.width, style.dash) : segmentRects(points, style.width);
+}
+
+/**
+ * The outline as rectangles, `outlineWidth` wide on every side. `follow` outlines each piece of the
+ * run (a dashed wire made of separate little outlined dashes), null is one solid sleeve (dashes of
+ * copper inside a continuous black track), and a pattern is the outline's own dashes around the run.
+ */
+export function outlinePieces(points: Point[], style: TraceStyle): Rect[] {
+  const ow = Math.max(0, style.outlineWidth);
+  if (ow === 0) return [];
+  const grow = (p: Rect): Rect => ({ x: p.x - ow, y: p.y - ow, w: p.w + 2 * ow, h: p.h + 2 * ow });
+  if (style.outlineDash === 'follow') return runPieces(points, style).map(grow);
+  if (style.outlineDash === null) return segmentRects(points, style.width).map(grow);
+  return dashPieces(points, style.width + 2 * ow, style.outlineDash);
+}
+
+/** One wire, finished: outline, run, inner strand, and vias at the bends when asked. */
+function drawWire(g: Graphics, points: Point[], style: TraceStyle, vias: boolean): void {
+  const outline = outlinePieces(points, style);
+  for (const p of outline) g.rect(p.x, p.y, p.w, p.h);
+  if (outline.length) g.fill({ color: hexToNumber(style.stroke) });
+
+  const run = runPieces(points, style);
+  for (const p of run) g.rect(p.x, p.y, p.w, p.h);
+  if (run.length) g.fill({ color: hexToNumber(style.color) });
+
+  if (style.innerColor) {
+    for (const rect of segmentRects(points, 1)) g.rect(rect.x, rect.y, rect.w, rect.h);
+    g.fill({ color: hexToNumber(style.innerColor) });
   }
-  return out;
+
+  // Vias: a dark centre at every bend, which is what a real board does when a trace changes
+  // layer. Also hides the corner notch where two segments meet.
+  if (vias && points.length > 2) {
+    for (let i = 1; i < points.length - 1; i++) {
+      const p = points[i]!;
+      g.rect(p.x - 1, p.y - 1, 2, 2);
+    }
+    g.fill({ color: hexToNumber(COPPER_DARK) });
+  }
 }
 
 export interface RoutedEdge {
@@ -219,61 +297,89 @@ export function attachEndpoints(points: Point[], from: Rect, to: Rect): Point[] 
 }
 
 /**
+ * The selected wire, redrawn on the overlay with a halo in `halo`: every stretch of it wrapped in
+ * a band `haloPx` wide, then the wire's own outline, run and strand over the top. Nothing is
+ * translucent, so a selected wire reads as the same wire, lit.
+ */
+export function buildWireHighlight(points: Point[], style: TraceStyle, halo: string, haloPx: number): Graphics {
+  const g = new Graphics();
+  const runs = segmentRects(points, style.width);
+  if (!runs.length) return g;
+  // The halo is one continuous band even under a dashed or dotted wire, so a selected wire reads as
+  // ONE wire, lit, rather than a row of lit dashes.
+  const pad = Math.max(OUTLINE_PX, style.outlineWidth) + haloPx;
+  for (const p of runs) g.rect(p.x - pad, p.y - pad, p.w + 2 * pad, p.h + 2 * pad);
+  g.fill({ color: hexToNumber(halo) });
+  drawWire(g, points, style, false);
+  g.roundPixels = true;
+  return g;
+}
+
+/**
+ * A selected wire's handles, in Edit Board mode: a filled square on each end and elbow, a smaller
+ * one in the middle of each segment long enough to bend, and a ring round the one Tab has focused.
+ * Every handle carries a black edge, like every wire. Whole pixels, like the node resize handle.
+ */
+export function buildWireHandles(handles: readonly WireHandle[], focused: number, signal: string): Graphics {
+  const g = new Graphics();
+  const grips = handles.filter((h) => h.kind !== 'segment');
+  const bends = handles.filter((h) => h.kind === 'segment');
+  if (grips.length) {
+    for (const h of grips) g.rect(h.x - 4, h.y - 4, 8, 8);
+    g.fill({ color: hexToNumber(INK) });
+    for (const h of grips) g.rect(h.x - 3, h.y - 3, 6, 6);
+    g.fill({ color: hexToNumber(signal) });
+    for (const h of grips) { g.rect(h.x - 3, h.y - 3, 6, 1); g.rect(h.x - 3, h.y - 3, 1, 6); }
+    g.fill({ color: hexToNumber(SILK) });
+  }
+  if (bends.length) {
+    for (const h of bends) g.rect(h.x - 3, h.y - 3, 6, 6);
+    g.fill({ color: hexToNumber(INK) });
+    for (const h of bends) g.rect(h.x - 2, h.y - 2, 4, 4);
+    g.fill({ color: hexToNumber(SILK) });
+  }
+  const f = handles[focused];
+  if (f) {
+    const x = f.x - 7;
+    const y = f.y - 7;
+    g.rect(x, y, 14, 1);
+    g.rect(x, y + 13, 14, 1);
+    g.rect(x, y, 1, 14);
+    g.rect(x + 13, y, 1, 14);
+    g.fill({ color: hexToNumber(SILK) });
+  }
+  g.roundPixels = true;
+  return g;
+}
+
+/**
  * Build the static copper layer. One Graphics for the whole room: traces only change when the
  * graph changes, so this is rebuilt on edit, not per frame.
+ *
+ * ── One wire at a time ───────────────────────────────────────────────────────────────────────
+ *
+ * Each wire is finished before the next begins: its black outline, then its run, then its inner
+ * strand and its vias. The layers used to be drawn board-wide (all copper, then all strands), so
+ * where two wires crossed they fused into one copper blob and you could not see which went where.
+ * Drawn one at a time, a later wire passes OVER an earlier one with its black edge cutting across
+ * it, which is how two wires on separate layers of a real board read. William: "all wires, even
+ * drawn ones should have a black stroke for visual clarity."
+ *
+ * The outline is one whole pixel wide on every side, drawn as filled rects like everything else
+ * here, never a stroke.
  */
 export function buildTraceLayer(routed: RoutedEdge[]): Container {
   const layer = new Container();
-  const copper = new Graphics();
-  const inner = new Graphics();
+  const g = new Graphics();
 
   for (const { points, style } of routed) {
-    for (const rect of segmentRects(points, style.width)) {
-      const pieces = style.dashed ? dashRects(rect) : [rect];
-      for (const p of pieces) copper.rect(p.x, p.y, p.w, p.h);
-    }
-  }
-  copper.fill({ color: hexToNumber(COPPER) });
-
-  // Vias: a copper ring with a dark centre at every bend, which is what a real board does when
-  // a trace changes layer. Also hides the corner notch where two segments meet.
-  const viaDark = new Graphics();
-  for (const { points, style } of routed) {
-    for (let i = 1; i < points.length - 1; i++) {
-      const p = points[i]!;
-      viaDark.rect(p.x - 1, p.y - 1, 2, 2);
-    }
-    if (style.innerColor) {
-      for (const rect of segmentRects(points, 1)) inner.rect(rect.x, rect.y, rect.w, rect.h);
-    }
-  }
-  viaDark.fill({ color: hexToNumber(COPPER_DARK) });
-
-  layer.addChild(copper, viaDark);
-
-  // Inner strands are drawn per-colour so a room can carry several relation colours at once.
-  const byColor = new Map<string, RoutedEdge[]>();
-  for (const r of routed) {
-    if (!r.style.innerColor) continue;
-    const list = byColor.get(r.style.innerColor) ?? [];
-    list.push(r);
-    byColor.set(r.style.innerColor, list);
-  }
-  for (const [color, edges] of byColor) {
-    const g = new Graphics();
-    for (const { points } of edges) {
-      for (const rect of segmentRects(points, 1)) g.rect(rect.x, rect.y, rect.w, rect.h);
-    }
-    g.fill({ color: hexToNumber(color) });
-    layer.addChild(g);
+    if (points.length < 2) continue;
+    drawWire(g, points, style, true);
   }
 
-  inner.destroy();
-  // roundPixels is a ViewContainer property, so it is set on each Graphics rather than on the
-  // group. It is belt-and-braces anyway: every coordinate here is already a whole number, and
-  // the camera rounds the stage position every frame.
-  for (const child of layer.children) {
-    if ('roundPixels' in child) (child as { roundPixels: boolean }).roundPixels = true;
-  }
+  // Belt-and-braces: every coordinate here is already a whole number, and the camera rounds the
+  // stage position every frame.
+  g.roundPixels = true;
+  layer.addChild(g);
   return layer;
 }

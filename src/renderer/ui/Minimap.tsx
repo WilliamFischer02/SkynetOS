@@ -3,6 +3,7 @@ import type { Board } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+import { Icon } from './Icon.js';
 
 /**
  * The minimap: the whole room at a glance, with the viewport box, and click to jump. docs/03 §5.
@@ -49,6 +50,14 @@ export function Minimap({ board, targets, cameraRef, onJump }: MinimapProps): Re
   const minimapOpen = useBoardStore((s) => s.minimapOpen);
   const setMinimapScale = useBoardStore((s) => s.setMinimapScale);
   const toggleMinimap = useBoardStore((s) => s.toggleMinimap);
+  /*
+   * Collapsed to its button by the layout manager when the window has no room for it: it would sit
+   * on the left-hand stack or the usage meter, or the LOOK panel needs the height (chrome-layout.ts).
+   * Opening it from there is a deliberate choice and is kept, through `minimapForced`, until closed.
+   */
+  const squeezed = useBoardStore((s) => s.layout.minimapSqueezed);
+  const setMinimapForced = useBoardStore((s) => s.setMinimapForced);
+  const shown = minimapOpen && !squeezed;
 
   /*
    * The stored preference is a NUDGE, not the scale. It is remembered across rooms, and rooms are
@@ -117,7 +126,9 @@ export function Minimap({ board, targets, cameraRef, onJump }: MinimapProps): Re
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [board, targets, cameraRef, width, height]);
+    // `shown`: the canvas only exists while the panel is open, so the loop has to re-attach to the
+    // new one each time it comes back. Without it a re-opened minimap stayed blank.
+  }, [board, targets, cameraRef, width, height, shown]);
 
   const jump = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -150,11 +161,21 @@ export function Minimap({ board, targets, cameraRef, onJump }: MinimapProps): Re
     window.addEventListener('pointerup', up);
   };
 
-  if (!minimapOpen) {
+  if (!shown) {
+    const show = (): void => {
+      if (!minimapOpen) toggleMinimap();
+      setMinimapForced(true);
+    };
     return (
-      <div className="minimap collapsed">
-        <button type="button" className="minimap-toggle" onClick={toggleMinimap} title="Show the minimap (M)">
-          ▣
+      <div className={squeezed ? 'minimap collapsed squeezed' : 'minimap collapsed'}>
+        <button
+          type="button"
+          className="minimap-toggle"
+          onClick={show}
+          title={squeezed ? 'The minimap moved aside to make room. Click to show it anyway.' : 'Show the minimap'}
+          aria-label="Show the minimap"
+        >
+          <Icon name="map" />
         </button>
       </div>
     );
@@ -170,11 +191,17 @@ export function Minimap({ board, targets, cameraRef, onJump }: MinimapProps): Re
           title="Drag to resize"
           aria-label="Resize the minimap"
         >
-          ⤡
+          <Icon name="resize" />
         </button>
         <span className="minimap-scale">{SCALE}×</span>
-        <button type="button" className="minimap-toggle" onClick={toggleMinimap} title="Hide the minimap">
-          ✕
+        <button
+          type="button"
+          className="minimap-toggle"
+          onClick={() => { toggleMinimap(); setMinimapForced(false); }}
+          title="Hide the minimap"
+          aria-label="Hide the minimap"
+        >
+          <Icon name="close" />
         </button>
       </div>
       <canvas

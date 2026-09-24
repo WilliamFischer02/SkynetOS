@@ -26,6 +26,6 @@
       "@shared/*": ["packages/shared/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "test/**/*.ts", "tools/**/*.ts", "*.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "test/**/*.ts", "tools/**/*.ts", "prime/tools/**/*.ts", "*.config.ts"],
   "exclude": ["node_modules", "out", "dist", "release"]
 }

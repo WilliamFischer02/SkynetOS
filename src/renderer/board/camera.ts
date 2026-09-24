@@ -31,7 +31,17 @@
  * the same texels in every frame, wherever the camera is, so panning at 1/2 does not shimmer.
  * test/camera.test.ts proves the phase is fixed rather than asserting it here.
  */
-export const ZOOM_LEVELS = [0.25, 0.5, 1, 2, 3, 4] as const;
+/*
+ * Every whole number from 1 to 8, plus three binary-fraction overview levels.
+ *
+ * William: "add more finite zoom levels to the program when navigating the board." More levels,
+ * but only exact ones. A whole-number zoom maps each world pixel onto an N×N block of screen
+ * pixels. A power-of-two fraction samples every 2nd, 4th or 8th pixel with nearest filtering. Any
+ * other factor (1.5x, 2.5x, 3/4) would resample the art unevenly, which docs/02 treats as a bug
+ * as serious as a crash. 5x to 8x are for reading a node's pixels up close; 1/8 fits even a tripled
+ * room on one screen.
+ */
+export const ZOOM_LEVELS = [0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8] as const;
 export type Zoom = (typeof ZOOM_LEVELS)[number];
 
 export const TILE = 16;
@@ -114,15 +124,23 @@ export const PAN_MARGIN = 8 * TILE;
  * The tripled boards made this urgent rather than merely wrong: on a 192x120 board a flat eight
  * tiles of slack is 4% of the width.
  */
-function panMargin(visible: number): number {
-  return Math.max(PAN_MARGIN, visible / 2);
+function panMargin(visible: number, zoom: number): number {
+  /*
+   * The eight-tile floor applies at the working zooms (1x to 4x) only. It exists for a window too
+   * small for half of it to be eight tiles. At 5x to 8x an ordinary window shows so few world
+   * pixels (125 at 8x on a 1000 px window) that the floor exceeded the whole view, and the board
+   * could be pushed entirely off screen. Found by the clamp tests when the close-up levels were
+   * added. Above 4x the slack is exactly half the view, which still brings every corner to the
+   * centre and still keeps half the screen board.
+   */
+  return zoom > 4 ? visible / 2 : Math.max(PAN_MARGIN, visible / 2);
 }
 
 export function clampCamera(cam: Camera, board: { width: number; height: number }, view: Viewport): Camera {
   const visibleW = view.width / cam.zoom;
   const visibleH = view.height / cam.zoom;
-  const marginX = panMargin(visibleW);
-  const marginY = panMargin(visibleH);
+  const marginX = panMargin(visibleW, cam.zoom);
+  const marginY = panMargin(visibleH, cam.zoom);
 
   /*
    * The test is "does the board fit on screen", not "does the board plus both margins fit". With a

@@ -74,8 +74,14 @@ function rampIndex(ramp: [number, number, number][], r: number, g: number, b: nu
  */
 export function buildGlowFrames(
   source: HTMLImageElement,
-  theme: BoardTheme
+  theme: BoardTheme,
+  /**
+   * The colour at the crest, as hex, when the node names one (`pulseColor`). The shoulders still
+   * lift one rung along the ramp, so the wave keeps its shape and only its peak changes colour.
+   */
+  crest?: string
 ): HTMLCanvasElement[] {
+  const crestRgb = crest ? hexToRgb(crest) : null;
   const width = source.width;
   const height = source.height;
   if (!width || !height) return [];
@@ -147,7 +153,7 @@ export function buildGlowFrames(
       const distance = Math.abs(radius[i]! - front) / BAND;
       const lift = distance < 0.45 ? 2 : distance < 1 ? 1 : 0;
 
-      const c = ramp[Math.min(top, baseIndex[i]! + lift)]!;
+      const c = lift === 2 && crestRgb ? crestRgb : ramp[Math.min(top, baseIndex[i]! + lift)]!;
       out.data[p] = c[0];
       out.data[p + 1] = c[1];
       out.data[p + 2] = c[2];
@@ -160,7 +166,7 @@ export function buildGlowFrames(
      * every frame of a cycle would hash identically, the cache would return frame 0 forever, and
      * the pulse would be a still image that cost sixteen canvases to produce.
      */
-    canvas.dataset['glowKey'] = `${width}x${height}:${frame}`;
+    canvas.dataset['glowKey'] = `${width}x${height}:${crest ?? 'ramp'}:${frame}`;
     frames.push(canvas);
   }
 

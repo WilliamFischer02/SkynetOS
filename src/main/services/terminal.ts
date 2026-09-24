@@ -1,10 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { isProcessAlive } from './db.js';
 import { hasExecutable } from './which.js';
-import { buildLaunchScript, elevatedArgv, popoutArgv, safeKey, type LaunchScriptSpec, type ShellKind } from './launch-script.js';
+import { buildLaunchScript, elevatedArgv, popoutArgv, safeKey, UAC_DECLINED_EXIT, type LaunchScriptSpec, type ShellKind } from './launch-script.js';
 
 /**
  * Opening a real console window on Windows, and knowing whether one actually opened.
@@ -111,11 +111,17 @@ export function readLivePid(pidFile: string): number | null {
   }
 }
 
-async function waitForPid(pidFile: string, timeoutMs: number): Promise<number | null> {
+/**
+ * Wait for the script to report in. `abort` ends the wait the moment the launcher has already
+ * failed: a spawn error or a non-zero exit. Without it, a launch that died in its first
+ * millisecond was still waited on for 12 s, or 90 s elevated, before anyone was told.
+ */
+async function waitForPid(pidFile: string, timeoutMs: number, abort: () => string | null = () => null): Promise<number | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const pid = readLivePid(pidFile);
     if (pid !== null) return pid;
+    if (abort() !== null) return null;
     await new Promise((r) => setTimeout(r, 150));
   }
   return null;
@@ -144,12 +150,32 @@ export async function openTerminal(request: TerminalRequest): Promise<TerminalRe
 
   const shell = resolveShell();
   const useWt = !request.elevated && hasWindowsTerminal();
+  const fail = (error: string): TerminalResult => {
+    console.error(`[terminal] ${error}`);
+    return { ok: false, pid: null, scriptFile, pidFile, shell, usedWindowsTerminal: useWt, error };
+  };
+
+  /*
+   * The working directory is checked before anything is spawned. A folder that does not exist
+   * makes spawn fail with ENOENT before any window can appear. That is exactly what an unexpanded
+   * `%USERPROFILE%/…` cwd did to every terminal on a portable node, and it is now said at once,
+   * with the path.
+   */
+  try {
+    if (!statSync(cwd).isDirectory()) return fail(`NOT A FOLDER — ${cwd}`);
+  } catch {
+    return fail(`WORKING DIRECTORY DOES NOT EXIST — ${cwd}`);
+  }
+
   const { file, args } = request.elevated
     ? elevatedArgv(shell, cwd, scriptFile)
     : popoutArgv(shell, cwd, scriptFile, useWt);
 
   let child: ChildProcess;
-  let spawnError: string | null = null;
+  let spawnError = null as string | null;
+  /** Set when the launcher itself exits non-zero: for the elevated helper, a refused or failed elevation. */
+  let launcherFailure = null as string | null;
+  let launcherStderr = '';
   try {
     /*
      * `detached` depends on WHAT is being launched, and getting it wrong is silent.
@@ -169,8 +195,21 @@ export async function openTerminal(request: TerminalRequest): Promise<TerminalRe
     child = spawn(file, args, {
       cwd,
       detached: guiLauncher,
-      stdio: 'ignore',
+      // The elevated helper's stderr is the only place a refused or failed elevation is written.
+      // wt stays fully ignored: a detached GUI launcher holding a pipe open would outlive nothing useful.
+      stdio: request.elevated ? ['ignore', 'ignore', 'pipe'] : 'ignore',
       windowsHide: request.elevated
+    });
+    child.stderr?.on('data', (chunk: Buffer) => { launcherStderr += chunk.toString(); });
+    child.on('exit', (code) => {
+      const said = launcherStderr.trim();
+      if (code === null || code === 0) {
+        if (said) console.log(`[terminal] launcher: ${said}`);
+        return;
+      }
+      launcherFailure = code === UAC_DECLINED_EXIT
+        ? 'UAC WAS DECLINED — NO ADMIN WINDOW WAS OPENED'
+        : `${file} FAILED (exit ${code})${said ? ` — ${said.split(/\r?\n/).filter(Boolean).pop() ?? ''}` : ''}`;
     });
     /*
      * A spawn failure arrives as an `error` EVENT, not an exception — an unhandled one takes the
@@ -184,28 +223,17 @@ export async function openTerminal(request: TerminalRequest): Promise<TerminalRe
     console.log(`[terminal] ${file} ${args.map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`);
     if (guiLauncher) child.unref();
   } catch (err) {
-    return {
-      ok: false,
-      pid: null,
-      scriptFile,
-      pidFile,
-      shell,
-      usedWindowsTerminal: useWt,
-      error: `COULD NOT RUN ${file} — ${(err as Error).message}`
-    };
+    return fail(`COULD NOT RUN ${file} — ${(err as Error).message}`);
   }
 
   const confirmMs = request.confirmMs ?? (request.elevated ? 90_000 : 12_000);
-  const pid = await waitForPid(pidFile, confirmMs);
+  const failedAlready = (): string | null => (spawnError ? `${file} DID NOT START — ${spawnError}` : launcherFailure);
+  const pid = await waitForPid(pidFile, confirmMs, failedAlready);
 
   if (pid === null) {
-    const why = spawnError
-      ? `${file} DID NOT START — ${spawnError as string}`
-      : request.elevated
-        ? `NO ELEVATED SHELL APPEARED — the UAC prompt was declined or timed out. The script is at ${scriptFile}`
-        : `THE TERMINAL NEVER REPORTED IN — run this by hand to see why: ${scriptFile}`;
-    console.error(`[terminal] ${why}`);
-    return { ok: false, pid: null, scriptFile, pidFile, shell, usedWindowsTerminal: useWt, error: why };
+    return fail(failedAlready() ?? (request.elevated
+      ? `NO ELEVATED SHELL APPEARED — the UAC prompt was not answered in ${confirmMs / 1000} s. The script is at ${scriptFile}`
+      : `THE TERMINAL NEVER REPORTED IN — run this by hand to see why: ${scriptFile}`));
   }
 
   return { ok: true, pid, scriptFile, pidFile, shell, usedWindowsTerminal: useWt };

@@ -18,15 +18,34 @@
   "agentEditPolicy": "require-approval",
   "nodes": [
     {
+      "id": "bg_room_art",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 37,
+        "y": 49
+      },
+      "footprint": {
+        "w": 47,
+        "h": 36
+      },
+      "image": "%SKYNET%/assets/sprites/writing-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "The room's own art, as on its drive on the root board. Restyle of 2026-09-11; delete or repoint freely."
+    },
+    {
       "id": "n0",
       "kind": "note.silk",
       "name": "header",
       "pos": {
-        "x": 50,
-        "y": 33
+        "x": 34,
+        "y": 19
       },
       "text": "STORYOS  //  MANUSCRIPTS · SCRIPTS · DEVELOPMENT",
-      "size": 11
+      "size": 22
     },
     {
       "id": "u1_witw",
@@ -34,17 +53,20 @@
       "kind": "agent.chat",
       "name": "SITW EDITOR",
       "pos": {
-        "x": 53,
-        "y": 37
+        "x": 34,
+        "y": 29
       },
       "footprint": {
-        "w": 4,
-        "h": 4
+        "w": 6,
+        "h": 6
       },
       "url": "https://claude.ai/project/REPLACE_WITH_SITW_PROJECT_ID",
       "partition": "persist:sitw",
       "codexRef": "codex/projects/something-in-the-woods.md",
-      "notes": "Copy editing + developmental feedback. First-person present-tense horror-thriller, Leavenworth WA."
+      "notes": "Copy editing + developmental feedback. First-person present-tense horror-thriller, Leavenworth WA.",
+      "frame": "bga",
+      "priority": 3,
+      "showDesignator": false
     },
     {
       "id": "f1_witw_doc",
@@ -52,14 +74,18 @@
       "kind": "file.document",
       "name": "Something In The Woods.docx",
       "pos": {
-        "x": 58,
-        "y": 39
+        "x": 47,
+        "y": 34
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods.docx"
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods.docx",
+      "priority": 2,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "showDesignator": false
     },
     {
       "id": "s1_witw_folder",
@@ -67,15 +93,18 @@
       "kind": "store.folder",
       "name": "SITW working files",
       "pos": {
-        "x": 67,
-        "y": 41
+        "x": 71,
+        "y": 39
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "path": "C:/Users/REPLACE_ME/Documents/Novels/SomethingInTheWoods",
-      "openWith": "explorer"
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "u2_plush",
@@ -83,17 +112,24 @@
       "kind": "agent.chat",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 56,
-        "y": 48
+        "x": 42,
+        "y": 57
       },
       "footprint": {
-        "w": 4,
-        "h": 4
+        "w": 7,
+        "h": 7
       },
       "url": "https://claude.ai/project/REPLACE_WITH_PLUSH_PROJECT_ID",
       "partition": "persist:plush",
       "codexRef": "codex/projects/dirty-plush.md",
-      "notes": "8-chapter literary mystery + 8-episode limited series. Ray Vega, 1994 North County San Diego cold case."
+      "notes": "8-chapter literary mystery + 8-episode limited series. Ray Vega, 1994 North County San Diego cold case.",
+      "frame": "quad",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "chase": true,
+      "chaseColor": "signal",
+      "chaseSpeed": 75
     },
     {
       "id": "f2_plush_doc",
@@ -101,14 +137,18 @@
       "kind": "file.document",
       "name": "Dirty Plush — manuscript",
       "pos": {
-        "x": 62,
-        "y": 47
+        "x": 58,
+        "y": 55
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush.docx"
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush.docx",
+      "priority": 4,
+      "textPlate": true,
+      "plateBorder": "ok",
+      "showDesignator": false
     },
     {
       "id": "s2_plush_cloud",
@@ -116,15 +156,18 @@
       "kind": "store.cloud",
       "name": "Dirty Plush (shared)",
       "pos": {
-        "x": 68,
-        "y": 50
+        "x": 73,
+        "y": 62
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "url": "https://drive.google.com/drive/folders/REPLACE_ME",
-      "notes": "Shared with co-writer."
+      "notes": "Shared with co-writer.",
+      "frame": "rails",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "e1_word",
@@ -132,15 +175,19 @@
       "kind": "file.exe",
       "name": "Word",
       "pos": {
-        "x": 83,
-        "y": 44
+        "x": 112,
+        "y": 47
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
       "path": "C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE",
-      "confirmBeforeLaunch": false
+      "confirmBeforeLaunch": false,
+      "frame": "castellated",
+      "priority": 1,
+      "plateBorder": "copper",
+      "showDesignator": false
     },
     {
       "id": "f3_bible",
@@ -148,14 +195,18 @@
       "kind": "file.document",
       "name": "Series bible",
       "pos": {
-        "x": 61,
-        "y": 54
+        "x": 55,
+        "y": 73
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md"
+      "path": "C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md",
+      "priority": 2,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "showDesignator": false
     },
     {
       "id": "t1_wordcount",
@@ -163,11 +214,11 @@
       "kind": "task.scheduled",
       "name": "Weekly wordcount",
       "pos": {
-        "x": 82,
-        "y": 51
+        "x": 110,
+        "y": 65
       },
       "footprint": {
-        "w": 2,
+        "w": 4,
         "h": 1
       },
       "schedule": "0 20 * * 0",
@@ -175,7 +226,194 @@
       "action": {
         "type": "jarvis.headless",
         "prompt": "Report this week's word delta for each manuscript node in StoryOS and append it to codex/journal/."
-      }
+      },
+      "showDesignator": false
+    },
+    {
+      "id": "z_sitw",
+      "kind": "group.zone",
+      "name": "SOMETHING IN THE WOODS",
+      "pos": {
+        "x": 32,
+        "y": 26
+      },
+      "footprint": {
+        "w": 47,
+        "h": 19
+      },
+      "members": [
+        "u1_witw",
+        "f1_witw_doc",
+        "s1_witw_folder"
+      ]
+    },
+    {
+      "id": "z_plush",
+      "kind": "group.zone",
+      "name": "DIRTY PLUSH",
+      "pos": {
+        "x": 40,
+        "y": 52
+      },
+      "footprint": {
+        "w": 41,
+        "h": 30
+      },
+      "members": [
+        "u2_plush",
+        "f2_plush_doc",
+        "s2_plush_cloud",
+        "f3_bible"
+      ]
+    },
+    {
+      "id": "z_tools",
+      "kind": "group.zone",
+      "name": "TOOLS",
+      "pos": {
+        "x": 108,
+        "y": 44
+      },
+      "footprint": {
+        "w": 10,
+        "h": 24
+      },
+      "members": [
+        "e1_word",
+        "t1_wordcount"
+      ]
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 32,
+        "y": 26
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 78,
+        "y": 44
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 40,
+        "y": 52
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 80,
+        "y": 81
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 108,
+        "y": 44
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 117,
+        "y": 67
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 40,
+        "y": 29
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 49,
+        "y": 57
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 112,
+        "y": 51
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 29,
+        "y": 23
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 120,
+        "y": 84
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
     }
   ],
   "edges": [
@@ -184,7 +422,8 @@
       "from": "u1_witw",
       "to": "f1_witw_doc",
       "kind": "reads",
-      "width": 3
+      "width": 3,
+      "color": "copper-dark"
     },
     {
       "id": "s2",
@@ -198,14 +437,16 @@
       "from": "u2_plush",
       "to": "f2_plush_doc",
       "kind": "reads",
-      "width": 3
+      "width": 3,
+      "color": "copper-dark"
     },
     {
       "id": "s4",
       "from": "f2_plush_doc",
       "to": "s2_plush_cloud",
       "kind": "syncs",
-      "width": 2
+      "width": 2,
+      "color": "signal"
     },
     {
       "id": "s5",
@@ -219,14 +460,102 @@
       "from": "f1_witw_doc",
       "to": "e1_word",
       "kind": "reads",
-      "width": 2
+      "width": 2,
+      "color": "copper-dark"
     },
     {
       "id": "s7",
       "from": "f2_plush_doc",
       "to": "e1_word",
       "kind": "reads",
-      "width": 2
+      "width": 2,
+      "color": "copper-dark"
+    }
+  ],
+  "phantoms": [
+    {
+      "id": "ph_panic_rough_draft",
+      "kind": "file.document",
+      "name": "PANIC — rough draft",
+      "description": "The real Something In The Woods (PANIC) manuscript. The room's SITW doc still points at a REPLACE_ME template path.",
+      "pos": {
+        "x": 58,
+        "y": 31
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%USERPROFILE%/OneDrive/Documents/01 DOCUMENTATION/PANIC_NovelRoughDraft.docx"
+      },
+      "connect": [
+        {
+          "to": "u1_witw",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_panic_claude_project",
+      "kind": "store.folder",
+      "name": "PANIC Claude project",
+      "description": "The PANIC project's local folder, holding its Claude instructions PDF. A real replacement for the template SITW WORKING FILES path.",
+      "pos": {
+        "x": 84,
+        "y": 26
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%USERPROFILE%/OneDrive/Documents/Claude/Projects/Something In The Woods (PANIC) Novel"
+      },
+      "connect": [
+        {
+          "to": "u1_witw",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_dirty_plush_novel",
+      "kind": "file.document",
+      "name": "Dirty Plush — novel",
+      "description": "The real Dirty Plush manuscript (063026). The room's manuscript node points at a REPLACE_ME template path.",
+      "pos": {
+        "x": 63,
+        "y": 65
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%USERPROFILE%/OneDrive/Documents/01 DOCUMENTATION/Dirty Plush - Novel 063026.docx"
+      },
+      "connect": [
+        {
+          "to": "u2_plush",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_dirty_plush_vault",
+      "kind": "store.folder",
+      "name": "Dirty Plush vault",
+      "description": "The Writer's Panel vault in C:/dev/DirtyPlush: characters, the 1994/2024 timeline, map pins and beats, as plain files the panel and Obsidian both read.",
+      "pos": {
+        "x": 40,
+        "y": 78
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "C:/dev/DirtyPlush/vault-sample"
+      },
+      "connect": [
+        {
+          "to": "u2_plush",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

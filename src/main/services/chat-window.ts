@@ -21,11 +21,42 @@ import type { BoardNode } from '@shared/types.js';
  */
 
 const windows = new Map<string, BrowserWindow>();
+/** The node each open window belongs to, so a face can be attached after the fact. */
+const nodes = new Map<string, BoardNode>();
+const openedListeners = new Set<(node: BoardNode, win: BrowserWindow) => void>();
+
+/** Called for every conversation window as it opens. The JARVIS face window hangs off this. */
+export function onChatWindowOpened(listener: (node: BoardNode, win: BrowserWindow) => void): () => void {
+  openedListeners.add(listener);
+  return () => openedListeners.delete(listener);
+}
+
+/** Every open conversation window, with its node. */
+export function openChatWindows(): { node: BoardNode; win: BrowserWindow }[] {
+  const out: { node: BoardNode; win: BrowserWindow }[] = [];
+  for (const [id, win] of windows) {
+    const node = nodes.get(id);
+    if (node && !win.isDestroyed()) out.push({ node, win });
+  }
+  return out;
+}
 
 /** Whether a conversation window is currently open for this node. */
 export function chatWindowOpen(nodeId: string): boolean {
   const win = windows.get(nodeId);
   return Boolean(win && !win.isDestroyed());
+}
+
+/**
+ * The conversation window for a node, if one is open.
+ *
+ * For services/prompt-send.ts, which types a prompt node's message into it from MAIN. The page is
+ * handed fixed scripts and gives back small JSON answers; it still gets no preload, no bridge and
+ * no handle on anything in SkynetOS.
+ */
+export function chatWindowFor(nodeId: string): BrowserWindow | null {
+  const win = windows.get(nodeId);
+  return win && !win.isDestroyed() ? win : null;
 }
 
 /** Close a node's conversation window, if it has one. */
@@ -111,11 +142,85 @@ export function openChatWindow(node: BoardNode, url: string): { ok: boolean; foc
     if (!/^https?:$/.test(safeProtocol(target))) event.preventDefault();
   });
 
-  win.on('closed', () => windows.delete(node.id));
+  win.on('closed', () => { windows.delete(node.id); nodes.delete(node.id); });
   windows.set(node.id, win);
+  nodes.set(node.id, node);
+  watchLoading(node, win, title);
+
+  /*
+   * Listeners (the JARVIS face) attach AFTER the page's first full load, or 3 s in if it never
+   * finishes, so nothing of SkynetOS's touches claude.ai while it boots. Changed 2026-09-11: the
+   * Face window hung on claude.ai's spinner while its face rendered, and the face was the one new
+   * thing reaching into the page mid-load. The fallback keeps the face appearing even if the page
+   * itself is what hangs.
+   */
+  let notified = false;
+  const notify = (): void => {
+    if (notified || win.isDestroyed()) return;
+    notified = true;
+    for (const listener of openedListeners) {
+      try { listener(node, win); } catch (err) { console.warn('[chat] window-opened listener failed:', err); }
+    }
+  };
+  win.webContents.once('did-finish-load', notify);
+  setTimeout(notify, 3000);
 
   void win.loadURL(url);
   return { ok: true, focused: false };
+}
+
+/**
+ * Make a conversation window diagnosable and recoverable without SkynetOS's help.
+ *
+ * - Ctrl+R reloads; Ctrl+Shift+R clears THIS window's HTTP cache (the login cookies stay) and
+ *   reloads; F12 opens DevTools in its own window. The window has no browser chrome, so without
+ *   these a stuck page could only be fixed by closing it.
+ * - Failed loads, a crashed or hung renderer and page errors are logged as `[chat]`.
+ * - A watchdog: 45 s after a load starts, if the page still has no message box, the window title
+ *   says so and names the key that fixes it. Read-only check, like the face's streaming probe.
+ */
+function watchLoading(node: BoardNode, win: BrowserWindow, title: string): void {
+  const wc = win.webContents;
+  let errors = 0;
+  wc.on('did-fail-load', (_event, code, desc, failedUrl, isMainFrame) => {
+    if (isMainFrame) console.warn(`[chat] ${node.id}: failed to load ${failedUrl} (${code} ${desc})`);
+  });
+  wc.on('render-process-gone', (_event, details) => console.warn(`[chat] ${node.id}: page process gone (${details.reason})`));
+  win.on('unresponsive', () => console.warn(`[chat] ${node.id}: window unresponsive`));
+  wc.on('console-message', (event) => {
+    const e = event as unknown as { level?: string | number; message?: string };
+    if ((e.level === 'error' || e.level === 3) && errors++ < 20) console.warn(`[chat] ${node.id} page error: ${String(e.message ?? '').slice(0, 240)}`);
+  });
+
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    if (input.control && input.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      if (input.shift) void wc.session.clearCache().then(() => wc.reloadIgnoringCache());
+      else wc.reload();
+    } else if (input.key === 'F12') {
+      event.preventDefault();
+      wc.openDevTools({ mode: 'detach' });
+    }
+  });
+
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+  wc.on('did-start-loading', () => {
+    if (watchdog) clearTimeout(watchdog);
+    if (!win.isDestroyed()) win.setTitle(title);
+    watchdog = setTimeout(() => {
+      if (win.isDestroyed()) return;
+      void wc.executeJavaScript(
+        `Boolean(document.querySelector('[contenteditable="true"], textarea') || /\\/login/.test(location.pathname))`,
+        false
+      ).then((ready: unknown) => {
+        if (ready === true || win.isDestroyed()) return;
+        console.warn(`[chat] ${node.id}: no message box after 45 s (still loading: ${wc.isLoading()})`);
+        win.setTitle(`${title} — STILL LOADING · Ctrl+Shift+R reloads without cache · F12 shows why`);
+      }).catch(() => undefined);
+    }, 45_000);
+  });
+  win.on('closed', () => { if (watchdog) clearTimeout(watchdog); });
 }
 
 function safeProtocol(url: string): string {

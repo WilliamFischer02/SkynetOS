@@ -1,0 +1,460 @@
+{
+  "schemaVersion": 1,
+  "id": "financeos",
+  "name": "FinanceOS",
+  "engraving": "FINANCEOS",
+  "parent": "root",
+  "theme": {
+    "maskDark": "#1A1B22",
+    "maskLight": "#26272F",
+    "signal": "#5CDCD0",
+    "substrateSeed": 20260923
+  },
+  "grid": {
+    "tile": 16,
+    "width": 144,
+    "height": 96
+  },
+  "agentEditPolicy": "require-approval",
+  "nodes": [
+    {
+      "id": "n0",
+      "kind": "note.silk",
+      "name": "header",
+      "pos": {
+        "x": 32,
+        "y": 22
+      },
+      "text": "FINANCEOS  //  BALANCES · BILLS · DEBT",
+      "size": 22
+    },
+    {
+      "id": "n1",
+      "kind": "note.silk",
+      "name": "institutions note",
+      "pos": {
+        "x": 32,
+        "y": 38
+      },
+      "text": "FILL EACH URL IN THE EDITOR. PROVISIONAL UNTIL THEN.",
+      "size": 11
+    },
+    {
+      "id": "n2",
+      "kind": "note.silk",
+      "name": "ledger note",
+      "pos": {
+        "x": 76,
+        "y": 38
+      },
+      "text": "npm run finance:report READS THIS FOLDER. NOTHING ELSE IS READ.",
+      "size": 11
+    },
+    {
+      "id": "n3",
+      "kind": "note.silk",
+      "name": "advisor note",
+      "pos": {
+        "x": 32,
+        "y": 71
+      },
+      "text": "THE ADVISOR PROPOSES. IT NEVER MOVES MONEY OR LOGS IN.",
+      "size": 11
+    },
+    {
+      "id": "j1_bank",
+      "designator": "J1",
+      "kind": "link.url",
+      "name": "BANK",
+      "pos": {
+        "x": 32,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 3,
+      "showDesignator": false,
+      "notes": "Your main bank's login page. Set the URL in the editor and untick Provisional."
+    },
+    {
+      "id": "j2_credit",
+      "designator": "J2",
+      "kind": "link.url",
+      "name": "CREDIT CARD",
+      "pos": {
+        "x": 41,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 3,
+      "showDesignator": false,
+      "notes": "The card issuer's login page. Set the URL in the editor and untick Provisional."
+    },
+    {
+      "id": "j3_loan",
+      "designator": "J3",
+      "kind": "link.url",
+      "name": "LOAN",
+      "pos": {
+        "x": 50,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false,
+      "notes": "The lender's login page. Set the URL in the editor and untick Provisional."
+    },
+    {
+      "id": "j4_savings",
+      "designator": "J4",
+      "kind": "link.url",
+      "name": "SAVINGS",
+      "pos": {
+        "x": 59,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false,
+      "notes": "Where savings live, if not the bank above. Set the URL in the editor and untick Provisional."
+    },
+    {
+      "id": "s1_ledger",
+      "designator": "S1",
+      "kind": "store.folder",
+      "name": "LEDGER",
+      "pos": {
+        "x": 76,
+        "y": 32
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "%SKYNET%/private/finance",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 5,
+      "showDesignator": false,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "notes": "private/finance: ledger.json, report.json, mappings.json. Gitignored; never reaches the public repo."
+    },
+    {
+      "id": "s2_imports",
+      "designator": "S2",
+      "kind": "store.folder",
+      "name": "IMPORTS",
+      "pos": {
+        "x": 87,
+        "y": 32
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "%SKYNET%/private/finance/imports",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 3,
+      "showDesignator": false,
+      "notes": "Drop bank CSV exports here as <accountId>__anything.csv. The report tool merges them into the ledger."
+    },
+    {
+      "id": "f1_readme",
+      "designator": "F1",
+      "kind": "file.document",
+      "name": "HOW THE LEDGER WORKS",
+      "pos": {
+        "x": 98,
+        "y": 32
+      },
+      "footprint": {
+        "w": 5,
+        "h": 7
+      },
+      "path": "%SKYNET%/private/finance/README.md",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "u1_finance",
+      "designator": "U1",
+      "kind": "agent.code",
+      "name": "CC-FINANCE",
+      "pos": {
+        "x": 32,
+        "y": 56
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "%SKYNET%",
+      "launch": "popout",
+      "resume": true,
+      "persona": "%SKYNET%/codex/personas/finance-advisor.md",
+      "readOnLaunch": [
+        "codex/personas/finance-advisor.md",
+        "codex/personas/jarvis-voice.md",
+        "private/finance/README.md"
+      ],
+      "initialPrompt": "You are the finance advisor. Run `npm run finance:report` first, then read private/finance/report.json and ledger.json. State the position in four lines, list the alerts faults first, order the debts (avalanche and snowball, with the interest each costs per month), and end with one next action. Never invent a figure; never move money or log in anywhere; write only under private/finance/.",
+      "tags": [
+        "finance",
+        "advisor"
+      ],
+      "frame": "castellated",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "pulseColor": "ok",
+      "notes": "The finance advisor. Persona: codex/personas/finance-advisor.md. Reads private/finance/ only."
+    },
+    {
+      "id": "t1_review",
+      "designator": "T1",
+      "kind": "task.scheduled",
+      "name": "WEEKLY FINANCE REVIEW",
+      "pos": {
+        "x": 46,
+        "y": 57
+      },
+      "footprint": {
+        "w": 4,
+        "h": 1
+      },
+      "schedule": "0 18 * * 0",
+      "enabled": false,
+      "action": {
+        "type": "agent.run"
+      },
+      "taskTarget": "u1_finance",
+      "taskBrief": "codex/briefs/finance-review.md",
+      "catchUpHours": 4,
+      "showDesignator": false,
+      "notes": "Sundays 18:00 while SkynetOS is open: a fresh CC-FINANCE session writes private/finance/reviews/<date>.md. Off until William ticks Enabled."
+    },
+    {
+      "id": "t2_bills",
+      "designator": "T2",
+      "kind": "task.scheduled",
+      "name": "BILLS DUE",
+      "pos": {
+        "x": 46,
+        "y": 60
+      },
+      "footprint": {
+        "w": 4,
+        "h": 1
+      },
+      "schedule": "0 9 * * 1",
+      "enabled": false,
+      "action": {
+        "type": "notify",
+        "message": "Monday. Run npm run finance:report and read the alerts: bills due this week are listed there."
+      },
+      "showDesignator": false,
+      "notes": "A Windows toast on Monday mornings. Off until William ticks Enabled. It carries no figures: the report does."
+    },
+    {
+      "id": "z_institutions",
+      "kind": "group.zone",
+      "name": "INSTITUTIONS",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "footprint": {
+        "w": 40,
+        "h": 13
+      }
+    },
+    {
+      "id": "z_ledger",
+      "kind": "group.zone",
+      "name": "LEDGER",
+      "pos": {
+        "x": 74,
+        "y": 29
+      },
+      "footprint": {
+        "w": 34,
+        "h": 13
+      }
+    },
+    {
+      "id": "z_advisor",
+      "kind": "group.zone",
+      "name": "ADVISOR",
+      "pos": {
+        "x": 30,
+        "y": 53
+      },
+      "footprint": {
+        "w": 78,
+        "h": 22
+      }
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 69,
+        "y": 41
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 74,
+        "y": 29
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 41
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 53
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 74
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 40,
+        "y": 56
+      },
+      "part": "led_ok",
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 98,
+        "y": 40
+      },
+      "part": "pads",
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 27,
+        "y": 26
+      },
+      "part": "fiducial",
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 110,
+        "y": 78
+      },
+      "part": "fiducial",
+      "showDesignator": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "u1_finance",
+      "to": "s1_ledger",
+      "kind": "reads",
+      "width": 3
+    },
+    {
+      "id": "e2",
+      "from": "s2_imports",
+      "to": "s1_ledger",
+      "kind": "produces",
+      "width": 2
+    },
+    {
+      "id": "e3",
+      "from": "t1_review",
+      "to": "u1_finance",
+      "kind": "supervises"
+    },
+    {
+      "id": "e4",
+      "from": "s1_ledger",
+      "to": "f1_readme",
+      "kind": "reads",
+      "width": 1,
+      "color": "copper-dark"
+    }
+  ],
+  "phantoms": []
+}

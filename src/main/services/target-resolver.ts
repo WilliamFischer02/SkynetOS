@@ -7,6 +7,7 @@ import type { BoardNode } from '@shared/types.js';
 import { primaryTargetField, type FieldControl } from '@shared/node-fields.js';
 import { looksLikePlaceholder, validateUrl, type TargetInfo } from '@shared/targets.js';
 import { normaliseRoot, trustedRoots } from './settings.js';
+import { homeRoot } from './home.js';
 
 /**
  * Resolves a node's target to something concrete, or explains exactly why it cannot.
@@ -17,7 +18,8 @@ import { normaliseRoot, trustedRoots } from './settings.js';
  */
 
 /**
- * Where SkynetOS itself lives: the repo in development, the resources folder in an install.
+ * Where SkynetOS's DATA lives: the repo in development, and in an install the home folder chosen
+ * by services/home.ts (on William's machines, still the repo). Never the install's own folder.
  *
  * Mirrors `boardRoot()`, because `board/` and `assets/` travel together and always have.
  */
@@ -31,7 +33,12 @@ export function skynetRoot(): string {
    * Without it, `app.isPackaged` throws on a board that merely mentions `%SKYNET%`.
    */
   if (!app) return process.cwd().replace(/\\/g, '/');
-  return (app.isPackaged ? process.resourcesPath : app.getAppPath()).replace(/\\/g, '/');
+  /*
+   * The data home, not the install folder. In dev they are the same place, the repo. In an install
+   * they must not be: an update replaces `resources/`, and a board kept there would be overwritten
+   * by it. packages/shared/home.ts has the rule.
+   */
+  return homeRoot();
 }
 
 /**

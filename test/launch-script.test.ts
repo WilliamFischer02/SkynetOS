@@ -41,9 +41,20 @@ describe('the pid file', () => {
   });
 
   it('is removed when the agent exits, in a finally so a crash still clears it', () => {
-    const script = buildLaunchScript(base);
+    const script = buildLaunchScript({ ...base, claude: { args: ['--resume', 'x'] } });
     expect(script).toContain('finally {');
     expect(script).toContain('Remove-Item -LiteralPath $SkynetPidFile');
+  });
+
+  it('is KEPT by a plain terminal, whose script ends while its shell stays open', () => {
+    /*
+     * The race of 2026-09-11: a plain terminal's script finished about 50 ms after writing its pid
+     * and its finally deleted the file, so main (polling every 150 ms) usually never saw it and
+     * reported a window that had opened as a failed launch.
+     */
+    const script = buildLaunchScript(base);
+    expect(script).toContain('Set-Content -LiteralPath $SkynetPidFile');
+    expect(script).not.toContain('Remove-Item -LiteralPath $SkynetPidFile');
   });
 });
 

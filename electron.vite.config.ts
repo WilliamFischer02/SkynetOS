@@ -28,7 +28,20 @@ export default defineConfig({
     plugins: [react()],
     resolve: { alias: { '@shared': shared } },
     build: {
-      rollupOptions: { input: resolve(__dirname, 'src/renderer/index.html') },
+      /*
+       * Two pages, one bundle tree. `index.html` is the board; `vision.html` is the camera page,
+       * which is a separate entry on purpose: it is served from its own scheme with its own CSP and
+       * its own session, so that the board window never needs `'wasm-unsafe-eval'` and only one
+       * page in the app can be granted a camera. See src/main/services/vision.ts.
+       */
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          vision: resolve(__dirname, 'src/renderer/vision.html'),
+          // The voice capture window: a microphone for one sentence, no network. src/main/services/voice.ts.
+          voice: resolve(__dirname, 'src/renderer/voice.html')
+        }
+      },
       // Pixel art must never be inlined as a base64 data URI and re-encoded; keep assets as files.
       assetsInlineLimit: 0
     },

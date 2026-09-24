@@ -15,11 +15,18 @@ files:
   # feature that does not exist. M3 removes this negation when the terminal actually lands.
   - "!node_modules/node-pty/**"
 
-# The board and the codex are data the app reads at runtime and William edits by hand, so they
-# ship unpacked next to the executable rather than sealed inside app.asar.
+# ── Program files and starter data ───────────────────────────────────────────────────────────
+# An installed SkynetOS does NOT run from the board/ and codex/ below. They are a SEED: copied once
+# into a new home folder on a machine that has no repo, and never read again. The live data is in
+# the home (packages/shared/home.ts), because an update replaces everything in resources/ and a
+# board kept here would be overwritten by it. schema/, tools/, mediapipe/ and build-info.json ARE
+# program files, read from here, and are meant to be replaced by every update.
 extraResources:
   - from: board
     to: board
+    filter:
+      - "**/*"
+      - "!.snapshots/**"
   - from: schema
     to: schema
   - from: assets/atlas
@@ -35,6 +42,19 @@ extraResources:
     to: codex
   - from: assets/fonts
     to: assets/fonts
+  # William's JARVIS face frames. Data, seeded with the rest.
+  - from: assets/avatar
+    to: assets/avatar
+  # Manual (gesture) control. @mediapipe/tasks-vision is a devDependency, so it is not in app.asar;
+  # the vision page is served these two from resources/mediapipe (src/main/services/vision.ts).
+  - from: node_modules/@mediapipe/tasks-vision/vision_bundle.mjs
+    to: mediapipe/vision_bundle.mjs
+  - from: node_modules/@mediapipe/tasks-vision/wasm
+    to: mediapipe/wasm
+  # Written by tools/build-info.mjs just before packaging: version, commit, and the repo this build
+  # was made in, which is how an install on this machine finds its data home.
+  - from: build/build-info.json
+    to: build-info.json
   # tools/skynet-mcp.mjs is spawned as a CHILD PROCESS by Claude Code, not imported by the app, so
   # it cannot live inside app.asar — `node <path-inside-asar>` would find nothing there. It has no
   # dependencies of its own on purpose, so it is the only file that needs to come along.
@@ -44,14 +64,31 @@ extraResources:
 asar: true
 
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
   artifactName: ${productName}-${version}-${arch}.${ext}
 
+# Updates. `npm run dist` writes release/latest.yml beside the installer; an installed SkynetOS
+# reads the same file from the newest GitHub release (src/main/services/updater.ts). Nothing here
+# uploads anything: publishing a release is `npm run release:publish`, which William runs himself.
+publish:
+  provider: github
+  owner: WilliamFischer02
+  repo: SkynetOS
+  releaseType: release
+
 nsis:
   oneClick: false
+  # Per user, under %LOCALAPPDATA%/Programs: no administrator prompt to install OR to update, which
+  # is what lets an update install itself quietly when SkynetOS closes.
   perMachine: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  # Uninstalling removes the program. It must never take %APPDATA%/SkynetOS (sessions, settings,
+  # paired devices) or the home folder with it.
+  deleteAppDataOnUninstall: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true

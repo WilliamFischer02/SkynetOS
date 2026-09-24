@@ -164,6 +164,12 @@ export function buildLaunchScript(spec: LaunchScriptSpec): string {
      * between a red line saying so and a window that flashes and closes is the whole complaint
      * this rewrite exists to answer.
      */
+    /*
+     * Keep the window title ours. Claude Code retitles its terminal after the conversation, and
+     * the JARVIS face window finds a Prime terminal BY its title (services/window-tracker.ts). A
+     * retitled window would leave its face behind, hidden, the moment JARVIS started talking.
+     */
+    L.push("  $env:CLAUDE_CODE_DISABLE_TERMINAL_TITLE = '1'");
     L.push('  $SkynetClaude = (Get-Command claude -ErrorAction SilentlyContinue).Source');
     L.push('  if (-not $SkynetClaude) {');
     L.push(`    ${say('  CLAUDE CODE IS NOT ON PATH IN THIS SHELL.', 'Red')}`);
@@ -198,9 +204,20 @@ export function buildLaunchScript(spec: LaunchScriptSpec): string {
 
   L.push('}');
   L.push('finally {');
-  // Removed when the agent exits, which is what makes the chip go idle at the right moment
-  // rather than 30 seconds after a launcher stub that was never the session in the first place.
-  L.push('  Remove-Item -LiteralPath $SkynetPidFile -ErrorAction SilentlyContinue');
+  if (spec.claude) {
+    // Removed when the agent exits, which is what makes the chip go idle at the right moment
+    // rather than 30 seconds after a launcher stub that was never the session in the first place.
+    L.push('  Remove-Item -LiteralPath $SkynetPidFile -ErrorAction SilentlyContinue');
+  } else {
+    /*
+     * A plain terminal KEEPS its pid file. Its script ends within milliseconds of starting and the
+     * -NoExit shell stays open, so removing the file here deleted it about 50 ms after writing it.
+     * Main polls every 150 ms, so it usually never saw the file and reported a window that HAD
+     * opened as a failed launch. The file lives as long as the shell; readLivePid checks the pid
+     * against the OS, so a stale one is harmless, and the next launch clears it first.
+     */
+    L.push('  # a plain terminal keeps its pid file while the shell lives');
+  }
   L.push('}');
   L.push('');
 
@@ -272,6 +289,24 @@ export function popoutArgv(
  * unreliable, and an elevated plain PowerShell console is precisely what "admin PowerShell
  * window" means anyway.
  */
+/** The elevated helper's exit code when UAC was declined: ERROR_CANCELLED, as Windows spells it. */
+export const UAC_DECLINED_EXIT = 1223;
+
+/*
+ * Reworked 2026-09-11, after William: "the whole admin component … just doesn't seem to be
+ * working." The helper used to run one bare Start-Process with its output discarded, so every way
+ * elevation can fail looked the same: the UAC prompt was declined, the shell could not be
+ * elevated, or the working directory was invalid. Nothing appeared, and 90 s later came a guess.
+ * Now it:
+ *   - fails loudly: -ErrorAction Stop, the reason written to stderr, which main captures;
+ *   - separates "declined" (exit 1223) from "broken" (exit 2), so the toast can say which;
+ *   - falls back once. pwsh 7 here is the Microsoft Store build, reached through an App Execution
+ *     Alias, and asking Windows to elevate an alias is the one step in this chain with a history
+ *     of failing. So a pwsh failure that is not a refusal retries with Windows PowerShell by full
+ *     System32 path, which is always elevatable.
+ * One line, `;`-separated: newlines inside a -Command argument are one more thing for the
+ * CreateProcess command line to mangle.
+ */
 export function elevatedArgv(
   shell: ShellKind,
   cwd: string,
@@ -279,9 +314,19 @@ export function elevatedArgv(
 ): { file: string; args: string[] } {
   const exe = shell === 'pwsh' ? 'pwsh.exe' : 'powershell.exe';
   const argumentList = `-NoExit -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
-  const command =
-    `Start-Process -FilePath ${psQuote(exe)} -Verb RunAs ` +
-    `-WorkingDirectory ${psQuote(cwd)} -ArgumentList ${psQuote(argumentList)}`;
+  const start = (filePath: string): string =>
+    `Start-Process -FilePath ${filePath} -Verb RunAs ` +
+    `-WorkingDirectory ${psQuote(cwd)} -ArgumentList ${psQuote(argumentList)} -ErrorAction Stop`;
+  const systemPowerShell =
+    `(Join-Path $env:SystemRoot ${psQuote(['System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'].join(BACKSLASH))})`;
+  const declined = `if ($_.Exception.Message -match 'cancel') { [Console]::Error.WriteLine('UAC_DECLINED'); exit ${UAC_DECLINED_EXIT} }`;
+  const giveUp = `[Console]::Error.WriteLine($_.Exception.Message); exit 2`;
+
+  const command = shell === 'pwsh'
+    ? `try { ${start(psQuote(exe))} } catch { ${declined}; ` +
+      `[Console]::Error.WriteLine('PWSH COULD NOT BE ELEVATED, USING WINDOWS POWERSHELL: ' + $_.Exception.Message); ` +
+      `try { ${start(systemPowerShell)} } catch { ${declined}; ${giveUp} } }`
+    : `try { ${start(psQuote(exe))} } catch { ${declined}; ${giveUp} }`;
   return { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-Command', command] };
 }
 

@@ -20,8 +20,10 @@ import { DEFAULT_FOOTPRINT } from '@shared/types.js';
  * things with jurisdiction, `s` for storage, `d` for drives, `a` for artifacts, `j` for jacks.
  */
 function prefixFor(kind: NodeKind): string {
+  // `q` for quick chat, before the agent rule: it feeds an agent, it is not one.
+  if (kind === 'agent.prompt' || kind === 'agent.prompt-to-node') return 'q';
   if (kind.startsWith('agent')) return 'u';
-  if (kind === 'store.repo' || kind === 'store.folder' || kind === 'store.cloud') return 's';
+  if (kind === 'store.repo' || kind === 'store.folder' || kind === 'store.explorer' || kind === 'store.cloud') return 's';
   if (kind === 'drive.room') return 'd';
   if (kind === 'file.artifact') return 'a';
   if (kind === 'link.url') return 'j';
@@ -41,9 +43,11 @@ function prefixFor(kind: NodeKind): string {
  * not mounted to it, and a printed bracket with a part number would be nonsense.
  */
 function designatorLetterFor(kind: NodeKind): string | null {
+  // P for a plug: the input you push a thought into. Not U, because it is not a chip that thinks.
+  if (kind === 'agent.prompt' || kind === 'agent.prompt-to-node') return 'P';
   if (kind.startsWith('agent')) return 'U';
   if (kind === 'drive.room') return 'D';
-  if (kind === 'store.repo' || kind === 'store.folder') return 'S';
+  if (kind === 'store.repo' || kind === 'store.folder' || kind === 'store.explorer') return 'S';
   if (kind === 'store.cloud' || kind === 'link.url') return 'J';
   if (kind === 'file.artifact') return 'A';
   if (kind === 'file.document' || kind === 'file.exe') return 'F';
@@ -96,11 +100,15 @@ function defaultName(kind: NodeKind): string {
     case 'group.zone': return 'NEW CLUSTER';
     case 'note.silk': return 'NEW NOTE';
     case 'agent.code': return 'NEW AGENT';
+    case 'agent.audit': return 'DRIVE AUDIT';
     case 'agent.chat': return 'NEW CONVERSATION';
     case 'agent.jarvis': return 'JARVIS';
+    case 'agent.prompt': return 'QUICK CHAT';
+    case 'agent.prompt-to-node': return 'PROMPT → NODE';
     case 'drive.room': return 'NEW ROOM';
     case 'store.repo': return 'NEW REPO';
     case 'store.folder': return 'NEW FOLDER';
+    case 'store.explorer': return 'FILE EXPLORER';
     case 'store.cloud': return 'NEW CLOUD';
     case 'file.document': return 'NEW DOCUMENT';
     case 'file.exe': return 'NEW PROGRAM';
@@ -162,9 +170,23 @@ export function makeNode(board: Board, kind: NodeKind, pos: GridPos): BoardNode 
     node.showDesignator = false;
   }
 
+  if (kind === 'agent.prompt' || kind === 'agent.prompt-to-node') {
+    /*
+     * Sized explicitly rather than left to the default: tools/validate-board.mjs keeps its own copy
+     * of the default footprints, and a box the app sizes one way and the validator another is an
+     * overlap check that disagrees with the screen. The designator is off because it would print
+     * across the middle of the message box.
+     */
+    node.footprint = { ...DEFAULT_FOOTPRINT[kind] };
+    node.showDesignator = false;
+    // The PROMPT → NODE tab already says what it is; a silkscreen name as well would say it twice.
+    if (kind === 'agent.prompt-to-node') node.showName = false;
+  }
+
   // Anything that binds to a real target starts explicitly unpopulated rather than pretending.
+  // A prompt box needs no binding to work: with no target it sends to the board's JARVIS head.
   const bindsToSomething = DEFAULT_FOOTPRINT[kind].w > 0;
-  if (bindsToSomething && kind !== 'monitor.system') node.provisional = true;
+  if (bindsToSomething && kind !== 'monitor.system' && kind !== 'agent.prompt' && kind !== 'agent.prompt-to-node') node.provisional = true;
 
   return node;
 }

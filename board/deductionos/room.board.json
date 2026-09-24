@@ -18,15 +18,34 @@
   "agentEditPolicy": "require-approval",
   "nodes": [
     {
+      "id": "bg_room_art",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 27,
+        "y": 26
+      },
+      "footprint": {
+        "w": 65,
+        "h": 27
+      },
+      "image": "%SKYNET%/assets/sprites/deduction-bg.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "The room's own art, as on its drive on the root board. Restyle of 2026-09-11; delete or repoint freely."
+    },
+    {
       "id": "n0",
       "kind": "note.silk",
       "name": "header",
       "pos": {
-        "x": 50,
-        "y": 33
+        "x": 32,
+        "y": 22
       },
       "text": "DEDUCTIONOS  //  OBSERVATION · INFERENCE · MEMORY",
-      "size": 11
+      "size": 22
     },
     {
       "id": "u1_observer",
@@ -34,26 +53,33 @@
       "kind": "agent.chat",
       "name": "THE OBSERVER",
       "pos": {
-        "x": 54,
-        "y": 37
+        "x": 32,
+        "y": 32
       },
       "footprint": {
-        "w": 4,
-        "h": 4
+        "w": 7,
+        "h": 7
       },
       "url": "https://claude.ai/project/REPLACE_WITH_OBSERVER_PROJECT_ID",
       "partition": "persist:observer",
       "persona": "codex/personas/observer.md",
       "codexRef": "codex/projects/deduction-training.md",
-      "notes": "Runs the 16-week curriculum. Evidence-based methods only. Tracks lessons and rubric progress across sessions."
+      "notes": "Runs the 16-week curriculum. Evidence-based methods only. Tracks lessons and rubric progress across sessions.",
+      "frame": "quad",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "chase": true,
+      "chaseColor": "signal",
+      "chaseSpeed": 75
     },
     {
       "id": "n1",
       "kind": "note.silk",
       "name": "phase",
       "pos": {
-        "x": 54,
-        "y": 42
+        "x": 30,
+        "y": 27
       },
       "text": "PHASE 1 — FOUNDATIONS & ATTENTION",
       "size": 11
@@ -64,14 +90,18 @@
       "kind": "file.document",
       "name": "The Observer's Curriculum",
       "pos": {
-        "x": 66,
-        "y": 37
+        "x": 62,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md"
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction/observers-curriculum.md",
+      "priority": 2,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "showDesignator": false
     },
     {
       "id": "f2_rubric",
@@ -79,14 +109,18 @@
       "kind": "file.document",
       "name": "Mastery rubric",
       "pos": {
-        "x": 70,
-        "y": 37
+        "x": 72,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/Users/REPLACE_ME/Documents/Deduction/rubric.md"
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction/rubric.md",
+      "priority": 4,
+      "textPlate": true,
+      "plateBorder": "ok",
+      "showDesignator": false
     },
     {
       "id": "f3_predlog",
@@ -94,14 +128,18 @@
       "kind": "file.document",
       "name": "Prediction log",
       "pos": {
-        "x": 74,
-        "y": 37
+        "x": 82,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 5,
+        "h": 7
       },
-      "path": "C:/Users/REPLACE_ME/Documents/Deduction/prediction-log.md"
+      "path": "C:/Users/REPLACE_ME/Documents/Deduction/prediction-log.md",
+      "priority": 2,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "showDesignator": false
     },
     {
       "id": "s1_notes",
@@ -109,15 +147,18 @@
       "kind": "store.folder",
       "name": "Course notes",
       "pos": {
-        "x": 66,
-        "y": 42
+        "x": 62,
+        "y": 44
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "path": "C:/Users/REPLACE_ME/Documents/Deduction",
-      "openWith": "explorer"
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "s2_drive",
@@ -125,14 +166,17 @@
       "kind": "store.cloud",
       "name": "Deduction (Drive)",
       "pos": {
-        "x": 73,
-        "y": 42
+        "x": 80,
+        "y": 44
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
-      "url": "https://drive.google.com/drive/folders/REPLACE_ME"
+      "url": "https://drive.google.com/drive/folders/REPLACE_ME",
+      "frame": "rails",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "j1_anki",
@@ -140,14 +184,17 @@
       "kind": "link.url",
       "name": "AnkiWeb",
       "pos": {
-        "x": 84,
-        "y": 37
+        "x": 107,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://ankiweb.net/decks"
+      "url": "https://ankiweb.net/decks",
+      "frame": "fingers",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "j2_memoryos",
@@ -155,14 +202,17 @@
       "kind": "link.url",
       "name": "memoryOS",
       "pos": {
-        "x": 88,
-        "y": 37
+        "x": 117,
+        "y": 32
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://memoryos.com/"
+      "url": "https://memoryos.com/",
+      "frame": "tabs",
+      "priority": 2,
+      "showDesignator": false
     },
     {
       "id": "j3_gjopen",
@@ -170,14 +220,17 @@
       "kind": "link.url",
       "name": "Good Judgment Open",
       "pos": {
-        "x": 84,
-        "y": 42
+        "x": 107,
+        "y": 44
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://www.gjopen.com/"
+      "url": "https://www.gjopen.com/",
+      "frame": "dip",
+      "priority": 3,
+      "showDesignator": false
     },
     {
       "id": "e1_anki",
@@ -185,15 +238,19 @@
       "kind": "file.exe",
       "name": "Anki",
       "pos": {
-        "x": 88,
-        "y": 44
+        "x": 117,
+        "y": 49
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
       "path": "C:/Program Files/Anki/anki.exe",
-      "confirmBeforeLaunch": false
+      "confirmBeforeLaunch": false,
+      "frame": "castellated",
+      "priority": 1,
+      "plateBorder": "copper",
+      "showDesignator": false
     },
     {
       "id": "t1_daily",
@@ -201,11 +258,11 @@
       "kind": "task.scheduled",
       "name": "Daily drill reminder",
       "pos": {
-        "x": 54,
-        "y": 48
+        "x": 32,
+        "y": 59
       },
       "footprint": {
-        "w": 2,
+        "w": 4,
         "h": 1
       },
       "schedule": "0 19 * * *",
@@ -214,7 +271,8 @@
         "type": "notify",
         "level": "info",
         "message": "Deduction drill window — 20-45 min, one pass only."
-      }
+      },
+      "showDesignator": false
     },
     {
       "id": "d1_palace",
@@ -224,15 +282,195 @@
       "engraving": "PALACEOS",
       "boardFile": "deductionos/palace/room.board.json",
       "pos": {
-        "x": 66,
-        "y": 50
+        "x": 62,
+        "y": 64
       },
       "footprint": {
-        "w": 6,
-        "h": 4
+        "w": 9,
+        "h": 12
       },
       "provisional": true,
-      "notes": "Loci wings 0-8 mapped to the Anki subdecks. Build after M6."
+      "notes": "Loci wings 0-8 mapped to the Anki subdecks. Build after M6.",
+      "frame": "socket",
+      "priority": 4,
+      "showDesignator": false
+    },
+    {
+      "id": "z_observer",
+      "kind": "group.zone",
+      "name": "THE OBSERVER",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "footprint": {
+        "w": 59,
+        "h": 21
+      },
+      "members": [
+        "u1_observer",
+        "f1_curriculum",
+        "f2_rubric",
+        "f3_predlog",
+        "s1_notes",
+        "s2_drive"
+      ]
+    },
+    {
+      "id": "z_practice",
+      "kind": "group.zone",
+      "name": "PRACTICE",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "footprint": {
+        "w": 93,
+        "h": 33
+      },
+      "members": [
+        "j1_anki",
+        "j2_memoryos",
+        "j3_gjopen",
+        "e1_anki",
+        "t1_daily"
+      ]
+    },
+    {
+      "id": "z_palace",
+      "kind": "group.zone",
+      "name": "MIND PALACE",
+      "pos": {
+        "x": 60,
+        "y": 61
+      },
+      "footprint": {
+        "w": 13,
+        "h": 17
+      },
+      "members": [
+        "d1_palace"
+      ]
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 88,
+        "y": 49
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 122,
+        "y": 61
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 60,
+        "y": 61
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 72,
+        "y": 77
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 39,
+        "y": 32
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 117,
+        "y": 53
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 27,
+        "y": 26
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 125,
+        "y": 80
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
     }
   ],
   "edges": [
@@ -255,7 +493,8 @@
       "from": "u1_observer",
       "to": "f3_predlog",
       "kind": "reads",
-      "width": 2
+      "width": 2,
+      "color": "copper-dark"
     },
     {
       "id": "d4",
@@ -269,21 +508,24 @@
       "from": "s1_notes",
       "to": "s2_drive",
       "kind": "syncs",
-      "width": 2
+      "width": 2,
+      "color": "signal"
     },
     {
       "id": "d6",
       "from": "u1_observer",
       "to": "j1_anki",
       "kind": "deploys",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "d7",
       "from": "j1_anki",
       "to": "e1_anki",
       "kind": "syncs",
-      "width": 2
+      "width": 2,
+      "color": "signal"
     },
     {
       "id": "d8",
@@ -291,6 +533,92 @@
       "to": "e1_anki",
       "kind": "depends",
       "width": 2
+    }
+  ],
+  "phantoms": [
+    {
+      "id": "ph_locibook",
+      "kind": "store.repo",
+      "name": "LociBook",
+      "description": "Placeable, writable loci books for Minecraft mind palaces: a Fabric mod that is itself a memory-palace tool. It belongs beside the Mind Palace room.",
+      "pos": {
+        "x": 82,
+        "y": 64
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "C:/dev/LociBook"
+      },
+      "connect": [
+        {
+          "to": "d1_palace",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_cc_locibook",
+      "kind": "agent.code",
+      "name": "CC-LOCIBOOK",
+      "description": "A Claude Code chip on LociBook, so mind-palace work opens a session in the right repo.",
+      "pos": {
+        "x": 82,
+        "y": 77
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "cwd": "C:/dev/LociBook"
+      },
+      "connect": [
+        {
+          "to": "d1_palace",
+          "kind": "supervises"
+        }
+      ]
+    },
+    {
+      "id": "ph_research_notes",
+      "kind": "store.folder",
+      "name": "Research notes",
+      "description": "Research notes in the SolidState Obsidian vault, which already syncs. A real home for course notes; COURSE NOTES points at a REPLACE_ME path.",
+      "pos": {
+        "x": 32,
+        "y": 44
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%USERPROFILE%/OneDrive/Documents/SolidState Sync/03 Research/NOTES"
+      },
+      "connect": [
+        {
+          "to": "u1_observer",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_note_templates",
+      "kind": "store.folder",
+      "name": "Note templates",
+      "description": "The vault's note templates: the natural starting point for the prediction log and the rubric, whose files do not exist yet.",
+      "pos": {
+        "x": 47,
+        "y": 44
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%USERPROFILE%/OneDrive/Documents/SolidState Sync/04 Resources/NOTE TEMPLATES"
+      },
+      "connect": [
+        {
+          "to": "u1_observer",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

@@ -109,12 +109,14 @@ export function renderTextBlock(
   text: string,
   style: TextStyle,
   theme: BoardTheme,
-  glowStep = 0
+  glowStep = 0,
+  /** The colour at the glow's peak (step 2), as hex, when the node names one (`textGlowColor`). */
+  crest?: string
 ): TextRender | null {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (!lines.length) return null;
 
-  const color = glowStep > 0 ? brighten(style.color, glowStep, theme) : style.color;
+  const color = glowStep >= 2 && crest ? crest : glowStep > 0 ? brighten(style.color, glowStep, theme) : style.color;
   const rendered = lines.map((line) => renderSilkText(line, style.size, color));
   const textW = rendered.reduce((max, r) => Math.max(max, r.width), 1);
   const textH = rendered.reduce((sum, r) => sum + r.height, 0) + LINE_GAP * (rendered.length - 1);

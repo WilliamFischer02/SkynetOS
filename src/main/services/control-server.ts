@@ -1,6 +1,7 @@
 import { createServer, type Server, type Socket } from 'node:net';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { controlFilePath, ownsControlFile } from '@shared/control-file.js';
 import { dirname, join } from 'node:path';
 import { app } from 'electron';
 
@@ -62,7 +63,9 @@ let pipePath = '';
  * the real one and pointing every agent on this machine at a fixture.
  */
 export function controlFile(): string {
-  return process.env['SKYNET_CONTROL_FILE'] ?? join(app.getPath('userData'), 'control.json');
+  // A smoke run keeps its own, in its capture folder, so it can never take the live app's.
+  // packages/shared/control-file.ts has the fault that taught this.
+  return controlFilePath(process.env, app.getPath('userData'));
 }
 
 function makePipePath(): string {
@@ -161,5 +164,11 @@ export function stopControlServer(): void {
   server?.close();
   server = null;
   // The file names a pipe that is gone. Leaving it behind makes the next proxy wait on nothing.
-  try { rmSync(controlFile(), { force: true }); } catch { /* nothing to clean up */ }
+  // But only OUR file: another copy of SkynetOS may have written its own over it since, and
+  // removing that one tells every agent the board is closed while it is open.
+  try {
+    let raw: string | null = null;
+    try { raw = readFileSync(controlFile(), 'utf8'); } catch { /* already gone */ }
+    if (ownsControlFile(raw, process.pid)) rmSync(controlFile(), { force: true });
+  } catch { /* nothing to clean up */ }
 }

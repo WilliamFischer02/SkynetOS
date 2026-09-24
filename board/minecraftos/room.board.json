@@ -13,7 +13,7 @@
   "grid": {
     "tile": 16,
     "width": 192,
-    "height": 132
+    "height": 180
   },
   "agentEditPolicy": "require-approval",
   "relatedBoards": [
@@ -21,14 +21,169 @@
   ],
   "nodes": [
     {
+      "id": "bg_room_art",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 29,
+        "y": 27
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "The room's own art, as on its drive on the root board. Restyle of 2026-09-11; delete or repoint freely."
+    },
+    {
+      "id": "bg_pace",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 107,
+        "y": 27
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "Backdrop for the PaceKeeper cluster: the same art as the Stalker's. Repoint freely."
+    },
+    {
+      "id": "bg_giants",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 29,
+        "y": 51
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "Backdrop for the ThereCouldBeGiants cluster: the same art as the Stalker's. Repoint freely."
+    },
+    {
+      "id": "bg_time",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 107,
+        "y": 51
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "Backdrop for the TimeServed cluster: the same art as the Stalker's. Repoint freely."
+    },
+    {
+      "id": "bg_locibook",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 29,
+        "y": 75
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "Backdrop for the LociBook cluster: the same art as the Stalker's. Repoint freely."
+    },
+    {
+      "id": "bg_just1nudge",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 107,
+        "y": 75
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "Backdrop for the Just1Nudge cluster: the same art as the Stalker's. Repoint freely."
+    },
+    {
+      "id": "bg_mccamop",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 29,
+        "y": 99
+      },
+      "footprint": {
+        "w": 59,
+        "h": 18
+      },
+      "image": "%SKYNET%/assets/sprites/minecraft-cover.jpg",
+      "showName": false,
+      "showDesignator": false,
+      "frame": "dip",
+      "pulseGlow": true,
+      "notes": "Backdrop for the MCCamOp cluster: the same art as the Stalker's. Repoint freely."
+    },
+    {
       "id": "n0_hdr",
       "kind": "note.silk",
       "name": "header",
       "pos": {
-        "x": 66,
-        "y": 45
+        "x": 34,
+        "y": 23
       },
       "text": "MINECRAFTOS  //  FABRIC 26.2  //  MOD PIPELINE",
+      "size": 22
+    },
+    {
+      "id": "n1_deploy",
+      "kind": "note.silk",
+      "name": "deploy label",
+      "pos": {
+        "x": 61,
+        "y": 127
+      },
+      "text": "DEPLOYMENT BUS",
+      "size": 11
+    },
+    {
+      "id": "n2_backlog",
+      "kind": "note.silk",
+      "name": "backlog",
+      "pos": {
+        "x": 32,
+        "y": 147
+      },
+      "text": "CHALLENGE BACKLOG — UNPOPULATED FOOTPRINTS",
       "size": 11
     },
     {
@@ -36,12 +191,12 @@
       "kind": "group.zone",
       "name": "THE STALKER",
       "pos": {
-        "x": 66,
-        "y": 48
+        "x": 32,
+        "y": 30
       },
       "footprint": {
-        "w": 28,
-        "h": 8
+        "w": 53,
+        "h": 12
       },
       "members": [
         "u1_agent_stalker",
@@ -50,72 +205,16 @@
       ]
     },
     {
-      "id": "u1_agent_stalker",
-      "designator": "U1",
-      "kind": "agent.code",
-      "name": "CC-STALKER",
-      "pos": {
-        "x": 68,
-        "y": 50
-      },
-      "footprint": {
-        "w": 3,
-        "h": 3
-      },
-      "cwd": "C:/dev/TheStalker",
-      "launch": "popout",
-      "resume": true,
-      "codexRef": "codex/projects/the-stalker.md",
-      "notes": "Persistent hunter that returns stronger each death and adapts to how William fights it."
-    },
-    {
-      "id": "s1_repo_stalker",
-      "designator": "S1",
-      "kind": "store.repo",
-      "name": "TheStalker",
-      "pos": {
-        "x": 76,
-        "y": 50
-      },
-      "footprint": {
-        "w": 4,
-        "h": 3
-      },
-      "path": "C:/dev/TheStalker",
-      "openWith": "explorer"
-    },
-    {
-      "id": "a1_jar_stalker",
-      "designator": "A1",
-      "kind": "file.artifact",
-      "name": "thestalker.jar",
-      "pos": {
-        "x": 86,
-        "y": 50
-      },
-      "footprint": {
-        "w": 3,
-        "h": 2
-      },
-      "glob": "C:/dev/TheStalker/build/libs/*.jar",
-      "exclude": [
-        "*-sources.jar",
-        "*-dev.jar",
-        "*-sources-dev.jar"
-      ],
-      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$"
-    },
-    {
       "id": "z2",
       "kind": "group.zone",
       "name": "PACEKEEPER",
       "pos": {
-        "x": 98,
-        "y": 48
+        "x": 110,
+        "y": 30
       },
       "footprint": {
-        "w": 28,
-        "h": 8
+        "w": 53,
+        "h": 12
       },
       "members": [
         "u2_agent_pace",
@@ -124,70 +223,16 @@
       ]
     },
     {
-      "id": "u2_agent_pace",
-      "designator": "U2",
-      "kind": "agent.code",
-      "name": "CC-PACEKEEPER",
-      "pos": {
-        "x": 100,
-        "y": 50
-      },
-      "footprint": {
-        "w": 3,
-        "h": 3
-      },
-      "cwd": "C:/dev/PaceKeeper",
-      "launch": "popout",
-      "resume": true,
-      "codexRef": "codex/projects/pacekeeper.md",
-      "notes": "Speedrun coach: live next-step strat guidance + split timer. Targets modern versions only."
-    },
-    {
-      "id": "s2_repo_pace",
-      "designator": "S2",
-      "kind": "store.repo",
-      "name": "PaceKeeper",
-      "pos": {
-        "x": 108,
-        "y": 50
-      },
-      "footprint": {
-        "w": 4,
-        "h": 3
-      },
-      "path": "C:/dev/PaceKeeper",
-      "openWith": "explorer"
-    },
-    {
-      "id": "a2_jar_pace",
-      "designator": "A2",
-      "kind": "file.artifact",
-      "name": "pacekeeper.jar",
-      "pos": {
-        "x": 118,
-        "y": 50
-      },
-      "footprint": {
-        "w": 3,
-        "h": 2
-      },
-      "glob": "C:/dev/PaceKeeper/build/libs/*.jar",
-      "exclude": [
-        "*-sources.jar",
-        "*-dev.jar"
-      ]
-    },
-    {
       "id": "z3",
       "kind": "group.zone",
       "name": "THERE COULD BE GIANTS",
       "pos": {
-        "x": 66,
-        "y": 58
+        "x": 32,
+        "y": 54
       },
       "footprint": {
-        "w": 28,
-        "h": 8
+        "w": 53,
+        "h": 12
       },
       "members": [
         "u3_agent_giants",
@@ -196,70 +241,16 @@
       ]
     },
     {
-      "id": "u3_agent_giants",
-      "designator": "U3",
-      "kind": "agent.code",
-      "name": "CC-GIANTS",
-      "pos": {
-        "x": 68,
-        "y": 60
-      },
-      "footprint": {
-        "w": 3,
-        "h": 3
-      },
-      "cwd": "C:/dev/ThereCouldBeGiants",
-      "launch": "popout",
-      "resume": true,
-      "codexRef": "codex/projects/there-could-be-giants.md",
-      "notes": "Kaiju-scale giants, footfall craters, distant fog silhouettes, roof counterplay. Client + server mod for Goobtropolis."
-    },
-    {
-      "id": "s3_repo_giants",
-      "designator": "S3",
-      "kind": "store.repo",
-      "name": "ThereCouldBeGiants",
-      "pos": {
-        "x": 76,
-        "y": 60
-      },
-      "footprint": {
-        "w": 4,
-        "h": 3
-      },
-      "path": "C:/dev/ThereCouldBeGiants",
-      "openWith": "explorer"
-    },
-    {
-      "id": "a3_jar_giants",
-      "designator": "A3",
-      "kind": "file.artifact",
-      "name": "giants.jar",
-      "pos": {
-        "x": 86,
-        "y": 60
-      },
-      "footprint": {
-        "w": 3,
-        "h": 2
-      },
-      "glob": "C:/dev/ThereCouldBeGiants/build/libs/*.jar",
-      "exclude": [
-        "*-sources.jar",
-        "*-dev.jar"
-      ]
-    },
-    {
       "id": "z4",
       "kind": "group.zone",
       "name": "TIME SERVED",
       "pos": {
-        "x": 98,
-        "y": 58
+        "x": 110,
+        "y": 54
       },
       "footprint": {
-        "w": 28,
-        "h": 8
+        "w": 53,
+        "h": 12
       },
       "members": [
         "u4_agent_time",
@@ -268,23 +259,323 @@
       ]
     },
     {
+      "id": "z_deploy",
+      "kind": "group.zone",
+      "name": "DEPLOYMENT BUS",
+      "pos": {
+        "x": 29,
+        "y": 128
+      },
+      "footprint": {
+        "w": 91,
+        "h": 9
+      },
+      "members": [
+        "f1_mods_folder",
+        "p1_goobtropolis",
+        "j1_bloom",
+        "j2_modrinth",
+        "e1_launcher"
+      ]
+    },
+    {
+      "id": "z_backlog",
+      "kind": "group.zone",
+      "name": "CHALLENGE BACKLOG",
+      "pos": {
+        "x": 32,
+        "y": 149
+      },
+      "footprint": {
+        "w": 50,
+        "h": 11
+      },
+      "members": [
+        "u5_johnwick",
+        "u6_hurtcraft",
+        "u7_blobs"
+      ]
+    },
+    {
+      "id": "z5",
+      "kind": "group.zone",
+      "name": "LOCIBOOK",
+      "pos": {
+        "x": 32,
+        "y": 72
+      },
+      "footprint": {
+        "w": 53,
+        "h": 12
+      },
+      "members": [
+        "u9_agent_locibook",
+        "s5_repo_locibook",
+        "a5_jar_locibook"
+      ]
+    },
+    {
+      "id": "z6",
+      "kind": "group.zone",
+      "name": "JUST1NUDGE",
+      "pos": {
+        "x": 110,
+        "y": 78
+      },
+      "footprint": {
+        "w": 53,
+        "h": 12
+      },
+      "members": [
+        "u10_agent_just1nudge",
+        "s6_repo_just1nudge",
+        "a6_jar_just1nudge"
+      ]
+    },
+    {
+      "id": "z7",
+      "kind": "group.zone",
+      "name": "MCCAMOP",
+      "pos": {
+        "x": 32,
+        "y": 102
+      },
+      "footprint": {
+        "w": 53,
+        "h": 12
+      },
+      "members": [
+        "u8_agent_mccamop",
+        "s7_repo_mccamop",
+        "a7_jar_mccamop"
+      ]
+    },
+    {
+      "id": "u1_agent_stalker",
+      "designator": "U1",
+      "kind": "agent.code",
+      "name": "CC-STALKER",
+      "pos": {
+        "x": 34,
+        "y": 33
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/TheStalker",
+      "launch": "popout",
+      "resume": true,
+      "codexRef": "codex/projects/the-stalker.md",
+      "notes": "Persistent hunter that returns stronger each death and adapts to how William fights it.",
+      "frame": "castellated",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "chase": true,
+      "chaseColor": "signal",
+      "chaseSpeed": 75
+    },
+    {
+      "id": "s1_repo_stalker",
+      "designator": "S1",
+      "kind": "store.repo",
+      "name": "TheStalker",
+      "pos": {
+        "x": 53,
+        "y": 33
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/TheStalker",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
+    },
+    {
+      "id": "a1_jar_stalker",
+      "designator": "A1",
+      "kind": "file.artifact",
+      "name": "thestalker.jar",
+      "pos": {
+        "x": 78,
+        "y": 33
+      },
+      "footprint": {
+        "w": 5,
+        "h": 3
+      },
+      "glob": "C:/dev/TheStalker/build/libs/*.jar",
+      "exclude": [
+        "*-sources.jar",
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$",
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "u2_agent_pace",
+      "designator": "U2",
+      "kind": "agent.code",
+      "name": "CC-PACEKEEPER",
+      "pos": {
+        "x": 112,
+        "y": 33
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/PaceKeeper",
+      "launch": "popout",
+      "resume": true,
+      "codexRef": "codex/projects/pacekeeper.md",
+      "notes": "Speedrun coach: live next-step strat guidance + split timer. Targets modern versions only.",
+      "frame": "castellated",
+      "priority": 3,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "image": "C:/dev/PaceKeeper/src/main/resources/assets/pacekeeper/icon.png"
+    },
+    {
+      "id": "s2_repo_pace",
+      "designator": "S2",
+      "kind": "store.repo",
+      "name": "PaceKeeper",
+      "pos": {
+        "x": 131,
+        "y": 33
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/PaceKeeper",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "a2_jar_pace",
+      "designator": "A2",
+      "kind": "file.artifact",
+      "name": "pacekeeper.jar",
+      "pos": {
+        "x": 156,
+        "y": 33
+      },
+      "footprint": {
+        "w": 5,
+        "h": 3
+      },
+      "glob": "C:/dev/PaceKeeper/build/libs/*.jar",
+      "exclude": [
+        "*-sources.jar",
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "frame": "fingers",
+      "priority": 1,
+      "showDesignator": false,
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$"
+    },
+    {
+      "id": "u3_agent_giants",
+      "designator": "U3",
+      "kind": "agent.code",
+      "name": "CC-GIANTS",
+      "pos": {
+        "x": 34,
+        "y": 57
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/ThereCouldBeGiants",
+      "launch": "popout",
+      "resume": true,
+      "codexRef": "codex/projects/there-could-be-giants.md",
+      "notes": "Kaiju-scale giants, footfall craters, distant fog silhouettes, roof counterplay. Client + server mod for Goobtropolis.",
+      "frame": "castellated",
+      "priority": 1,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "image": "C:/dev/ThereCouldBeGiants/src/main/resources/assets/therecouldbegiants/icon.png"
+    },
+    {
+      "id": "s3_repo_giants",
+      "designator": "S3",
+      "kind": "store.repo",
+      "name": "ThereCouldBeGiants",
+      "pos": {
+        "x": 53,
+        "y": 57
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/ThereCouldBeGiants",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
+    },
+    {
+      "id": "a3_jar_giants",
+      "designator": "A3",
+      "kind": "file.artifact",
+      "name": "giants.jar",
+      "pos": {
+        "x": 78,
+        "y": 57
+      },
+      "footprint": {
+        "w": 5,
+        "h": 3
+      },
+      "glob": "C:/dev/ThereCouldBeGiants/build/libs/*.jar",
+      "exclude": [
+        "*-sources.jar",
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false,
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$"
+    },
+    {
       "id": "u4_agent_time",
       "designator": "U4",
       "kind": "agent.code",
       "name": "CC-TIMESERVED",
       "pos": {
-        "x": 100,
-        "y": 60
+        "x": 112,
+        "y": 57
       },
       "footprint": {
-        "w": 3,
-        "h": 3
+        "w": 8,
+        "h": 7
       },
       "cwd": "C:/dev/TimeServed",
       "launch": "popout",
       "resume": true,
       "codexRef": "codex/projects/time-served.md",
-      "notes": "Server-side per-player stats HUD: days, session time, deaths. modid timeserved."
+      "notes": "Server-side per-player stats HUD: days, session time, deaths. modid timeserved.",
+      "frame": "castellated",
+      "priority": 2,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "image": "C:/dev/TimeServed/src/main/resources/assets/timeserved/icon.png"
     },
     {
       "id": "s4_repo_time",
@@ -292,15 +583,18 @@
       "kind": "store.repo",
       "name": "TimeServed",
       "pos": {
-        "x": 108,
-        "y": 60
+        "x": 131,
+        "y": 57
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "path": "C:/dev/TimeServed",
-      "openWith": "explorer"
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 2,
+      "showDesignator": false
     },
     {
       "id": "a4_jar_time",
@@ -308,29 +602,23 @@
       "kind": "file.artifact",
       "name": "timeserved.jar",
       "pos": {
-        "x": 118,
-        "y": 60
+        "x": 156,
+        "y": 57
       },
       "footprint": {
-        "w": 3,
-        "h": 2
+        "w": 5,
+        "h": 3
       },
       "glob": "C:/dev/TimeServed/build/libs/*.jar",
       "exclude": [
         "*-sources.jar",
-        "*-dev.jar"
-      ]
-    },
-    {
-      "id": "n1_deploy",
-      "kind": "note.silk",
-      "name": "deploy label",
-      "pos": {
-        "x": 66,
-        "y": 69
-      },
-      "text": "DEPLOYMENT BUS",
-      "size": 11
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "frame": "fingers",
+      "priority": 1,
+      "showDesignator": false,
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$"
     },
     {
       "id": "f1_mods_folder",
@@ -338,15 +626,18 @@
       "kind": "store.folder",
       "name": "Client mods",
       "pos": {
-        "x": 80,
-        "y": 71
+        "x": 63,
+        "y": 132
       },
       "footprint": {
-        "w": 4,
-        "h": 3
+        "w": 6,
+        "h": 4
       },
       "path": "%APPDATA%/.minecraft/mods",
-      "openWith": "explorer"
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "p1_goobtropolis",
@@ -355,15 +646,21 @@
       "name": "Goobtropolis (local test)",
       "pos": {
         "x": 92,
-        "y": 71
+        "y": 132
       },
       "footprint": {
-        "w": 3,
-        "h": 2
+        "w": 7,
+        "h": 4
       },
       "startCommand": "java -Xmx4G -jar fabric-server-launch.jar nogui",
       "cwd": "C:/dev/GoobtropolisTest",
-      "port": 25565
+      "port": 25565,
+      "frame": "rails",
+      "priority": 3,
+      "scan": true,
+      "scanSpeed": 50,
+      "scanColor": "signal",
+      "showDesignator": false
     },
     {
       "id": "j1_bloom",
@@ -371,14 +668,17 @@
       "kind": "link.url",
       "name": "Bloom.host panel",
       "pos": {
-        "x": 102,
-        "y": 71
+        "x": 117,
+        "y": 132
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://bloom.host/"
+      "url": "https://bloom.host/",
+      "frame": "fingers",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "j2_modrinth",
@@ -386,14 +686,17 @@
       "kind": "link.url",
       "name": "Modrinth",
       "pos": {
-        "x": 108,
-        "y": 71
+        "x": 131,
+        "y": 132
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
-      "url": "https://modrinth.com/"
+      "url": "https://modrinth.com/",
+      "frame": "tabs",
+      "priority": 2,
+      "showDesignator": false
     },
     {
       "id": "e1_launcher",
@@ -401,26 +704,19 @@
       "kind": "file.exe",
       "name": "Minecraft Launcher",
       "pos": {
-        "x": 114,
-        "y": 71
+        "x": 146,
+        "y": 132
       },
       "footprint": {
-        "w": 2,
-        "h": 2
+        "w": 4,
+        "h": 4
       },
       "path": "C:/XboxGames/Minecraft Launcher/Content/Minecraft.exe",
-      "confirmBeforeLaunch": false
-    },
-    {
-      "id": "n2_backlog",
-      "kind": "note.silk",
-      "name": "backlog",
-      "pos": {
-        "x": 66,
-        "y": 77
-      },
-      "text": "CHALLENGE BACKLOG — UNPOPULATED FOOTPRINTS",
-      "size": 11
+      "confirmBeforeLaunch": false,
+      "frame": "castellated",
+      "priority": 1,
+      "plateBorder": "copper",
+      "showDesignator": false
     },
     {
       "id": "u5_johnwick",
@@ -428,17 +724,20 @@
       "kind": "agent.code",
       "name": "CC-JOHNWICK",
       "pos": {
-        "x": 68,
-        "y": 79
+        "x": 34,
+        "y": 152
       },
       "footprint": {
-        "w": 3,
-        "h": 3
+        "w": 7,
+        "h": 6
       },
       "cwd": "C:/dev/JohnWickMobs",
       "launch": "popout",
       "provisional": true,
-      "notes": "Hurting a passive mob near witnesses aggros nearby mobs. Heat bar with stacking duration."
+      "notes": "Hurting a passive mob near witnesses aggros nearby mobs. Heat bar with stacking duration.",
+      "frame": "quad",
+      "priority": 3,
+      "showDesignator": false
     },
     {
       "id": "u6_hurtcraft",
@@ -446,17 +745,20 @@
       "kind": "agent.code",
       "name": "CC-HURTCRAFT",
       "pos": {
-        "x": 76,
-        "y": 79
+        "x": 53,
+        "y": 152
       },
       "footprint": {
-        "w": 3,
-        "h": 3
+        "w": 7,
+        "h": 6
       },
       "cwd": "C:/dev/Hurtcraft",
       "launch": "popout",
       "provisional": true,
-      "notes": "Injury consequences by damage type, limb loss cutting slots/movement, body-diagram HUD."
+      "notes": "Injury consequences by damage type, limb loss cutting slots/movement, body-diagram HUD.",
+      "frame": "castellated",
+      "priority": 1,
+      "showDesignator": false
     },
     {
       "id": "u7_blobs",
@@ -464,17 +766,609 @@
       "kind": "agent.code",
       "name": "CC-BLOBS",
       "pos": {
-        "x": 84,
-        "y": 79
+        "x": 73,
+        "y": 152
       },
       "footprint": {
-        "w": 3,
-        "h": 3
+        "w": 7,
+        "h": 6
       },
       "cwd": "C:/dev/TheBlobs",
       "launch": "popout",
       "provisional": true,
-      "notes": "Slimes absorb entities they touch and grow; 4s engulf = death."
+      "notes": "Slimes absorb entities they touch and grow; 4s engulf = death.",
+      "frame": "dip",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "u8_agent_mccamop",
+      "kind": "agent.code",
+      "name": "CC-MCCAMOP",
+      "pos": {
+        "x": 34,
+        "y": 105
+      },
+      "designator": "U8",
+      "cwd": "C:/dev/MCCamOp",
+      "launch": "popout",
+      "prelaunch": [
+        "claude",
+        "git-fetch"
+      ],
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "image": "C:/dev/MCCamOp/src/main/resources/assets/mccamop/icon.png",
+      "resume": true,
+      "codexRef": "codex/projects/mccamop.md",
+      "notes": "Client-side cinematic camera operator: ten hotkey-bound eased camera shots with HUD hide. SPEC.md is authoritative.",
+      "frame": "castellated",
+      "priority": 3,
+      "showDesignator": false,
+      "pulseGlow": true
+    },
+    {
+      "id": "u9_agent_locibook",
+      "kind": "agent.code",
+      "designator": "U9",
+      "name": "CC-LOCIBOOK",
+      "pos": {
+        "x": 34,
+        "y": 81
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/LociBook",
+      "launch": "popout",
+      "resume": true,
+      "codexRef": "codex/projects/locibook.md",
+      "notes": "Placeable, writable loci books for mind-palace use: 16 angles, a landing cue, 32 note pages. Fabric 26.2, Java 25.",
+      "frame": "castellated",
+      "priority": 3,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "image": "C:/dev/LociBook/src/main/resources/assets/locibook/icon.png"
+    },
+    {
+      "id": "s5_repo_locibook",
+      "designator": "S5",
+      "kind": "store.repo",
+      "name": "LociBook",
+      "pos": {
+        "x": 53,
+        "y": 81
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/LociBook",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
+    },
+    {
+      "id": "a5_jar_locibook",
+      "designator": "A5",
+      "kind": "file.artifact",
+      "name": "locibook.jar",
+      "pos": {
+        "x": 78,
+        "y": 81
+      },
+      "footprint": {
+        "w": 5,
+        "h": 3
+      },
+      "glob": "C:/dev/LociBook/build/libs/*.jar",
+      "exclude": [
+        "*-sources.jar",
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$",
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "u10_agent_just1nudge",
+      "kind": "agent.code",
+      "designator": "U10",
+      "name": "CC-JUST1NUDGE",
+      "pos": {
+        "x": 112,
+        "y": 81
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/Just1Nudge",
+      "launch": "popout",
+      "resume": true,
+      "codexRef": "codex/projects/just1nudge.md",
+      "notes": "Nudge blocks and items off-grid (rotate, slide, lay flat) via display entities, so it saves with the world and shows for vanilla clients.",
+      "frame": "castellated",
+      "priority": 3,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "image": "C:/dev/Just1Nudge/src/main/resources/assets/just1nudge/icon.png"
+    },
+    {
+      "id": "s6_repo_just1nudge",
+      "designator": "S6",
+      "kind": "store.repo",
+      "name": "Just1Nudge",
+      "pos": {
+        "x": 131,
+        "y": 81
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/Just1Nudge",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
+    },
+    {
+      "id": "a6_jar_just1nudge",
+      "designator": "A6",
+      "kind": "file.artifact",
+      "name": "just1nudge.jar",
+      "pos": {
+        "x": 155,
+        "y": 81
+      },
+      "footprint": {
+        "w": 7,
+        "h": 6
+      },
+      "glob": "C:/dev/Just1Nudge/build/libs/*.jar",
+      "exclude": [
+        "*-sources.jar",
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$",
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "s7_repo_mccamop",
+      "designator": "S7",
+      "kind": "store.repo",
+      "name": "MCCamOp",
+      "pos": {
+        "x": 53,
+        "y": 105
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/MCCamOp",
+      "openWith": "explorer",
+      "frame": "tabs",
+      "priority": 1,
+      "showDesignator": false
+    },
+    {
+      "id": "a7_jar_mccamop",
+      "designator": "A7",
+      "kind": "file.artifact",
+      "name": "mccamop.jar",
+      "pos": {
+        "x": 78,
+        "y": 105
+      },
+      "footprint": {
+        "w": 5,
+        "h": 3
+      },
+      "glob": "C:/dev/MCCamOp/build/libs/*.jar",
+      "exclude": [
+        "*-sources.jar",
+        "*-dev.jar",
+        "*-sources-dev.jar"
+      ],
+      "versionPattern": "-(\\d+\\.\\d+\\.\\d+)\\.jar$",
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 32,
+        "y": 30
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 84,
+        "y": 41
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 110,
+        "y": 30
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 162,
+        "y": 41
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 32,
+        "y": 54
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 84,
+        "y": 65
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_7",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 110,
+        "y": 54
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_8",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 162,
+        "y": 65
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_9",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 61,
+        "y": 129
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_10",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 151,
+        "y": 137
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_11",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 32,
+        "y": 149
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_12",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 81,
+        "y": 159
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 42,
+        "y": 33
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 120,
+        "y": 33
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 42,
+        "y": 57
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 120,
+        "y": 57
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_grille_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 99,
+        "y": 133
+      },
+      "part": "grille",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_pads_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 146,
+        "y": 136
+      },
+      "part": "pads",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 41,
+        "y": 152
+      },
+      "part": "led_idle",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 60,
+        "y": 152
+      },
+      "part": "led_idle",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_7",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 80,
+        "y": 152
+      },
+      "part": "led_idle",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 29,
+        "y": 27
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 165,
+        "y": 162
+      },
+      "part": "fiducial",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_8",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 42,
+        "y": 81
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_13",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 32,
+        "y": 78
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_14",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 84,
+        "y": 89
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_9",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 120,
+        "y": 81
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_15",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 110,
+        "y": 78
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_16",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 162,
+        "y": 89
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_10",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 42,
+        "y": 105
+      },
+      "part": "led_ok",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_17",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 32,
+        "y": 102
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_18",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 84,
+        "y": 113
+      },
+      "part": "screw",
+      "showName": false,
+      "showDesignator": false
     }
   ],
   "edges": [
@@ -539,49 +1433,166 @@
       "from": "a1_jar_stalker",
       "to": "f1_mods_folder",
       "kind": "deploys",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "m10",
       "from": "a2_jar_pace",
       "to": "f1_mods_folder",
       "kind": "deploys",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "m11",
       "from": "a3_jar_giants",
       "to": "f1_mods_folder",
       "kind": "deploys",
-      "width": 2
+      "width": 2,
+      "color": "ok"
     },
     {
       "id": "m12",
       "from": "a3_jar_giants",
       "to": "p1_goobtropolis",
       "kind": "deploys",
-      "width": 3
+      "width": 3,
+      "color": "ok"
     },
     {
       "id": "m13",
       "from": "a4_jar_time",
       "to": "p1_goobtropolis",
       "kind": "deploys",
-      "width": 3
+      "width": 3,
+      "color": "ok"
     },
     {
       "id": "m14",
       "from": "p1_goobtropolis",
       "to": "j1_bloom",
       "kind": "syncs",
-      "width": 2
+      "width": 2,
+      "color": "signal"
     },
     {
       "id": "m15",
       "from": "f1_mods_folder",
       "to": "e1_launcher",
       "kind": "reads",
-      "width": 2
+      "width": 2,
+      "color": "copper-dark"
+    },
+    {
+      "id": "m17",
+      "from": "u9_agent_locibook",
+      "to": "s5_repo_locibook",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "m18",
+      "from": "s5_repo_locibook",
+      "to": "a5_jar_locibook",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "m19",
+      "from": "a5_jar_locibook",
+      "to": "f1_mods_folder",
+      "kind": "deploys",
+      "width": 2,
+      "color": "ok"
+    },
+    {
+      "id": "m20",
+      "from": "u10_agent_just1nudge",
+      "to": "s6_repo_just1nudge",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "m21",
+      "from": "s6_repo_just1nudge",
+      "to": "a6_jar_just1nudge",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "m22",
+      "from": "a6_jar_just1nudge",
+      "to": "f1_mods_folder",
+      "kind": "deploys",
+      "width": 2,
+      "color": "ok"
+    },
+    {
+      "id": "m23",
+      "from": "u8_agent_mccamop",
+      "to": "s7_repo_mccamop",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "m24",
+      "from": "s7_repo_mccamop",
+      "to": "a7_jar_mccamop",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "m25",
+      "from": "a7_jar_mccamop",
+      "to": "f1_mods_folder",
+      "kind": "deploys",
+      "width": 2,
+      "color": "ok"
+    }
+  ],
+  "phantoms": [
+    {
+      "id": "ph_latest_log",
+      "kind": "file.document",
+      "name": "latest.log",
+      "description": "The client's live log. The first thing to read when a mod misbehaves, one click away instead of four folders deep.",
+      "pos": {
+        "x": 78,
+        "y": 132
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%APPDATA%/.minecraft/logs/latest.log"
+      },
+      "connect": [
+        {
+          "to": "f1_mods_folder",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_crash_reports",
+      "kind": "store.folder",
+      "name": "Crash reports",
+      "description": "Where the client writes a report every time it crashes. Pairs with latest.log when a mod takes the game down.",
+      "pos": {
+        "x": 156,
+        "y": 132
+      },
+      "proposedBy": "U3 JARVIS-PRIME",
+      "proposedAt": "2026-09-11T09:02:35.480Z",
+      "fields": {
+        "path": "%APPDATA%/.minecraft/crash-reports"
+      },
+      "connect": [
+        {
+          "to": "e1_launcher",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

@@ -4,6 +4,11 @@ import { primaryTargetField } from '@shared/node-fields.js';
 import { isBroken, type TargetInfo } from '@shared/targets.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { NodeEditor } from './NodeEditor.js';
+import { ScheduleBlock } from './ScheduleBlock.js';
+import { FinanceBlock } from './FinanceBlock.js';
+import { isFinanceFolder } from '@shared/finance.js';
+import { AvatarLogoNote } from './AvatarLogoNote.js';
+import { GifNote } from './GifNote.js';
 import { formatBytes, relativeTime } from './TargetField.js';
 import { formatTokens } from '@shared/usage.js';
 
@@ -51,6 +56,7 @@ export function Inspector(): React.JSX.Element | null {
   const stopSession = useBoardStore((s) => s.stopSession);
   const copyResumeCommand = useBoardStore((s) => s.copyResumeCommand);
   const openTerminal = useBoardStore((s) => s.openTerminal);
+  const refreshFiles = useBoardStore((s) => s.refreshFiles);
   const usageRoutes = useBoardStore((s) => s.usageRoutes);
 
   if (!board) return null;
@@ -151,6 +157,16 @@ export function Inspector(): React.JSX.Element | null {
               {openLabel(node)}
             </button>
             <button type="button" className="btn" onClick={() => beginEdit(node.id)}>Edit node (F2)</button>
+            {node.kind === 'file.artifact' || node.kind === 'file.document' || node.kind === 'file.exe' ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void refreshFiles({ announce: true })}
+                title="Look on disk again for the newest file, now. The board also does this by itself when a file changes and when you come back to the window."
+              >
+                Refresh (F5)
+              </button>
+            ) : null}
           </div>
 
           {/*
@@ -184,7 +200,7 @@ export function Inspector(): React.JSX.Element | null {
             </div>
           ) : null}
 
-          {node.kind === 'agent.code' ? (
+          {node.kind === 'agent.code' || node.kind === 'agent.audit' ? (
             <div className="session-block">
               {session ? (
                 <>
@@ -243,6 +259,11 @@ export function Inspector(): React.JSX.Element | null {
             </div>
           ) : null}
 
+          {node.kind === 'task.scheduled' ? <ScheduleBlock node={node} /> : null}
+          {node.kind === 'store.folder' && isFinanceFolder(node.path) ? <FinanceBlock /> : null}
+          {node.logoSource === 'avatar' || node.logoSource === 'avatar-live' ? <AvatarLogoNote node={node} /> : null}
+          <GifNote node={node} />
+
           <dl className="facts">
             <dt title="Grid position, in tiles from the board origin. Drag in Edit Board mode (E) to change it.">Position</dt>
             <dd>{node.pos.x}, {node.pos.y}</dd>
@@ -252,6 +273,10 @@ export function Inspector(): React.JSX.Element | null {
             {node.launch ? <>
               <dt title="popout opens Windows Terminal. popout-elevated raises a UAC prompt on every launch.">Launch</dt>
               <dd>{node.launch}{node.launch === 'popout-elevated' ? ' ⚡ ELEVATED' : ''}</dd>
+            </> : null}
+            {node.kind === 'agent.code' && node.remoteControl === true ? <>
+              <dt title="This chip's sessions start with Claude Code's Remote Control. Open the Claude app, signed in as you, to read and drive them. Set in the editor, Session section.">Phone</dt>
+              <dd>REACHABLE (REMOTE CONTROL)</dd>
             </> : null}
             {node.prelaunch?.length ? <>
               <dt title="Named update steps this terminal runs before handing over. The commands live in code, never in board JSON.">Primes</dt>
@@ -319,7 +344,9 @@ function hasDirectory(node: BoardNode): boolean {
   switch (node.kind) {
     case 'store.repo':
     case 'store.folder':
+    case 'store.explorer':
     case 'agent.code':
+    case 'agent.audit':
     case 'service.process':
     case 'file.document':
     case 'file.exe':
@@ -336,9 +363,14 @@ function hasDirectory(node: BoardNode): boolean {
 function openLabel(node: BoardNode): string {
   switch (node.kind) {
     case 'agent.code': return 'Launch session';
+    case 'agent.audit': return 'Start drive audit';
+    case 'agent.prompt': return 'Type a message';
+    case 'agent.prompt-to-node': return 'Describe a node';
+    case 'monitor.system': return 'Open system monitor';
     case 'agent.chat':
     case 'agent.jarvis': return 'Open conversation in browser';
     case 'drive.room': return 'Descend into room';
+    case 'store.explorer': return 'Browse files';
     case 'store.repo':
     case 'store.folder': return node.openWith === 'vscode' ? 'Open in VS Code' : 'Open in Explorer';
     case 'store.cloud':

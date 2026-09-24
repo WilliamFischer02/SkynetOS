@@ -6,6 +6,7 @@ import Ajv2020, { type ValidateFunction } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { footprintOf, type Board, type BoardNode } from '@shared/types.js';
 import type { BoardLoad } from '@shared/ipc.js';
+import { homeRoot, programRoot } from './home.js';
 
 /**
  * Reads, validates and writes board/*.board.json.
@@ -19,9 +20,8 @@ import type { BoardLoad } from '@shared/ipc.js';
 let validator: ValidateFunction<Board> | null = null;
 
 function schemaPath(): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'schema', 'board.schema.json')
-    : join(app.getAppPath(), 'schema', 'board.schema.json');
+  // The schema belongs to the PROGRAM: the validator must match the code that was built with it.
+  return join(programRoot(), 'schema', 'board.schema.json');
 }
 
 /**
@@ -60,9 +60,10 @@ function getValidator(): ValidateFunction<Board> {
 }
 
 export function boardRoot(): string {
-  // Packaged: extraResources puts board/ next to the executable, outside app.asar, so it stays
-  // hand-editable and git-diffable. Dev: the repo copy.
-  return app.isPackaged ? join(process.resourcesPath, 'board') : join(app.getAppPath(), 'board');
+  // The boards are DATA, and live in the home folder: the repo in dev, and in an install too on a
+  // machine that has the repo. Never inside the install, where an update would overwrite them.
+  // See packages/shared/home.ts.
+  return join(homeRoot(), 'board');
 }
 
 function snapshotRoot(): string {

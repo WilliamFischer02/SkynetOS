@@ -55,7 +55,8 @@ describe('palette.ts agrees with skynet.gpl', () => {
     ['mc', ROOM_THEMES.minecraftos],
     ['ded', ROOM_THEMES.deductionos],
     ['story', ROOM_THEMES.storyos],
-    ['game', ROOM_THEMES.gameos]
+    ['game', ROOM_THEMES.gameos],
+    ['fin', ROOM_THEMES.financeos]
   ])('room %s matches', (prefix, theme) => {
     expect(gpl.get(`${prefix}-mask-dark`)).toBe(theme.maskDark.toUpperCase());
     expect(gpl.get(`${prefix}-mask-light`)).toBe(theme.maskLight.toUpperCase());
@@ -69,7 +70,8 @@ describe('board files agree with the palette', () => {
     ['minecraftos/room.board.json', ROOM_THEMES.minecraftos],
     ['deductionos/room.board.json', ROOM_THEMES.deductionos],
     ['storyos/room.board.json', ROOM_THEMES.storyos],
-    ['gameos/room.board.json', ROOM_THEMES.gameos]
+    ['gameos/room.board.json', ROOM_THEMES.gameos],
+    ['financeos/room.board.json', ROOM_THEMES.financeos]
   ])('%s carries its documented theme', (file, theme) => {
     const board = JSON.parse(readFileSync(join(ROOT, 'board', file), 'utf8')) as {
       theme: { maskDark: string; maskLight: string; signal: string };

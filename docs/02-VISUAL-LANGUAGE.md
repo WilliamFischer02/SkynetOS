@@ -23,6 +23,7 @@ Per-room, exactly two values — a dark mask and a light mask (the mask is shade
 | **DeductionOS** | `#201A12` | `#2E2619` | `#FFD866` |
 | **StoryOS** | `#1B1420` | `#271C2E` | `#A87BD6` |
 | **GameOS** | `#101C26` | `#182734` | `#4FA8D8` |
+| **FinanceOS** | `#1A1B22` | `#26272F` | `#5CDCD0` |
 
 ### Relation colour
 
@@ -104,7 +105,12 @@ designator is what survives — it is how you refer to the node when talking to 
 
 - Base tile: **16×16 px** at 1x. All art authored at 1x.
 - Node footprints, in tiles: `1×1` (passive component), `2×2` (small chip / file), `3×3` (agent chip), `4×3` (drive), `6×4` (room drive / big agent), `8×6` (JARVIS).
-- Traces run on the 8px half-grid so they can pass between adjacent components.
+- Traces run on the 8px half-grid so they can pass between adjacent components. A pinned wire end
+  (`fromAnchor` / `toAnchor`) snaps to the same half-grid along the node's side.
+- **Dashed and dotted traces are whole-pixel filled rectangles**, cut on the CPU by distance along
+  the route (`wire-geometry.ts`). Dashed is 4 on / 3 off, dotted 1 on / 2 off, both in multiples of
+  the run width, and the pattern carries on round a corner instead of restarting at it. Pixi's
+  dashed strokes are never used: a stroked dash is antialiased and lands on fractional pixels.
 - Silkscreen text: **Departure Mono** at 11px or 22px only (SIL OFL, <https://departuremono.com/>). Never in between — the font is pixel-perfect only at multiples of 11.
 
 ## Component vocabulary
@@ -124,7 +130,7 @@ designator is what survives — it is how you refer to the node when talking to 
 | Scheduler | **Crystal oscillator** with a tick animation | Cron-style jobs |
 | Health monitor | **PSU block** with 3 gauges | Real CPU/RAM/disk, unlike the cosmetic chip temps |
 | Note / label | **Silkscreen text only** | No component, just print on the board |
-| Trace | Copper run, 2px or 3px wide | Width = importance, not throughput |
+| Trace | Copper run, 1–4 px wide, solid, dashed or dotted, with a 0–3 px black outline | Width = importance, not throughput |
 | Bundle | Several traces routed in parallel with a ribbon clamp | Collapses visual noise |
 | Via | Copper ring with a dark centre | Where a trace leaves the room to a parent board |
 
@@ -155,7 +161,13 @@ These exist because the number one failure mode of a project like this is art th
 1. **Alpha is binary.** Every pixel is `alpha == 0` or `alpha == 255`. No feathered edges.
 2. **Palette lock.** Every pixel must exactly match a hex in `assets/palettes/skynet.gpl`. Max 6 unique colors per sprite.
 3. **Authored at 1x.** Source sprite dimensions must be multiples of 8. Never upscale source art and re-save.
-4. **Integer scaling only, above 1x.** Working zoom ∈ {1,2,3,4}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+4. **Integer scaling only, above 1x.** Working zoom ∈ {1,2,3,4,5,6,7,8}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+
+   > **Widened 2026-09-11** at William's request for "more finite zoom levels". The integers
+   > run to **8x**, for reading a node's pixels up close, and a third overview level, **1/8**,
+   > joins the two below. Still only exact factors: a whole number maps each world pixel to an
+   > N×N block, and a power-of-two fraction samples every Nth pixel. Keys 1 to 8 jump straight to
+   > that zoom; the wheel and `-`/`=` step through all eleven levels.
 
    > **Amended 2026-09-11.** Two overview levels sit below 1x: **1/2** and **1/4**, for seeing a
    > whole tripled board at once (key `0` picks the closest one that fits). They are exact binary
@@ -166,6 +178,28 @@ These exist because the number one failure mode of a project like this is art th
    > for reading it. An arbitrary fraction (0.75, "fit exactly") remains a bug.
 5. **Nearest-neighbour everywhere.** Pixi `scaleMode: 'nearest'`, CSS `image-rendering: pixelated` on any DOM that shows sprites, mipmaps off.
 6. **No blur/bloom/drop-shadow filters.** Not in Pixi, not in CSS. Glow is achieved with palette ramps and dither masks.
+
+   > **The room look, added 2026-09-11: one deliberate, user-chosen exception to rule 2.** A room
+   > may set `look.hue` / `saturation` / `brightness` / `contrast`, applied as a CSS colour filter
+   > on the board canvas only. These are per-pixel colour matrices: nothing blurs, nothing moves,
+   > nothing is resampled, so rules 1 and 3–7 still hold. What does not hold while one is set is
+   > the palette lock. A hue-rotated copper is not copper. William asked for exactly that; it is
+   > off by default, and a room with no look carries no filter at all. The look's vignette is NOT
+   > an exception: it is an ordered dither of one palette colour at integer scale, and its tiled
+   > floor goes through the same palette dither as a backdrop. See docs/DECISIONS.md 2026-09-11.
+
+   > **The animated JARVIS-face logo, added 2026-09-11: a second user-chosen exception to rule 2.**
+   > A node whose `logoSource` is `avatar-live` shows William's avatar frames in their OWN colours,
+   > not dithered onto the room's palette, as the face window composes them: mask-dark ground, a
+   > 1 px copper-dark edge, the face, its float, blinks and mouth, in the node's logo box. Every
+   > other rule holds. Alpha stays binary (the validator already requires it of the frames), the
+   > float moves in whole pixels, and the face is drawn nearest-neighbour in world space at the
+   > largest whole-number scale that fits the box. A box smaller than one frame takes every 2nd,
+   > 3rd, … pixel, an exact decimation like the overview zooms, never a smoothed resample.
+   > William asked for the face "as a logo graphic", in the face window's own look. It is opt-in
+   > per node, and `avatar`, the still face, stays dithered like any other logo. **GIF wallpapers
+   > and logos are NOT an exception:** every frame goes through the same palette dither as a
+   > still. See docs/DECISIONS.md 2026-09-11.
 7. **No rotation off 90°.** Sprites rotate only in 90° steps. Diagonals are pre-drawn, never rotated.
 8. **Text is bitmap.** Departure Mono at 11/22px, or a Pixi BitmapFont. No sub-pixel antialiasing (`-webkit-font-smoothing: none`).
 9. **The window is not fractionally scaled.** On launch, read `screen.getPrimaryDisplay().scaleFactor` and call `webContents.setZoomFactor(1 / scaleFactor)`. Electron computes the renderer's `devicePixelRatio` as `osScaleFactor × zoomFactor`, so this drives it to exactly **1**: one CSS pixel becomes one device pixel and every integer camera zoom is exact at any OS scaling. Re-apply on the window's `moved` event, because a second monitor can have a different scale factor. Log the values.
@@ -189,6 +223,54 @@ These exist because the number one failure mode of a project like this is art th
 
    > **Corrected 2026-09-09 (M0).** This rule used to say "snap to the nearest workable integer" zoom. That is not always possible: at Windows' 125%, `1.25 × N` is a whole number only for N ∈ {4, 8, 12}, so zoom 2 and zoom 3 — two of the three documented zoom levels — have no workable snap at all. Cancelling the OS scale instead of constraining the zoom fixes every scale factor with one line. Confirmed in the M0 smoke capture: on this machine, at OS scaling **200%**, `devicePixelRatio` reads 1 and the rendered board contains exactly four colours, all exact palette entries, at zoom 2x, 3x and 4x.
 10. **Screenshot diff test.** A Playwright test renders a fixture board and pixel-diffs it against a golden PNG at 0% tolerance. Any accidental filter or resample breaks it loudly.
+
+## Chrome icons
+
+The chrome's controls carry a pixel icon beside their words (`src/renderer/ui/Icon.tsx`).
+
+- **How they are drawn.** Each is a 9x9 bitmap written as text rows, drawn as whole-pixel SVG rects
+  with `shapeRendering="crispEdges"` and `fill="currentColor"`, at `9 × --p`. An icon takes the
+  colour of the text beside it, stays sharp at every chrome scale, and brings no colour of its own
+  into the palette.
+- **They never stand alone.** An icon is `aria-hidden` and is never the only label: its button keeps
+  its word. An icon-only button (the HUD's find, bell and gear; the minimap's controls) carries a
+  `title` and an `aria-label` instead.
+- **One glyph per meaning, reused.** `stop` is Kill and Stop everywhere; `close` is every close.
+- **Adding one.** Add its rows. `test/icons.test.ts` checks that every icon is 9x9, has at least 5
+  lit pixels, and duplicates no other.
+
+## The chrome's layout manager
+
+The docked chrome must never cover itself: the breadcrumb, HUD, usage meter, left stack, minimap,
+toasts, LOOK and the help line. `ui/chrome-layout.ts` decides; `ui/useChromeLayout.ts` measures and
+applies. The rules:
+
+- **The HUD keeps to one line.** It goes compact, with a +N list, rather than wrapping into the row
+  below.
+- **What gives way, lowest priority first:**
+  1. the help line;
+  2. the minimap, to its button, shown in warn;
+  3. the usage meter, to its header;
+  4. the session dock, to its header.
+- **Toasts and LOOK make room.** Toasts stack above whatever holds the bottom-right corner, and LOOK
+  stops above it.
+- **The user's own fold or hide always holds**, and each panel has one.
+- **Every offset stays a whole pixel.** Offsets the planner computes are whole pixels, and the
+  inspector's width is rounded down to a multiple of `--p` when a narrow window shrinks it.
+
+A new docked panel belongs in `planChrome`'s inputs and in the smoke layout probe's `CHROME` list
+(`src/main/index.ts`). Then `npm run smoke:shots` shows whether it collides with anything.
+
+### THE MATRIX
+
+*(Added 2026-09-12.)* THE MATRIX (`G`, or the MATRIX button beside MANUAL) is a 3D globe, and it keeps every
+rule above by drawing the 3D itself rather than asking Canvas2D or WebGL to. `src/renderer/matrix/MatrixView.tsx`
+rasterises its polygons and lines into a buffer of about 280 rows, writing only exact colours: the room's
+`mask-dark`, `mask-light` and `signal`, and `silk` for the file in the middle. Coverage is binary and shading
+is a 4×4 Bayer dither. The buffer is shown at a whole number of device pixels per pixel with
+`image-rendering: pixelated`. Canvas2D's own paths antialias their edges, which would put pixels on screen that
+are in no palette; WebGL would need the same fight with its filtering. The words over the globe are DOM chrome
+text and held to the chrome's standard, on the ground colour so the dither behind them does not eat them.
 
 ## Writing on the board
 

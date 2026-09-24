@@ -156,6 +156,13 @@ export function liveSessions(): SessionRow[] {
   ).all() as unknown as SessionRow[];
 }
 
+/** Every session started at or after `iso`, oldest first. The journal's list of the day's sessions. */
+export function sessionsSince(iso: string): SessionRow[] {
+  return getDb().prepare(
+    'SELECT * FROM sessions WHERE started_at >= ? ORDER BY started_at ASC'
+  ).all(iso) as unknown as SessionRow[];
+}
+
 export function sessionsForNode(boardId: string, nodeId: string, limit = 10): SessionRow[] {
   return getDb().prepare(`
     SELECT * FROM sessions WHERE board_id = ? AND node_id = ?

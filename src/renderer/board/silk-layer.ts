@@ -10,7 +10,7 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import type { BoardNode, BoardTheme } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
-import { SILK, hexToNumber, signalOf } from '@shared/palette.js';
+import { SILK, hexToNumber, resolveToken, signalOf } from '@shared/palette.js';
 import { TILE } from './camera.js';
 import { renderSilkText } from './silkscreen.js';
 import { renderTextBlock, styleForNode } from './text-plate.js';
@@ -27,7 +27,8 @@ import { renderTextBlock, styleForNode } from './text-plate.js';
 export function buildSilkNote(node: BoardNode, theme: BoardTheme, glowStep = 0): Sprite | null {
   const text = (node.text ?? '').trim();
   if (!text) return null;
-  const block = renderTextBlock(text, styleForNode(node, theme), theme, glowStep);
+  const crest = node.textGlowColor ? resolveToken(node.textGlowColor, theme) : undefined;
+  const block = renderTextBlock(text, styleForNode(node, theme), theme, glowStep, crest);
   if (!block) return null;
 
   const sprite = new Sprite(Texture.from(block.canvas));

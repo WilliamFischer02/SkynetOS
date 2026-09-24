@@ -1,0 +1,44 @@
+/*
+ * The JARVIS face window. A frameless window holding one canvas; the whole body drags the window.
+ * Chrome sizes are multiples of --p, like the board window's, so 11px Departure Mono stays exact.
+ */
+body.avatar-mode {
+  margin: 0;
+  overflow: hidden;
+  background: var(--mask-dark);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+body.avatar-mode #root { height: 100vh; }
+
+.avatar-root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper-dark);
+}
+
+.avatar-canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  image-rendering: pixelated;
+}
+
+.avatar-label,
+.avatar-hint {
+  flex: 0 0 auto;
+  padding: 0 calc(6 * var(--p)) calc(4 * var(--p));
+  font-family: "Departure Mono", ui-monospace, monospace;
+  font-size: calc(11px * var(--ui-scale));
+  line-height: calc(13 * var(--p));
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.avatar-label { color: var(--signal); }
+.avatar-hint { color: var(--copper); text-transform: none; }

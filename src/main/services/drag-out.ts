@@ -117,7 +117,14 @@ export async function startDragOut(
 
   const { file, error } = dragFileFor(node);
   if (!file) return { ok: false, ...(error ? { error } : {}) };
+  return dragPathOut(sender, file);
+}
 
+/**
+ * Hand one file on disk to Windows as a drag. The file explorer's entry point: it has already
+ * checked the file is inside its root, so there is no node to resolve.
+ */
+export async function dragPathOut(sender: WebContents, file: string): Promise<DragOutResult> {
   try {
     sender.startDrag({ file: file.replace(/\//g, '\\'), icon: await dragIcon(file) });
     return { ok: true, file };

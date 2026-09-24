@@ -26,7 +26,7 @@ const board = boardPixelSize({ width: 64, height: 40 }); // the real root board:
 
 describe('zoom', () => {
   it('offers whole numbers for working and exact binary fractions for overview', () => {
-    expect(ZOOM_LEVELS).toEqual([0.25, 0.5, 1, 2, 3, 4]);
+    expect(ZOOM_LEVELS).toEqual([0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8]);
     for (const z of ZOOM_LEVELS) {
       if (z >= 1) expect(Number.isInteger(z)).toBe(true);
       // A power-of-two fraction: 1/z is a whole power of two, so the scale is exact in floating point.
@@ -37,15 +37,21 @@ describe('zoom', () => {
   it('rejects arbitrary fractions and out-of-range zooms', () => {
     expect(isZoom(2.5)).toBe(false);
     expect(isZoom(0.75)).toBe(false);
-    expect(isZoom(0.125)).toBe(false);
-    expect(isZoom(5)).toBe(false);
+    expect(isZoom(1.5)).toBe(false);
+    expect(isZoom(0.0625)).toBe(false);
+    expect(isZoom(9)).toBe(false);
+    expect(isZoom(0.125)).toBe(true);
+    expect(isZoom(5)).toBe(true);
+    expect(isZoom(8)).toBe(true);
     expect(isZoom(1)).toBe(true);
     expect(isZoom(0.5)).toBe(true);
   });
 
   it('saturates at the ends instead of wrapping', () => {
-    expect(stepZoom(4, 1)).toBe(4);
-    expect(stepZoom(0.25, -1)).toBe(0.25);
+    expect(stepZoom(8, 1)).toBe(8);
+    expect(stepZoom(0.125, -1)).toBe(0.125);
+    expect(stepZoom(4, 1)).toBe(5);
+    expect(stepZoom(0.25, -1)).toBe(0.125);
     expect(stepZoom(3, 1)).toBe(4);
     expect(stepZoom(2, -1)).toBe(1);
     expect(stepZoom(1, -1)).toBe(0.5);
@@ -68,14 +74,16 @@ describe('zoom', () => {
   });
 
   it('falls back on the smallest level for a board nothing fits', () => {
-    expect(fitZoom(boardPixelSize({ width: 512, height: 512 }), { width: 800, height: 600 })).toBe(0.25);
+    expect(fitZoom(boardPixelSize({ width: 512, height: 512 }), { width: 800, height: 600 })).toBe(0.125);
   });
 
   it('prints fractions as fractions', () => {
+    expect(formatZoom(8)).toBe('8X');
     expect(formatZoom(3)).toBe('3X');
     expect(formatZoom(1)).toBe('1X');
     expect(formatZoom(0.5)).toBe('1/2X');
     expect(formatZoom(0.25)).toBe('1/4X');
+    expect(formatZoom(0.125)).toBe('1/8X');
   });
 
   it('keeps the anchor point over the same world position', () => {
@@ -206,12 +214,22 @@ describe('clampCamera', () => {
     ['bottom-left', 0, bigBoard.height],
     ['bottom-right', bigBoard.width, bigBoard.height]
   ])('can bring the %s corner of the board to the centre of the screen', (_corner, x, y) => {
-    for (const zoom of ZOOM_LEVELS) {
+    // Only where the board is bigger than the view. A board that fits is centred instead; see below.
+    const panning = ZOOM_LEVELS.filter((z) => bigBoard.width > view.width / z && bigBoard.height > view.height / z);
+    expect(panning.length).toBeGreaterThan(0);
+    for (const zoom of panning) {
       const wanted = centreOn(x, y, zoom);
       const got = clampCamera(wanted, bigBoard, view);
       expect(got.x, `x at ${zoom}x`).toBeCloseTo(wanted.x, 6);
       expect(got.y, `y at ${zoom}x`).toBeCloseTo(wanted.y, 6);
     }
+  });
+
+  it('centres a board that fits in the view, at 1/8 even an 8000 px one', () => {
+    // 1600 px of screen at 1/8 shows 12800 world px, so the whole board fits and sits in the middle.
+    const got = clampCamera({ x: -99999, y: 99999, zoom: 0.125 }, bigBoard, view);
+    expect(got.x).toBeCloseTo((bigBoard.width - view.width / 0.125) / 2, 6);
+    expect(got.y).toBeCloseTo((bigBoard.height - view.height / 0.125) / 2, 6);
   });
 
   it('still refuses to let the board leave the screen entirely', () => {

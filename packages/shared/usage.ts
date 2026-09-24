@@ -106,8 +106,75 @@ export interface UsageSummary {
    * span this account has ever had. If a ceiling has ever been hit, this is approximately it.
    */
   peakWindowTokens: number;
+  /** What a real limit hit says the budget is. See `calibrateFromLimits`. Absent on an error. */
+  calibration?: UsageCalibration;
   /** Set when reading the conversation store failed, so the widget can say so. */
   error?: string;
+}
+
+/* ────────────────────────── calibrating against a real limit ────────────────────────── */
+
+/**
+ * One request Claude refused because a limit was reached, as the transcript recorded it.
+ *
+ * Claude Code writes the refusal into the conversation with a `quotaLimits` object:
+ * `{ status: "rejected", rateLimitType: "five_hour", resetsAt: <epoch s>, … }`. Found on this
+ * machine on 2026-09-08. It is the one place a ceiling is recorded rather than estimated.
+ */
+export interface LimitHit {
+  /** When the refusal happened, epoch ms. */
+  at: number;
+  /** When that limit resets, epoch ms. */
+  resetsAt: number;
+  /** `five_hour`, `seven_day`, …, as Claude Code named it. */
+  type: string;
+}
+
+export interface UsageCalibration {
+  /**
+   * Weighted tokens spent in the five-hour window that ended in a refusal: the budget, MEASURED.
+   * Null when no five-hour limit has ever been hit here, in which case every budget is an estimate.
+   */
+  measuredBudget: number | null;
+  /** When that limit was hit, epoch ms. */
+  measuredAt: number | null;
+  /** How many distinct five-hour windows have ended in a refusal. */
+  hits: number;
+}
+
+const FIVE_HOURS_MS = 5 * 3_600_000;
+
+/**
+ * The budget, from the most recent five-hour limit actually hit.
+ *
+ * William: "double down on ensuring the resource monitor for credit usage is as accurate as
+ * possible." A refusal is the only moment the account says where its ceiling is. The window it
+ * closed began five hours before it resets. Everything spent between that start and the refusal
+ * is, by definition, the whole allowance. The most recent hit wins, because a plan can change
+ * and an old ceiling is a stale fact. Several refusals in the same window count once.
+ */
+export function calibrateFromLimits(limits: readonly LimitHit[], events: readonly [number, number][]): UsageCalibration {
+  const windows = new Map<number, LimitHit>();
+  for (const hit of [...limits].filter((l) => l.type === 'five_hour' && Number.isFinite(l.at) && Number.isFinite(l.resetsAt)).sort((a, b) => b.at - a.at)) {
+    if (!windows.has(hit.resetsAt)) windows.set(hit.resetsAt, hit);
+  }
+  const latest = [...windows.values()][0];
+  if (!latest) return { measuredBudget: null, measuredAt: null, hits: 0 };
+  const start = latest.resetsAt - FIVE_HOURS_MS;
+  let spent = 0;
+  for (const [at, w] of events) if (at >= start && at <= latest.at) spent += w;
+  return { measuredBudget: spent > 0 ? Math.round(spent) : null, measuredAt: latest.at, hits: windows.size };
+}
+
+/**
+ * The budget implied by Claude's own percentage: what was measured here, divided by the share of
+ * the allowance Claude says it was. `/usage` in Claude Code and claude.ai's usage page both show
+ * the current session as a percentage. That is the one number the account reports and this disk
+ * does not have.
+ */
+export function budgetFromPercent(usedTokens: number, percentUsed: number): number | null {
+  if (!(percentUsed > 0 && percentUsed <= 100) || !(usedTokens > 0)) return null;
+  return Math.round(usedTokens / (percentUsed / 100));
 }
 
 /** The three numbers William asked for, plus what each is derived from. */

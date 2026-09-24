@@ -19,9 +19,9 @@ export type Hex = `#${string}`;
 export type BriefingMode = 'none' | 'first' | 'every';
 
 export const NODE_KINDS = [
-  'agent.code', 'agent.chat', 'agent.jarvis',
+  'agent.code', 'agent.audit', 'agent.chat', 'agent.jarvis', 'agent.prompt', 'agent.prompt-to-node',
   'drive.room',
-  'store.repo', 'store.folder', 'store.cloud',
+  'store.repo', 'store.folder', 'store.explorer', 'store.cloud',
   'file.document', 'file.exe', 'file.artifact',
   'link.url', 'service.process', 'task.scheduled',
   'monitor.system', 'note.silk', 'group.zone', 'decor.image', 'decor.part'
@@ -79,7 +79,7 @@ export type LaunchMode = 'popout' | 'popout-elevated' | 'embedded' | 'headless';
  * direct document URL and falls back to the browser, with an explanation, when it does not get
  * one. See packages/shared/office.ts.
  */
-export type OpenWith = 'explorer' | 'default' | 'browser' | 'terminal' | 'vscode' | 'office';
+export type OpenWith = 'explorer' | 'default' | 'browser' | 'terminal' | 'vscode' | 'office' | 'notepadpp' | 'obsidian';
 
 /** Grid position, in tiles from the board origin. Never pixels. */
 export interface GridPos { x: number; y: number }
@@ -120,6 +120,13 @@ export interface BoardNode {
   launch?: LaunchMode;
   model?: string;
   resume?: boolean;
+  /**
+   * Start this agent's sessions with Claude Code's own Remote Control (`claude --remote-control`),
+   * so the session can be read and driven from the Claude app on a phone. Off unless set. The
+   * reach is William's Anthropic login, not anything SkynetOS opens: see docs/07 "Sessions from
+   * the phone".
+   */
+  remoteControl?: boolean;
   initialPrompt?: string;
   mcpServers?: string[];
 
@@ -160,12 +167,23 @@ export interface BoardNode {
   partition?: string;
   persona?: string;
 
+  // agent.prompt — the quick-chat box. See packages/shared/prompt.ts.
+  /** The agent.jarvis or agent.chat node this box sends to. Absent: the board's JARVIS head. */
+  promptTarget?: string;
+  /** What Enter does: `send` (the default) or `draft` (leave it in the conversation's own box). */
+  promptMode?: 'send' | 'draft';
+
   // drive.room
   boardFile?: string;
   engraving?: string;
 
   // store.* / file.*
   path?: string;
+  /**
+   * store.explorer only: the folder its window opens at, inside `path`. Absent means the root. Set
+   * from the window's SET AS RESTING FOLDER button, so it is an ordinary, undoable node.update.
+   */
+  restPath?: string;
   localPath?: string;
   remote?: string;
   openWith?: OpenWith;
@@ -219,6 +237,25 @@ export interface BoardNode {
   schedule?: string;
   action?: Record<string, unknown>;
   enabled?: boolean;
+  /**
+   * task.scheduled, as the journal: the Obsidian vault its note is written into. Set, and a click
+   * writes today's SkynetOS journal note there. See src/main/services/journal.ts.
+   */
+  journalVault?: string;
+  /** Vault-relative folder for the journal's notes. Empty: the vault's daily-notes folder, `/SkynetOS`. */
+  journalFolder?: string;
+  /**
+   * task.scheduled with `{"type":"agent.run"}`: which agent.code node the run starts a fresh
+   * session on (by id, on this board or the root board). Empty: the root board's JARVIS Prime.
+   * See packages/shared/schedule.ts.
+   */
+  taskTarget?: string;
+  /** A markdown brief inside the SkynetOS repo, read at run time, e.g. `codex/briefs/morning-maintenance.md`. */
+  taskBrief?: string;
+  /** Extra instructions appended after the brief. */
+  taskPrompt?: string;
+  /** How long after a missed slot (the app was closed) the task still runs ONCE on opening. Default 4, max 48. */
+  catchUpHours?: number;
 
   // note.silk / group.zone
   text?: string;
@@ -253,6 +290,25 @@ export interface BoardNode {
    * given its own bevel so it reads as a badge sitting on the face rather than part of it.
    */
   logo?: string;
+  /**
+   * Where the logo comes from: `file` (the `logo` image above, the default), `avatar` (the JARVIS
+   * avatar's still face, assets/avatar/jarvis/idle.png) or `none`. `showLogo: false` still hides
+   * whichever it is. See packages/shared/logo-source.ts.
+   */
+  logoSource?: 'file' | 'avatar' | 'avatar-live' | 'none';
+  /**
+   * For a GIF wallpaper or logo: play it (the default) or hold its first frame. Each frame is
+   * dithered onto the room's palette like any image; see packages/shared/gif.ts for the caps.
+   */
+  imageAnimate?: boolean;
+
+  /**
+   * The JARVIS face window beside this node's window (services/avatar-window.ts). Only JARVIS
+   * iterations have one: the Face, JARVIS Prime, and anything tagged `jarvis`
+   * (packages/shared/avatar-window.ts `isJarvisIteration`). `false` switches it off for this node;
+   * it never grants a face to a node that is not JARVIS. Absent means on.
+   */
+  avatarWindow?: boolean;
 
   /**
    * What this node prints on the board. All four default to ON and are independent, so a node can
@@ -327,6 +383,38 @@ export interface BoardNode {
    * Every frame holds exactly the six colours the image already had. See board/glow.ts.
    */
   pulseGlow?: boolean;
+
+  /*
+   * Effect modifiers and the effects added on 2026-09-11. William: "more checkboxes that enable
+   * different animated / visual effects like the light pulse, and when those effects are enabled
+   * color and speed modifiers for the animation." Speeds are percentages (100 = the tuned
+   * default, 25 to 400) so they stay whole numbers in the board file. Colours are palette tokens.
+   * See src/renderer/board/effects.ts.
+   */
+  /**
+   * monitor.system: draw the live system-performance widget on the node's face. Default on.
+   * Off shows the node's own wallpaper and logo like any other component. William: "the psu /
+   * live data widgets should have a togglable switch for 'display system performance graphics',
+   * otherwise it should show the selected images."
+   */
+  showSystemGraphics?: boolean;
+
+  /** Pulse glow speed, percent. */
+  pulseSpeed?: number;
+  /** The colour at the pulse's crest. Absent: two rungs up the room's own ramp. */
+  pulseColor?: PaletteToken;
+  /** Text glow speed, percent. */
+  textGlowSpeed?: number;
+  /** The colour at the text glow's peak. Absent: two rungs up the room's own ramp. */
+  textGlowColor?: PaletteToken;
+  /** A run of light travelling clockwise round the node's edge. */
+  chase?: boolean;
+  chaseColor?: PaletteToken;
+  chaseSpeed?: number;
+  /** A line sweeping down across the node's face. */
+  scan?: boolean;
+  scanColor?: PaletteToken;
+  scanSpeed?: number;
 }
 
 /** What a node prints on the board, with the defaults applied. */
@@ -354,13 +442,54 @@ export function displayOf(
   };
 }
 
+/**
+ * A wire's stroke pattern. William: "more wire type variations (dotted and dashed and solid strokes
+ * and fills, stroke width modifier". Drawn as whole-pixel rectangles along the route, never as an
+ * antialiased dashed line; see src/renderer/board/wire-geometry.ts.
+ */
+export const WIRE_DASHES = ['solid', 'dashed', 'dotted'] as const;
+export type WireDash = (typeof WIRE_DASHES)[number];
+
+export const ANCHOR_SIDES = ['top', 'right', 'bottom', 'left'] as const;
+export type AnchorSide = (typeof ANCHOR_SIDES)[number];
+
+/**
+ * Where a wire meets a node, pinned by hand: a side, and how far along it (0 = the side's start,
+ * top-left going clockwise for top/right, and the left or top end for bottom/left; 1 = its end).
+ * A fraction rather than a tile, so the pin stays at the same place on the node when it is moved or
+ * resized. William: "reposition both endpoints of a wire to a desired point along a nodes edge and
+ * it sticks to that point".
+ */
+export interface WireAnchor {
+  side: AnchorSide;
+  offset: number;
+}
+
 export interface BoardEdge {
   id: string;
   from: string;
   to: string;
   kind: EdgeKind;
-  /** 2 = normal, 3 = primary. Width means importance, not throughput. */
-  width?: 2 | 3;
+  /** The run's stroke pattern. Absent: solid, except a `depends` wire, which is dashed by kind. */
+  dash?: WireDash;
+  /** The outline's own pattern. Absent: the outline follows the run, dash for dash. */
+  outlineDash?: WireDash;
+  /** The black edge's width in px, 0 to 3. 0 draws no outline. Absent: 1. */
+  outlineWidth?: 0 | 1 | 2 | 3;
+  /** Where the wire leaves `from`, pinned by hand. Absent: the router picks. */
+  fromAnchor?: WireAnchor;
+  /** Where the wire arrives at `to`, pinned by hand. Absent: the router picks. */
+  toAnchor?: WireAnchor;
+  /** Run width in px, 1 to 4. 2 = normal, 3 = primary. Width means importance, not throughput. */
+  width?: 1 | 2 | 3 | 4;
+  /**
+   * The copper run's colour, as a wire token (see WIRE_TOKENS in palette.ts), never a hex, so a
+   * board cannot name an off-palette colour and `signal` stays each room's own accent. Absent
+   * means copper.
+   */
+  color?: string;
+  /** The outline's colour, as a wire token. Absent means ink: every wire carries a black edge. */
+  stroke?: string;
   waypoints?: [number, number][];
   label?: string;
   /**
@@ -368,6 +497,33 @@ export interface BoardEdge {
    * leads somewhere else carries that place's identity. Colour only — no routing effect.
    */
   relation?: string;
+}
+
+/**
+ * A room's overall look, on top of its theme. Every field optional; absent means the board exactly
+ * as it was drawn before this existed. See packages/shared/look.ts and docs/03 §Board look.
+ */
+export interface BoardLook {
+  /** Whole-board hue rotation, degrees, -180..180. */
+  hue?: number;
+  /** Percent, 0..200. 100 is unchanged. */
+  saturation?: number;
+  /** Percent, 50..150. 100 is unchanged. */
+  brightness?: number;
+  /** Percent, 50..150. 100 is unchanged. */
+  contrast?: number;
+  /** A dithered, pixel-art darkening toward the screen edges. */
+  vignette?: boolean;
+  /** 1..4. How far in the dither reaches and how dense it gets at the corners. */
+  vignetteStrength?: number;
+  /** A wire token (palette token or `ink`). Absent means ink. */
+  vignetteColor?: string;
+  /** A square image, tiled across the whole board in place of the procedural substrate. */
+  tileImage?: string;
+  /** The tiled background is used only while this is on. Off keeps the path for later. */
+  tileEnabled?: boolean;
+  /** Integer screen scale of one tile, 1..4. */
+  tileScale?: number;
 }
 
 export interface Board {
@@ -381,8 +537,41 @@ export interface Board {
   agentEditPolicy?: 'require-approval' | 'auto';
   /** Board ids this room is related to. Declarative; drives shared colour, nothing else. */
   relatedBoards?: string[];
+  /** Whole-board colour, vignette and tiled background. Absent means the default look. */
+  look?: BoardLook;
   nodes: BoardNode[];
   edges: BoardEdge[];
+  /**
+   * Recommended nodes: JARVIS's sketches of what should go here next, drawn as phantoms with a
+   * tick and a cross. Not nodes — nothing resolves, nothing collides, nothing activates — until
+   * William approves one, which turns it into a real node in one undoable command. At most
+   * MAX_PHANTOMS_PER_BOARD (packages/shared/phantoms.ts). See docs/03 §Phantoms.
+   */
+  phantoms?: Phantom[];
+}
+
+/** A proposed wire from a phantom to a node that already exists. */
+export interface PhantomLink {
+  to: string;
+  kind: EdgeKind;
+}
+
+export interface Phantom {
+  id: string;
+  kind: NodeKind;
+  /** What the real node would be called. */
+  name: string;
+  /** Why it belongs here, in a sentence or two. Shown on the phantom's plate. */
+  description: string;
+  pos: GridPos;
+  footprint?: Footprint;
+  /** Binding and appearance fields the real node gets on approval: path, url, cwd, frame… */
+  fields?: Partial<BoardNode>;
+  connect?: PhantomLink[];
+  /** Who sketched it: 'user', 'jarvis', or an agent's name. */
+  proposedBy: string;
+  /** ISO timestamp. */
+  proposedAt: string;
 }
 
 /**
@@ -396,10 +585,18 @@ export interface Board {
 export const DEFAULT_FOOTPRINT: Record<NodeKind, Footprint> = {
   'agent.jarvis': { w: 8, h: 6 },
   'agent.code': { w: 3, h: 3 },
+  // A drive audit is a Claude Code chip with a whole drive under it: a size up, so it reads as one.
+  'agent.audit': { w: 4, h: 4 },
   'agent.chat': { w: 4, h: 4 },
+  // A message box is wide and short, like the one it imitates: room for two lines and a toolbar.
+  'agent.prompt': { w: 11, h: 3 },
+  // The same box plus one row for its PROMPT → NODE title tab, so the text keeps the same room.
+  'agent.prompt-to-node': { w: 11, h: 4 },
   'drive.room': { w: 6, h: 4 },
   'store.repo': { w: 4, h: 3 },
   'store.folder': { w: 4, h: 3 },
+  // A window onto a folder: wide enough to read as a screen rather than as another drive.
+  'store.explorer': { w: 6, h: 4 },
   'store.cloud': { w: 4, h: 3 },
   'file.document': { w: 2, h: 2 },
   'file.exe': { w: 2, h: 2 },
@@ -502,11 +699,15 @@ export function spriteKeyOf(node: Pick<BoardNode, 'kind' | 'part'>, state = 'idl
   }
   const byKind: Partial<Record<NodeKind, string>> = {
     'agent.code': 'component.chip_dip',
+    'agent.audit': 'component.chip_audit',
     'agent.chat': 'component.chip_qfp',
+    'agent.prompt': 'component.prompt_box',
+    'agent.prompt-to-node': 'component.prompt_to_node',
     'agent.jarvis': 'component.cpu_jarvis',
     'drive.room': 'component.ssd_room',
     'store.repo': 'component.hdd',
     'store.folder': 'component.hdd',
+    'store.explorer': 'component.explorer',
     'store.cloud': 'component.jack_link',
     'file.document': 'component.eprom_doc',
     'file.exe': 'component.switch_exe',

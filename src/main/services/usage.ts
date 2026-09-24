@@ -5,11 +5,13 @@ import {
   ZERO_TOKENS,
   addTokens,
   attributeActivity,
+  calibrateFromLimits,
   normalisePath,
   projectDirFor,
   toolPaths,
   weightedTokens,
   type ActivityEvent,
+  type LimitHit,
   type NodeClaim,
   type ProjectUsage,
   type TokenCounts,
@@ -52,6 +54,8 @@ interface CacheEntry {
   events: [number, number][];
   /** Every assistant message inside the window, with the files its tool calls named. */
   activity: ActivityEvent[];
+  /** Every refusal for a reached limit, for calibration. */
+  limits: LimitHit[];
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -111,7 +115,8 @@ function scanProject(
   projectDir: string,
   windowStart: number,
   events: [number, number][],
-  activity: ActivityEvent[]
+  activity: ActivityEvent[],
+  limits: LimitHit[]
 ): ProjectUsage {
   let allTime: TokenCounts = ZERO_TOKENS;
   let windowTokens: TokenCounts = ZERO_TOKENS;
@@ -142,7 +147,9 @@ function scanProject(
       // The cheap gate. Most lines in a conversation file are file snapshots and tool results.
       const hasUsage = line.includes('"usage"');
       const hasCost = line.includes('"cost-state"');
-      if (!hasUsage && !hasCost) continue;
+      // A refused request carries `quotaLimits`: the one record of where a ceiling actually is.
+      const hasQuota = line.includes('"quotaLimits"');
+      if (!hasUsage && !hasCost && !hasQuota) continue;
 
       let record: {
         type?: string;
@@ -151,11 +158,20 @@ function scanProject(
         /** The conversation's working directory, recorded on every line. Resolves relative tool paths. */
         cwd?: string;
         message?: { usage?: Record<string, unknown>; content?: unknown };
+        quotaLimits?: { status?: string; resetsAt?: number; rateLimitType?: string };
       };
       try {
         record = JSON.parse(line) as typeof record;
       } catch {
         continue;
+      }
+
+      const quota = record.quotaLimits;
+      if (hasQuota && quota?.status === 'rejected' && typeof quota.resetsAt === 'number') {
+        const refusedAt = record.timestamp ? Date.parse(record.timestamp) : NaN;
+        // Seconds in every record seen so far; milliseconds tolerated in case that ever changes.
+        const resetsAt = quota.resetsAt < 1e12 ? quota.resetsAt * 1000 : quota.resetsAt;
+        if (Number.isFinite(refusedAt)) limits.push({ at: refusedAt, resetsAt, type: quota.rateLimitType ?? 'unknown' });
       }
 
       if (hasCost && record.type === 'cost-state' && typeof record.totalCostUSD === 'number') {
@@ -251,6 +267,7 @@ export function readUsage(windowHours?: number): UsageSummary {
   const projects: ProjectUsage[] = [];
   const allEvents: [number, number][] = [];
   const activity: ActivityEvent[] = [];
+  const limits: LimitHit[] = [];
   for (const projectDir of dirs) {
     const dir = join(root, projectDir);
     const signature = directorySignature(dir);
@@ -265,16 +282,19 @@ export function readUsage(windowHours?: number): UsageSummary {
       projects.push(cached.usage);
       allEvents.push(...cached.events);
       activity.push(...cached.activity);
+      limits.push(...cached.limits);
       continue;
     }
 
     const events: [number, number][] = [];
     const windowActivity: ActivityEvent[] = [];
-    const usage = scanProject(dir, projectDir, windowStart, events, windowActivity);
-    cache.set(projectDir, { ...signature, windowStart, usage, events, activity: windowActivity });
+    const projectLimits: LimitHit[] = [];
+    const usage = scanProject(dir, projectDir, windowStart, events, windowActivity, projectLimits);
+    cache.set(projectDir, { ...signature, windowStart, usage, events, activity: windowActivity, limits: projectLimits });
     projects.push(usage);
     allEvents.push(...events);
     activity.push(...windowActivity);
+    limits.push(...projectLimits);
   }
 
   latestActivity = activity;
@@ -291,7 +311,8 @@ export function readUsage(windowHours?: number): UsageSummary {
     budgetTokens: budget.tokens,
     budgetSource: budget.source,
     plan: settings.plan,
-    peakWindowTokens: peakWindow(allEvents, hours)
+    peakWindowTokens: peakWindow(allEvents, hours),
+    calibration: calibrateFromLimits(limits, allEvents)
   };
 }
 
@@ -332,10 +353,12 @@ function claimPath(value: string | undefined): string | null {
 function claimFor(node: BoardNode, depth: number): Claim {
   switch (node.kind) {
     case 'agent.code':
+    case 'agent.audit':
     case 'service.process':
       return node.cwd ? { ...NO_CLAIM, projects: [projectDirFor(expandPath(node.cwd))] } : NO_CLAIM;
     case 'store.repo':
-    case 'store.folder': {
+    case 'store.folder':
+    case 'store.explorer': {
       const dir = claimPath(node.path);
       return dir ? { projects: [projectDirFor(dir)], dirs: [dir], files: [] } : NO_CLAIM;
     }

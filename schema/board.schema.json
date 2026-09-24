@@ -97,6 +97,25 @@
       },
       "description": "Board ids this room is related to. Purely declarative: it tells the renderer which rooms may share colour and wire treatment, so a relation is visible at a glance instead of remembered. See docs/02 Relation colour."
     },
+    "look": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Whole-board colour, vignette and tiled background. Absent means the default look. See packages/shared/look.ts.",
+      "properties": {
+        "hue": { "type": "integer", "minimum": -180, "maximum": 180 },
+        "saturation": { "type": "integer", "minimum": 0, "maximum": 200 },
+        "brightness": { "type": "integer", "minimum": 50, "maximum": 150 },
+        "contrast": { "type": "integer", "minimum": 50, "maximum": 150 },
+        "vignette": { "type": "boolean" },
+        "vignetteStrength": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "vignetteColor": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault", "ink"]
+        },
+        "tileImage": { "type": "string", "minLength": 1 },
+        "tileEnabled": { "type": "boolean" },
+        "tileScale": { "type": "integer", "minimum": 1, "maximum": 4 }
+      }
+    },
     "nodes": {
       "type": "array",
       "items": {
@@ -108,12 +127,90 @@
       "items": {
         "$ref": "#/$defs/edge"
       }
+    },
+    "phantoms": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "$ref": "#/$defs/phantom"
+      },
+      "description": "Recommended nodes: JARVIS's sketches of what should go here next, drawn as phantoms with a tick and a cross. At most 4 per board (MAX_PHANTOMS_PER_BOARD in packages/shared/phantoms.ts). Approving one turns it into a real node in one undoable command; see docs/03 §Phantoms."
     }
   },
   "$defs": {
     "hex": {
       "type": "string",
       "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "phantom": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "description",
+        "pos",
+        "proposedBy",
+        "proposedAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "kind": {
+          "$ref": "#/$defs/node/properties/kind"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "pos": {
+          "$ref": "#/$defs/pos"
+        },
+        "footprint": {
+          "$ref": "#/$defs/node/properties/footprint"
+        },
+        "fields": {
+          "type": "object",
+          "description": "Fields the real node gets on approval. Keys are checked against the node editor's field list for the kind (phantomFieldKeys); the node itself is validated against $defs/node when it is created."
+        },
+        "connect": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "kind"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "to": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/edge/properties/kind"
+              }
+            }
+          }
+        },
+        "proposedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "proposedAt": {
+          "type": "string"
+        }
+      }
     },
     "pos": {
       "type": "object",
@@ -159,9 +256,13 @@
             "agent.code",
             "agent.chat",
             "agent.jarvis",
+            "agent.prompt",
+            "agent.prompt-to-node",
+            "agent.audit",
             "drive.room",
             "store.repo",
             "store.folder",
+            "store.explorer",
             "store.cloud",
             "file.document",
             "file.exe",
@@ -236,6 +337,10 @@
           "type": "boolean",
           "default": true
         },
+        "remoteControl": {
+          "type": "boolean",
+          "default": false
+        },
         "initialPrompt": {
           "type": "string"
         },
@@ -294,6 +399,19 @@
         "persona": {
           "type": "string"
         },
+        "promptTarget": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "agent.prompt only: the id of the agent.jarvis or agent.chat node this quick-chat box sends to. Omit to send to the board's JARVIS head."
+        },
+        "promptMode": {
+          "enum": [
+            "send",
+            "draft"
+          ],
+          "default": "send",
+          "description": "agent.prompt only: what Enter does. send = type it into the conversation and press send; draft = leave it in the conversation's message box for a final look."
+        },
         "boardFile": {
           "type": "string",
           "description": "Relative path to the child board JSON"
@@ -308,6 +426,10 @@
         "localPath": {
           "type": "string"
         },
+        "restPath": {
+          "type": "string",
+          "description": "store.explorer only: the folder its window opens at. Must be inside `path`; one outside it is ignored and the window says so."
+        },
         "remote": {
           "type": "string"
         },
@@ -318,7 +440,9 @@
             "browser",
             "terminal",
             "vscode",
-            "office"
+            "office",
+            "notepadpp",
+            "obsidian"
           ]
         },
         "glob": {
@@ -364,6 +488,32 @@
           "type": "boolean",
           "default": true
         },
+        "journalVault": {
+          "type": "string",
+          "description": "task.scheduled as the journal: the Obsidian vault (a folder holding .obsidian) its daily note is written into."
+        },
+        "journalFolder": {
+          "type": "string",
+          "description": "Vault-relative folder for the journal's notes. Empty: the vault's daily-notes folder plus /SkynetOS."
+        },
+        "taskTarget": {
+          "type": "string",
+          "description": "task.scheduled agent.run: the agent.code node id a run starts a fresh session on. Empty: the root board's JARVIS Prime."
+        },
+        "taskBrief": {
+          "type": "string",
+          "description": "task.scheduled agent.run: a markdown brief inside the SkynetOS repo, read at run time."
+        },
+        "taskPrompt": {
+          "type": "string",
+          "description": "task.scheduled agent.run: instructions appended after the brief."
+        },
+        "catchUpHours": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 48,
+          "description": "task.scheduled: a slot missed while the app was closed still runs once if the app opens within this many hours. Default 4."
+        },
         "text": {
           "type": "string"
         },
@@ -391,6 +541,16 @@
           "type": "string",
           "description": "LOGO. A smaller image centred on the face, aspect ratio preserved, with its own bevel so it reads as a badge sitting on the wallpaper. Sized by logoBoxTiles() in packages/shared/types.ts \u2014 proportional to the footprint, always a whole number of tiles."
         },
+        "logoSource": {
+          "enum": ["file", "avatar", "avatar-live", "none"],
+          "default": "file",
+          "description": "Where the logo badge comes from: file (the `logo` image, the default), avatar (the JARVIS avatar's still face, assets/avatar/jarvis/idle.png, dithered), avatar-live (the ANIMATED face in the face window's box, drawn live by the board in the frames' true colours) or none. showLogo: false still hides whichever it is. See packages/shared/logo-source.ts."
+        },
+        "imageAnimate": {
+          "type": "boolean",
+          "default": true,
+          "description": "For a GIF wallpaper or logo: play it (the default) or hold its first frame. Every frame is dithered onto the room's palette. See packages/shared/gif.ts for the frame and size caps."
+        },
         "showDesignator": {
           "type": "boolean",
           "default": true,
@@ -405,6 +565,11 @@
           "type": "boolean",
           "default": true,
           "description": "Draw the wallpaper (`image`). Off keeps the drawn package silhouette and leaves the image bound to the node. Independent of showLogo."
+        },
+        "avatarWindow": {
+          "type": "boolean",
+          "default": true,
+          "description": "The JARVIS face window beside this node's window. Only JARVIS iterations have one (agent.jarvis, the Hands chip, a node tagged jarvis, an agent.chat named like JARVIS). false switches it off for this node; it never grants a face to a node that is not JARVIS."
         },
         "showLogo": {
           "type": "boolean",
@@ -436,6 +601,50 @@
             "led_white"
           ],
           "description": "Which piece of board furniture this decor.part is. Each maps to a decor.* sprite in assets/sprites/manifest.json, cut from a real tilesheet cell."
+        },
+        "showSystemGraphics": {
+          "type": "boolean", "default": true,
+          "description": "monitor.system: draw the live system-performance widget on the node's face. Off shows the node's own wallpaper and logo."
+        },
+        "pulseSpeed": {
+          "type": "integer", "minimum": 25, "maximum": 400,
+          "description": "Pulse glow speed as a percentage; 100 is the tuned default."
+        },
+        "pulseColor": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault"],
+          "description": "The palette colour at the pulse's crest. Absent: two rungs up the room's own ramp."
+        },
+        "textGlowSpeed": {
+          "type": "integer", "minimum": 25, "maximum": 400,
+          "description": "Text glow speed as a percentage; 100 is the tuned default."
+        },
+        "textGlowColor": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault"],
+          "description": "The palette colour at the text glow's peak. Absent: two rungs up the room's own ramp."
+        },
+        "chase": {
+          "type": "boolean", "default": false,
+          "description": "A run of light travelling clockwise round the node's edge. Whole pixels, one palette colour; off under reducedMotion. See src/renderer/board/effects.ts."
+        },
+        "chaseColor": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault"],
+          "description": "The chase light's colour. Absent: the room's signal."
+        },
+        "chaseSpeed": {
+          "type": "integer", "minimum": 25, "maximum": 400,
+          "description": "Chase speed as a percentage; 100 is the tuned default."
+        },
+        "scan": {
+          "type": "boolean", "default": false,
+          "description": "A line sweeping down across the node's face and pausing below it. Whole pixels, one palette colour; off under reducedMotion."
+        },
+        "scanColor": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault"],
+          "description": "The scan line's colour. Absent: the room's signal."
+        },
+        "scanSpeed": {
+          "type": "integer", "minimum": 25, "maximum": 400,
+          "description": "Scan speed as a percentage; 100 is the tuned default."
         },
         "pulseGlow": {
           "type": "boolean",
@@ -587,6 +796,20 @@
                 "if": {
                   "properties": {
                     "kind": {
+                      "const": "agent.audit"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "cwd"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "kind": {
                       "const": "drive.room"
                     }
                   }
@@ -619,6 +842,7 @@
                       "enum": [
                         "store.repo",
                         "store.folder",
+                        "store.explorer",
                         "file.exe"
                       ]
                     }
@@ -782,10 +1006,52 @@
         },
         "width": {
           "enum": [
+            1,
             2,
-            3
+            3,
+            4
           ],
           "default": 2
+        },
+        "color": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault", "ink"],
+          "description": "The copper run's colour, as a palette token. Absent means copper. Tokens, never hex, so a board cannot name an off-palette colour."
+        },
+        "stroke": {
+          "enum": ["silk", "copper", "copper-dark", "signal", "mask-light", "mask-dark", "ok", "warn", "fault", "ink"],
+          "description": "The outline's colour, as a palette token. Absent means ink (black): every wire carries a black edge."
+        },
+        "dash": {
+          "enum": ["solid", "dashed", "dotted"],
+          "description": "The run's stroke pattern, drawn as whole-pixel rectangles. Absent: solid, except a depends wire, which is dashed by kind."
+        },
+        "outlineDash": {
+          "enum": ["solid", "dashed", "dotted"],
+          "description": "The outline's own stroke pattern. Absent: the outline follows the run, dash for dash."
+        },
+        "outlineWidth": {
+          "enum": [0, 1, 2, 3],
+          "description": "The outline's width in px. 0 draws no outline. Absent: 1."
+        },
+        "fromAnchor": {
+          "type": "object",
+          "required": ["side", "offset"],
+          "additionalProperties": false,
+          "properties": {
+            "side": { "enum": ["top", "right", "bottom", "left"] },
+            "offset": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "description": "Where the wire leaves its from node, pinned by hand: a side and a fraction along it, so the pin follows the node when it moves or resizes."
+        },
+        "toAnchor": {
+          "type": "object",
+          "required": ["side", "offset"],
+          "additionalProperties": false,
+          "properties": {
+            "side": { "enum": ["top", "right", "bottom", "left"] },
+            "offset": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "description": "Where the wire arrives at its to node, pinned by hand."
         },
         "waypoints": {
           "type": "array",

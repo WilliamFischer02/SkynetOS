@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { PLANS, PLAN_SPECS, parsePlanInput, planFromPeak, type PlanId } from '@shared/plans.js';
-import { formatTokens } from '@shared/usage.js';
+import { budgetFromPercent, formatTokens, type UsageCalibration } from '@shared/usage.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 
 /**
@@ -22,13 +22,20 @@ export interface PlanDialogProps {
   /** The busiest window ever measured, for the calibration line. */
   peakWindowTokens: number;
   windowHours: number;
+  /** Weighted tokens measured in the current window, for the percentage calibration. */
+  usedTokens: number;
+  /** What a real five-hour limit hit says the budget is, if one has been hit. */
+  calibration?: UsageCalibration;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function PlanDialog({ peakWindowTokens, windowHours, onClose, onSaved }: PlanDialogProps): React.JSX.Element {
+export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibration, onClose, onSaved }: PlanDialogProps): React.JSX.Element {
   const toast = useBoardStore((s) => s.toast);
   const [text, setText] = useState('');
+  const [percent, setPercent] = useState('');
+  const fromPercent = budgetFromPercent(usedTokens, Number.parseFloat(percent));
+  const measured = calibration?.measuredBudget ?? null;
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -135,6 +142,65 @@ export function PlanDialog({ peakWindowTokens, windowHours, onClose, onSaved }: 
             Use my measured peak ({formatTokens(peakWindowTokens)})
           </button>
         ) : null}
+      </div>
+
+      {/*
+        * Calibration from evidence, strongest first. A limit actually hit is a measurement of the
+        * ceiling. Claude's own percentage is the account's word for where you are. Either beats a
+        * plan multiplier, and both say what they rest on.
+        */}
+      <div className="plan-calibration">
+        <div className="section-head">Calibrate from Claude&apos;s own numbers</div>
+        {measured && calibration?.measuredAt ? (
+          <>
+            <p className="plan-note">
+              You hit your five-hour limit on <strong>{new Date(calibration.measuredAt).toLocaleString()}</strong>.
+              The window that ended in that refusal spent <strong>{formatTokens(measured)}</strong> weighted tokens,
+              so that is your ceiling, measured rather than estimated
+              {calibration.hits > 1 ? ` (the latest of ${calibration.hits} limit hits on record)` : ''}.
+            </p>
+            <button type="button" className="btn primary" disabled={saving} onClick={() => void commit('custom', measured)}>
+              Use the measured limit ({formatTokens(measured)})
+            </button>
+          </>
+        ) : calibration && calibration.hits > 0 && calibration.measuredAt ? (
+          <p className="plan-note">
+            You hit your five-hour limit on <strong>{new Date(calibration.measuredAt).toLocaleString()}</strong>, but none of
+            the usage in that window was on this machine, so it cannot be measured here. The limit is per account,
+            and the sessions that reached it ran somewhere else.
+          </p>
+        ) : (
+          <p className="plan-note">No five-hour limit has been hit on this machine, so there is no measured ceiling yet.</p>
+        )}
+
+        <label className="field-label" htmlFor="plan-percent">
+          Session used, as Claude shows it (%)
+          <span className="field-hint" title="Run /usage in Claude Code, or open claude.ai → Settings → Usage, and type the current session's percentage.">?</span>
+        </label>
+        <div className="field-row">
+          <input
+            id="plan-percent"
+            className="input"
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            placeholder="42"
+            value={percent}
+            disabled={saving}
+            onChange={(e) => setPercent(e.target.value)}
+          />
+          <button type="button" className="btn" disabled={!fromPercent || saving} onClick={() => fromPercent && void commit('custom', fromPercent)}>
+            {fromPercent ? `Use ${formatTokens(fromPercent)}` : 'Use that'}
+          </button>
+        </div>
+        <p className="plan-note">
+          SkynetOS measured {formatTokens(usedTokens)} in the last {windowHours}h and divides it by that percentage.
+          Claude&apos;s session starts at your first message rather than rolling, so this is closest
+          when you calibrate a few hours into a session, not in its first minutes. Only this machine&apos;s
+          usage is visible here: if you have been working on another machine in the same session, its
+          tokens count against your limit but not in this sum, and the budget comes out low.
+        </p>
       </div>
 
       <div className="plan-foot">
