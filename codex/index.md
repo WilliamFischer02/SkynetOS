@@ -68,6 +68,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Projects — DeductionOS
 - `projects/deduction-training.md` — 16-week evidence-based observation curriculum + Anki deck v2.
 
+## Projects — LifeOS (the Face's drop of 2026-09-25; figures live under private/)
+- `projects/rent-run.md` — Income recovery: 216-option research, the Rent Run artifact, the ledger. ACTIVE.
+- `projects/financeos.md` — FinanceOS room (built 2026-09-23): live balances (SimpleFIN), INCOME LAUNCHER, CC-FINANCE. ACTIVE — launcher and feed pending (Phases 3–4).
+- `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room not built; timezone fix first (Phase 5).
+
 ## Projects — SkynetOS itself
 - `projects/skynetos.md` — This program. See the repo's docs/ for the spec; this file tracks state only.
 
@@ -77,3 +82,5 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Journal & handoffs
 - `journal/YYYY-MM.md` — nightly five-line summaries.
 - `handoffs/<project>.md` — current state per agent, overwritten each session.
+- `handoffs/financeos-scheduleos.md` — the build handoff for the 2026-09-25 drop; superseded by
+  `handoffs/financeos.md` and `handoffs/scheduleos.md` after Phase 7.

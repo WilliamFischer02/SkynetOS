@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-24T21:50:20.428Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-25T21:12:13.886Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -83,6 +83,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Projects — DeductionOS
 - `projects/deduction-training.md` — 16-week evidence-based observation curriculum + Anki deck v2.
 
+## Projects — LifeOS (the Face's drop of 2026-09-25; figures live under private/)
+- `projects/rent-run.md` — Income recovery: 216-option research, the Rent Run artifact, the ledger. ACTIVE.
+- `projects/financeos.md` — FinanceOS room (built 2026-09-23): live balances (SimpleFIN), INCOME LAUNCHER, CC-FINANCE. ACTIVE — launcher and feed pending (Phases 3–4).
+- `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room not built; timezone fix first (Phase 5).
+
 ## Projects — SkynetOS itself
 - `projects/skynetos.md` — This program. See the repo's docs/ for the spec; this file tracks state only.
 
@@ -92,9 +97,93 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Journal & handoffs
 - `journal/YYYY-MM.md` — nightly five-line summaries.
 - `handoffs/<project>.md` — current state per agent, overwritten each session.
+- `handoffs/financeos-scheduleos.md` — the build handoff for the 2026-09-25 drop; superseded by
+  `handoffs/financeos.md` and `handoffs/scheduleos.md` after Phase 7.
 ````
 
-## 2. Mail for the Face (25 unread, newest first)
+## 2. Mail for the Face (30 unread, newest first)
+
+### Away session: 8 item(s)
+
+`2026-09-25T00-26-16-659--away-session-8-item-s.md`, from hands, sent 2026-09-25T00:26:16.659Z
+
+````markdown
+Away session, finished on its own. 8 item(s):
+
+- held back by the away bounds: Bash
+- recommended a node: JARVIS Voice (root)
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- roadmap updated: SkynetOS/codex/projects/skynetos.md
+- roadmap updated: SkynetOS/codex/projects/skynetos.md
+- roadmap updated: SkynetOS/codex/projects/skynetos.md
+- journal written: SkynetOS/codex/journal/away-2026-09-24-1824.md
+- mailed the mailbox: Away pass 18:24: skynetos.md caught up to M13 (JARVIS Voice), one root phantom proposed
+
+Its last word:
+
+Away pass complete. Closed the day's biggest gap — `codex/projects/skynetos.md` and `docs/06-ROADMAP.md` had no record of today's JARVIS Voice (M13) session, including the conversational reply/follow-up work built after the roadmap was last touched. Proposed one root phantom (`ph_jarvis_voice`) since M13 shipped a whole feature with zero board presence. Journal and mail to the Face are written; the open decision for you is the same one already queued: boot SkynetOS and actually hear/see M13 for the first time.
+````
+
+### Away pass 18:24: skynetos.md caught up to M13 (JARVIS Voice), one root phantom proposed
+
+`2026-09-25T00-26-13-870--away-pass-18-24-skynetos-md-caught-up-to-m13-jar.md`, from hands, sent 2026-09-25T00:26:13.870Z
+
+````markdown
+No unread mail on to-hands this pass. Main find: `codex/projects/skynetos.md` had drifted a day behind handoff.md — it had no record of today's JARVIS Voice session (M13 slice 1: hologram window, speech, voice profiles, desktop control, and later the same day, a conversational reply + one-shot follow-up so an unrecognised sentence gets spoken back instead of silently typing into your window). Closed:
+
+- docs/06-ROADMAP.md: added the missing M13 bullet for the conversation/follow-up work (it was built but not logged).
+- codex/projects/skynetos.md: caught up to handoff.md, JARVIS Voice moved to the top of "Next."
+
+Proposed one phantom on root (needs William's tick): `ph_jarvis_voice`, a doc node for docs/11-JARVIS-VOICE.md, since M13 shipped a whole feature with zero board presence. Root is now 4/4; minecraftos stays 2/4, nothing new there earned a slot.
+
+Needs William, not me: M13 is entirely unseen/unheard live — same "built, unverified" shape as the 2026-09-12 voice/gesture batch. TimeServed/MCCamOp/LociBook still have no handoff.md. The 2026-09-23 FinanceOS/Mail/Tailscale queue is still open underneath and getting older. Full detail: codex/journal/away-2026-09-24-1824.md.
+````
+
+### Voice now answers aloud and listens once more; the Face hears only what is addressed to it (2026-09-24)
+
+`2026-09-24T23-31-15-181--voice-now-answers-aloud-and-listens-once-more-th.md`, from hands, sent 2026-09-24T23:31:15.181Z
+
+````markdown
+William tried JARVIS Voice and got the old behaviour: an unrecognised sentence was typed into your window and nothing was said. He asked for conversation instead: an answer aloud, then his next sentence without the wake word. Built and verified (112 files, 1,747 tests), not yet heard live.
+
+- An unrecognised sentence now goes to headless claude -p (Haiku, no tools, empty MCP set), is trimmed to two spoken sentences, and is spoken by main. About 8 s on Haiku. Logged to userData, never the repo.
+- After JARVIS answers, the microphone opens once without the wake phrase, for one sentence or five seconds of silence. Silence ends the exchange. docs/07 records this as the one exception to the wake rule, bounded.
+- Consequence for you: the 2.2 s hand-off that typed sentences into your conversation is gone. Only "ask the face …", "tell the face …" or "send that to the face" reach you now.
+- Also: the VOICE button opens the hologram window; the window's buttons fit the square.
+
+Details: handoff.md "JARVIS Voice — 2026-09-24" items 9–11; docs/DECISIONS.md same date.
+````
+
+### JARVIS speaks in William's voice: profile jarvis built from 358 of his clips (2026-09-24)
+
+`2026-09-24T23-14-43-191--jarvis-speaks-in-william-s-voice-profile-jarvis-.md`, from hands, sent 2026-09-24T23:14:43.191Z
+
+````markdown
+M13.2 done and heard. William dropped 380 AIFF clips of his own JARVIS impression; the importer took 358 (22 too short), whisper transcribed all of them, and the F5-TTS synthesis server on this PC produced an eight-second line in his voice from an eleven-second reference, played aloud. settings.json now speaks with profile "jarvis" through the server, falling back to Windows' voice whenever the server is down.
+
+- The clips sit in voice-profiles/ inside the repo, now gitignored; the profile itself is under LOCALAPPDATA. Nothing uploaded.
+- Found by doing: torchaudio 2.9 needs FFmpeg to read a WAV; the server reads its own with soundfile.
+- The service warms the model after starting the server and allows 90 s for a synthesis.
+- Unseen in the app itself: the USE THIS VOICE switch and SkynetOS starting the server; both need his restart.
+
+Next: M13.3, the planner ("open my most recent project in After Effects"). Details: handoff.md "JARVIS Voice — 2026-09-24" item 8.
+````
+
+### JARVIS Voice slice 1 built 2026-09-24: hologram window, speech, voice profiles, desktop control
+
+`2026-09-24T22-26-40-385--jarvis-voice-slice-1-built-2026-09-24-hologram-w.md`, from hands, sent 2026-09-24T22:26:40.385Z
+
+````markdown
+William asked for a launch-on-boot voice-controlled window with a blue hologram, spoken program launching onto named monitors, visible mouse control, talk-back, a TRAIN button and a planner. Built inside SkynetOS as roadmap M13, slice 1. Verify green: 109 files, 1,708 tests. Nothing committed; nothing seen on screen; no plan has touched the desktop yet.
+
+- Declined a voice cloned from Paul Bettany's lines. William amended it the same hour: he records the lines himself, and the program treats that dataset as a voice profile. That is the design (docs/11 § Voice profiles).
+- The hologram window is a view over the existing voice pipeline, the speech service and the desktop helper; it opens no microphone, so the docs/07 Voice rules are unchanged.
+- Speech is Windows' own synthesiser until a synthesis server is installed (M13.2); the probe spoke one line with Microsoft David.
+- Desktop control is a separate helper, off by default, one user-only switch, Start Menu shortcuts only, 12 steps, Esc halts. The read-only tracker is untouched.
+- Not built: the synthesis server, the claude -p planner, action recording, a tray icon (M13.2–M13.5, all designed in docs/11 with rules already in docs/07).
+
+Details: handoff.md "JARVIS Voice — 2026-09-24", docs/DECISIONS.md same date.
+````
 
 ### Away session: 7 item(s)
 
@@ -187,98 +276,7 @@ William was at work for an hour or two and said to proceed. Nothing committed, d
 Details: handoff.md "The away hour — 2026-09-23"; docs/DECISIONS.md same date.
 ````
 
-### Morning maintenance 2026-09-23: the notify task rings, three missing states filled
-
-`2026-09-23T17-33-18-888--morning-maintenance-2026-09-23-the-notify-task-r.md`, from hands, sent 2026-09-23T17:33:18.888Z
-
-````markdown
-Catch-up run of MORNING MAINTENANCE for the 08:00 slot. Verify green before and after: 103 files, 1,606 tests (was 1,604). Nothing committed, deleted, or touched on any board.
-
-- Roadmap M8 "Windows toasts": a {"type":"notify"} task now shows an Electron Notification titled with the task's name. DeductionOS's T1 Daily drill reminder (19:00) has been inert since before the scheduler existed. Pure rules tested; the toast itself not seen on screen and needs a restart.
-- Usage meter: Space now activates the plan label, CALIBRATE and minimise, which answered Enter only.
-- Gesture catalogue: a switch that fails to save says so instead of snapping back in silence.
-- Schedule block: a failed read shows COULD NOT READ THE SCHEDULE with the reason, not an endless green READING….
-- Found and left, roadmap "Known issues" 11–15: mailbox and gesture catalogue empty-state before first read, mailbox clipboard failure path, away-mode failed save keeps typed value, MANUAL chip tooltip, six bare fallback strings.
-
-Details: handoff.md "Morning maintenance 2026-09-23", docs/DECISIONS.md same date.
-````
-
-### 2026-09-21: board sees first builds, installer 0.1.0, updates, sessions on the phone
-
-`2026-09-21T22-48-57-559--2026-09-21-first-builds-seen-installer-0-1-0-phone.md`, from hands, sent 2026-09-21T22:48:57.559Z
-
-````markdown
-William asked for a board that notices rebuilt files, an exe with an update workflow, and Tailscale for his phone. All built, uncommitted, `npm run verify` green at 103 files and 1,604 tests. This note was written by hand: see 5.
-1. The TimeServed fault: the watcher skipped any folder that did not exist, so a mod's first build, and any build after `gradlew clean`, was never seen. It now waits at the nearest existing ancestor and re-plans when the folder appears. F5 refreshes files and says what changed; coming back to the window does it too. Proved against a real temp directory. Needs a restart.
-2. The installed program: `release/SkynetOS-0.1.0-x64.exe` exists and has NOT been run by William. An install never keeps boards in its own folder; its data home is the repo, so an update cannot overwrite a board. Updates come from GitHub Releases through electron-updater once William publishes one; nothing publishes itself. Workflow in `docs/09-RELEASE.md`, rules in docs/07 "Program updates".
-3. The phone: Tailscale on the desktop is signed in with HTTPS on and the iPhone on the tailnet. What is left is William's three presses in LOOK, SYSTEM, REMOTE. `agent.code` nodes have a new switch, "Reachable from my phone" (`remoteControl`), which starts the session with Claude Code's own Remote Control so the Claude app can drive it. docs/07 "Sessions from the phone". Not tried on a phone.
-4. Roadmap "Known issues" 9, the half revoke, is fixed with a test.
-5. An incident of my own making: smoke runs of the packed exe took the live app's control file, so the skynet tools report SKYNETOS IS NOT RUNNING until William restarts it. `npm run smoke:shots` always had that fault. Fixed and proved (`packages/shared/control-file.ts`).
-One new dependency: electron-updater. Version is now 0.1.0. Details in handoff.md, top section.
-````
-
-### Away session: 4 item(s)
-
-`2026-09-19T23-21-04-849--away-session-4-item-s.md`, from hands, sent 2026-09-19T23:21:04.849Z
-
-````markdown
-Away session, finished on its own. 4 item(s):
-
-- held back by the away bounds: Bash
-- roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- journal written: SkynetOS/codex/journal/away-2026-09-19-1720.md
-- mailed the mailbox: Away 2026-09-19 17:20: nothing changed since 13:44
-
-Its last word:
-
-Nothing has changed since the 13:44 pass, so this session made only small edits.
-- Bash was denied, so I couldn't read `git log` or `git status`. Repo state is inferred from file listings.
-- Phantom slates are unchanged (root 3/4, minecraftos 2/4, the other three rooms 4/4). I proposed nothing new.
-- I added a 17:20 note to `docs/06-ROADMAP.md` and wrote `codex/journal/away-2026-09-19-1720.md`. I sent one summary mail to `to-face`.
-- **Needs William's decision:**
-  - Tick or cross the 11 standing phantoms.
-  - Say whether a streaming project is starting (`Stream`, `StreamerBot`).
-  - Decide on the `goobos` room, `isChannel`/`FEATURE_NAMES`, and the `revokeDevice` half-revoke.
-  - Click through the voice, gesture and MATRIX work.
-- Inferred suggestion: skip PLAN-level away runs until a phantom is actioned or a handoff changes, since this one spent usage confirming nothing moved.
-````
-
-### Away 2026-09-19 17:20: nothing changed since 13:44
-
-`2026-09-19T23-21-00-808--away-2026-09-19-17-20-nothing-changed-since-13-4.md`, from hands, sent 2026-09-19T23:21:00.808Z
-
-````markdown
-Second away pass today. Bash was denied, so repo state is inferred from listings. Nothing has changed since 13:44: same phantom slates (root 3/4, minecraftos 2/4, three rooms 4/4), Stream still one empty file, no handoff.md in TimeServed/MCCamOp/LociBook. No new phantoms; the 11 standing ones are the recommendation. Added a short note to docs/06-ROADMAP.md and wrote codex/journal/away-2026-09-19-1720.md. Needs your decision: tick/cross the standing phantoms; is a streaming project starting; the goobos room; isChannel/FEATURE_NAMES; the revokeDevice half-revoke (docs/06 item 9); clicking through the voice/gesture/MATRIX work. Suggestion (inferred): skip PLAN-level away runs until something changes.
-````
-
-### Away session: 8 item(s)
-
-`2026-09-19T19-45-41-278--away-session-8-item-s.md`, from hands, sent 2026-09-19T19:45:41.278Z
-
-````markdown
-Away session, finished on its own. 8 item(s):
-
-- held back by the away bounds: Bash
-- held back by the away bounds: Bash
-- roadmap updated: SkynetOS/codex/projects/time-served.md
-- edited SkynetOS/codex/index.md
-- edited SkynetOS/codex/index.md
-- roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- journal written: SkynetOS/codex/journal/away-2026-09-19-1344.md
-- mailed the mailbox: Away pass 2026-09-19 13:44: TimeServed codex entry, no new phantoms
-
-Its last word:
-
-Away pass done, and I proposed no new phantoms. The 11 already standing have gone unticked since 2026-09-11/15, and nothing I found deserved a slot over them. I couldn't run `git log` or `git status` because Bash was denied, so repo state comes from file listings only.
-- I wrote `codex/projects/time-served.md` (v1.1.0, the repo has no CLAUDE.md or handoff) and fixed its index line, which had claimed "RUNNING IN PROD" without evidence.
-- I added a 2026-09-19 note to `docs/06-ROADMAP.md`.
-- Your decision: tick or cross the standing phantoms, since three rooms are full at 4/4.
-- Your decision: is `C:/dev/Stream` plus `C:/dev/StreamerBot` a new streaming project? Stream holds one empty file and StreamerBot is an installed app, so I wrote nothing for them.
-- Suggested small sessions: a `handoff.md` each for TimeServed and MCCamOp.
-- Journal is at `codex/journal/away-2026-09-19-1344.md`, and the summary mail went to `to-face`.
-````
-
-15 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
+20 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
 
 ## 3. Board truth
 
@@ -368,7 +366,12 @@ Placed on the board but not yet confirmed as bound to anything real.
 
 Compressed from `handoff.md`, which is linked from the repo root.
 
-**Last session (2026-09-23, U3 JARVIS-PRIME, the away hour):**
+**Last session (2026-09-24, U3 JARVIS-PRIME, JARVIS Voice slice 1):** the hologram window, speech
+through Windows' own voice, the voice-profile recorder, and rule-based desktop control ("open after
+effects on one and firefox on two"), all off or unseen until William restarts and switches them on.
+Design docs/11, rules docs/07 § JARVIS Voice, roadmap M13. Verify green: 109 files, 1,708 tests.
+
+**Session before (2026-09-23, U3 JARVIS-PRIME, the away hour):**
 - The Tailscale guide for William's side: `docs/guides/remote-setup-tailscale.md`.
 - FinanceOS: a room, a ledger model, `npm run finance:report`, a finance-advisor persona; numbers
   live only in gitignored `private/finance/`, which William fills from a template.

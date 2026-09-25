@@ -43,3 +43,16 @@ private/
 
 # JARVIS Prime's working files (prime/ itself is tracked)
 prime/scratch/
+
+# Voice recordings of William (JARVIS Voice profiles). Never committed: the repo is public.
+voice-profiles/
+
+# The Face's drops (codex/drops/): the record of what it sent, with William's own figures in it. Never published.
+codex/drops/
+# Schedule data: calendars, shifts, the week preview. Personal; scripts in schedule/ are tracked.
+schedule/week.html
+schedule/today.md
+schedule/cache/
+schedule/pbs-shifts.json
+schedule/changes.log.jsonl
+schedule/proposals.md
