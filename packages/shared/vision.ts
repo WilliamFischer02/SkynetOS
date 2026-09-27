@@ -4,7 +4,7 @@
  * Recognition itself is packages/shared/gesture.ts, which is pure. This file is the contract
  * between the three processes that have to agree about the cameras:
  *
- *   - the VISION PAGE (src/renderer/vision.tsx) opens the cameras, runs the landmarkers and the
+ *   - the VISION PAGE (src/renderer/vision.ts) opens the cameras, runs the landmarkers and the
  *     tracker, and reports. It is served from `skynet://vision` with its own CSP and its own
  *     session, because it is the only page in the app allowed near a camera, and the only one
  *     permitted to compile WebAssembly. See docs/DECISIONS.md, 2026-09-11.

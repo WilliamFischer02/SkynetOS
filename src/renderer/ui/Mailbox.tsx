@@ -1,3 +1,5 @@
+import { StateBox } from './StateBox.js';
+import { PanelHead } from './PanelHead.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { MailSide, MailboxMessage } from '@shared/mailbox.js';
 import { forClipboard } from '@shared/mailbox.js';
@@ -27,16 +29,23 @@ export function Mailbox(): React.JSX.Element | null {
   const toast = useBoardStore((s) => s.toast);
 
   const [side, setSide] = useState<MailSide>('hands');
-  const [mail, setMail] = useState<MailboxMessage[]>([]);
+  // `null` until the first read has answered: an empty list is a fact, an unread one is not.
+  const [mail, setMail] = useState<MailboxMessage[] | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
 
   const refresh = useCallback(async () => {
-    const [toHands, toFace] = await Promise.all([
-      window.skynet['mailbox:list']('hands'),
-      window.skynet['mailbox:list']('face')
-    ]);
-    setMail(side === 'hands' ? toHands : toFace);
+    try {
+      const [toHands, toFace] = await Promise.all([
+        window.skynet['mailbox:list']('hands'),
+        window.skynet['mailbox:list']('face')
+      ]);
+      setMail(side === 'hands' ? toHands : toFace);
+      setReadError(null);
+    } catch (error) {
+      setReadError(error instanceof Error ? error.message : String(error));
+    }
   }, [side]);
 
   useEffect(() => { if (open) void refresh(); }, [open, refresh]);
@@ -70,8 +79,12 @@ export function Mailbox(): React.JSX.Element | null {
   };
 
   const copy = async (message: MailboxMessage) => {
-    await navigator.clipboard.writeText(forClipboard(message));
-    toast('ok', 'copied — paste it to the Face');
+    try {
+      await navigator.clipboard.writeText(forClipboard(message));
+      toast('ok', 'copied — paste it to the Face');
+    } catch {
+      toast('warn', `COULD NOT REACH THE CLIPBOARD — OPEN ${message.file} AND COPY IT BY HAND`);
+    }
   };
 
   const archive = async (message: MailboxMessage) => {
@@ -83,8 +96,7 @@ export function Mailbox(): React.JSX.Element | null {
 
   return (
     <div className="mailbox">
-      <div className="mailbox-head">
-        <span className="with-icon"><Icon name="mail" />JARVIS MAILBOX</span>
+      <PanelHead name="JARVIS MAILBOX" icon="mail" onClose={() => setOpen(false)}>
         <button
           type="button"
           className={side === 'hands' ? 'btn primary' : 'btn'}
@@ -101,15 +113,18 @@ export function Mailbox(): React.JSX.Element | null {
         >
           To the Face
         </button>
-        <button type="button" className="btn tiny" onClick={() => setOpen(false)}>Close (Esc)</button>
-      </div>
+      </PanelHead>
 
       <div className="mailbox-body">
         <div className="mailbox-list">
           <div className="section-head">
-            {side === 'hands' ? 'WAITING FOR THE HANDS' : 'WAITING FOR THE FACE'} · {mail.length}
+            {side === 'hands' ? 'WAITING FOR THE HANDS' : 'WAITING FOR THE FACE'} · {mail ? mail.length : '…'}
           </div>
-          {mail.length ? mail.map((message) => (
+          {readError ? (
+            <StateBox tone="warn" line={`COULD NOT READ codex/mailbox/ — ${readError}`} detail="Close and reopen the mailbox (M) to try again." />
+          ) : !mail ? (
+            <div className="dim">READING codex/mailbox/…</div>
+          ) : mail.length ? mail.map((message) => (
             <article className="mail" key={message.file}>
               <header className="mail-head">
                 <span className="mail-subject">{message.subject}</span>
@@ -118,7 +133,7 @@ export function Mailbox(): React.JSX.Element | null {
               <pre className="mail-body">{message.body}</pre>
               <footer className="mail-actions">
                 {side === 'face' ? (
-                  <button type="button" className="btn" onClick={() => void copy(message)}>
+                  <button type="button" className="btn" onClick={() => void copy(message)} title="Copy this message to the clipboard, ready to paste to the Face">
                     Copy for the Face
                   </button>
                 ) : null}
@@ -164,7 +179,7 @@ export function Mailbox(): React.JSX.Element | null {
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
-          <button type="submit" className="btn primary" disabled={!body.trim()}>
+          <button type="submit" className="btn primary" disabled={!body.trim()} title="Save this note in the mailbox for the next session to pick up">
             Leave it in the mailbox
           </button>
         </form>

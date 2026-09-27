@@ -47,6 +47,25 @@
        * The previews are small on purpose. The streams behind them stay at 1280x720 and that full
        * resolution is what the landmarker sees; only the display is scaled down.
        */
+      /*
+       * The board's tokens (src/renderer/styles.css :root), for the rules this page shares with the
+       * chrome: the panel head, the status box, the keycap and the focus ring. This window runs at
+       * its own scale, so one --p is one CSS pixel here.
+       */
+      :root {
+        --p: 1px;
+        --gap: calc(4 * var(--p));
+        --pad: calc(6 * var(--p));
+        --mask-dark: #0e1a14;
+        --mask-light: #16261d;
+        --signal: #7fe0b0;
+        --copper: #c08a3e;
+        --copper-dark: #7a5423;
+        --silk: #e9e4d6;
+        --ok: #57c25a;
+        --warn: #e0a22e;
+        --fault: #d2453b;
+      }
       body {
         margin: 0;
         background: #0e1a14;
@@ -143,7 +162,47 @@
         scrollbar-width: thin;
         scrollbar-color: #7a5423 #0e1a14;
       }
-      .wz-steps { display: flex; gap: 10px; margin-bottom: 14px; }
+      /* ── the head: PanelHead.tsx, by hand (styles.css .panel-head) ── */
+      .panel-head {
+        display: flex;
+        align-items: center;
+        gap: var(--gap);
+        color: var(--copper);
+        text-transform: uppercase;
+        padding-bottom: var(--gap);
+        border-bottom: var(--p) solid var(--copper-dark);
+        min-height: calc(24 * var(--p));
+        font-size: 11px;
+        line-height: 16px;
+      }
+      .panel-head-name { color: var(--signal); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 1px; }
+      .panel-head .btn.tiny.panel-head-close { margin-left: auto; flex: none; }
+      .wz-head { flex: 0 0 auto; margin-bottom: calc(12 * var(--p)); }
+      .wz-steps { display: flex; gap: calc(8 * var(--p)); margin-left: calc(4 * var(--gap)); min-width: 0; }
+
+      /* The chrome's keycap (styles.css .btn), for the head's close button. */
+      .btn {
+        font: inherit;
+        text-transform: uppercase;
+        padding: calc(2 * var(--gap)) calc(3 * var(--gap));
+        min-height: calc(24 * var(--p));
+        background: var(--mask-light);
+        color: var(--silk);
+        border: var(--p) solid var(--copper-dark);
+        cursor: pointer;
+        box-shadow:
+          inset var(--p) var(--p) 0 0 rgba(233, 228, 214, 0.14),
+          inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 0 rgba(0, 0, 0, 0.45),
+          calc(2 * var(--p)) calc(2 * var(--p)) 0 0 rgba(0, 0, 0, 0.5);
+      }
+      .btn:hover { border-color: var(--copper); color: var(--signal); }
+      .btn:active {
+        transform: translate(calc(2 * var(--p)), calc(2 * var(--p)));
+        box-shadow: inset var(--p) var(--p) 0 0 rgba(0, 0, 0, 0.45);
+        background: var(--copper-dark);
+        color: var(--mask-dark);
+      }
+      .btn.tiny { padding: 0 var(--gap); }
       .wz-step {
         padding: 2px 8px;
         color: #7a5423;
@@ -176,15 +235,16 @@
       /* A camera that agrees with the reference wears the ok colour — the aiming feedback. */
       body.training .view.level-ok video { outline: 2px solid #57c25a; outline-offset: -2px; }
 
-      .wz-advice {
-        min-height: 2.6em;
-        padding: 6px 8px;
-        border-left: 3px solid #7a5423;
-        color: #c9c2b2;
-        margin-bottom: 12px;
-      }
-      .wz-advice.ok { border-left-color: #57c25a; color: #7fe0b0; }
-      .wz-advice.bad { border-left-color: #e0a22e; color: #e0a22e; }
+      /* ── the status box: ui/StateBox.tsx, by hand (styles.css .state) ── */
+      .state { padding: var(--pad); border: var(--p) solid var(--copper-dark); color: var(--silk); }
+      .state.ok { border-color: var(--ok); color: var(--ok); }
+      .state.warn { border-color: var(--warn); color: var(--warn); }
+      .state.fault { border-color: var(--fault); color: var(--fault); }
+      .state.dim { border-color: var(--copper-dark); color: var(--copper-dark); }
+      .state-line { text-transform: uppercase; letter-spacing: 1px; }
+      .state-detail { margin-top: var(--gap); overflow-wrap: anywhere; }
+      .wz-state { margin-bottom: calc(12 * var(--p)); }
+      .wz-state:empty { display: none; }
 
       .wz-dots { display: flex; gap: 6px; margin-bottom: 14px; min-height: 12px; }
       .wz-dots:empty { display: none; }
@@ -209,7 +269,12 @@
         cursor: pointer;
       }
       .wz-btn:hover { border-color: #c08a3e; }
-      .wz-btn:focus-visible { outline: 2px solid #7fe0b0; outline-offset: 2px; }
+      /* Focus is visible, pixel-aligned and the same as on the board: 2p signal, 1p gap. */
+      button:focus-visible,
+      [tabindex]:focus-visible {
+        outline: calc(2 * var(--p)) solid var(--signal);
+        outline-offset: var(--p);
+      }
       .wz-btn.go { color: #0e1a14; background: #7fe0b0; border-color: #7fe0b0; }
       .wz-btn.stop { color: #0e1a14; background: #e0a22e; border-color: #e0a22e; }
       .wz-btn.alt { color: #c9c2b2; border-color: #4a3a22; font-size: 11px; padding: 6px 10px; }
@@ -274,6 +339,10 @@
         border: 1px solid #7fe0b0; color: #7fe0b0; font: 700 11px/1 ui-monospace, monospace;
       }
       .wz-frames-note { font-size: 10px; color: #6f6558; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .wz *, .wz { animation: none !important; transition: none !important; }
+      }
     </style>
   </head>
   <body>

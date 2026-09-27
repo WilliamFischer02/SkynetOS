@@ -1,3 +1,4 @@
+import { failureLine } from '@shared/ui-copy.js';
 import { useEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import type { AwayLogEvent, AwayLogItem, AwayStatus } from '@shared/away.js';
@@ -181,8 +182,8 @@ function Report({ status, onReturn, onDismiss }: { status: AwayStatus; onReturn:
       {status.journal ? <div className="away-hint">Journal: {status.journal}</div> : null}
       <div className="away-return">Space to return to the board</div>
       <div className="away-report-actions">
-        <button type="button" className="btn" onClick={onReturn}>Return to the board (Space)</button>
-        <button type="button" className="btn" onClick={onDismiss}>Dismiss the report</button>
+        <button type="button" className="btn" onClick={onReturn} title="Hide this report and go back to the board (Space)">Return to the board (Space)</button>
+        <button type="button" className="btn" onClick={onDismiss} title="Close this report for good and go back to the board; it cannot be reopened">Dismiss the report</button>
       </div>
     </div>
   );
@@ -330,7 +331,12 @@ export function AwaySettings(): React.JSX.Element {
 
   const save = async (patch: { mode?: AwayMode; afterMinutes?: number; model?: string }): Promise<void> => {
     const result = await window.skynet['away:setMode'](patch);
-    if (!result.ok) toast('warn', result.error ?? 'COULD NOT SAVE');
+    if (!result.ok) {
+      // docs/06 item 13: a failed save used to leave the typed value on screen, which looks saved.
+      setMinutes(String(status.afterMinutes));
+      setModel(status.model);
+      toast('warn', failureLine(result.error, 'COULD NOT SAVE', 'the old values are back; check settings.json is writable'));
+    }
   };
 
   return (
@@ -378,7 +384,7 @@ export function AwaySettings(): React.JSX.Element {
         />
       </label>
       <div className="look-row">
-        <button type="button" className="btn tiny" onClick={() => void window.skynet['away:sleepNow']().then((r) => { if (!r.ok) toast('warn', r.error ?? 'COULD NOT SLEEP'); })}>
+        <button type="button" className="btn tiny" title="Put SkynetOS into away mode now instead of waiting for the idle timer (Shift+Z)" onClick={() => void window.skynet['away:sleepNow']().then((r) => { if (!r.ok) toast('warn', r.error ?? 'COULD NOT SLEEP'); })}>
           Sleep now (Shift+Z)
         </button>
       </div>

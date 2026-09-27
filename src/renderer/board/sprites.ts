@@ -11,7 +11,7 @@
  */
 
 import { groupD8, ImageSource, Texture, Rectangle, type TextureSource } from 'pixi.js';
-import { COPPER_DARK, SILK } from '@shared/palette.js';
+import { COPPER_DARK, SILK, hexToRgb } from '@shared/palette.js';
 import type { NodeKind, Rotation } from '@shared/types.js';
 
 import { TILE } from './camera.js';
@@ -166,6 +166,43 @@ export function nameplateHeight(size: 11 | 22): number {
  * colours, and it is exact — every edge is a whole pixel, no gradient, no alpha, nothing that
  * docs/02 anti-mush would object to.
  */
+/**
+ * A lit edge along a drawn package: the topmost opaque pixel of every column and the leftmost of
+ * every row, within the body, in the lighter mask colour. It follows the silhouette rather than
+ * the rectangle, so a notched chip or a rounded drive is lit along its real outline (only the
+ * outer three pixels are searched, so a notch floor is not). The packages already draw in
+ * mask-light, so this adds no colour to the sprite's budget; it moves one.
+ */
+export function drawLitEdge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  maskLight: string
+): void {
+  if (w <= 0 || h <= 0) return;
+  const img = ctx.getImageData(x, y, w, h);
+  const d = img.data;
+  const [lr, lg, lb] = hexToRgb(maskLight);
+  const opaque = (i: number): boolean => d[i * 4 + 3] === 255;
+  const light = (i: number): void => { d[i * 4] = lr; d[i * 4 + 1] = lg; d[i * 4 + 2] = lb; d[i * 4 + 3] = 255; };
+  const reach = 3;
+  for (let cx = 0; cx < w; cx++) {
+    for (let cy = 0; cy < Math.min(reach, h); cy++) {
+      const i = cy * w + cx;
+      if (opaque(i)) { light(i); break; }
+    }
+  }
+  for (let cy = 0; cy < h; cy++) {
+    for (let cx = 0; cx < Math.min(reach, w); cx++) {
+      const i = cy * w + cx;
+      if (opaque(i)) { light(i); break; }
+    }
+  }
+  ctx.putImageData(img, x, y);
+}
+
 export function drawBevel(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -327,6 +364,33 @@ export function layoutLabel(
   const upper = label.toUpperCase();
   if (!desig && upper && measure(upper) <= usableW) return { kind: 'designator-only', lines: [upper] };
   return { kind: 'none', lines: [] };
+}
+
+/** Drawn placeholder packages, by their full spec key, shared by every SpriteStore this process makes. */
+const placeholderCanvases = new Map<string, HTMLCanvasElement>();
+export const PLACEHOLDER_CANVAS_CACHE = 400;
+
+function rememberedPlaceholder(key: string): HTMLCanvasElement | undefined {
+  const canvas = placeholderCanvases.get(key);
+  if (!canvas) return undefined;
+  // Recency: a Map keeps insertion order, so re-inserting moves the entry to the back.
+  placeholderCanvases.delete(key);
+  placeholderCanvases.set(key, canvas);
+  return canvas;
+}
+
+function rememberPlaceholder(key: string, canvas: HTMLCanvasElement): void {
+  placeholderCanvases.set(key, canvas);
+  while (placeholderCanvases.size > PLACEHOLDER_CANVAS_CACHE) {
+    const oldest = placeholderCanvases.keys().next().value;
+    if (oldest === undefined) break;
+    placeholderCanvases.delete(oldest);
+  }
+}
+
+/** How many drawn packages are remembered; for the perf counters and tests. */
+export function placeholderCanvasCount(): number {
+  return placeholderCanvases.size;
 }
 
 export class SpriteStore {
@@ -560,6 +624,22 @@ export class SpriteStore {
     const cached = this.placeholders.get(key);
     if (cached) return cached;
 
+    /*
+     * Drawn once per process, not once per room (2026-09-26 audit). A SpriteStore lives as long
+     * as one room's canvas, so coming back to a room redrew every package: `nodes` was 190 ms of
+     * the root board's 230 ms rebuild. The finished canvas is remembered in module scope by the
+     * same key and only re-uploaded; a texture is per renderer, a canvas is not. Faces and logos
+     * are excluded: their keys are per image, and live ones are replaced every couple of seconds.
+     */
+    const reusable = !spec.face && !spec.logo;
+    const remembered = reusable ? rememberedPlaceholder(key) : undefined;
+    if (remembered) {
+      const texture = Texture.from(remembered);
+      texture.source.scaleMode = 'nearest';
+      this.placeholders.set(key, texture);
+      return texture;
+    }
+
     const bodyW = Math.max(TILE, spec.w * TILE);
     const bodyH = Math.max(TILE, spec.h * TILE);
 
@@ -588,8 +668,9 @@ export class SpriteStore {
     const plateH = plate ? nameplateHeight(nameSize) : 0;
     const plateW = plate ? plate.width + (suffixText ? suffixText.width + 1 : 0) + 6 : 0;
 
-    const width = Math.max(bodyW + margin * 2 + depth, plateW);
-    const height = bodyH + plateH + margin * 2 + depth;
+    // + 1: the one-pixel shadow every package casts, whatever its priority (drawn below).
+    const width = Math.max(bodyW + margin * 2 + depth + 1, plateW);
+    const height = bodyH + plateH + margin * 2 + depth + 1;
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -638,7 +719,15 @@ export class SpriteStore {
     const bodyX = margin;
     const bodyY = plateH + margin;
 
-    // Behind everything: the long shadow that makes priority read as height.
+    /*
+     * Under every package, priority or none: one world pixel of shadow down and to the right, so
+     * a component sits a step above the substrate — one device pixel per zoom level, which is
+     * what "depth" costs at 1x and what it is worth at 8x. The priority stack, when there is one,
+     * starts a pixel further out and paints over the rest of it.
+     */
+    ctx.fillStyle = spec.maskDark ?? '#000000';
+    ctx.fillRect(bodyX + 1, bodyY + 1, bodyW, bodyH);
+    // Behind everything else: the long shadow that makes priority read as height.
     if (depth > 0) drawDepth(ctx, bodyX, bodyY, bodyW, bodyH, spec.priority ?? 0, spec.maskDark ?? '#000000');
 
     // Behind the body, in the margin: the copper.
@@ -664,6 +753,8 @@ export class SpriteStore {
         { ctx, x: bodyX, y: bodyY, w: bodyW, h: bodyH, maskLight: spec.maskLight, signal: spec.signal },
         COMPONENT_STYLE[spec.kind] ?? { silhouette: 'plain', inset: 2 }
       );
+      // The light comes from the top-left, where the shadow falls away from.
+      drawLitEdge(ctx, bodyX, bodyY, bodyW, bodyH, spec.maskLight);
       // A logo is a badge on the component, not on the picture — so it lands on a drawn package
       // exactly as it lands on a wallpaper.
       if (spec.logo) drawLogo(ctx, spec.logo, bodyX, bodyY, bodyW, bodyH, spec.maskLight);
@@ -681,6 +772,7 @@ export class SpriteStore {
       ctx.drawImage(rendered.canvas, tx, ty);
     }
 
+    if (reusable) rememberPlaceholder(key, canvas);
     const texture = Texture.from(canvas);
     texture.source.scaleMode = 'nearest';
     this.placeholders.set(key, texture);

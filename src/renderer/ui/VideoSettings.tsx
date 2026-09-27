@@ -24,6 +24,7 @@ export function VideoSettings(): React.JSX.Element {
         <input
           type="checkbox"
           checked={gesture.phase !== 'off'}
+          title={gesture.phase !== 'off' ? 'Switch the cameras and hand-gesture control off' : 'Switch the cameras on and control the board with hand gestures'}
           onChange={(event) => void setGestureEnabled(event.target.checked)}
         />
         Manual control (cameras)

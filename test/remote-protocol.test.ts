@@ -26,7 +26,7 @@ describe('REMOTE_METHODS', () => {
     const never = [
       'pick:target', 'prompt:pickFiles', 'prompt:describeFiles', 'command:confirmDestructive',
       'node:open', 'terminal:open', 'explorer:open', 'explorer:drag', 'drag:startFile', 'ingest:classify', 'ingest:create',
-      'settings:setPlan', 'models:setFableReset', 'away:setMode', 'app:autostart', 'app:setAutostart',
+      'settings:setPlan', 'settings:addUsageReadings', 'models:setFableReset', 'away:setMode', 'app:autostart', 'app:setAutostart',
       'avatar:setEnabled', 'avatar:preview', 'display:info',
       'remote:status', 'remote:setEnabled', 'remote:pairCode', 'remote:revoke', 'remote:tailscaleServe'
     ];

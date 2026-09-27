@@ -3,6 +3,7 @@ import type { BoardNode } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
 import type { BoardLoad } from '@shared/ipc.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+import { nextUiScale, resolveUiScale, uiScaleLabel } from '@shared/ui-scale.js';
 import { Icon, type IconName } from './Icon.js';
 import { pushRecent, rankCommands, type CommandItem } from './command-search.js';
 
@@ -192,6 +193,23 @@ function buildActions(): Entry[] {
     action({ id: 'act.calibrate', label: 'Calibrate the usage meter', icon: 'calibrate', keywords: ['plan', 'budget', 'tokens', 'limit'], run: () => { s.setChromePref('usageMinimized', false); s.requestPlanDialog(); } }),
     action({ id: 'act.dock', label: prefs.dockCollapsed ? 'Unfold the session dock' : 'Fold the session dock', icon: 'list', keywords: ['sessions', 'services', 'collapse'], run: () => s.setChromePref('dockCollapsed', !prefs.dockCollapsed) }),
     action({ id: 'act.help', label: prefs.helpHidden ? 'Show the help line' : 'Hide the help line', icon: 'help', keywords: ['hint', 'bottom'], run: () => s.setChromePref('helpHidden', !prefs.helpHidden) }),
+    // 2026-09-27: the chrome's scale steps AUTO → 1× → 2× → 3× (also LOOK → SYSTEM), and the window's frame.
+    action({
+      id: 'act.uiscale',
+      label: `UI scale: ${uiScaleLabel(s.uiScaleSetting)} → ${uiScaleLabel(nextUiScale(s.uiScaleSetting))}`,
+      detail: `now ${resolveUiScale(s.uiScaleSetting, s.osScaleFactor)}×`,
+      icon: 'resize',
+      keywords: ['ui scale', 'size', 'bigger', 'smaller', 'zoom chrome', 'squashed', 'buttons', 'dpi', 'text size'],
+      run: () => void s.chooseUiScale(nextUiScale(s.uiScaleSetting))
+    }),
+    action({ id: 'act.maximize', label: s.windowMaximized ? 'Restore the window' : 'Maximize the window', detail: 'F11', icon: s.windowMaximized ? 'restore' : 'maximize', keywords: ['window', 'full screen', 'fullscreen', 'maximise', 'restore', 'bigger'], run: () => void s.toggleMaximize() }),
+    action({
+      id: 'act.minimize', label: 'Minimize the window', icon: 'minus', keywords: ['window', 'hide', 'minimise', 'taskbar'],
+      run: () => {
+        if (typeof window.skynet['window:minimize'] !== 'function') { s.toast('warn', 'RESTART SKYNETOS TO MINIMIZE FROM HERE'); return; }
+        void window.skynet['window:minimize']().catch((err: unknown) => s.toast('fault', `COULD NOT MINIMIZE — ${(err as Error).message}`));
+      }
+    }),
     action({ id: 'act.diag', label: 'Renderer diagnostics', detail: '`', icon: 'info', keywords: ['fps', 'camera', 'dpr', 'debug'], run: () => press('Backquote', '`') }),
     action({ id: 'act.undo', label: s.history.canUndo ? `Undo ${s.history.undoLabel ?? ''}`.trim() : 'Undo', detail: 'Ctrl+Z', icon: 'left', keywords: ['back', 'revert'], run: () => void s.undo() }),
     action({ id: 'act.redo', label: 'Redo', detail: 'Ctrl+Y', icon: 'right', keywords: ['again'], run: () => void s.redo() })
@@ -291,6 +309,7 @@ function PaletteBody({ onClose }: { onClose: () => void }): React.JSX.Element {
                   role="option"
                   tabIndex={-1}
                   aria-selected={i === active}
+                  title={item.group === 'action' ? `${item.label} (Enter)` : `Go to ${item.label} (Enter); Shift+Enter also opens it`}
                   className={i === active ? 'cmdk-item active' : 'cmdk-item'}
                   onMouseMove={() => { if (i !== active) setActive(i); }}
                   onClick={(e) => run(item.id, e.shiftKey)}

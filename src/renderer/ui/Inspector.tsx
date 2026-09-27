@@ -153,10 +153,11 @@ export function Inspector(): React.JSX.Element | null {
               className="btn primary"
               disabled={!targetField || (target ? isBroken(target) : false)}
               onClick={() => void openNode(node.id)}
+              title={target && isBroken(target) ? 'Target not found: fix it in Edit node (F2)' : `${openLabel(node)} (Enter or Space on the selected node)`}
             >
               {openLabel(node)}
             </button>
-            <button type="button" className="btn" onClick={() => beginEdit(node.id)}>Edit node (F2)</button>
+            <button type="button" className="btn" onClick={() => beginEdit(node.id)} title="Edit this node's name, target and look (F2)">Edit node (F2)</button>
             {node.kind === 'file.artifact' || node.kind === 'file.document' || node.kind === 'file.exe' ? (
               <button
                 type="button"
@@ -222,8 +223,8 @@ export function Inspector(): React.JSX.Element | null {
                     ) : null}
                   </div>
                   <div className="inspector-actions">
-                    <button type="button" className="btn danger" onClick={() => void stopSession(session.id)}>Kill session</button>
-                    <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
+                    <button type="button" className="btn danger" onClick={() => void stopSession(session.id)} title="End this agent's running session now; the conversation can be resumed later">Kill session</button>
+                    <button type="button" className="btn" onClick={() => void startSession(node.id, true)} title="Start another session for this agent with an empty context, not resuming the last conversation">New session (fresh context)</button>
                   </div>
                 </>
               ) : (
@@ -235,15 +236,15 @@ export function Inspector(): React.JSX.Element | null {
                     </div>
                   ) : null}
                   <div className="inspector-actions">
-                    <button type="button" className="btn primary" onClick={() => void startSession(node.id)}>
+                    <button type="button" className="btn primary" onClick={() => void startSession(node.id)} title={node.resume === false ? 'Open a terminal and start a new Claude session for this agent' : "Open a terminal and pick up this agent's last conversation"}>
                       {node.resume === false ? 'Launch session' : 'Resume conversation'}
                     </button>
-                    <button type="button" className="btn" onClick={() => void startSession(node.id, true)}>New session (fresh context)</button>
+                    <button type="button" className="btn" onClick={() => void startSession(node.id, true)} title="Start a session with an empty context, not resuming the last conversation">New session (fresh context)</button>
                   </div>
                 </>
               )}
               <div className="inspector-actions">
-                <button type="button" className="btn" onClick={() => void copyResumeCommand(node.id)}>Copy resume command</button>
+                <button type="button" className="btn" onClick={() => void copyResumeCommand(node.id)} title="Copy the claude --resume command for this agent's last conversation, to paste into any terminal">Copy resume command</button>
               </div>
             </div>
           ) : null}

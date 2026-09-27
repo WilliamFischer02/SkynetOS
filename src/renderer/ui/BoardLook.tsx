@@ -1,3 +1,4 @@
+import { PanelHead } from './PanelHead.js';
 import { useEffect, useState } from 'react';
 import { INK, WIRE_TOKENS, resolveWireToken } from '@shared/palette.js';
 import { LOOK_LIMITS, TILE_MAX_PX, resolveLook } from '@shared/look.js';
@@ -127,7 +128,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
 
   const section = (id: SectionId, label: string, icon: IconName, body: React.ReactNode): React.JSX.Element => (
     <div key={id}>
-      <button type="button" className="look-section" aria-expanded={open[id]} onClick={() => toggle(id)}>
+      <button type="button" className="look-section" aria-expanded={open[id]} onClick={() => toggle(id)} title={open[id] ? `Fold the ${label} section` : `Unfold the ${label} section`}>
         <span className="look-section-mark">{open[id] ? '[-]' : '[+]'}</span>
         <Icon name={icon} />
         {label}
@@ -146,6 +147,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
             <span>{label}</span>
             <input
               type="range"
+              title={`Drag to change the board's ${label.toLowerCase()}; arrow keys step by one`}
               min={LOOK_LIMITS[key].min}
               max={LOOK_LIMITS[key].max}
               step={1}
@@ -162,6 +164,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
           <button
             type="button"
             className="btn tiny"
+            title="Put hue, saturation, brightness and contrast back to the room's own palette (Ctrl+Z undoes it)"
             onClick={() => {
               const { hue: _h, saturation: _s, brightness: _b, contrast: _c, ...rest } = current;
               commit(rest);
@@ -179,7 +182,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
     vignette: (
       <>
         <label className="look-check">
-          <input type="checkbox" checked={r.vignette} onChange={(e) => commit({ ...current, vignette: e.target.checked })} />
+          <input type="checkbox" checked={r.vignette} onChange={(e) => commit({ ...current, vignette: e.target.checked })} title={r.vignette ? 'Turn the dithered vignette off' : 'Darken the board edges with a dithered vignette'} />
           Vignette
         </label>
         <div className="look-row">
@@ -190,6 +193,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
               key={n}
               className="btn tiny look-step"
               aria-pressed={r.vignetteStrength === n}
+              title={`Set the vignette strength to ${n} of 4`}
               onClick={() => commit({ ...current, vignette: true, vignetteStrength: n })}
             >
               {n}
@@ -219,6 +223,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
           <input
             type="checkbox"
             checked={r.tileEnabled && !!r.tileImage}
+            title={r.tileImage ? 'Show or hide the picture tiled across the board' : 'Choose a square picture to tile across the board'}
             onChange={(e) => {
               if (e.target.checked && !r.tileImage) { void browse(); return; }
               commit({ ...current, tileEnabled: e.target.checked });
@@ -227,8 +232,8 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
           Enable background image tile
         </label>
         <div className="look-row">
-          <button type="button" className="btn tiny" onClick={() => void browse()}>Browse…</button>
-          {r.tileImage ? <button type="button" className="btn tiny" onClick={clearTile}>Clear</button> : null}
+          <button type="button" className="btn tiny" onClick={() => void browse()} title="Choose a square picture on disk to tile behind the board">Browse…</button>
+          {r.tileImage ? <button type="button" className="btn tiny" onClick={clearTile} title="Remove the background picture; the room goes back to its own substrate">Clear</button> : null}
         </div>
         {r.tileImage ? <div className="look-path">{r.tileImage}</div> : (
           <div className="look-note">No picture. The room shows its own procedural substrate.</div>
@@ -242,6 +247,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
               key={n}
               className="btn tiny look-step"
               aria-pressed={r.tileScale === n}
+              title={`Draw each picture pixel ${n}x${n} board pixels`}
               onClick={() => commit({ ...current, tileScale: n })}
             >
               {n}X
@@ -256,7 +262,7 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
     ),
     recommendations: (
       <label className="look-check">
-        <input type="checkbox" checked={hidePhantoms} onChange={(e) => setHidePhantoms(e.target.checked)} />
+        <input type="checkbox" checked={hidePhantoms} onChange={(e) => setHidePhantoms(e.target.checked)} title={hidePhantoms ? 'Show the recommended nodes JARVIS suggests' : 'Hide the recommended nodes JARVIS suggests'} />
         Hide Recommended Nodes
       </label>
     ),
@@ -273,14 +279,11 @@ export function BoardLook({ onClose }: { onClose: () => void }): React.JSX.Eleme
 
   return (
     <div className="look-panel" role="dialog" aria-label="Board look">
-      <div className="look-head">
-        <span className="with-icon"><Icon name="look" />LOOK · {board.name}</span>
-        <button type="button" className="btn tiny" onClick={onClose}>Close (L)</button>
-      </div>
+      <PanelHead name={`LOOK · ${board.name}`} icon="look" closeKey="L" onClose={onClose} />
       {SECTIONS.map(({ id, label, icon }) => section(id, label, icon, bodies[id]))}
       <div className="look-foot">
         <span>Saved in this room&apos;s board file. Ctrl+Z undoes any change.</span>
-        <button type="button" className="btn tiny" onClick={() => commit({})}>Reset whole look</button>
+        <button type="button" className="btn tiny" onClick={() => commit({})} title="Clear every look setting for this room: colour, vignette and background (Ctrl+Z undoes it)">Reset whole look</button>
       </div>
     </div>
   );

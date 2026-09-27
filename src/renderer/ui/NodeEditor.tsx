@@ -254,6 +254,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
             className="editor-section"
             data-section={section}
             aria-expanded={open}
+            title={open ? `Fold the ${SECTION_LABELS[section]} fields` : `Unfold the ${SECTION_LABELS[section]} fields`}
             onClick={() => toggleSection(section)}
           >
             <span className="editor-section-mark" aria-hidden="true">{open ? '−' : '+'}</span>
@@ -325,6 +326,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                   type="checkbox"
                   checked={Boolean(value)}
                   disabled={saving}
+                  title={`${Boolean(value) ? 'Turn off' : 'Turn on'}: ${field.label}${field.help ? ` — ${field.help}` : ''}`}
                   onChange={(e) => set(field.key, e.target.checked)}
                 />
                 <span>{Boolean(value) ? 'on' : 'off'}</span>
@@ -353,6 +355,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                   step={5}
                   value={Number(value ?? 100)}
                   disabled={saving}
+                  title={`Drag to set ${field.label.toLowerCase()} from ${field.min ?? 10}% to ${field.max ?? 300}%; arrow keys step by 5`}
                   onChange={(e) => set(field.key, e.target.value)}
                 />
                 <span className="percent-value">{Number(value ?? 100)}%</span>
@@ -397,6 +400,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                   step={1}
                   value={Number(value ?? 0)}
                   disabled={saving}
+                  title="Drag to raise this node's stack on the board, from flat to level 5; arrow keys step by one"
                   onChange={(e) => set(field.key, e.target.value)}
                 />
                 {/*
@@ -431,6 +435,7 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
                         type="checkbox"
                         checked={on}
                         disabled={saving}
+                        title={`${on ? 'Untick to leave out' : 'Tick to include'}: ${option}`}
                         onChange={(e) => {
                           const next = e.target.checked
                             ? [...chosen, option]
@@ -495,11 +500,11 @@ export function NodeEditor({ node, saving, onSave, onCancel, onDelete }: NodeEdi
       ) : null}
 
       <div className="editor-actions">
-        <button type="submit" className="btn primary" disabled={saving || blocked || !changedKeys.length}>
+        <button type="submit" className="btn primary" disabled={saving || blocked || !changedKeys.length} title="Write these changes to the board (Enter; Ctrl+Z undoes them)">
           {saving ? 'Saving…' : changedKeys.length ? `Save ${changedKeys.length} change${changedKeys.length === 1 ? '' : 's'}` : 'No changes'}
         </button>
-        <button type="button" className="btn" onClick={onCancel} disabled={saving}>Cancel</button>
-        <button type="button" className="btn danger" onClick={onDelete} disabled={saving}>Delete node</button>
+        <button type="button" className="btn" onClick={onCancel} disabled={saving} title="Close the editor and throw away unsaved changes">Cancel</button>
+        <button type="button" className="btn danger" onClick={onDelete} disabled={saving} title="Remove this node from the board after you confirm; nothing on disk is touched (Ctrl+Z undoes it)">Delete node</button>
       </div>
 
       {changedKeys.length ? (

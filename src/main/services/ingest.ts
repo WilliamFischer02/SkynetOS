@@ -3,6 +3,7 @@ import { basename, dirname, extname, join } from 'node:path';
 import type { BoardNode, NodeKind } from '@shared/types.js';
 import type { IngestSuggestion } from '@shared/ipc.js';
 import { DEFAULT_FOOTPRINT } from '@shared/types.js';
+import { idSlug } from '@shared/id-slug.js';
 
 /**
  * Drop-in ingestion: drag a file or folder from Explorer into a room and get the right node,
@@ -29,7 +30,7 @@ function slugId(name: string, kind: NodeKind): string {
         : kind === 'drive.room' ? 'd'
           : kind === 'link.url' ? 'j'
             : 'f';
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'node';
+  const slug = idSlug(name);
   return `${prefix}_${slug}`;
 }
 

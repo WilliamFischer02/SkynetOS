@@ -24,6 +24,8 @@
 import type { BoardEdge, BoardNode, EdgeKind } from './types.js';
 import { EDGE_KINDS } from './types.js';
 import type { Actor, CommandRequest } from './commands.js';
+import { parseDesktopCommand, type AppEntry, type DesktopPlan } from './desktop.js';
+import type { HologramControl, HologramControlId, HologramDropdown, HologramPanel } from './hologram-control.js';
 
 /** What the resolver is allowed to know: one room, and what is selected in it. */
 export interface IntentContext {
@@ -34,6 +36,12 @@ export interface IntentContext {
   selectedId?: string | null;
   /** Who is speaking, decided by the caller and enforced in main. Never assumed here. */
   actor: Actor;
+  /**
+   * Desktop control (docs/11): the programs a spoken name can mean, and how many monitors there
+   * are. Absent or empty means no sentence becomes a desktop plan, and "open X" is the board's.
+   */
+  apps?: readonly AppEntry[];
+  monitors?: number;
 }
 
 /** Things that change the view rather than the board. No undo entry, nothing written. */
@@ -46,8 +54,19 @@ export type ViewAction =
   | { type: 'gestureControl'; on: boolean }
   /** Close the microphone by voice. Opening it by voice is impossible by construction: it is not listening. */
   | { type: 'voiceControl'; on: boolean }
+  /**
+   * Send words to the Face (the claude.ai conversation), and only because William said so: "ask
+   * the face …", "tell the face …". Since 2026-09-24 an unrecognised sentence is answered by JARVIS
+   * himself (docs/11 § Conversation); this is the one way a sentence still reaches claude.ai.
+   */
+  | { type: 'faceSend'; text: string }
   /** Open or leave THE MATRIX. */
   | { type: 'matrix'; open: boolean }
+  /**
+   * "Jarvis, stop." Speech stops, a running desktop plan halts, the caption clears: what Esc does
+   * in the hologram window. Not the microphone: that is "stop listening", which closes it.
+   */
+  | { type: 'stop' }
   | { type: 'select'; nodeId: string }
   | { type: 'clearSelection' }
   | { type: 'open'; nodeId: string }
@@ -64,6 +83,24 @@ export type Intent =
   | { kind: 'confirm'; request: CommandRequest; say: string; because: string }
   /** Renderer only. */
   | { kind: 'view'; action: ViewAction; say: string }
+  /**
+   * The desktop, not the board: open a program on a monitor, place a window, open a site. Runs
+   * through `desktop:run` (user-only), which refuses unless William has switched desktop control
+   * on. Made only when the words name a program in the catalogue or a known site, so a board node
+   * called the same thing as nothing installed still opens as a node.
+   */
+  | { kind: 'desktop'; plan: DesktopPlan; say: string }
+  /**
+   * A control in the JARVIS Voice window, by voice: a panel, a dropdown, a switch, a button. Sent
+   * through the user-only `hologram:control`; the renderer presses the control with that id
+   * exactly as a click would (packages/shared/hologram-control.ts).
+   */
+  | { kind: 'hologram'; control: HologramControl; say: string }
+  /**
+   * A saved desktop action, by name: "do the morning setup". Main matches the name against what
+   * TRAIN ACTION recorded, says which one it will run, and runs it under the desktop switch.
+   */
+  | { kind: 'action'; name: string; say: string }
   /** Two or more nodes fit the words equally well. Ask, do not guess. */
   | { kind: 'ambiguous'; say: string; candidates: { id: string; name: string }[] }
   /**
@@ -228,6 +265,224 @@ const nameOf = (node: BoardNode): string => (node.designator ? `${node.designato
 
 const unknown = (heard: string, say: string, understood = true): Intent => ({ kind: 'unknown', say, heard, understood });
 
+/*
+ * ── The JARVIS Voice window, spoken (docs/11; packages/shared/hologram-control.ts) ──────────
+ *
+ * William, 2026-09-26: "all of the Jarvis Voice UI, every submenu and button, should have voice
+ * commands preset." Written as whole-utterance patterns like the manual-control ones above, so
+ * each phrasing is a legible line. `normalise` has folded case and punctuation by the time these
+ * run. Fillers people put in ("the", "my", "panel", "menu", "dropdown") are optional everywhere.
+ */
+const PANEL_WORDS: Record<string, HologramPanel> = {
+  main: 'main', home: 'main', front: 'main', start: 'main',
+  train: 'train', training: 'train', trainer: 'train', voices: 'train',
+  desk: 'desk', desktop: 'desk',
+  action: 'actions', actions: 'actions', routines: 'actions', macros: 'actions',
+  say: 'say', speech: 'say', talk: 'say', talkback: 'say', speak: 'say'
+};
+
+const DROPDOWN_WORDS: Record<string, HologramDropdown> = {
+  profile: 'profiles', profiles: 'profiles',
+  voice: 'voices', voices: 'voices',
+  monitor: 'monitors', monitors: 'monitors', displays: 'monitors'
+};
+
+const UI_FILLER = '(?:(?:the|my|your|that|this|a|an) )?';
+const PANEL_SUFFIX = '(?: (?:panel|menu|tab|screen|page|view|section|mode))?';
+const DROPDOWN_SUFFIX = '(?: (?:dropdown|drop down|list|menu|selector|picker|options))?';
+
+const PANEL_GO = new RegExp(`^(?:(?:go|switch|take me|return|get|jump)(?: back)? (?:to|into|onto)|back to|show(?: me)?|open(?: up)?|bring up|display|pull up|give me) ${UI_FILLER}([a-z]+)${PANEL_SUFFIX}$`);
+const PANEL_BARE = new RegExp(`^${UI_FILLER}([a-z]+) (?:panel|menu|tab|screen|page|view|section)$`);
+const DROPDOWN = new RegExp(`^(open|show|expand|drop down|pull down|unfold|close|hide|collapse|fold|fold up) ${UI_FILLER}([a-z]+)${DROPDOWN_SUFFIX}$`);
+const ON_OFF_SWITCH = new RegExp(`^(?:(?:turn|switch|flip|toggle) (on|off) ${UI_FILLER}([a-z ]+?)|${UI_FILLER}([a-z ]+?) (on|off)|(enable|disable|activate|deactivate|mute|unmute) ${UI_FILLER}([a-z ]+?))$`);
+
+const TALKBACK_NAMES = /^(?:talk ?back|speech|talking|replies|voice replies|spoken replies|your voice|the voice|your speech)$/;
+const MIC_NAMES = /^(?:mic|microphone|the mic|the microphone|listening)$/;
+const DESK_NAMES = /^(?:desk|desktop|desk control|desktop control|desk mode|desktop mode|the desk|the desktop)$/;
+
+/** Every control id a spoken control reaches, for the renderer and for the test that walks them all. */
+export function controlTargets(control: HologramControl): HologramControlId[] {
+  switch (control.op) {
+    case 'panel': return control.panel === 'train' ? ['btn-train'] : control.panel === 'actions' ? ['btn-actions'] : control.panel === 'desk' ? ['btn-desk'] : control.panel === 'say' ? ['btn-say'] : [];
+    case 'dropdown': return [`dropdown-${control.name}` as HologramControlId];
+    case 'talkback': return ['btn-say'];
+    case 'mic': return ['btn-mic'];
+    case 'desk': return ['btn-desk'];
+    case 'press': return [control.id];
+    case 'dictate': return ['btn-dictate'];
+    case 'train-action': return ['btn-train-action'];
+    case 'minimise': return ['btn-minimise'];
+    case 'close': return ['btn-close'];
+    case 'shutdown': return ['btn-close', 'btn-mic', 'btn-say'];
+  }
+}
+
+/** The one-line spoken reply for a control performed by voice. */
+export function sayForControl(control: HologramControl): string {
+  switch (control.op) {
+    case 'panel': return `The ${control.panel} panel.`;
+    case 'dropdown': return `${control.open ? 'Opening' : 'Closing'} ${control.name}.`;
+    case 'talkback': return `Talkback ${control.on ? 'on' : 'off'}.`;
+    case 'mic': return `Microphone ${control.on ? 'on' : 'off'}.`;
+    case 'desk': return `Desktop control ${control.on ? 'on' : 'off'}.`;
+    case 'press': {
+      const words: Partial<Record<HologramControlId, string>> = {
+        'btn-use-voice': 'Switching voices.',
+        'btn-record': 'Recording. Read the line.',
+        'btn-play': 'Playing it back.',
+        'btn-create-profile': 'A new profile.',
+        'btn-save-action': 'Saving the action.',
+        'btn-discard-action': 'Discarded.',
+        'btn-send': 'Sent.',
+        'input-text': 'The text box is yours.'
+      };
+      return words[control.id] ?? `${control.id.replace(/^btn-/, '').replace(/-/g, ' ')}.`;
+    }
+    case 'dictate': return control.on ? 'Dictating. Speak, and I will type.' : 'Dictation off.';
+    case 'train-action': return control.on ? 'Watching. Show me.' : 'Recording stopped. Name it, or discard it.';
+    case 'minimise': return 'Minimised.';
+    case 'close': return 'Closing.';
+    case 'shutdown': return 'Shutting down. Goodnight, sir.';
+  }
+}
+
+const hologram = (control: HologramControl, say?: string): Intent => ({ kind: 'hologram', control, say: say ?? sayForControl(control) });
+
+/** A sentence about the JARVIS Voice window, or null when it is about something else. */
+function hologramIntent(text: string, heard: string): Intent | null {
+  // ── shut down: the JARVIS Voice program, and never the computer ──────────────────────────
+  if (/\b(?:shut|power|turn|switch)\b.*\b(?:down|off)\b/.test(text) && /\b(?:computer|pc|machine|windows|system|everything)\b/.test(text)) {
+    return unknown(heard, 'I do not shut the computer down.', true);
+  }
+  if (/^(?:shut (?:yourself|jarvis|it|the (?:jarvis )?(?:voice )?(?:program|window|app|assistant)) down|shut down(?: jarvis| yourself| the (?:jarvis )?(?:voice )?(?:program|window|app|assistant))?|power (?:down|off)(?: jarvis| yourself)?|turn yourself off|switch yourself off|go to sleep|go offline|goodnight jarvis)$/.test(text)) {
+    return hologram({ op: 'shutdown' });
+  }
+
+  // ── stop: speech and the desktop, as Esc does. Not the microphone. ───────────────────────
+  if (/^(?:stop|halt|stop that|stop it|stop there|stop talking|stop speaking|stop moving|stop everything|quiet|be quiet|hush|shush|silence|cancel|cancel that|never mind|abort|freeze|hold on|hold it|wait|enough)$/.test(text)) {
+    return { kind: 'view', action: { type: 'stop' }, say: '' };
+  }
+
+  // ── dictation ────────────────────────────────────────────────────────────────────────────
+  if (/^(?:dictate|dictation|start (?:dictating|dictation|a dictation)|take (?:a |some )?dictation|begin (?:dictating|dictation)|type what i say|write what i say|transcribe (?:me|this)|dictation on)$/.test(text)) {
+    return hologram({ op: 'dictate', on: true });
+  }
+  if (/^(?:stop (?:dictating|dictation|the dictation|typing)|end (?:the )?dictation|finish (?:the )?dictation|dictation off|that s all)$/.test(text)) {
+    return hologram({ op: 'dictate', on: false });
+  }
+
+  // ── train action: watch what William does ────────────────────────────────────────────────
+  if (/^(?:train (?:an? |the )?actions?|train me|watch (?:what i do|me|this|closely)|start watching|record (?:my |an? |this |the )?actions?|record what i do|learn (?:this|an? action|what i do)|action training)$/.test(text)) {
+    return hologram({ op: 'train-action', on: true });
+  }
+  if (/^(?:stop watching|stop recording(?: (?:my |the )?actions?)?|stop (?:the )?training|end (?:the )?(?:action|recording)|done watching|that s the action|finish (?:the )?action|action done)$/.test(text)) {
+    return hologram({ op: 'train-action', on: false });
+  }
+  if (/^(?:save (?:the |that |this )?action|keep (?:the |that |this )?action|save it|save that|remember (?:that|this|it))$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-save-action' });
+  }
+  if (/^(?:discard|discard (?:the |that |this )?action|forget (?:the |that |this )?action|throw (?:that |it )?away|scrap (?:that|it|the action)|delete (?:the |that )?recording)$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-discard-action' });
+  }
+
+  // ── the window itself ────────────────────────────────────────────────────────────────────
+  if (/^(?:minimi[sz]e|minimi[sz]e (?:yourself|the window|jarvis|the jarvis window)|hide yourself|hide the window|shrink|to the taskbar|get small)$/.test(text)) {
+    return hologram({ op: 'minimise' });
+  }
+  if (/^(?:close|close (?:yourself|the window|jarvis|the jarvis window|the hologram|the jarvis voice window|the voice window|your window)|dismiss|dismissed|go away|that will be all)$/.test(text)) {
+    return hologram({ op: 'close' });
+  }
+
+  // ── the profile buttons and the text box ─────────────────────────────────────────────────
+  if (/^(?:use|switch to|speak with|talk with|speak in|talk in) (?:this|that|the|my|the recorded|the trained|your|the new)? ?(?:voice|profile)(?: voice| profile)?$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-use-voice' });
+  }
+  if (/^(?:record|record (?:the |a |this |the next )?(?:line|it|that)|start recording|record now)$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-record' });
+  }
+  if (/^(?:play|play it|play that|play it back|play that back|playback|play (?:the |that |my )?(?:line|last line|recording)(?: back)?)$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-play' });
+  }
+  if (/^(?:(?:create|make|add|start|begin) (?:a |an? )?(?:new )?(?:voice )?profile|new (?:voice )?profile)$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-create-profile' });
+  }
+  if (/^(?:send|send it|send that|send this|submit|submit it)$/.test(text)) {
+    return hologram({ op: 'press', id: 'btn-send' });
+  }
+  if (/^(?:focus (?:the )?(?:text )?(?:box|field|input)|(?:the )?text box|let me type|i ll type|keyboard|type)$/.test(text)) {
+    return hologram({ op: 'press', id: 'input-text' });
+  }
+
+  // ── panels ───────────────────────────────────────────────────────────────────────────────
+  const goPanel = PANEL_GO.exec(text) ?? PANEL_BARE.exec(text);
+  if (goPanel) {
+    const panel = PANEL_WORDS[goPanel[1]!];
+    if (panel) return hologram({ op: 'panel', panel });
+  }
+  if (/^(?:go back|back|main menu|home|go home)$/.test(text)) return hologram({ op: 'panel', panel: 'main' });
+
+  // ── dropdowns ────────────────────────────────────────────────────────────────────────────
+  const dropdown = DROPDOWN.exec(text);
+  if (dropdown) {
+    const name = DROPDOWN_WORDS[dropdown[2]!];
+    const suffixed = /(?:dropdown|drop down|list|menu|selector|picker|options)$/.test(text);
+    // "open profile" alone could be a node; the dropdown needs the plural or the word for a list.
+    if (name && (suffixed || dropdown[2]!.endsWith('s'))) {
+      const open = !/^(?:close|hide|collapse|fold|fold up)$/.test(dropdown[1]!);
+      return hologram({ op: 'dropdown', name, open });
+    }
+  }
+
+  // ── the three switches: talkback, the microphone, desktop control ────────────────────────
+  const sw = ON_OFF_SWITCH.exec(text);
+  if (sw) {
+    const verb = sw[5];
+    const on = sw[1] ? sw[1] === 'on' : sw[4] ? sw[4] === 'on' : verb === 'enable' || verb === 'activate' || verb === 'unmute';
+    const name = (sw[2] ?? sw[3] ?? sw[6] ?? '').trim();
+    if (TALKBACK_NAMES.test(name)) return hologram({ op: 'talkback', on });
+    if (MIC_NAMES.test(name) && !(verb === 'mute' || verb === 'unmute')) return hologram({ op: 'mic', on });
+    if (DESK_NAMES.test(name)) return hologram({ op: 'desk', on });
+  }
+  if (/^(?:open|turn on) ${UI_FILLER}(?:mic|microphone)$/.test(text)) return hologram({ op: 'mic', on: true });
+
+  return null;
+}
+
+/**
+ * The saved action a spoken name means, by token overlap: "the morning setup" finds
+ * "Morning setup (OBS + Discord)". Case, punctuation and fillers do not count; the best candidate
+ * wins when at least three fifths of the spoken words are in its name, or all of its name's words
+ * were said. Ties go to nobody: null means "ask".
+ */
+export function matchActionName<T extends { id: string; name: string }>(spoken: string, actions: readonly T[]): T | null {
+  const asked = words(spoken).filter((w) => !FILLER.has(w) && !/^(?:action|routine|macro|recording)$/.test(w));
+  if (!asked.length || !actions.length) return null;
+  let best: { action: T; score: number } | null = null;
+  let tie = false;
+  for (const action of actions) {
+    const own = words(action.name).filter((w) => !FILLER.has(w));
+    if (!own.length) continue;
+    const inName = asked.filter((w) => own.some((o) => o === w || o.startsWith(w) || w.startsWith(o))).length;
+    const said = own.filter((o) => asked.some((w) => o === w || o.startsWith(w) || w.startsWith(o))).length;
+    const score = Math.max(inName / asked.length, said / own.length);
+    if (score < 0.6) continue;
+    if (!best || score > best.score) { best = { action, score }; tie = false; }
+    else if (score === best.score) tie = true;
+  }
+  return best && !tie ? best.action : null;
+}
+
+/** "do the morning setup", "run the stream setup action": a saved action by name, or null. */
+function actionIntent(text: string, heard: string): Intent | null {
+  const byVerb = /^(?:do|perform|replay|play back|repeat|carry out) (?:the |my |that |this )?(.+?)(?: (?:action|routine|macro|recording))?$/.exec(text);
+  const byNoun = /^(?:run|execute|start|launch|trigger) (?:the |my |that |this )?(.+?) (?:action|routine|macro|recording)$/.exec(text);
+  const hit = byVerb ?? byNoun;
+  if (!hit) return null;
+  const name = hit[1]!.trim();
+  if (!name || /^(?:it|that|this|nothing|something|anything|again|the same)$/.test(name)) return unknown(heard, 'Do which action, sir?', true);
+  return { kind: 'action', name, say: `Looking for an action called ${name}.` };
+}
+
 const ambiguous = (candidates: BoardNode[]): Intent => ({
   kind: 'ambiguous',
   say: `Which one: ${candidates.slice(0, 4).map((n) => n.name).join(', or ')}?`,
@@ -262,6 +517,14 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
     label
   });
 
+  // ── the Face, by name only: everything else is answered here (docs/11 § Conversation) ────
+  const face = /^(?:ask|tell|send(?: (?:that|this|it))?(?: to)?|message|say to) the face[,:]?\s*(?:to\s+)?(.*)$/.exec(text);
+  if (face) {
+    const words = (face[1] ?? '').trim();
+    if (!words) return unknown(heard, 'Ask the face what, sir?', true);
+    return { kind: 'view', action: { type: 'faceSend', text: words }, say: 'Sent to the Face.' };
+  }
+
   // ── THE MATRIX: the globe of end products ────────────────────────────────────────────────
   if (/^(open|show( me)?|enter|go to|go into) (the )?matrix$/.test(text)) {
     return { kind: 'view', action: { type: 'matrix', open: true }, say: 'The MATRIX.' };
@@ -274,6 +537,12 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
   if (/^(stop listening( to me)?|mute( yourself)?|voice off|turn off voice( control)?|close the microphone)$/.test(text)) {
     return { kind: 'view', action: { type: 'voiceControl', on: false }, say: 'Voice off. The microphone is closed.' };
   }
+
+  // ── the JARVIS Voice window: panels, dropdowns, switches, buttons, stop, shut down ────────
+  const voiceWindow = hologramIntent(text, heard);
+  if (voiceWindow) return voiceWindow;
+  const action = actionIntent(text, heard);
+  if (action) return action;
 
   // ── manual control: give the board to the hands, or take it back ──────────────────────────
   // Tested first, so "manual controls off" can never be read as a request to switch them on.
@@ -307,6 +576,13 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
 
   if (/^(deselect|clear (the )?selection|select nothing|nothing selected)$/.test(text)) {
     return { kind: 'view', action: { type: 'clearSelection' }, say: 'Cleared.' };
+  }
+
+  // ── the desktop: a program, a site, a monitor (docs/11) ──────────────────────────────────
+  // Before the board's own move/open rules, and only when a catalogue program or a site is named.
+  if (ctx.apps?.length) {
+    const plan = parseDesktopCommand(text, { apps: ctx.apps, monitors: ctx.monitors ?? 1 });
+    if (plan) return { kind: 'desktop', plan: { ...plan, heard, source: ctx.actor === 'user' ? 'typed' : 'voice' }, say: 'On it.' };
   }
 
   // ── move ──────────────────────────────────────────────────────────────────────────────────

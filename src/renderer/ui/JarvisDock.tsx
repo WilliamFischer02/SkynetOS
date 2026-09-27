@@ -209,6 +209,7 @@ export function JarvisDock(): React.JSX.Element {
                 type="button"
                 className="prompt-chip-x"
                 aria-label={`Remove ${f.name}`}
+                title={`Take ${f.name} off this message; the file itself is not touched`}
                 disabled={busy}
                 onClick={() => setFiles((current) => current.filter((x) => x.path !== f.path))}
               >

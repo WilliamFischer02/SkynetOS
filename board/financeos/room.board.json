@@ -456,5 +456,71 @@
       "color": "copper-dark"
     }
   ],
-  "phantoms": []
+  "phantoms": [
+    {
+      "id": "ph_rent_run",
+      "kind": "link.url",
+      "name": "RENT RUN",
+      "description": "The Face's income-recovery artifact: 216 researched options, Rent Score, a 30-day run of show, earned/spent ledger. Zero board presence today though it's the live phone-side view William and the Face already use; the on-disk ledger stays the record, this reconciles against it Sundays.",
+      "pos": {
+        "x": 113,
+        "y": 32
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-26T06:20:25.734Z",
+      "fields": {
+        "url": "https://claude.ai/artifact/4jhBmr2YmATvywkJ8QReHh",
+        "notes": "Collections: ledger, settings/main, status/board, plan/progress. Static fallback copy: private/finance/research/rent-run-artifact.html."
+      },
+      "connect": [
+        {
+          "to": "s1_ledger",
+          "kind": "syncs"
+        }
+      ]
+    },
+    {
+      "id": "ph_rent_run_research",
+      "kind": "store.folder",
+      "name": "RENT RUN RESEARCH",
+      "description": "The 216-option income research behind Rent Run: options.json/csv, top-picks.md (Tier S+A, 40), plan-30-day.json, sources.txt (406 URLs). Real, on-disk since 2026-09-25, no board presence — the room's IMPORTS/LEDGER nodes cover bank data only, not this.",
+      "pos": {
+        "x": 113,
+        "y": 41
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-26T06:20:28.768Z",
+      "fields": {
+        "path": "%SKYNET%/private/finance/research",
+        "openWith": "explorer"
+      },
+      "connect": [
+        {
+          "to": "s1_ledger",
+          "kind": "reads"
+        }
+      ]
+    },
+    {
+      "id": "ph_aggregator_options",
+      "kind": "file.document",
+      "name": "AGGREGATOR OPTIONS",
+      "description": "The live-data upgrade decision doc: SimpleFIN Bridge vs BankBridge hosted MCP, tracked and real, but cited only in prose (financeos.md, handoff) with no board presence. Phase 4 (live feed) starts here.",
+      "pos": {
+        "x": 76,
+        "y": 38
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-26T22:15:44.061Z",
+      "fields": {
+        "path": "%SKYNET%/finance/aggregator-options.md"
+      },
+      "connect": [
+        {
+          "to": "s1_ledger",
+          "kind": "reads"
+        }
+      ]
+    }
+  ]
 }

@@ -134,6 +134,7 @@ export function ContextMenu(): React.JSX.Element | null {
           key={item.label}
           className={i === active ? 'context-item active' : 'context-item'}
           disabled={item.disabled}
+          title={item.keys ? `${item.label} (${item.keys})` : item.label}
           onMouseEnter={() => setActive(i)}
           onClick={() => run(item)}
         >

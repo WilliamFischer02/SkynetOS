@@ -1,0 +1,90 @@
+/*
+ * The themed confirmation window (ConfirmApp.tsx). The same rules as every other piece of chrome:
+ * multiples of --p, 11px Departure Mono, flat fills, 1px borders, no radius, no blur, no shadow
+ * (docs/02 anti-mush). The room's three theme tokens are set on :root by the page from the
+ * question's payload; everything below reads them, so a FinanceOS question is graphite and cyan
+ * and a root question is solder-mask green, without a rule per room.
+ */
+body.confirm-mode {
+  margin: 0;
+  overflow: hidden;
+  background: var(--mask-dark);
+  user-select: none;
+}
+body.confirm-mode #root { height: 100vh; }
+
+.confirm-root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--mask-dark);
+  border: var(--p) solid var(--copper);
+  color: var(--silk);
+  font-family: "Departure Mono", ui-monospace, monospace;
+  font-size: var(--f);
+  line-height: calc(13 * var(--p));
+}
+.confirm-root.kind-danger { border-color: var(--fault); }
+.confirm-root.kind-launch { border-color: var(--copper); }
+
+/* The title strip drags the window; nothing else does. */
+.confirm-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  height: calc(26 * var(--p));
+  padding: 0 var(--pad);
+  background: var(--mask-light);
+  border-bottom: var(--p) solid var(--copper-dark);
+  color: var(--signal);
+  text-transform: uppercase;
+  -webkit-app-region: drag;
+}
+.confirm-root.kind-danger .confirm-head { color: var(--fault); }
+.confirm-head .with-icon { display: inline-flex; align-items: center; gap: var(--gap); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.confirm-hint { flex: 0 0 auto; color: var(--copper-dark); }
+
+.confirm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--pad) var(--pad) 0;
+  -webkit-app-region: no-drag;
+}
+.confirm-message {
+  color: var(--silk);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.confirm-detail {
+  margin: var(--pad) 0 0;
+  padding: var(--pad);
+  max-height: calc(300 * var(--p));
+  overflow: auto;
+  border: var(--p) solid var(--copper-dark);
+  background: var(--mask-light);
+  color: var(--silk);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.confirm-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap);
+  padding: var(--pad);
+  border-top: var(--p) solid var(--copper-dark);
+  -webkit-app-region: no-drag;
+}
+.confirm-actions .btn { min-width: calc(88 * var(--p)); }
+/* Focus is the whole story in a keyboard-answered box: make it unmistakable. */
+.confirm-actions .btn:focus-visible {
+  outline: calc(2 * var(--p)) solid var(--signal);
+  outline-offset: var(--p);
+}
+.confirm-root.kind-danger .confirm-actions .btn.danger:focus-visible { outline-color: var(--fault); }

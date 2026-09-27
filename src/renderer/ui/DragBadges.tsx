@@ -1,3 +1,4 @@
+import { failureLine } from '@shared/ui-copy.js';
 import { useEffect, useRef } from 'react';
 import type { Board } from '@shared/types.js';
 import { footprintOf } from '@shared/types.js';
@@ -135,7 +136,7 @@ export function DragBadges({ board, artifacts, cameraRef }: DragBadgesProps): Re
             onDragStart={(event) => {
               event.preventDefault();
               void window.skynet['drag:startFile'](boardId, node.id).then((result) => {
-                if (!result.ok) toast('warn', result.error ?? 'could not start drag');
+                if (!result.ok) toast('warn', failureLine(result.error, 'COULD NOT START THE DRAG', 'open the file from its node instead'));
               });
             }}
           >

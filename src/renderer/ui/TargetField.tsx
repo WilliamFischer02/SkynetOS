@@ -102,11 +102,11 @@ export function TargetField({ field, value, context, onChange, disabled }: Targe
           onChange={(e) => onChange(e.target.value)}
         />
         {canBrowse ? (
-          <button type="button" className="btn" onClick={() => void browse()} disabled={disabled}>
+          <button type="button" className="btn" onClick={() => void browse()} disabled={disabled} title={field.control === 'path-dir' ? 'Choose the folder on disk' : 'Choose the file on disk'}>
             {field.control === 'path-dir' ? 'Browse folder…' : 'Browse…'}
           </button>
         ) : null}
-        <button type="button" className="btn" onClick={() => void verify(value)} disabled={disabled || checking}>
+        <button type="button" className="btn" onClick={() => void verify(value)} disabled={disabled || checking} title="Check that this target exists on this machine now">
           {checking ? 'Checking…' : 'Verify'}
         </button>
       </div>

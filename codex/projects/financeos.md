@@ -41,5 +41,8 @@ a shell string, docs/07).
 
 ## Blockers
 
-- William's card issuer, APR, minimum: unknown. Asked in Phase 2.
+- Card issuer and APR resolved (Bank of America, 24.49% APR, per `private/finance/settings.json`
+  stated 2026-09-24/25) — only the minimum ($210) is still flagged as a placeholder. Corrected
+  2026-09-26 (away pass); the prior "unknown, asked at the hardship call" line was stale.
+- Ross Dress for Less ended (2026-09-25): PBS is the only base income.
 - Whether SimpleFIN covers his institutions: verify in Phase 4; log in `aggregator-options.md`.

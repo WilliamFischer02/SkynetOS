@@ -43,6 +43,8 @@ html.compact .usage-meter {
   max-width: 48vw;
 }
 html.compact .usage-meter .usage-projects { display: none; }
+/* The weekly bars stay on a phone; how each figure was arrived at is left to the desktop's tooltip. */
+html.compact .usage-meter .week-note { display: none; }
 /* The header wraps inside the meter rather than running out of it. At 48vw the plan chip, the
    calibrate flag and the fold arrow do not fit on one line, and the arrow is how you fold it. */
 html.compact .usage-meter .usage-head-row { flex-wrap: wrap; row-gap: var(--p); }
@@ -113,7 +115,6 @@ html.compact .context-menu { max-width: calc(100vw - 16px); }
 
 @media (pointer: coarse) {
   html.compact .btn,
-  html.compact .explorer-tool,
   html.compact .context-item,
   html.compact .phantom-btn,
   html.compact .jarvis-tool,

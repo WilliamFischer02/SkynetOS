@@ -71,7 +71,8 @@ describe('hitTest', () => {
     const rects2 = layoutRects(minecraft);
     const agent = minecraft.nodes.find((n) => n.id === 'u1_agent_stalker');
     const zone = minecraft.nodes.find((n) => n.kind === 'group.zone');
-    if (!agent || !zone) return;
+    // A board edit that removed either would otherwise pass this test by asserting nothing.
+    if (!agent || !zone) throw new Error('MinecraftOS no longer has u1_agent_stalker inside a group.zone');
     const r = nodeRect(agent);
     expect(hitTest(rects2, r.x + 8, r.y + 8)?.nodeId).toBe(agent.id);
   });
@@ -79,7 +80,7 @@ describe('hitTest', () => {
   it('still allows selecting a zone by its empty margin', () => {
     const rects2 = layoutRects(minecraft);
     const zone = minecraft.nodes.find((n) => n.id === 'z1');
-    if (!zone) return;
+    if (!zone) throw new Error('MinecraftOS no longer has zone z1');
     const r = nodeRect(zone);
     // Top-left corner of the zone, which sits outside every member component.
     const hit = hitTest(rects2, r.x + 1, r.y + 1);

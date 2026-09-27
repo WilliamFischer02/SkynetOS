@@ -1332,6 +1332,75 @@
       "frame": "socket",
       "priority": 4,
       "notes": "FinanceOS: institution links, the private ledger, the finance advisor. Added 2026-09-23. No logo yet; pick one in the editor."
+    },
+    {
+      "id": "d6_scheduleos",
+      "designator": "D6",
+      "kind": "drive.room",
+      "name": "Schedule",
+      "engraving": "SCHEDULEOS",
+      "boardFile": "scheduleos/room.board.json",
+      "pos": {
+        "x": 135,
+        "y": 92
+      },
+      "footprint": {
+        "w": 9,
+        "h": 13
+      },
+      "tags": [
+        "schedule",
+        "calendar",
+        "reclaim"
+      ],
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "size": 22,
+      "showDesignator": false,
+      "frame": "socket",
+      "priority": 4,
+      "notes": "ScheduleOS: the week view, Reclaim, the schedule secretary. Added 2026-09-26. No logo yet; pick one in the editor."
+    },
+    {
+      "id": "u_jarvis_tqr",
+      "designator": "U7",
+      "kind": "agent.code",
+      "name": "JARVIS-TQR",
+      "pos": {
+        "x": 106,
+        "y": 90
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/TruthQuestRetro",
+      "launch": "popout",
+      "resume": true,
+      "persona": "%SKYNET%/codex/personas/persona.md",
+      "codexRef": "codex/projects/truthquest-retro.md",
+      "readOnLaunch": [
+        "CLAUDE.md",
+        "docs/roadmap.md",
+        "docs/TODO-NEXT.md"
+      ],
+      "initialPrompt": "You are JARVIS on TruthQuestRetro. Read CLAUDE.md and the handoff before speaking, then state the build state in three lines and one next action.",
+      "mcpServers": [
+        "skynet"
+      ],
+      "tags": [
+        "game",
+        "tqr",
+        "cpp"
+      ],
+      "frame": "castellated",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "pulseColor": "ok",
+      "chase": true,
+      "chaseColor": "signal",
+      "chaseSpeed": 75,
+      "notes": "JARVIS on TruthQuestRetro: the C++20 engine and the Forge editor. Added 2026-09-26 beside GameOS. Sessions in that repo follow its own CLAUDE.md ritual (roadmap milestone, effort tag, TODO-NEXT)."
     }
   ],
   "edges": [
@@ -1913,6 +1982,29 @@
         "side": "left",
         "offset": 0.5
       }
+    },
+    {
+      "id": "e_scheduleos",
+      "from": "u1_jarvis",
+      "to": "d6_scheduleos",
+      "kind": "supervises",
+      "width": 3,
+      "relation": "scheduleos"
+    },
+    {
+      "id": "e_tqr_gameos",
+      "from": "u_jarvis_tqr",
+      "to": "d4_gameos",
+      "kind": "syncs",
+      "width": 2,
+      "relation": "gameos"
+    },
+    {
+      "id": "e_tqr_supervises",
+      "from": "u1_jarvis",
+      "to": "u_jarvis_tqr",
+      "kind": "supervises",
+      "width": 2
     }
   ],
   "look": {
@@ -1970,6 +2062,27 @@
         "path": "C:/dev/story-universe-map",
         "openWith": "terminal"
       }
+    },
+    {
+      "id": "ph_jarvis_voice",
+      "kind": "file.document",
+      "name": "JARVIS Voice",
+      "description": "M13 slice 1 shipped 2026-09-24 (hologram window, speech, voice profiles, desktop control, conversational follow-up) with zero board presence — nothing to click through to docs/11-JARVIS-VOICE.md or the handoff. This gives it one.",
+      "pos": {
+        "x": 140,
+        "y": 115
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-09-25T00:25:20.383Z",
+      "fields": {
+        "path": "C:/dev/SkynetOS/docs/11-JARVIS-VOICE.md"
+      },
+      "connect": [
+        {
+          "to": "s1_repo_skynet",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

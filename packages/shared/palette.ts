@@ -44,7 +44,8 @@ export const ROOM_THEMES = {
   deductionos: { maskDark: '#201A12', maskLight: '#2E2619', signal: '#FFD866' },
   storyos: { maskDark: '#1B1420', maskLight: '#271C2E', signal: '#A87BD6' },
   gameos: { maskDark: '#101C26', maskLight: '#182734', signal: '#4FA8D8' },
-  financeos: { maskDark: '#1A1B22', maskLight: '#26272F', signal: '#5CDCD0' }
+  financeos: { maskDark: '#1A1B22', maskLight: '#26272F', signal: '#5CDCD0' },
+  scheduleos: { maskDark: '#10201F', maskLight: '#183230', signal: '#9CF0FF' }
 } as const satisfies Record<string, { maskDark: Hex; maskLight: Hex; signal: Hex }>;
 
 export type RoomId = keyof typeof ROOM_THEMES;

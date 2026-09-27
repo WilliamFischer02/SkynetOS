@@ -182,6 +182,35 @@ function centreCell(rect: Rect, grid: RouteGrid): { x: number; y: number } {
  * A* with a turn penalty. State is (cell, incoming direction), so a turn can be charged for —
  * plain cell-based A* cannot express "arriving here going east costs less than going north".
  */
+interface RouteScratch {
+  gScore: Float64Array;
+  cameFrom: Int32Array;
+  closed: Uint8Array;
+  stamp: Uint32Array;
+  generation: number;
+}
+
+let scratch: RouteScratch | null = null;
+
+/** The shared scratch, grown to fit the largest grid seen; never shrunk, never cleared. */
+function scratchFor(stateCount: number): RouteScratch {
+  if (!scratch || scratch.gScore.length < stateCount) {
+    scratch = {
+      gScore: new Float64Array(stateCount),
+      cameFrom: new Int32Array(stateCount),
+      closed: new Uint8Array(stateCount),
+      stamp: new Uint32Array(stateCount),
+      generation: 0
+    };
+  }
+  // A stamp that wrapped around to 0 would match a fresh array; start a new one long before that.
+  if (scratch.generation > 0xfffffff0) {
+    scratch.stamp = new Uint32Array(scratch.stamp.length);
+    scratch.generation = 0;
+  }
+  return scratch;
+}
+
 export function routeAStar(request: RouteRequest, grid: RouteGrid): Point[] | null {
   const { cols, rows, cells } = grid;
   const start = request.start ? pointCell(request.start, grid) : centreCell(request.from, grid);
@@ -204,20 +233,33 @@ export function routeAStar(request: RouteRequest, grid: RouteGrid): Point[] | nu
 
   // 5 direction slots: 0-3 are DIRS, 4 is "no direction yet" at the start.
   const stateCount = cols * rows * 5;
-  const gScore = new Float64Array(stateCount).fill(Infinity);
-  const cameFrom = new Int32Array(stateCount).fill(-1);
+  /*
+   * Scratch arrays are reused across routes (2026-09-26 audit). They used to be allocated and
+   * filled per route: for MinecraftOS that is 691,200 states, so three arrays of 5.5 MB, 2.8 MB
+   * and 0.7 MB filled 24 times per board build, and the fills, not the search, were most of the
+   * 116 ms. A generation stamp says which entries belong to THIS route; a state whose stamp is
+   * stale reads as unvisited with an infinite score, exactly as a fresh fill would give.
+   */
+  const s = scratchFor(stateCount);
+  const gen = ++s.generation;
+  const { gScore, cameFrom, closed, stamp } = s;
   const open = new MinHeap();
+  const scoreOf = (state: number): number => (stamp[state] === gen ? gScore[state]! : Infinity);
+  const touch = (state: number): void => {
+    if (stamp[state] !== gen) { stamp[state] = gen; gScore[state] = Infinity; cameFrom[state] = -1; closed[state] = 0; }
+  };
 
   const startState = (start.y * cols + start.x) * 5 + 4;
+  touch(startState);
   gScore[startState] = 0;
   open.push(Math.abs(goal.x - start.x) + Math.abs(goal.y - start.y), startState);
 
-  const closed = new Uint8Array(stateCount);
   let expansions = 0;
   let goalState = -1;
 
   while (open.size) {
     const state = open.pop()!;
+    touch(state);
     if (closed[state]) continue;
     closed[state] = 1;
     if (++expansions > MAX_EXPANSIONS) break;
@@ -235,11 +277,12 @@ export function routeAStar(request: RouteRequest, grid: RouteGrid): Point[] | nu
       if (!isFree(nx, ny)) continue;
 
       const nextState = (ny * cols + nx) * 5 + d;
+      touch(nextState);
       if (closed[nextState]) continue;
 
       const turn = dir !== 4 && dir !== d ? TURN_COST : 0;
       const tentative = gScore[state]! + 1 + turn + penalty(nx, ny);
-      if (tentative >= gScore[nextState]!) continue;
+      if (tentative >= scoreOf(nextState)) continue;
 
       gScore[nextState] = tentative;
       cameFrom[nextState] = state;

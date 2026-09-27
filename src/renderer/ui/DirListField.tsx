@@ -83,7 +83,7 @@ export function DirListField({ value, disabled, onChange }: DirListFieldProps): 
 
       {!dirs.length ? <div className="dirlist-empty">NONE — this agent sees only its working directory</div> : null}
 
-      <button type="button" className="btn" disabled={disabled} onClick={() => void browse()}>
+      <button type="button" className="btn" disabled={disabled} onClick={() => void browse()} title="Choose another folder this agent may read and write, beyond its working directory">
         Grant a directory…
       </button>
     </div>

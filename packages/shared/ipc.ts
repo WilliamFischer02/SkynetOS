@@ -45,6 +45,17 @@ import type { UpdateStatus } from './update.js';
 import type { AwayLogEvent, AwayStatus } from './away.js';
 import type { AwayMode } from './presence.js';
 import type { AvatarMood, AvatarPayload } from './avatar.js';
+import type { HologramStatus } from './hologram.js';
+import type { ProfileRecordRequest, ProfileRecordResult, SpeechBackend, SpeechRequest, SpeechState, SpeechStatus, VoiceProfile, VoiceProfileSummary } from './speech.js';
+import type { AppEntry, DesktopPlan, DesktopResult, DesktopState, DesktopStatus, DesktopWindow } from './desktop.js';
+import type { DictateStatus } from './dictate.js';
+// fork H (2026-09-26): TRAIN ACTION recordings and saved actions.
+import type { ActionRecording, RecordStatus, SavedAction } from './actions.js';
+// F1 (2026-09-26): the hologram's levels, scene and voice-driven controls.
+import type { AudioLevels } from './speech-levels.js';
+import type { HoloScene } from './holo-scene.js';
+import type { HologramControl } from './hologram-control.js';
+import type { UiScaleSetting } from './ui-scale.js';
 
 /** What a board file's load attempt produced. A failure is data, not an exception. */
 export type BoardLoad =
@@ -57,6 +68,20 @@ export interface DisplayInfo {
   /** The zoom factor applied to cancel it, so 1 CSS px == 1 device px. */
   appliedZoomFactor: number;
   workArea: { width: number; height: number };
+  /**
+   * William's chrome scale choice (settings.json `uiScale`): `auto` follows `scaleFactor`, a number
+   * overrides it. Here rather than in `settings:read` because this channel is answered by the device
+   * itself on a remote page (remote/shim.ts), so a phone never inherits the desktop's choice.
+   * Optional: a main process that predates it leaves it out, which means `auto`.
+   */
+  uiScale?: UiScaleSetting;
+}
+
+/** The board window's frame: maximised or not, and where it is. `window:state` and `window:changed`. */
+export interface WindowSnapshot {
+  maximized: boolean;
+  /** The window's bounds in screen DIPs, whole numbers. */
+  bounds: { x: number; y: number; width: number; height: number };
 }
 
 /** A request for a native file/folder picker. */
@@ -247,6 +272,32 @@ export interface SkynetApi {
    */
   'settings:setPlan': (plan: string | null, tokenBudget: number | null) =>
     { ok: boolean; error?: string };
+  /**
+   * Append this week's /usage readings to the weekly pools: `all` (every model) and/or `top`
+   * (Fable), percentages, stamped now. USER ONLY, like `settings:setPlan` and for the same reason:
+   * it scales two bars and grants nothing. In neither AGENT_METHODS nor REMOTE_METHODS. See
+   * addWeeklyReadings in services/settings.ts.
+   */
+  'settings:addUsageReadings': (readings: { all?: number | null; top?: number | null }) =>
+    { ok: boolean; error?: string };
+  /**
+   * The chrome's scale: `auto` (the OS scale factor) or 1, 2 or 3 (2026-09-27, William: "a lot of
+   * the buttons and UI elements are squashed"). USER ONLY, in neither AGENT_METHODS nor
+   * REMOTE_METHODS. Like `settings:setPlan` it grants nothing and allows no path; it sizes the
+   * chrome. It writes `uiScale` and nothing else, clamped (packages/shared/ui-scale.ts).
+   */
+  'settings:setUiScale': (scale: UiScaleSetting) => { ok: boolean; uiScale: UiScaleSetting; error?: string };
+
+  /*
+   * The board window's own frame (2026-09-27): maximise or restore, minimise, and where it is.
+   * BOARD WINDOW ONLY (WINDOW_METHODS below): in neither AGENT_METHODS nor REMOTE_METHODS, and
+   * refused from every other window by `registerIpc`. An agent that could minimise the board could
+   * hide what it is doing; a phone has no business resizing a desktop it is not in front of.
+   */
+  /** Toggle maximised and restored. Answers with the state it left the window in. */
+  'window:maximize': () => { maximized: boolean };
+  'window:minimize': () => { ok: boolean };
+  'window:state': () => WindowSnapshot;
 
   // --- target resolution: "does this point at something real?" ---
   'target:resolveNode': (boardId: string, nodeId: string) => NodeStatus;
@@ -668,6 +719,103 @@ export interface SkynetApi {
   'voice:setEnabled': (on: boolean) => VoiceStatus;
   /** One sentence from the capture window: a WAV, or why there is none. CAPTURE WINDOW ONLY. */
   'voice:captured': (capture: VoiceCapture) => { ok: boolean };
+  /**
+   * A command typed into the hologram window (or the corner prompt) instead of spoken. Main
+   * pushes it to the board as `voice:heard`, so it takes exactly the path a sentence takes.
+   */
+  'voice:typed': (text: string) => { ok: boolean };
+
+  /* ── JARVIS Voice: the hologram window, speech, voice profiles, desktop control (docs/11) ── */
+  'hologram:status': () => HologramStatus;
+  /** User-only. Opens the window now and on every start, or closes it and stops doing so. */
+  'hologram:setEnabled': (on: boolean) => HologramStatus;
+  /** From the hologram window: minimise itself (close is minimise, docs/11). */
+  'hologram:minimize': () => { ok: boolean };
+  /** The VOICE button: enable the window if it is not, open or restore it, and give it focus. */
+  'hologram:open': () => HologramStatus;
+  /** From the hologram window: REALLY close it (voice keeps running). User-only. */
+  'hologram:close': () => { ok: boolean };
+  /** Close the window AND switch the microphone off and stop speaking. Never the computer. User-only. */
+  'hologram:shutdown': () => { ok: boolean };
+  /** DESK layout on monitor one, full height, or back to the square. User-only. */
+  'hologram:setDesk': (on: boolean) => HologramStatus;
+  /** Microphone levels while LISTENING, thirty a second, for the globe. CAPTURE WINDOW ONLY. */
+  'voice:levels': (levels: AudioLevels) => { ok: boolean };
+  /**
+   * The themed confirmation window pressed a button (src/main/services/confirm-window.ts). The
+   * ONLY channel that window may call, and callable by nothing else; an index outside the
+   * question's buttons is the refusal.
+   */
+  'confirm:answer': (id: string, index: number) => { ok: boolean };
+  /**
+   * A sentence the grammar did not understand: JARVIS composes a spoken reply (headless claude -p,
+   * no tools) and says it from main. User-only; the model cannot call anything (docs/11 § Conversation).
+   */
+  'converse:ask': (req: { text: string; source: 'voice' | 'typed' }) => { reply: string; source: 'model' | 'fallback'; ms: number };
+
+  'speech:status': () => SpeechStatus;
+  /** User-only. */
+  'speech:setEnabled': (on: boolean) => SpeechStatus;
+  /** Say a line in JARVIS's voice. User-only: an agent may not put words in his mouth. */
+  'speech:say': (req: SpeechRequest) => { ok: boolean; error?: string };
+  'speech:stop': () => { ok: boolean };
+  /** User-only. Speak with Windows' voice, or with a recorded profile through the synthesis server. */
+  'speech:setBackend': (req: { backend: SpeechBackend; profile?: string }) => SpeechStatus;
+
+  /** Voice profiles: datasets William records of his own voice (docs/11 § Voice profiles). */
+  'profile:list': () => VoiceProfileSummary[];
+  'profile:read': (name: string) => VoiceProfile | null;
+  /** Creates the profile folder with every line unrecorded. User-only. */
+  'profile:create': (name: string) => { ok: boolean; profile?: VoiceProfile; error?: string };
+  /** Opens the microphone for ONE line, writes ONE wav into the profile folder. User-only. */
+  'profile:record': (req: ProfileRecordRequest) => ProfileRecordResult;
+  /** Plays a recorded line back. User-only. */
+  'profile:play': (req: { profile: string; lineId: string }) => { ok: boolean; error?: string };
+  /** Set or correct a line's transcript (an imported clip's, mostly). User-only. */
+  'profile:setText': (req: { profile: string; lineId: string; text: string }) => { ok: boolean; error?: string };
+
+  'desktop:status': () => DesktopStatus;
+  /** User-only. The one switch for moving anything on the desktop. OFF by default. */
+  'desktop:setEnabled': (on: boolean) => DesktopStatus;
+  'desktop:windows': () => DesktopWindow[];
+  'desktop:apps': () => AppEntry[];
+  /** Run a plan, step by step, reporting each as `desktop:state`. User-only. */
+  'desktop:run': (plan: DesktopPlan) => DesktopResult;
+  /** Stop the running plan at once. */
+  'desktop:halt': () => { ok: boolean };
+
+  /* ── fork H, 2026-09-26: TRAIN ACTION (docs/07 § JARVIS Voice). All user-only; the hologram window. ── */
+  /** Light on: the helper records mouse and keyboard until `desktop:recordStop`. Refused while recording. */
+  'desktop:recordStart': () => { ok: boolean; error?: string };
+  /** Light off: the recording, coalesced into steps, not yet saved. */
+  'desktop:recordStop': () => { ok: boolean; recording?: ActionRecording; error?: string };
+  'desktop:recordStatus': () => RecordStatus;
+  /** Name it and keep it: userData/desktop/recordings/<id>.json. Never deleted by a channel. */
+  'desktop:actionSave': (req: { name: string; description: string; recording: ActionRecording }) => { ok: boolean; action?: SavedAction; error?: string };
+  'desktop:actionList': () => SavedAction[];
+  /** Replay a saved action with adaptation, under the desktop switch and the same halt. */
+  'desktop:actionRun': (req: { id: string }) => { ok: boolean; error?: string };
+
+  /* ── fork G, 2026-09-26: spoken controls for the JARVIS Voice window, and dictation ── */
+  /**
+   * Perform a control in the hologram window by voice or from the board: a panel, a dropdown, a
+   * switch, a button, close, shut down. User-only (the board and the hologram windows). Main opens
+   * the window if it must and pushes the `hologram:control` event; the renderer presses the
+   * control with that `data-control` id. `shutdown` also closes the microphone and stops speech.
+   */
+  'hologram:control': (control: HologramControl) => { ok: boolean; said: string; error?: string };
+  /**
+   * Run a saved desktop action by its spoken name. User-only. Main matches the name against
+   * what TRAIN ACTION recorded, says which one it is about to run, and runs it under the desktop
+   * switch (refused when desktop control is off, as `desktop:run` is).
+   */
+  'hologram:runAction': (name: string) => { ok: boolean; name?: string; error?: string };
+  /**
+   * Dictation (docs/07 § Voice): one press or hotkey to start, one to stop; the microphone opens
+   * only then; the transcript is typed into whatever has focus and written nowhere. User-only.
+   */
+  'dictate:toggle': () => DictateStatus;
+  'dictate:status': () => DictateStatus;
 }
 
 export type Channel = keyof SkynetApi;
@@ -685,6 +833,11 @@ export const CHANNELS = [
   'app:setAutostart',
   'settings:read',
   'settings:setPlan',
+  'settings:addUsageReadings',
+  'settings:setUiScale',
+  'window:maximize',
+  'window:minimize',
+  'window:state',
   'target:resolveNode',
   'target:resolveBoard',
   'target:verify',
@@ -774,7 +927,47 @@ export const CHANNELS = [
   'gesture:train',
   'voice:status',
   'voice:setEnabled',
-  'voice:captured'
+  'voice:captured',
+  'voice:levels',
+  'voice:typed',
+  'hologram:status',
+  'hologram:setEnabled',
+  'hologram:minimize',
+  'hologram:open',
+  'hologram:close',
+  'hologram:shutdown',
+  'hologram:setDesk',
+  'confirm:answer',
+  'converse:ask',
+  'speech:status',
+  'speech:setEnabled',
+  'speech:say',
+  'speech:stop',
+  'speech:setBackend',
+  'profile:list',
+  'profile:read',
+  'profile:create',
+  'profile:record',
+  'profile:play',
+  'profile:setText',
+  'desktop:status',
+  'desktop:setEnabled',
+  'desktop:windows',
+  'desktop:apps',
+  'desktop:run',
+  'desktop:halt',
+  // fork H, 2026-09-26: TRAIN ACTION
+  'desktop:recordStart',
+  'desktop:recordStop',
+  'desktop:recordStatus',
+  'desktop:actionSave',
+  'desktop:actionList',
+  'desktop:actionRun',
+  // fork G, 2026-09-26
+  'hologram:control',
+  'hologram:runAction',
+  'dictate:toggle',
+  'dictate:status'
 ] as const satisfies readonly Channel[];
 
 /**
@@ -788,7 +981,7 @@ export const CHANNELS = [
  *
  * Read the omissions as carefully as the entries:
  *
- * - `settings:setPlan` and anything else that writes settings. docs/07: "settings, allowlists and
+ * - `settings:setPlan`, `settings:addUsageReadings` and anything else that writes settings. docs/07: "settings, allowlists and
  *   elevation are user-only". An agent that can edit the allowlist has no allowlist.
  * - `command:confirmDestructive`. This is the approval dialog itself. An agent calling it would be
  *   asking the user a question in its own voice and then reading the answer as consent —
@@ -893,7 +1086,7 @@ export function isAgentMethod(value: string): value is AgentMethod {
  * - The PC's own files and programs: `node:open`, `terminal:open`, `explorer:open`, `explorer:drag`,
  *   `drag:startFile`, `ingest:*`, `prompt:describeFiles`. Opening a document on a desktop you are
  *   not sitting at does nothing useful, and runs code in the worst case.
- * - Settings and grants: `settings:setPlan`, `models:setFableReset`, `away:setMode`,
+ * - Settings and grants: `settings:setPlan`, `settings:addUsageReadings`, `models:setFableReset`, `away:setMode`,
  *   `app:autostart`/`app:setAutostart`, `avatar:setEnabled`, `avatar:preview`, and every `remote:*`
  *   channel. A paired phone cannot pair another device, change the rules, or turn remote off.
  * - `command:apply` IS here, rewritten on the way in (prepareRemoteCall): attributed to `remote`,
@@ -1006,7 +1199,7 @@ export function isVisionMethod(value: string): value is VisionMethod {
  * be able to edit the board, and nothing else may slip a sentence into the speech engine as though it had
  * been spoken.
  */
-export const VOICE_METHODS = ['voice:captured'] as const satisfies readonly Channel[];
+export const VOICE_METHODS = ['voice:captured', 'voice:levels'] as const satisfies readonly Channel[];
 
 const VOICE_METHOD_SET: ReadonlySet<string> = new Set(VOICE_METHODS);
 
@@ -1039,6 +1232,88 @@ const VISION_SHARED_SET: ReadonlySet<string> = new Set(VISION_SHARED);
 
 export function isVisionShared(value: string): boolean {
   return VISION_SHARED_SET.has(value);
+}
+
+/**
+ * Channels the HOLOGRAM window may call, and nothing else (docs/11-JARVIS-VOICE.md).
+ *
+ * A grant only, like VISION_SHARED: the board may call all of these too. The hologram is a small
+ * window with a microphone switch, a text box and a TRAIN panel; it may switch voice, speech and
+ * desktop control on or off for William, type a command, record a profile line, and read status.
+ * It may not edit the board, open files, or start sessions: the list below is the whole of it.
+ */
+export const HOLOGRAM_ALLOWED = [
+  'app:version',
+  'hologram:status',
+  'hologram:minimize',
+  'hologram:close',
+  'hologram:shutdown',
+  'hologram:setDesk',
+  'converse:ask',
+  'voice:status',
+  'voice:setEnabled',
+  'voice:typed',
+  'speech:status',
+  'speech:setEnabled',
+  'speech:say',
+  'speech:stop',
+  'speech:setBackend',
+  'profile:list',
+  'profile:read',
+  'profile:create',
+  'profile:record',
+  'profile:play',
+  'profile:setText',
+  'desktop:status',
+  'desktop:setEnabled',
+  'desktop:windows',
+  'desktop:apps',
+  'desktop:halt',
+  // fork H, 2026-09-26: the TRAIN ACTION light, its save screen, the action list and RUN.
+  'desktop:recordStart',
+  'desktop:recordStop',
+  'desktop:recordStatus',
+  'desktop:actionSave',
+  'desktop:actionList',
+  'desktop:actionRun',
+  // fork G, 2026-09-26: its own buttons by voice, a saved action's RUN, and the DICTATE button.
+  'hologram:control',
+  'hologram:runAction',
+  'dictate:toggle',
+  'dictate:status'
+] as const satisfies readonly Channel[];
+
+const HOLOGRAM_ALLOWED_SET: ReadonlySet<string> = new Set(HOLOGRAM_ALLOWED);
+
+export function isHologramAllowed(value: string): boolean {
+  return HOLOGRAM_ALLOWED_SET.has(value);
+}
+
+/**
+ * The themed confirmation window (src/main/services/confirm-window.ts) may call this and nothing
+ * else, and nothing else may call it: a grant AND a denial, like VISION_METHODS. The question
+ * itself reaches the page in its URL hash, so it has no reason to ask main for anything.
+ */
+export const CONFIRM_ALLOWED = ['confirm:answer'] as const satisfies readonly Channel[];
+
+const CONFIRM_ALLOWED_SET: ReadonlySet<string> = new Set(CONFIRM_ALLOWED);
+
+export function isConfirmMethod(value: string): boolean {
+  return CONFIRM_ALLOWED_SET.has(value);
+}
+
+/**
+ * The board window's frame controls (2026-09-27). A denial, not a grant: only the board window may
+ * call these, and `registerIpc` checks the sender against `boardWindow()`, so the hologram, vision,
+ * voice, confirm and face windows cannot maximise, minimise or read the board window. Neither list
+ * an agent or a phone is served from names them (test/window-controls-contract.test.ts).
+ */
+export const WINDOW_METHODS = ['window:maximize', 'window:minimize', 'window:state'] as const satisfies readonly Channel[];
+
+const WINDOW_METHOD_SET: ReadonlySet<string> = new Set(WINDOW_METHODS);
+
+export function isWindowMethod(value: string): boolean {
+  return WINDOW_METHOD_SET.has(value);
 }
 
 /**
@@ -1096,11 +1371,31 @@ export interface SkynetEvents {
   'voice:heard': VoiceHeard;
   /** Sent to the CAPTURE WINDOW only: open the microphone for one sentence. */
   'voice:listen': VoiceListen;
+  /** Sent to the CAPTURE WINDOW only: open the microphone for one profile line (docs/11). */
+  'voice:record': ProfileRecordRequest;
+  /** Speech playback: started, progressing, finished. The hologram pulses with it. */
+  'speech:state': SpeechState;
+  /** Desktop control: a plan is running, which step, or it has finished. */
+  'desktop:state': DesktopState;
+  /** Eight band levels and a loudness while a line plays; the globe distorts to them. Hologram only. */
+  'speech:levels': AudioLevels;
+  /** The same shape from the microphone while LISTENING. Hologram only. */
+  'voice:levels': AudioLevels;
+  /** What orbits the globe and what is at its centre (services/activity-feed.ts). Hologram only. */
+  'hologram:scene': HoloScene;
+  /** A spoken command that presses a control in the hologram window. Hologram only. */
+  'hologram:control': HologramControl;
+  /** fork G: dictation phase changed; the board and the hologram show it. */
+  'dictate:state': DictateStatus;
+  /** fork H: the TRAIN ACTION light: recording, how many steps, paused over a sign-in. Hologram only. */
+  'desktop:recordState': RecordStatus;
+  /** The board window was maximised, restored or resized; coalesced to one push per 100 ms. Board only. */
+  'window:changed': WindowSnapshot;
 }
 
 export type EventName = keyof SkynetEvents;
 
-export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched', 'monitor:open', 'away:state', 'away:log', 'avatar:changed', 'avatar:mood', 'avatar:nodeMood', 'gesture:event', 'gesture:state', 'voice:state', 'voice:wake', 'voice:heard', 'voice:listen', 'update:state'] as const satisfies readonly EventName[];
+export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched', 'monitor:open', 'away:state', 'away:log', 'avatar:changed', 'avatar:mood', 'avatar:nodeMood', 'gesture:event', 'gesture:state', 'voice:state', 'voice:wake', 'voice:heard', 'voice:listen', 'voice:record', 'speech:state', 'desktop:state', 'update:state', 'speech:levels', 'voice:levels', 'hologram:scene', 'hologram:control', 'dictate:state', 'desktop:recordState', 'window:changed'] as const satisfies readonly EventName[];
 
 /** The shape contextBridge exposes on window.skynet. */
 export type SkynetBridge = {

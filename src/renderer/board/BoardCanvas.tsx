@@ -32,6 +32,17 @@ import {
   stepZoom,
   TILE
 } from './camera.js';
+import {
+  GESTURE_PAN_SETTLE_MS,
+  MOUSE_PAN_SETTLE_MS,
+  PARALLAX,
+  applyGlide,
+  initialMotion,
+  parallaxOffset,
+  renderPlan,
+  startGlide,
+  stepMotion
+} from './motion.js';
 import { buildSubstrate } from './substrate.js';
 import { Texture, TilingSprite } from 'pixi.js';
 import { resolveLook } from '@shared/look.js';
@@ -92,6 +103,8 @@ import { TouchGestures } from './touch.js';
 import { isLiveAvatarLogo, logoBoxPx, logoCacheSource } from '@shared/logo-source.js';
 import { gifFrameAt } from '@shared/gif.js';
 import { avatarFrameAt, liveLogoLayout, wobbleOffset, type AvatarMood, type AvatarPayload } from '@shared/avatar.js';
+import { perfCount, perfEnabled, perfMaybeLog, perfTick } from './perf.js';
+import { getCachedRoutes, putCachedRoutes, routeCacheKey, type CachedRoutes } from './route-cache.js';
 
 /**
  * The baked atlas. `npm run assets:bake` writes it from assets/sprites/manifest.json.
@@ -258,6 +271,31 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let disposed = false;
     let app: Application | null = null;
     const held: PanHeld = { up: false, down: false, left: false, right: false, heldFrames: 0 };
+    /*
+     * Render on demand (2026-09-26 audit). Pixi's ticker plugin renders the stage every tick
+     * whether or not anything changed; on a board at rest that is sixty GPU frames a second of
+     * the same picture. The plugin's render is removed after `app.init` and the ticker renders
+     * only when something marked the scene dirty: a redraw function below, a camera that moved,
+     * an animation that stepped, a resize. A safety render every RENDER_SAFETY_MS catches any path
+     * that forgot to mark, so the worst case of a miss is a quarter-second-old frame, not a stale one.
+     */
+    let dirty = true;
+    let lastRenderAt = 0;
+    const RENDER_SAFETY_MS = 250;
+    const markDirty = (): void => { dirty = true; };
+    const onWindowResize = (): void => markDirty();
+    window.addEventListener('resize', onWindowResize);
+
+    /*
+     * The shown camera (motion.ts). `cameraStore` is the TARGET every handler writes; the ticker
+     * eases this toward it and renders from it. Created here, with the effect, so a new room starts
+     * exactly where its camera does.
+     */
+    const motion = initialMotion(cameraStore.current);
+    /** Where the last zoom command pointed, in canvas pixels. The ticker consumes it. */
+    let zoomAnchor: { ax: number; ay: number } | null = null;
+    /** The last few pan positions with their times, for momentum on release. */
+    const panTrail: { t: number; x: number; y: number }[] = [];
 
     /** The board currently drawn. Every handler reads this, never a captured prop. */
     let board: Board = props.board;
@@ -372,6 +410,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     let fallbackCount = 0;
 
     const viewport = (): Viewport => ({ width: app?.renderer.width ?? 0, height: app?.renderer.height ?? 0 });
+    /** The zoom anchor the keys use: the middle of the view. */
+    const centreAnchor = (): { ax: number; ay: number } => {
+      const v = viewport();
+      return { ax: v.width / 2, ay: v.height / 2 };
+    };
+    /** A released pan keeps a little of its speed; from the last 80 ms of the trail, or nothing. */
+    const releasePan = (): void => {
+      const now = performance.now();
+      const recent = panTrail.filter((p) => now - p.t <= 80);
+      panTrail.length = 0;
+      if (recent.length < 2) return;
+      const a = recent[0]!;
+      const b = recent[recent.length - 1]!;
+      const dt = b.t - a.t;
+      if (dt <= 0) return;
+      startGlide(motion, ((b.x - a.x) / dt) * 1000, ((b.y - a.y) / dt) * 1000);
+    };
 
     const canvasPoint = (event: { clientX: number; clientY: number }): { x: number; y: number } => {
       if (!app) return { x: 0, y: 0 };
@@ -494,7 +549,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       // 1 to 8 jump straight to that whole-number zoom. 0 is "whole board", handled below.
       if (/^Digit[1-8]$/.test(event.code)) {
         const z = Number(event.code.slice(-1));
-        if (isZoom(z)) cameraStore.current = { ...cameraStore.current, zoom: z };
+        if (isZoom(z)) { zoomAnchor = centreAnchor(); cameraStore.current = { ...cameraStore.current, zoom: z }; }
         event.preventDefault();
         return;
       }
@@ -506,6 +561,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        */
       if (event.code === 'Digit0') {
         const view = viewport();
+        zoomAnchor = centreAnchor();
         cameraStore.current = clampCamera(setZoom(cameraStore.current, fitZoom(boardPx, view), view), boardPx, view);
         event.preventDefault();
         return;
@@ -516,6 +572,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         const out = event.code === 'Minus' || event.code === 'NumpadSubtract';
         const view = viewport();
         const next = stepZoom(cameraStore.current.zoom, out ? -1 : 1);
+        zoomAnchor = centreAnchor();
         cameraStore.current = clampCamera(setZoom(cameraStore.current, next, view), boardPx, view);
         event.preventDefault();
         return;
@@ -626,6 +683,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const next = stepZoom(camera.zoom, event.deltaY < 0 ? 1 : -1);
       if (next === camera.zoom) return;
       const anchor = canvasPoint(event);
+      zoomAnchor = { ax: anchor.x, ay: anchor.y };
       cameraStore.current = clampCamera(setZoom(camera, next, viewport(), anchor), boardPx, viewport());
     };
 
@@ -808,6 +866,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!app) return;
+      // A press ends any momentum, and picks the spring: a hand (a synthetic pointer) is softer.
+      motion.glide = null;
+      motion.panSettleMs = event.isTrusted ? MOUSE_PAN_SETTLE_MS : GESTURE_PAN_SETTLE_MS;
+      panTrail.length = 0;
       const screen = canvasPoint(event);
       const camera = cameraStore.current;
       const point = screenToWorld(camera, screen.x, screen.y);
@@ -1031,6 +1093,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
       if (drag.kind === 'pan') {
         cameraStore.current = clampCamera({ ...camera, ...panTo(drag, screen, camera.zoom) }, boardPx, viewport());
+        panTrail.push({ t: performance.now(), x: cameraStore.current.x, y: cameraStore.current.y });
+        if (panTrail.length > 8) panTrail.shift();
         return;
       }
 
@@ -1142,6 +1206,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       } else if (drag.kind === 'move' && drag.nodeId) {
         // An illegal or abandoned move: put the sprite back where the data still says it is.
         placeSprite(drag.nodeId);
+      } else if (drag.kind === 'pan' && drag.exceeded) {
+        releasePan();
       }
 
       drag = NO_DRAG;
@@ -1336,6 +1402,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       const node = nodeById(nodeId);
       const sprite = spriteById.get(nodeId);
       if (!node || !sprite || !sprites) return;
+      perfCount('drawNode');
+      markDirty();
       const fp = footprintOf(node);
 
       /*
@@ -1579,6 +1647,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     /** Follow each node every frame (a drag moves its sprite directly); step the faces ~30 times a second. */
     const stepLiveLogos = (seconds: number, force = false): void => {
       if (!liveLogos.size || !avatarPayload?.ok) return;
+      // A live face moves every frame it is shown; the board renders while one is on it.
+      markDirty();
       for (const [nodeId, entry] of liveLogos) {
         const sprite = spriteById.get(nodeId);
         if (!sprite) continue;
@@ -1731,16 +1801,22 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       routedCount = 0;
       fallbackCount = 0;
       const routeContext = { grid, obstacles, boardPx, tile: board.grid.tile };
+      // Same geometry as a board routed before: the same routes (route-cache.ts).
+      const cacheKey = routeCacheKey(board);
+      const cached = getCachedRoutes(cacheKey);
+      const fresh: CachedRoutes = { routes: new Map(), routedCount: 0, fallbackCount: 0 };
       for (const edge of board.edges) {
         const from = rectById.get(edge.from);
         const to = rectById.get(edge.to);
         if (!from || !to) continue;
         // Automatic, or through the ends and elbows pinned by hand. See wire-route.ts.
-        const route = routeEdge(edge, from, to, routeContext);
+        const route = cached?.routes.get(edge.id) ?? routeEdge(edge, from, to, routeContext);
         if (route.routed) routedCount++;
         if (route.fellBack) fallbackCount++;
+        fresh.routes.set(edge.id, { points: route.points, routed: route.routed, fellBack: route.fellBack });
         routed.push({ edge, points: route.points, style: styleFor(edge, board.theme.signal, board.theme) });
       }
+      if (!cached) { fresh.routedCount = routedCount; fresh.fallbackCount = fallbackCount; putCachedRoutes(cacheKey, fresh); }
       // Wires that share a run get a lane each, so two wires never draw as one. See wire-lanes.ts.
       const laned = separateParallel(routed.map((r) => ({ id: r.edge.id, points: r.points, width: r.style.width, outline: r.style.outlineWidth })));
       for (const r of routed) r.points = laned.get(r.edge.id) ?? r.points;
@@ -1837,7 +1913,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       if (!zoneLayer) return;
       clearLayer(zoneLayer);
       for (const node of board.nodes) {
-        if (node.kind === 'group.zone') zoneLayer.addChild(buildZone(node, board.theme.signal));
+        if (node.kind === 'group.zone') zoneLayer.addChild(buildZone(node, board.theme.signal, board.theme.maskDark));
       }
     };
 
@@ -1852,6 +1928,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     /** `liftFor` gives each glowing note its own pulse step, since each has its own speed. */
     const buildNotes = (liftFor?: (node: BoardNode) => number): void => {
       if (!noteLayer) return;
+      perfCount('buildNotes');
+      markDirty();
       clearLayer(noteLayer);
       glowingNotes = [];
       for (const node of board.nodes) {
@@ -1870,6 +1948,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     const drawEffects = (seconds: number): void => {
       const g = effectGraphics;
       if (!g) return;
+      perfCount('effects');
+      markDirty();
       g.clear();
       if (live.current.reducedMotion) return;
       for (const node of board.nodes) {
@@ -1892,6 +1972,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const buildGrid = (): void => {
       if (!gridLayer) return;
+      markDirty();
       clearLayer(gridLayer);
       if (!live.current.editMode) return;
       // A 1px dot at every tile corner. Dots, not lines: a full grid of lines over the whole
@@ -1909,6 +1990,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const rebuildOverlay = (): void => {
       if (!overlayLayer) return;
+      perfCount('rebuildOverlay');
+      markDirty();
       clearLayer(overlayLayer);
 
       const { targets, selectedId } = live.current;
@@ -2148,6 +2231,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     };
 
     const applyFocus = (): void => {
+      markDirty();
       const { focus, selectedId } = live.current;
       if (!focus || !selectedId) {
         for (const sprite of spriteById.values()) sprite.alpha = 1;
@@ -2223,21 +2307,34 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     };
 
     const rebuild = (next: Board): void => {
+      markDirty();
       board = next;
       // A member deleted, or moved to another room by an agent, leaves the group rather than
       // lingering as an outline around nothing.
       if (group.size) group = new Set([...group].filter((id) => next.nodes.some((n) => n.id === id)));
       boardPx = boardPixelSize(board.grid);
-      rects = layoutRects(board, live.current.editMode, measureNode);
-      buildTraces();
-      buildZones();
-      buildNodes();
-      buildNotes();
-      buildGrid();
-      rebuildOverlay();
-      applyFocus();
-      buildCourierRoutes();
-      applyTile();
+      // Stage timings, printed only with the perf counters on (perf.ts), so a slow rebuild names
+      // the stage that made it slow.
+      const stages: [string, number][] = [];
+      const stage = (name: string, run: () => void): void => {
+        const t = performance.now();
+        run();
+        stages.push([name, performance.now() - t]);
+      };
+      stage('layout', () => { rects = layoutRects(board, live.current.editMode, measureNode); });
+      stage('traces', buildTraces);
+      stage('zones', buildZones);
+      stage('nodes', buildNodes);
+      stage('notes', buildNotes);
+      stage('grid', buildGrid);
+      stage('overlay', rebuildOverlay);
+      stage('focus', applyFocus);
+      stage('couriers', buildCourierRoutes);
+      stage('tile', applyTile);
+      if (perfEnabled()) {
+        const total = stages.reduce((sum, [, ms]) => sum + ms, 0);
+        console.log(`[ui] perf rebuild ${board.id} ${total.toFixed(1)} ms: ${stages.map(([n, ms]) => `${n} ${ms.toFixed(1)}`).join(' · ')}`);
+      }
       builtRef.current = next;
     };
 
@@ -2259,6 +2356,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const paintMonitors = (): void => {
       if (!sprites) return; // The font and the sprite store are not ready yet.
+      markDirty();
       const monitors = board.nodes.filter((n) => n.kind === 'monitor.system');
       for (const id of [...monitorFaces.keys()]) {
         if (!monitors.some((n) => n.id === id)) monitorFaces.delete(id);
@@ -2295,6 +2393,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     const monitorTimer = setInterval(() => {
       if (disposed) { clearInterval(monitorTimer); return; }
+      // A hidden window shows nobody a PSU reading; the poll resumes with the window.
+      if (document.hidden) return;
       void pollMonitors();
     }, 2000);
 
@@ -2302,6 +2402,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
 
     void (async () => {
       try {
+        const buildStart = performance.now();
         await ensureSilkFont(fontUrl);
         if (disposed) return;
 
@@ -2319,11 +2420,15 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           resizeTo: host
         });
         if (disposed) { app.destroy(true, { children: true }); return; }
+        // Render on demand: the ticker below decides when a frame is drawn (see `dirty`).
+        app.ticker.remove(app.render, app);
 
         host.appendChild(app.canvas);
         app.canvas.style.imageRendering = 'pixelated';
         app.canvas.style.display = 'block';
         app.canvas.style.touchAction = 'none';
+        // The in-between zoom is a CSS scale of this element about its top-left (motion.ts).
+        app.canvas.style.transformOrigin = '0 0';
 
         world = new Container();
         app.stage.addChild(world);
@@ -2441,7 +2546,14 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
         const liftOf = (node: BoardNode, seconds: number): number =>
           TEXT_LIFTS[cycleFrame(seconds, TEXT_LIFTS.length, TEXT_LIFTS.length, (node.textGlowSpeed ?? 100) / 100)] ?? 0;
 
+        {
+          const builtMs = performance.now() - buildStart;
+          perfCount('boardBuildMs', builtMs);
+          if (perfEnabled()) console.log(`[ui] perf board ${board.id} built in ${builtMs.toFixed(1)} ms (${board.nodes.length} nodes, ${board.edges.length} edges)`);
+        }
+
         app.ticker.add((ticker) => {
+          const tickStart = performance.now();
           const view = viewport();
           let camera = cameraStore.current;
 
@@ -2463,6 +2575,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               view
             );
           }
+          // Momentum from a released drag carries the target on, clamped like any other pan.
+          if (motion.glide && drag.kind === 'none') camera = clampCamera(applyGlide(motion, camera, ticker.deltaMS), boardPx, view);
           cameraStore.current = camera;
 
           /*
@@ -2485,12 +2599,35 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
             live.current.cameraRef.current.viewH = view.height;
           }
 
-          // The one line that keeps the board from shimmering.
+          /*
+           * The SHOWN camera eases toward the target (motion.ts). The stage still renders at an
+           * exact level and on a whole device pixel — the anti-mush rules — and a zoom that is in
+           * between two levels is the canvas ELEMENT scaled up by CSS about its top-left corner,
+           * so every screen pixel is one of the rendered ones until the spring settles and the
+           * stage is re-rendered at the level itself. The layers under the components take a
+           * little less of the pan than the components do, which is what makes them read as
+           * further away; each lands on a whole device pixel of its own (parallaxOffset).
+           */
+          const eased = stepMotion(motion, camera, ticker.deltaMS, zoomAnchor ?? centreAnchor());
+          zoomAnchor = null;
           if (world) {
-            const pos = stagePosition(camera);
+            const shown = eased.shown;
+            const plan = renderPlan(shown.zoom);
+            const pos = stagePosition({ x: shown.x, y: shown.y, zoom: plan.level });
             world.x = pos.x;
             world.y = pos.y;
-            world.scale.set(camera.zoom);
+            world.scale.set(plan.level);
+            const transform = plan.scale === 1 ? '' : `scale(${plan.scale})`;
+            const canvasEl = app?.canvas;
+            if (canvasEl && canvasEl.style.transform !== transform) canvasEl.style.transform = transform;
+            if (substrateLayer) {
+              substrateLayer.x = parallaxOffset(shown.x, plan.level, PARALLAX.substrate);
+              substrateLayer.y = parallaxOffset(shown.y, plan.level, PARALLAX.substrate);
+            }
+            if (partLayer) {
+              partLayer.x = parallaxOffset(shown.x, plan.level, PARALLAX.parts);
+              partLayer.y = parallaxOffset(shown.y, plan.level, PARALLAX.parts);
+            }
           }
 
           /*
@@ -2681,6 +2818,23 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
               fps
             });
           }
+
+          /*
+           * Render only when something changed (see `dirty` above). The camera easing, a drag, a
+           * glide, keyboard panning and every stepped animation mark the scene as they go; the
+           * safety render covers anything that did not. `app.render` is what Pixi's ticker plugin
+           * used to call every tick; it was removed after `app.init`.
+           */
+          const tickEnd = performance.now();
+          if (eased.moving || motion.glide || panning || drag.kind !== 'none') dirty = true;
+          if (dirty || tickEnd - lastRenderAt >= RENDER_SAFETY_MS) {
+            app?.render();
+            lastRenderAt = tickEnd;
+            dirty = false;
+            perfCount('renders');
+          }
+          perfTick(performance.now() - tickStart);
+          perfMaybeLog(tickEnd, `fps ${fps} zoom ${camera.zoom} dirty ${dirty ? 1 : 0} lastRender ${Math.round(tickEnd - lastRenderAt)}`);
         });
 
         /*
@@ -2714,7 +2868,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
           zoomStep: (direction, anchor) => {
             const camera = cameraStore.current;
             const next = stepZoom(camera.zoom, direction);
-            if (next !== camera.zoom) cameraStore.current = clampCamera(setZoom(camera, next, viewport(), anchor), boardPx, viewport());
+            if (next !== camera.zoom) {
+              zoomAnchor = anchor ? { ax: anchor.x, ay: anchor.y } : centreAnchor();
+              cameraStore.current = clampCamera(setZoom(camera, next, viewport(), anchor), boardPx, viewport());
+            }
           },
           panBy: (dx, dy) => {
             const camera = cameraStore.current;
@@ -2753,6 +2910,7 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       // The tile's texture is ours, made per room; the app's teardown frees children, not textures.
       tileSprite?.destroy({ texture: true, textureSource: true });
       tileSprite = null;
+      window.removeEventListener('resize', onWindowResize);
       if (app) {
         app.canvas.removeEventListener('pointerdown', onPointerDown);
         touch?.dispose();

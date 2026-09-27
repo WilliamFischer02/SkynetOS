@@ -50,6 +50,14 @@ export interface VoiceSettings {
   capture: number;
   /** Wake-word confidence below which a hit is ignored, 0 to 1. */
   confidence: number;
+  /**
+   * After JARVIS has answered a wake-word sentence, open the microphone once more for the next
+   * sentence without the wake phrase (docs/07 § Voice, the follow-up window). Silence closes it.
+   * `false` removes the window entirely.
+   */
+  followUp: boolean;
+  /** How long a follow-up window waits for speech before closing on silence. */
+  followUpNoSpeechMs: number;
 }
 
 export const DEFAULT_VOICE: VoiceSettings = {
@@ -63,8 +71,44 @@ export const DEFAULT_VOICE: VoiceSettings = {
   serverModel: '',
   port: 47831,
   phrases: ['hey jarvis', 'jarvis'],
-  captureLabel: ''
+  captureLabel: '',
+  followUp: true,
+  followUpNoSpeechMs: 5000
 };
+
+/* ────────────────────────── the follow-up window ────────────────────────── */
+
+/** The room's echo of JARVIS's last word must not be the first thing the follow-up hears. */
+export const FOLLOW_UP_PAUSE_MS = 350;
+/** A line spoken this soon after a sentence was heard counts as answering it. */
+export const FOLLOW_UP_HEARD_WINDOW_MS = 20_000;
+export const FOLLOW_UP_NO_SPEECH_MIN_MS = 2000;
+export const FOLLOW_UP_NO_SPEECH_MAX_MS = 8000;
+
+/** The silence budget a follow-up window is allowed to ask for. */
+export function clampFollowUpNoSpeech(ms: unknown): number {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return DEFAULT_VOICE.followUpNoSpeechMs;
+  return Math.max(FOLLOW_UP_NO_SPEECH_MIN_MS, Math.min(FOLLOW_UP_NO_SPEECH_MAX_MS, Math.round(n)));
+}
+
+/**
+ * May the microphone reopen without the wake phrase? Only when voice is on and idle (`waiting`:
+ * not off, not unavailable, not starting, not already listening), the setting allows it, the line
+ * just spoken answered something heard within the window, and the previous capture did not end in
+ * silence: silence ends the exchange, and the next sentence needs the wake phrase again.
+ */
+export function mayListenAgain(
+  status: Pick<VoiceStatus, 'phase' | 'enabled'>,
+  settings: Pick<VoiceSettings, 'followUp'>,
+  sinceHeardMs: number,
+  lastCaptureWasSilence: boolean
+): boolean {
+  if (!settings.followUp) return false;
+  if (!status.enabled || status.phase !== 'waiting') return false;
+  if (!Number.isFinite(sinceHeardMs) || sinceHeardMs < 0 || sinceHeardMs > FOLLOW_UP_HEARD_WINDOW_MS) return false;
+  return !lastCaptureWasSilence;
+}
 
 /** What the board shows before main has said anything. */
 export const VOICE_OFF: VoiceStatus = { phase: 'off', enabled: false, muted: false, word: 'hey jarvis' };
@@ -141,6 +185,10 @@ export interface VoiceCapture {
 /** Main to the capture window: the wake phrase fired, open the microphone for one sentence. */
 export interface VoiceListen {
   captureLabel: string;
+  /** A follow-up window (no wake phrase): silence closes it without a transcript. */
+  followUp?: boolean;
+  /** How long to wait for speech before closing on silence; the default endpointer's when absent. */
+  noSpeechMs?: number;
 }
 
 /** Main to the board: the wake phrase fired. */

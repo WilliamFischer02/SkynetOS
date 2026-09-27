@@ -1,8 +1,10 @@
+import { failureLine } from '@shared/ui-copy.js';
 import { create } from 'zustand';
 import type { Board, BoardNode, NodeKind } from '@shared/types.js';
 import type { Command, CommandResult, HistoryStatus } from '@shared/commands.js';
 import type { ArtifactInfo, BoardLoad, IngestSuggestion, NodeStatus, ServiceInfo, SessionInfo } from '@shared/ipc.js';
 import type { UsageRoute } from '@shared/usage.js';
+import type { AppEntry } from '@shared/desktop.js';
 import { clusterOrigin, copySelection, type BoardClipboard } from '@shared/clipboard.js';
 import { DEFAULT_CHROME_PREFS, EMPTY_PLAN, type ChromePlan, type ChromePrefs } from '../ui/chrome-layout.js';
 import { markAllRead, pushNotification, type NotificationEntry } from '../ui/notification-history.js';
@@ -11,8 +13,10 @@ import { refreshChanges, refreshSummary } from '@shared/refresh-summary.js';
 import { freeEdgeId, guessEdgeKind } from '../board/ports.js';
 import type { BoardLook } from '@shared/types.js';
 import { cleanLook } from '@shared/look.js';
+import { perfEnabled } from '../board/perf.js';
 import { VISION_OFF, type GestureStatus } from '@shared/vision.js';
 import { VOICE_OFF, type VoiceMoment, type VoiceStatus } from '@shared/voice.js';
+import { resolveUiScale, uiScaleLabel, type UiScaleSetting } from '@shared/ui-scale.js';
 
 /**
  * Small, boring UI preferences that outlive a reload.
@@ -129,6 +133,21 @@ interface BoardState {
   /** Integer chrome scale, derived from the OS scale factor. See App.uiScaleFor. */
   uiScale: number;
   setUiScale: (scale: number) => void;
+  /**
+   * William's choice (settings.json `uiScale`, 2026-09-27): `auto` follows the OS scale factor, a
+   * number overrides it. App.tsx turns the two into `uiScale` and `--ui-scale`.
+   */
+  uiScaleSetting: UiScaleSetting;
+  /** The OS scale factor main reported (`display:info`), for `auto`. */
+  osScaleFactor: number;
+  setDisplayScale: (osScaleFactor: number, setting: UiScaleSetting) => void;
+  /** Write the choice through the user-only `settings:setUiScale` and apply it at once. */
+  chooseUiScale: (setting: UiScaleSetting) => Promise<void>;
+  /** The board window is maximised (`window:state` and `window:changed`). */
+  windowMaximized: boolean;
+  setWindowMaximized: (maximized: boolean) => void;
+  /** MAXIMIZE / RESTORE and F11: `window:maximize`. */
+  toggleMaximize: () => Promise<void>;
 
   /**
    * Minimap pixels per tile, 1-4, and whether the panel is open at all.
@@ -294,6 +313,14 @@ interface BoardState {
   setVoiceStatus: (status: VoiceStatus) => void;
   /** Switch voice on or off. Off is the hard mute. Desktop-only channel; also reached by "stop listening". */
   setVoiceEnabled: (on: boolean) => Promise<void>;
+  /**
+   * Desktop control (docs/11): the programs a spoken name can mean, and how many monitors there
+   * are, read once from main so the intent grammar can tell "open firefox" from "open the stalker".
+   * Empty on a SkynetOS started before the channels existed, in which case no sentence is a plan.
+   */
+  desktopApps: AppEntry[];
+  desktopMonitors: number;
+  refreshDesktop: () => Promise<void>;
   /** What the summoned prompt is showing while voice is in play, or null when it is back in its corner. */
   voiceMoment: VoiceMoment | null;
   setVoiceMoment: (moment: VoiceMoment | null) => void;
@@ -367,6 +394,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   busy: false,
   focus: false,
   uiScale: 1,
+  uiScaleSetting: 'auto',
+  osScaleFactor: 1,
+  windowMaximized: false,
   minimapScale: loadNumber('skynet.minimapScale', 1, 1, 4),
   minimapOpen: loadBoolean('skynet.minimapOpen', true),
   jumpTo: null,
@@ -422,6 +452,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ voiceStatus: status });
     if (status.phase === 'unavailable' && status.error) get().toast('warn', status.error);
     else get().toast('ok', on ? 'VOICE ON — SAY "HEY JARVIS"' : 'VOICE OFF — THE MICROPHONE IS CLOSED');
+  },
+  desktopApps: [],
+  desktopMonitors: 0,
+  refreshDesktop: async () => {
+    if (typeof window.skynet['desktop:apps'] !== 'function' || typeof window.skynet['desktop:status'] !== 'function') return;
+    try {
+      const [apps, status] = await Promise.all([window.skynet['desktop:apps'](), window.skynet['desktop:status']()]);
+      set({ desktopApps: apps, desktopMonitors: status.monitors.length });
+    } catch {
+      // Left empty: the grammar then never makes a plan, and the board's own "open" still works.
+    }
   },
   voiceMoment: null,
   setVoiceMoment: (moment) => set({ voiceMoment: moment }),
@@ -545,6 +586,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   loadBoard: async (boardId) => {
     set({ busy: true });
+    if (!get().desktopApps.length) void get().refreshDesktop();
     const load = await window.skynet['board:load'](boardId);
     const stack = get().stack.length
       ? get().stack
@@ -748,6 +790,35 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   setUiScale: (scale) => set({ uiScale: scale }),
 
+  setDisplayScale: (osScaleFactor, setting) => set({ osScaleFactor, uiScaleSetting: setting }),
+
+  chooseUiScale: async (setting) => {
+    const write = window.skynet['settings:setUiScale'];
+    if (typeof write !== 'function') { get().toast('warn', 'RESTART SKYNETOS TO CHANGE THE UI SCALE'); return; }
+    try {
+      const result = await write(setting);
+      set({ uiScaleSetting: result.uiScale });
+      if (!result.ok) { get().toast('fault', result.error ?? 'COULD NOT SAVE THE UI SCALE'); return; }
+      const now = resolveUiScale(result.uiScale, get().osScaleFactor);
+      get().toast('ok', `UI scale ${uiScaleLabel(result.uiScale)}${result.uiScale === 'auto' ? ` (${now}× from Windows)` : ''}`);
+    } catch (err) {
+      get().toast('fault', `COULD NOT SAVE THE UI SCALE — ${(err as Error).message}`);
+    }
+  },
+
+  setWindowMaximized: (maximized) => set({ windowMaximized: maximized }),
+
+  toggleMaximize: async () => {
+    const call = window.skynet['window:maximize'];
+    if (typeof call !== 'function') { get().toast('warn', 'RESTART SKYNETOS TO USE THE MAXIMIZE BUTTON'); return; }
+    try {
+      const result = await call();
+      set({ windowMaximized: result.maximized });
+    } catch (err) {
+      get().toast('fault', `COULD NOT MAXIMIZE THE WINDOW — ${(err as Error).message}`);
+    }
+  },
+
   setMinimapScale: (scale) => {
     const clamped = Math.min(4, Math.max(1, Math.round(scale)));
     save('skynet.minimapScale', String(clamped));
@@ -841,7 +912,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   stopSession: async (sessionId) => {
     const result = await window.skynet['session:stop'](sessionId);
-    if (!result.ok) get().toast('warn', result.error ?? 'could not stop');
+    if (!result.ok) get().toast('warn', failureLine(result.error, 'COULD NOT STOP THE SESSION', 'close its terminal window by hand'));
     else get().toast('ok', 'session stopped');
   },
 
@@ -854,7 +925,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   stopService: async (boardId, nodeId) => {
     const result = await window.skynet['service:stop'](boardId, nodeId);
-    if (!result.ok) get().toast('warn', result.error ?? 'could not stop');
+    if (!result.ok) get().toast('warn', failureLine(result.error, 'COULD NOT STOP THE SERVICE', 'check its window, or end the process in task manager'));
     else get().toast('ok', 'service stopped');
   },
 
@@ -890,6 +961,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   runCommand: async (command, label) => {
     set({ busy: true });
+    const t0 = performance.now();
     const result = await window.skynet['command:apply']({
       command,
       // A pinch-drag is William's hand, and the history says which hand. Attribution only: the
@@ -897,6 +969,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       actor: get().inputSource === 'gesture' ? 'gesture' : 'user',
       ...(label ? { label } : {})
     });
+    const tApplied = performance.now();
     if (!result.ok) {
       set({ busy: false });
       get().toast('fault', result.error);
@@ -905,11 +978,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     // Re-read from disk rather than patching local state. The file main just wrote IS the
     // board; anything else is a second source of truth waiting to disagree.
     const load = await window.skynet['board:load'](get().boardId);
-    const statuses = await window.skynet['target:resolveBoard'](get().boardId);
+    const tLoaded = performance.now();
+    /*
+     * Targets are re-resolved only when the command could have changed one (2026-09-26 audit).
+     * A move, a resize, a wire edit or a LOOK change alters no path, and resolving every node's
+     * target walks the disk, including the OneDrive folders the watcher already polls at 5 s.
+     * The statuses in hand stay right until the next resolve; the relink poll refreshes them anyway.
+     */
+    const geometryOnly = /^(node\.move|node\.resize|node\.rotate|edge\.|board\.update$)/.test(command.type);
+    const nextTargets = geometryOnly ? get().targets : byNodeId(await window.skynet['target:resolveBoard'](get().boardId));
+    if (perfEnabled()) {
+      const tResolved = performance.now();
+      console.log(`[ui] perf command ${command.type}: apply ${(tApplied - t0).toFixed(1)} ms · reload ${(tLoaded - tApplied).toFixed(1)} ms · targets ${geometryOnly ? 'kept' : `${(tResolved - tLoaded).toFixed(1)} ms`}`);
+    }
     set({
       load,
       board: load.ok ? load.board : get().board,
-      targets: byNodeId(statuses),
+      targets: nextTargets,
       history: result.history,
       busy: false
     });
@@ -1004,7 +1089,9 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return;
     }
 
+    const openedAt = performance.now();
     const result = await window.skynet['node:open'](get().boardId, nodeId);
+    if (perfEnabled()) console.log(`[ui] perf node:open ${nodeId} round trip ${(performance.now() - openedAt).toFixed(1)} ms`);
     if (result.ok) get().toast('ok', result.action);
     else get().toast(result.target.state === 'missing' ? 'fault' : 'warn', result.error ?? result.action);
   },

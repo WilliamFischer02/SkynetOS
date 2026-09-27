@@ -1,13 +1,14 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { app, dialog } from 'electron';
+import { app } from 'electron';
 import type { RemoteStatusView, TailscaleInfo } from '@shared/remote.js';
 import { formatPairCode } from '@shared/remote.js';
 import { DeviceStore, PairingCodes } from './remote-devices.js';
 import { startRemoteServer, type RemoteServer } from './remote-server.js';
 import { getSettings, setRemoteSettings } from './settings.js';
 import { boardWindow } from './main-window.js';
+import { confirmThemed } from './confirm-window.js';
 import { which } from './which.js';
 
 /**
@@ -241,8 +242,9 @@ export async function runTailscaleServe(): Promise<{ ok: boolean; output?: strin
   const port = server?.port ?? getSettings().remotePort;
   const args = ['serve', '--bg', `http://127.0.0.1:${port}`];
   const win = boardWindow();
-  const options = {
-    type: 'question' as const,
+  // SkynetOS's own window since 2026-09-26 (services/confirm-window.ts): same refusal default.
+  const { response } = await confirmThemed(win ?? null, {
+    kind: 'info',
     buttons: ['Publish to my tailnet', 'Cancel'],
     defaultId: 1,
     cancelId: 1,
@@ -252,10 +254,8 @@ export async function runTailscaleServe(): Promise<{ ok: boolean; output?: strin
       'This changes your Tailscale configuration: devices signed in to YOUR tailnet (your iPhone, iPad, laptop) ' +
       `can reach SkynetOS at https://<this-pc>.<tailnet>.ts.net, which Tailscale forwards to 127.0.0.1:${port} on this PC.\n\n` +
       'Nothing is exposed to the public internet. A device still has to pair with a one-time code before it can do anything.\n\n' +
-      'To undo it later: tailscale serve reset',
-    noLink: true
-  };
-  const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+      'To undo it later: tailscale serve reset'
+  });
   if (response !== 0) return { ok: false, error: 'CANCELLED' };
   const result = await run(exe, args, 20_000);
   tailscaleCache = null;

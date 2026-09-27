@@ -17,12 +17,14 @@
  *
  * How much of a subscription's allowance is left is not on this disk. There is no file for it and
  * no local API that reports it. Prime directive 1 forbids making one up, so `remainingTokens` and
- * `remainingTime` are `null` until the user writes a `tokenBudget` into settings.json, and the
+ * `remainingHours` are `null` until the user writes a `tokenBudget` into settings.json, and the
  * widget says SET A BUDGET instead of showing a confident fiction.
  *
  * The rate is real whether or not a budget exists. That is the number that answers "am I burning
  * this fast on purpose", and it needs no allowance to be true.
  */
+
+import type { WeeklyReadout } from './usage-week.js';
 
 /** Every token that passed through the model, by category. All four are billable in some form. */
 export interface TokenCounts {
@@ -108,6 +110,11 @@ export interface UsageSummary {
   peakWindowTokens: number;
   /** What a real limit hit says the budget is. See `calibrateFromLimits`. Absent on an error. */
   calibration?: UsageCalibration;
+  /**
+   * The two weekly pools (all models, Fable) from William's /usage readings, carried forward by
+   * this machine's usage. See packages/shared/usage-week.ts.
+   */
+  weekly?: WeeklyReadout;
   /** Set when reading the conversation store failed, so the widget can say so. */
   error?: string;
 }

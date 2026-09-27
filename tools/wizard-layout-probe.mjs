@@ -90,7 +90,7 @@ const PHASES = [
     strip: [],
     dots: 0,
     frames: 0,
-    buttons: ['SAVE AND CONTINUE', 'SKIP']
+    buttons: ['SAVE AND CONTINUE', 'SKIP', '◀ BACK']
   },
   {
     // The worst case on the card: every variant button showing, the keyframe editor at 3, the
@@ -142,7 +142,7 @@ const PHASES = [
     strip: Array.from({ length: 15 }, () => 'health'),
     dots: 0,
     frames: 0,
-    buttons: ['REPAIR — DROP 3', '\u25C0 BACK TO TRAINING', 'LEAVE IT']
+    buttons: ['REPAIR — DROP 3', 'TUNE FROM MY DATA', '\u25C0 BACK TO TRAINING', 'LEAVE IT']
   }
 ];
 
@@ -159,8 +159,13 @@ const script = (phase) => `(() => {
   const phase = ${JSON.stringify(phase)};
   const shell = el('div', 'wz');
   const body = el('div', 'wz-body');
+  // The pinned head (PanelHead.tsx by hand): name, the four steps, and the close button.
+  const head = el('div', 'panel-head wz-head');
   const steps = el('div', 'wz-steps');
   for (const label of ['1 · AIM', '2 · REACH', '3 · TRAIN', '4 · CHECK']) steps.append(el('span', 'wz-step', label));
+  const close = el('button', 'btn tiny panel-head-close', 'Close (Esc)');
+  close.type = 'button';
+  head.append(el('span', 'with-icon panel-head-name', 'CALIBRATE AND TRAIN'), steps, close);
   const stage = el('div', 'wz-stage');
   stage.append(document.getElementById('views'));
   const count = el('div', 'wz-count', phase.count);
@@ -194,8 +199,12 @@ const script = (phase) => `(() => {
     frames.append(el('span', 'wz-frames-label', 'KEYFRAMES'));
     for (let i = 0; i < phase.frames; i++) frames.append(el('span', 'wz-frame', String(i + 1)));
     if (phase.hands) {
-      frames.append(el('span', 'wz-frames-label', 'HANDS'));
-      for (const label of ['ONE HAND', 'TWO HANDS', 'BOTH, SAME', 'TRAVEL: ON']) {
+      // The card's whole editor as vision-train.ts draws it at three keyframes: −, the hands
+      // toggle, TRAVEL and SWAP L/R.
+      const minus = el('button', 'wz-btn tiny', '−');
+      minus.type = 'button';
+      frames.append(minus, el('span', 'wz-frames-label', 'HANDS'));
+      for (const label of ['ONE HAND', 'TWO HANDS', 'BOTH, SAME', 'TRAVEL: ON', 'SWAP L/R']) {
         const chip = el('button', 'wz-btn tiny', label);
         chip.type = 'button';
         frames.append(chip);
@@ -209,29 +218,44 @@ const script = (phase) => `(() => {
     node.type = 'button';
     actions.append(node);
   }
+  // The status line is the shared status box; the tallest one it shows has a line and a detail.
+  const state = el('div', 'state wz-state warn');
+  state.append(
+    el('div', 'state-line', 'A hand is in shot, but not the one this take wants — both hands, please.'),
+    el('div', 'state-detail', 'Press again to confirm.')
+  );
   body.append(
-    steps,
-    el('h1', 'wz-title', 'CALIBRATE AND TRAIN'),
+    el('h1', 'wz-title', 'BEFORE YOU START'),
     el('p', 'wz-lead', phase.lead),
     stage,
     count,
     strip,
-    el('div', 'wz-advice', 'Waiting for a hand…'),
+    state,
     dots,
     frames
   );
-  shell.append(body, actions);
+  shell.append(head, body, actions);
   host.append(shell);
 
   const view = { width: window.innerWidth, height: window.innerHeight };
   const rect = actions.getBoundingClientRect();
-  const buttons = [...actions.querySelectorAll('button')].map((node) => {
+  // The head's close is as much a way out as the action row, so it is checked the same way.
+  const buttons = [...actions.querySelectorAll('button'), close].map((node) => {
     const box = node.getBoundingClientRect();
     return {
       label: node.textContent,
       visible: box.top >= 0 && box.bottom <= view.height && box.left >= 0 && box.right <= view.width
     };
   });
+  /*
+   * The buttons in the scrolling body (the keyframe editor) may sit below the fold, since the body
+   * scrolls to them, but nothing scrolls sideways to find one: each must lie inside the body's width.
+   */
+  const inner = body.getBoundingClientRect();
+  for (const node of body.querySelectorAll('button')) {
+    const box = node.getBoundingClientRect();
+    buttons.push({ label: node.textContent, visible: box.left >= inner.left && box.right <= inner.right });
+  }
   return {
     view,
     top: Math.round(rect.top),

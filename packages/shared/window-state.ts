@@ -57,3 +57,72 @@ export function restoreWindowState(
   });
   return onScreen ? { x, y, width, height, maximized } : { width, height, maximized };
 }
+
+/* ── The window controls in the chrome (2026-09-27) ─────────────────────────────────────────────
+ *
+ * William: "add a maximize button / window scalability to the program". The MAXIMIZE / RESTORE
+ * button in the breadcrumb row and F11 call `window:maximize`; main pushes `window:changed` so the
+ * button's glyph follows the window however it was maximised (the title bar, Win+Up, a snap). A
+ * drag-resize fires `resize` dozens of times a second, so the pushes are coalesced: one per 100 ms
+ * of quiet, and none at all when nothing the renderer shows has changed.
+ */
+
+export interface WindowSnapshotLike { maximized: boolean; bounds: WindowRect }
+
+/** Anything with Electron's BrowserWindow shape, so the snapshot is testable without Electron. */
+export interface SnapshotSource {
+  isMaximized(): boolean;
+  getBounds(): WindowRect;
+}
+
+export function snapshotWindow(win: SnapshotSource): WindowSnapshotLike {
+  const b = win.getBounds();
+  return {
+    maximized: win.isMaximized(),
+    bounds: { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }
+  };
+}
+
+export function sameSnapshot(a: WindowSnapshotLike | null, b: WindowSnapshotLike | null): boolean {
+  if (!a || !b) return a === b;
+  return a.maximized === b.maximized
+    && a.bounds.x === b.bounds.x && a.bounds.y === b.bounds.y
+    && a.bounds.width === b.bounds.width && a.bounds.height === b.bounds.height;
+}
+
+export const WINDOW_CHANGE_DEBOUNCE_MS = 100;
+
+/**
+ * A trailing debounce for `window:changed`. `poke()` on every maximize, unmaximize and resize; the
+ * snapshot is read once the window has been still for `delayMs`, and emitted only if it differs
+ * from the last one emitted. `read` returning null (a destroyed window) emits nothing.
+ */
+export function coalesceWindowChanges(
+  read: () => WindowSnapshotLike | null,
+  emit: (snapshot: WindowSnapshotLike) => void,
+  delayMs: number = WINDOW_CHANGE_DEBOUNCE_MS,
+  timers: { set: (fn: () => void, ms: number) => unknown; clear: (handle: unknown) => void } = {
+    set: (fn, ms) => setTimeout(fn, ms),
+    clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>)
+  }
+): { poke: () => void; dispose: () => void } {
+  let handle: unknown = null;
+  let last: WindowSnapshotLike | null = null;
+  const fire = (): void => {
+    handle = null;
+    const next = read();
+    if (!next || sameSnapshot(last, next)) return;
+    last = next;
+    emit(next);
+  };
+  return {
+    poke: () => {
+      if (handle !== null) timers.clear(handle);
+      handle = timers.set(fire, delayMs);
+    },
+    dispose: () => {
+      if (handle !== null) timers.clear(handle);
+      handle = null;
+    }
+  };
+}

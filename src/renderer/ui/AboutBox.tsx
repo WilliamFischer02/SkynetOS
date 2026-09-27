@@ -1,3 +1,4 @@
+import { PanelHead } from './PanelHead.js';
 import { useEffect, useState } from 'react';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { Icon } from './Icon.js';
@@ -81,10 +82,7 @@ function AboutBody(): React.JSX.Element {
   return (
     <div className="about-backdrop">
       <div className="about-panel" role="dialog" aria-label="About SkynetOS">
-        <div className="look-head">
-          <span className="with-icon"><Icon name="info" />About</span>
-          <button type="button" className="btn tiny" onClick={() => setOpen(false)}>Close (Esc)</button>
-        </div>
+        <PanelHead name="About" icon="info" onClose={() => setOpen(false)} />
         <div className="about-title">SkynetOS</div>
         <div className="about-sub">
           An overhead pixel-art motherboard that is a real control surface for every project run with Claude.
@@ -103,7 +101,7 @@ function AboutBody(): React.JSX.Element {
         <div className="about-note">{!canUpdate ? 'RESTART SKYNETOS TO SEE UPDATES: THE RUNNING COPY PREDATES THEM' : update ? updateLine(update) : 'READING…'}</div>
         {canUpdate && update && update.state !== 'dev' ? (
           <div className="settings-row">
-            <button type="button" className="btn tiny" disabled={update.state === 'checking' || update.state === 'downloading'} onClick={() => void check()}>
+            <button type="button" className="btn tiny" disabled={update.state === 'checking' || update.state === 'downloading'} onClick={() => void check()} title="Ask the update server now whether a newer SkynetOS is out">
               <Icon name="refresh" />Check now
             </button>
             {update.state === 'ready' ? (
@@ -126,7 +124,7 @@ function AboutBody(): React.JSX.Element {
           SkynetOS&apos;s own code has no licence file.
         </div>
         <div className="settings-row">
-          <button type="button" className="btn tiny" disabled={!versions} onClick={() => void copy()}>
+          <button type="button" className="btn tiny" disabled={!versions} onClick={() => void copy()} title="Copy the SkynetOS, Electron, Chromium and Node versions to the clipboard, for a bug report">
             <Icon name="copy" />Copy version details
           </button>
         </div>

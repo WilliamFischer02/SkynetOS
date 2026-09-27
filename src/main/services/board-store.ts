@@ -7,6 +7,7 @@ import addFormats from 'ajv-formats';
 import { footprintOf, type Board, type BoardNode } from '@shared/types.js';
 import type { BoardLoad } from '@shared/ipc.js';
 import { homeRoot, programRoot } from './home.js';
+import { bootMark, scheduleBootReport } from './boot-timing.js';
 
 /**
  * Reads, validates and writes board/*.board.json.
@@ -150,7 +151,15 @@ export function validateBoard(board: unknown): string[] {
   return graphProblems(board as Board);
 }
 
+let firstLoadMarked = false;
+
 export function loadBoard(boardId: string): BoardLoad {
+  if (!firstLoadMarked) {
+    // The renderer is alive and asking for its first board: the boot's last milestone before paint.
+    firstLoadMarked = true;
+    bootMark('board-load-first');
+    scheduleBootReport();
+  }
   const file = resolveBoardFile(boardId);
   if (!file) return { ok: false, file: boardId, error: `ILLEGAL BOARD ID — "${boardId}"` };
   if (!existsSync(file)) return { ok: false, file, error: `BOARD FILE NOT FOUND — ${file}` };
@@ -247,6 +256,38 @@ export function snapshot(label: string): string | null {
     console.error(`[board] snapshot failed: ${(err as Error).message}`);
     return null;
   }
+}
+
+/**
+ * The same prune, a few directories per turn of the event loop (2026-09-26 audit).
+ *
+ * `board/.snapshots/` held 661 directories on this machine, and the synchronous walk cost 608 ms
+ * on the main thread during the renderer's own load. Statting 32 entries, then yielding, keeps
+ * every IPC reply and window event flowing; the result and the log line are the same.
+ */
+export function pruneSnapshotsAsync(retentionDays: number, batch = 32): Promise<number> {
+  const root = snapshotRoot();
+  if (!existsSync(root)) return Promise.resolve(0);
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  let entries: string[];
+  try { entries = readdirSync(root); } catch { return Promise.resolve(0); }
+  let removed = 0;
+  let index = 0;
+  return new Promise((resolveDone) => {
+    const step = (): void => {
+      const end = Math.min(entries.length, index + batch);
+      for (; index < end; index++) {
+        const dir = join(root, entries[index]!);
+        try {
+          if (statSync(dir).mtimeMs < cutoff) { rmSync(dir, { recursive: true, force: true }); removed++; }
+        } catch { /* a snapshot we cannot stat is left alone rather than guessed about */ }
+      }
+      if (index < entries.length) { setImmediate(step); return; }
+      if (removed) console.log(`[board] pruned ${removed} snapshot(s) older than ${retentionDays} days`);
+      resolveDone(removed);
+    };
+    setImmediate(step);
+  });
 }
 
 export function pruneSnapshots(retentionDays: number): number {

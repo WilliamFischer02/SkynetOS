@@ -1,0 +1,174 @@
+/*
+ * JARVIS Voice: the hologram window. A frameless square (480 px since 2026-09-26) or, in DESK
+ * layout, a tall panel at monitor one's right edge. The stage drags the window, the controls do
+ * not. Sizes are multiples of --p, like the board window's, so 11px Departure Mono stays exact.
+ * No filter, no blur, no CSS transition on anything that draws pixels (docs/02 anti-mush); the
+ * only animation in CSS is the recording light's border, which is a step, not a fade.
+ */
+body.hologram-mode {
+  margin: 0;
+  overflow: hidden;
+  background: #04090f;
+  user-select: none;
+}
+body.hologram-mode #root { height: 100vh; }
+
+.holo-root {
+  --holo-ink: #48c8f0;
+  --holo-dim: #12466e;
+  --holo-bright: #b8f4ff;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--p));
+  height: 100vh;
+  padding: calc(12 * var(--p));
+  background: #04090f;
+  border: var(--p) solid var(--holo-dim);
+  color: var(--holo-ink);
+  font-family: "Departure Mono", ui-monospace, monospace;
+  font-size: calc(11px * var(--ui-scale));
+  line-height: calc(13 * var(--p));
+}
+.holo-root.mood-fault { --holo-ink: #f0be46; --holo-dim: #6e4412; --holo-bright: #ffe9b8; }
+.holo-root.mood-listening { border-color: var(--holo-ink); }
+.holo-root.desk { padding: calc(14 * var(--p)); }
+
+.holo-nav {
+  flex: 0 0 auto;
+  display: flex;
+  gap: calc(3 * var(--p));
+  width: 100%;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+/*
+ * Eight buttons across the width: six share it equally and clip rather than push past the edge
+ * (William, 2026-09-24: TRAIN ran off the right); minimise and close are fixed and small. Labels
+ * are kept to five characters so nothing clips at 480.
+ */
+.holo-nav .holo-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: calc(2 * var(--p)) calc(2 * var(--p));
+  overflow: hidden;
+  text-overflow: clip;
+  text-align: center;
+}
+.holo-nav .holo-btn.holo-small { flex: 0 0 auto; min-width: calc(18 * var(--p)); padding-left: calc(3 * var(--p)); padding-right: calc(3 * var(--p)); }
+.holo-btn {
+  padding: calc(2 * var(--p)) calc(4 * var(--p));
+  min-height: calc(18 * var(--p));
+  border-color: var(--holo-dim);
+  color: var(--holo-ink);
+  background: #04090f;
+  white-space: nowrap;
+}
+.holo-btn:hover:not(:disabled) { border-color: var(--holo-ink); color: var(--holo-bright); background: #0b1e36; }
+.holo-btn:focus-visible { outline: var(--p) solid var(--holo-bright); outline-offset: var(--p); }
+.holo-btn.on { border-color: var(--holo-ink); color: var(--holo-bright); background: #0b1e36; }
+.holo-btn.on.warn { border-color: var(--warn); color: var(--warn); }
+.holo-btn.primary { border-color: var(--holo-ink); }
+.holo-btn.holo-wide { width: 100%; min-height: calc(24 * var(--p)); margin-top: auto; }
+/* The recording light: a stepped border, on 500 ms and off 500 ms. Steps, never a fade. */
+.holo-btn.rec { border-color: var(--fault); color: var(--fault); animation: holo-rec 1s steps(1, end) infinite; }
+@keyframes holo-rec { 0% { border-color: var(--fault); } 50% { border-color: var(--holo-dim); } 100% { border-color: var(--fault); } }
+@media (prefers-reduced-motion: reduce) { .holo-btn.rec { animation: none; } }
+
+.holo-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  -webkit-app-region: drag;
+}
+.holo-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.holo-canvas.legacy { image-rendering: pixelated; }
+
+.holo-caption {
+  flex: 0 0 auto;
+  max-height: calc(26 * var(--p));
+  overflow: hidden;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--holo-ink);
+  word-break: break-word;
+}
+.holo-root.mood-listening .holo-caption { color: var(--holo-bright); }
+
+.holo-input-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: calc(4 * var(--p));
+  -webkit-app-region: no-drag;
+}
+.holo-input,
+.holo-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: calc(18 * var(--p));
+  padding: 0 calc(4 * var(--p));
+  border: var(--p) solid var(--holo-dim);
+  background: #04090f;
+  color: var(--holo-bright);
+  font: inherit;
+}
+.holo-input::placeholder { color: var(--holo-dim); }
+.holo-input:focus-visible,
+.holo-select:focus-visible { outline: var(--p) solid var(--holo-bright); outline-offset: 0; }
+
+/* Panels over the stage: TRAIN, DESK, ACTIONS. */
+.holo-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--p));
+  padding: calc(4 * var(--p));
+  overflow: hidden;
+  background: #04090f;
+  border: var(--p) solid var(--holo-dim);
+  -webkit-app-region: no-drag;
+}
+.holo-train-row { display: flex; gap: calc(3 * var(--p)); align-items: center; min-width: 0; }
+/* Nothing in a row may push past the panel: buttons shrink, text clips with an ellipsis. */
+.holo-train-row > * { min-width: 0; }
+.holo-train-row .holo-btn { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.holo-train-row .holo-select { flex: 1 1 0; }
+.holo-count { flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.holo-line {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(2 * var(--p)) 0;
+  color: var(--holo-bright);
+  font-size: calc(11px * var(--ui-scale));
+  line-height: calc(13 * var(--p));
+}
+.holo-train-error { color: var(--warn); }
+
+/* Imported clips (npm run profile:import): file, play, transcript. Scrolls inside the panel. */
+.holo-imports { list-style: none; margin: calc(2 * var(--p)) 0 0; padding: 0; max-height: calc(120 * var(--p)); overflow-y: auto; display: flex; flex-direction: column; gap: var(--p); }
+.holo-import { display: flex; gap: calc(2 * var(--p)); align-items: center; }
+.holo-import-name { flex: 0 0 calc(40 * var(--p)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.holo-import-text { flex: 1 1 auto; min-width: 0; }
+.holo-import.needs .holo-import-text { border-color: var(--warn); }
+
+/* ACTIONS: the recorded steps, and the saved list. */
+.holo-steps {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 0 calc(18 * var(--p));
+  overflow-y: auto;
+  color: var(--holo-ink);
+}
+.holo-steps li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.holo-actions { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--p); }
+.holo-action { display: flex; gap: calc(3 * var(--p)); align-items: center; min-width: 0; }
+.holo-action-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--holo-bright); }
+.holo-action-meta { flex: 0 0 auto; color: var(--holo-dim); }

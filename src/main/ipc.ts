@@ -1,5 +1,5 @@
-import { app, dialog, ipcMain, screen } from 'electron';
-import { CHANNELS, isAgentMethod, isRemoteMethod, isVisionMethod, isVisionShared, isVoiceMethod, type Channel, type SkynetApi } from '@shared/ipc.js';
+import { app, ipcMain, screen } from 'electron';
+import { CHANNELS, isAgentMethod, isConfirmMethod, isHologramAllowed, isRemoteMethod, isVisionMethod, isVisionShared, isVoiceMethod, isWindowMethod, type Channel, type SkynetApi } from '@shared/ipc.js';
 import { prepareRemoteCall } from '@shared/remote.js';
 import type { BoardNode } from '@shared/types.js';
 import { asWilliam, type Actor, type CommandRequest } from '@shared/commands.js';
@@ -8,7 +8,7 @@ import { findNode, listBoards, loadBoard, loadBoardByFile } from './services/boa
 import { apply, historyStatus, redo, undo } from './services/command-bus.js';
 import { pick } from './services/pickers.js';
 import { boardWindow } from './services/main-window.js';
-import { getSettings, setFableResetsAt, setUsagePlan } from './services/settings.js';
+import { addWeeklyReadings, getSettings, setFableResetsAt, setUsagePlan } from './services/settings.js';
 import { lastClaudeSessionId } from './services/db.js';
 import { resumeCommandLine } from './services/launch-args.js';
 import { mosaicForBoardTile, mosaicForNode } from './services/mosaic.js';
@@ -68,7 +68,17 @@ import {
   setGestureTravel,
   tuneGestureLibrary
 } from './services/gesture-store.js';
-import { isVoiceSender, setVoiceEnabled, voiceCaptured, voiceStatus } from './services/voice.js';
+import { isVoiceSender, setVoiceEnabled, voiceCaptured, voiceLevels, voiceStatus } from './services/voice.js';
+import { closeHologram, hologramStatus, isHologramSender, minimizeHologram, openHologram, setHologramDesk, setHologramEnabled, shutdownHologram } from './services/hologram-window.js';
+import { answerConfirm, confirmThemed, isConfirmSender } from './services/confirm-window.js';
+// fork G, 2026-09-26: spoken controls for the JARVIS window, saved actions by name, dictation.
+import { runNamedAction, sendHologramControl } from './services/hologram-control.js';
+import { dictateStatus, initDictate, toggleDictation } from './services/dictate.js';
+import { createProfile, listProfiles, playProfileLine, readProfile, recordProfileLine, say, setSpeechBackend, setProfileLineText, setSpeechEnabled, speechStatus, stopSpeaking } from './services/speech.js';
+import { desktopStatus, haltPlan, listApps, listDesktopWindows, runPlan, setDesktopEnabled } from './services/desktop.js';
+// fork H, 2026-09-26: TRAIN ACTION.
+import { listSavedActions, recordStatus, runSavedAction, saveAction, startRecording, stopRecording } from './services/action-recorder.js';
+import { converse } from './services/converse.js';
 import { noteVisit, readVisits } from './services/visits.js';
 import { refuseDialogWhenRemote, runAsRemote } from './services/remote-context.js';
 import { avatarDir, loadAvatar } from './services/avatar-frames.js';
@@ -83,7 +93,8 @@ import { buildNodeFromPrompt } from './services/node-builder.js';
 import { resolveNodeTarget, resolveValue } from './services/target-resolver.js';
 import { claimAwaySubsession, markActivity } from './services/activity.js';
 import { enterAway, getAwayStatus, refreshAwayStatus, wake } from './services/presence.js';
-import { setAwaySettings } from './services/settings.js';
+import { setAwaySettings, setUiScale } from './services/settings.js';
+import { minimizeWindow, toggleMaximize, windowState } from './services/window-controls.js';
 
 /**
  * Handlers, one per allowlisted channel. The type says every channel in CHANNELS must have one
@@ -277,7 +288,8 @@ const handlers: Handlers = {
     return {
       scaleFactor,
       appliedZoomFactor: win ? win.webContents.getZoomFactor() : 1,
-      workArea: { width: display.workArea.width, height: display.workArea.height }
+      workArea: { width: display.workArea.width, height: display.workArea.height },
+      uiScale: getSettings().uiScale
     };
   },
 
@@ -310,6 +322,14 @@ const handlers: Handlers = {
     };
   },
 
+  // User only (2026-09-27): the chrome's scale, clamped to auto/1/2/3. See services/settings.ts.
+  'settings:setUiScale': (scale) => setUiScale(scale),
+
+  // The board window's frame. Board window only: WINDOW_METHODS, checked in registerIpc below.
+  'window:maximize': () => toggleMaximize(),
+  'window:minimize': () => minimizeWindow(),
+  'window:state': () => windowState(),
+
   'settings:setPlan': (plan, tokenBudget) => {
     const result = setUsagePlan(
       plan !== null && isPlanId(plan) ? plan : null,
@@ -320,6 +340,14 @@ const handlers: Handlers = {
     // stale.
     if (result.ok) clearUsageCache();
     return result;
+  },
+
+  // User only. The weekly figures are computed on every read, so there is no cache to clear.
+  'settings:addUsageReadings': (readings) => {
+    const r = readings && typeof readings === 'object' ? readings : {};
+    const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+    const result = addWeeklyReadings({ all: num(r.all), top: num(r.top) });
+    return result.ok ? { ok: true } : { ok: false, error: result.error ?? 'COULD NOT SAVE THE READINGS' };
   },
 
   'target:resolveNode': (boardId, nodeId) => ({
@@ -543,23 +571,23 @@ const handlers: Handlers = {
 
   /**
    * docs/07: deleting a node, edge or room "always requires explicit approval in the UI. No auto
-   * policy can override this." The approval is a native modal, deliberately — an in-page
+   * policy can override this." The approval is a separate modal window, deliberately — an in-page
    * confirm could be dismissed by a stray keypress, and this is the one gate that must not be.
+   * Since 2026-09-26 that window is SkynetOS's own (services/confirm-window.ts), with the same
+   * refusal default and the same one answer.
    */
   'command:confirmDestructive': async (summary, detail) => {
     refuseDialogWhenRemote('a deletion');
     const win = boardWindow();
-    const options = {
-      type: 'warning' as const,
+    const { response } = await confirmThemed(win ?? null, {
+      kind: 'danger',
       buttons: ['Delete', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
       title: 'Confirm deletion',
       message: summary,
-      detail: `${detail}\n\nA snapshot of every board file is written to board/.snapshots/ first, and Ctrl+Z undoes this.`,
-      noLink: true
-    };
-    const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+      detail: `${detail}\n\nA snapshot of every board file is written to board/.snapshots/ first, and Ctrl+Z undoes this.`
+    });
     return response === 0;
   },
 
@@ -597,7 +625,57 @@ const handlers: Handlers = {
   'gesture:train': (on) => setTrainMode(on === true),
   'voice:status': () => voiceStatus(),
   'voice:setEnabled': (on) => setVoiceEnabled(on === true),
-  'voice:captured': (capture) => voiceCaptured(capture)
+  // A typed command takes the spoken path: main hands it to the board as if it had been heard.
+  'voice:typed': (text) => {
+    const line = typeof text === 'string' ? text.trim() : '';
+    const win = boardWindow();
+    if (!line || !win || win.isDestroyed()) return { ok: false };
+    win.webContents.send('voice:heard', { text: line, confidence: 1, ms: 0 });
+    return { ok: true };
+  },
+
+  /* ── JARVIS Voice (docs/11-JARVIS-VOICE.md): all user-only, none in AGENT_METHODS or REMOTE_METHODS ── */
+  'hologram:status': () => hologramStatus(),
+  'hologram:setEnabled': (on) => setHologramEnabled(on === true),
+  'hologram:minimize': () => minimizeHologram(),
+  'hologram:open': () => openHologram(),
+  'hologram:close': () => closeHologram(),
+  'hologram:shutdown': () => shutdownHologram(),
+  'hologram:setDesk': (on) => setHologramDesk(on === true),
+  // Gated in registerIpc: only the confirm window that owns `id` reaches this handler.
+  'confirm:answer': (id, index) => answerConfirm(String(id), Number(index)),
+  'converse:ask': (req) => converse(req?.text, req?.source === 'typed' ? 'typed' : 'voice'),
+  'speech:status': () => speechStatus(),
+  'speech:setEnabled': (on) => setSpeechEnabled(on === true),
+  'speech:say': (req) => say(req),
+  'speech:stop': () => stopSpeaking(),
+  'speech:setBackend': (req) => setSpeechBackend(req),
+  'profile:list': () => listProfiles(),
+  'profile:read': (name) => readProfile(name),
+  'profile:create': (name) => createProfile(name),
+  'profile:record': (req) => recordProfileLine(req),
+  'profile:play': (req) => playProfileLine(req),
+  'profile:setText': (req) => setProfileLineText(req),
+  'desktop:status': () => desktopStatus(),
+  'desktop:setEnabled': (on) => setDesktopEnabled(on === true),
+  'desktop:windows': () => listDesktopWindows(),
+  'desktop:apps': () => listApps(),
+  'desktop:run': (plan) => runPlan(plan),
+  'desktop:halt': () => haltPlan(),
+  // fork H, 2026-09-26: TRAIN ACTION, user-only (HOLOGRAM_ALLOWED grants the hologram window).
+  'desktop:recordStart': () => startRecording(),
+  'desktop:recordStop': () => stopRecording(),
+  'desktop:recordStatus': () => recordStatus(),
+  'desktop:actionSave': (req) => saveAction(req),
+  'desktop:actionList': () => listSavedActions(),
+  'desktop:actionRun': (req) => runSavedAction(typeof req?.id === 'string' ? req.id : ''),
+  // fork G, 2026-09-26: user-only; the board and hologram windows only (HOLOGRAM_ALLOWED grants them).
+  'hologram:control': (control) => sendHologramControl(control),
+  'hologram:runAction': (name) => runNamedAction(typeof name === 'string' ? name : ''),
+  'dictate:toggle': () => toggleDictation(),
+  'dictate:status': () => dictateStatus(),
+  'voice:captured': (capture) => voiceCaptured(capture),
+  'voice:levels': (levels) => voiceLevels(levels)
 };
 
 /**
@@ -730,6 +808,23 @@ export function registerIpc(): void {
         if (!fromVoice && isVoiceMethod(channel)) {
           throw new Error(`"${channel}" MAY ONLY BE CALLED BY THE VOICE WINDOW`);
         }
+        // The hologram window: a grant only (HOLOGRAM_ALLOWED), docs/11-JARVIS-VOICE.md.
+        if (isHologramSender(event.sender) && !isHologramAllowed(channel)) {
+          throw new Error(`"${channel}" IS NOT AVAILABLE TO THE HOLOGRAM WINDOW — it may switch voice, speech and desktop control, type a command, and record a profile`);
+        }
+        // The confirmation window: one channel, for its own question only, and nobody else's
+        // (docs/07 § Path and execution policy).
+        // The board window's frame controls: the board window alone, not any window with the bridge.
+        if (isWindowMethod(channel) && event.sender !== boardWindow()?.webContents) {
+          throw new Error(`"${channel}" MAY ONLY BE CALLED BY THE BOARD WINDOW`);
+        }
+        const fromConfirm = isConfirmSender(event.sender);
+        if (fromConfirm && !isConfirmMethod(channel)) {
+          throw new Error(`"${channel}" IS NOT AVAILABLE TO THE CONFIRMATION WINDOW — it may only answer its question`);
+        }
+        if (isConfirmMethod(channel) && !isConfirmSender(event.sender, String(args[0]))) {
+          throw new Error(`"${channel}" MAY ONLY BE CALLED BY THE CONFIRMATION WINDOW THAT ASKED`);
+        }
         return await handler(...args);
       } catch (err) {
         // An exception crossing the bridge arrives in the renderer as a rejected promise with a
@@ -740,4 +835,6 @@ export function registerIpc(): void {
     });
   }
   console.log(`[ipc] registered ${CHANNELS.length} allowlisted channels`);
+  // fork G: the dictation hotkey (Ctrl+Alt+D). Reported in dictate:status if it cannot be taken.
+  initDictate();
 }

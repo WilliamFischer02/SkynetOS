@@ -7,7 +7,21 @@ import { DEFAULT_AWAY_MINUTES, clampAwayMinutes, isAwayMode, type AwayMode } fro
 import { AWAY_DEFAULT_MODEL } from '@shared/away.js';
 import { DEFAULT_VOICE, type VoiceSettings } from '@shared/voice.js';
 import { DEFAULT_VISION, type VisionSettings } from '@shared/vision.js';
+import { DEFAULT_HOLOGRAM, type HologramSettings } from '@shared/hologram.js';
+import { DEFAULT_SPEECH, type SpeechSettings } from '@shared/speech.js';
+import { DEFAULT_CONVERSE, type ConverseSettings } from '@shared/converse.js';
+import { DEFAULT_DESKTOP, type DesktopSettings } from '@shared/desktop.js';
 import { REMOTE_DEFAULT_PORT } from '@shared/remote.js';
+import { DEFAULT_TRAY, normaliseTraySettings, type TraySettings } from '@shared/tray.js';
+import { normalisePath } from '@shared/usage.js';
+import {
+  DEFAULT_WEEKLY_USAGE,
+  appendReading,
+  sanitizeWeeklyUsage,
+  type PoolId,
+  type WeeklyUsageSettings
+} from '@shared/usage-week.js';
+import { clampUiScale, type UiScaleSetting } from '@shared/ui-scale.js';
 import { homeRoot } from './home.js';
 
 /**
@@ -92,6 +106,16 @@ export interface Settings {
   fableResetsAt: string | null;
 
   /**
+   * The weekly pools (packages/shared/usage-week.ts). `usage.weeklyAnchor` is when both reset:
+   * Monday 20:00 America/Denver by default, William's account. `usage.pools` holds the percentages
+   * he typed from claude.ai/usage, `all` (every model) and `top` (Fable), the last 20 of each.
+   *
+   * The readings are appended by the CALIBRATE dialog through `addWeeklyReadings`, the one writer;
+   * the anchor is file-only. Neither grants anything: they scale two bars on a meter.
+   */
+  usage: WeeklyUsageSettings;
+
+  /**
    * Away (sleep) mode: what happens after `awayAfterMinutes` with no input, no agent activity and
    * no board commands. `off`: nothing. `visual`: the sleep screen only. `plan` (default): a headless
    * JARVIS Prime roadmaps across the projects, writing only the codex and docs/06. `work`: plan, plus
@@ -135,12 +159,39 @@ export interface Settings {
   gesture: VisionSettings;
 
   /**
+   * JARVIS Voice (docs/11-JARVIS-VOICE.md): the hologram window, speech playback and desktop
+   * control. Each block has ONE switch written by its own user-only channel (`hologram:setEnabled`,
+   * `speech:setEnabled`, `desktop:setEnabled`); everything else in them is file-only. Desktop
+   * control is OFF by default and is the only one of the three that can move anything: with it
+   * on, a spoken or typed sentence can launch a Start Menu program, place its window and move the
+   * mouse. Still user-only, still never an agent's to switch.
+   */
+  hologram: HologramSettings;
+  speech: SpeechSettings;
+  /** JARVIS answering unrecognised sentences out loud (docs/11 § Conversation). File-only. */
+  converse: ConverseSettings;
+  desktop: DesktopSettings;
+
+  /**
+   * The tray icon (packages/shared/tray.ts, services/tray.ts). `minimizeToTray`, default false:
+   * minimising the board hides it and the tray icon brings it back. File-only; no channel writes it.
+   */
+  tray: TraySettings;
+
+  /**
    * Where an INSTALLED SkynetOS keeps its boards and codex. Null means: the repo the build was
    * made from if it is on this machine, else `%USERPROFILE%/SkynetOS`. Ignored by a dev build,
    * whose home is the repo it runs from. File-only, like `devRoots`: the home is a trusted root,
    * so no channel may move it. See packages/shared/home.ts.
    */
   home: string | null;
+
+  /**
+   * The chrome's scale (packages/shared/ui-scale.ts): `auto` follows the OS scale factor, as it
+   * always did; 1, 2 or 3 fixes it. Written by the LOOK panel's SYSTEM section and the palette's
+   * "UI scale", through the user-only `settings:setUiScale`. The board's pixel zoom is separate.
+   */
+  uiScale: UiScaleSetting;
 }
 
 /**
@@ -168,6 +219,7 @@ const DEFAULTS: Settings = {
   tokenBudget: null,
   autoModel: true,
   fableResetsAt: null,
+  usage: { weeklyAnchor: { ...DEFAULT_WEEKLY_USAGE.weeklyAnchor }, pools: { all: [], top: [] } },
   awayMode: 'plan',
   awayAfterMinutes: DEFAULT_AWAY_MINUTES,
   awayModel: AWAY_DEFAULT_MODEL,
@@ -176,6 +228,7 @@ const DEFAULTS: Settings = {
   remotePort: REMOTE_DEFAULT_PORT,
   remoteAllowedHosts: [],
   home: null,
+  uiScale: 'auto',
   // The install locations tools/ downloads into. Empty if LOCALAPPDATA is somehow unset, which the
   // readiness checks in @shared/voice.ts and @shared/vision.ts then report as "not installed".
   voice: {
@@ -189,7 +242,12 @@ const DEFAULTS: Settings = {
     ...DEFAULT_VISION,
     model: localAppData() ? join(localAppData(), 'SkynetOS', 'vision', 'hand_landmarker.task') : '',
     gestureModel: localAppData() ? join(localAppData(), 'SkynetOS', 'vision', 'gesture_recognizer.task') : ''
-  }
+  },
+  hologram: { ...DEFAULT_HOLOGRAM },
+  speech: { ...DEFAULT_SPEECH },
+  converse: { ...DEFAULT_CONVERSE },
+  desktop: { ...DEFAULT_DESKTOP },
+  tray: { ...DEFAULT_TRAY }
 };
 
 let cached: Settings | null = null;
@@ -232,7 +290,17 @@ export function getSettings(): Settings {
       ...DEFAULTS,
       ...parsed,
       voice: { ...DEFAULTS.voice, ...(parsed.voice ?? {}) },
-      gesture: { ...DEFAULTS.gesture, ...(parsed.gesture ?? {}) }
+      gesture: { ...DEFAULTS.gesture, ...(parsed.gesture ?? {}) },
+      hologram: { ...DEFAULTS.hologram, ...(parsed.hologram ?? {}) },
+      speech: { ...DEFAULTS.speech, ...(parsed.speech ?? {}) },
+      converse: { ...DEFAULTS.converse, ...(parsed.converse ?? {}) },
+      desktop: { ...DEFAULTS.desktop, ...(parsed.desktop ?? {}) },
+      tray: normaliseTraySettings(parsed.tray),
+      // Checked field by field rather than merged: a hand-edited reading that does not parse is
+      // dropped, and an unusable anchor field falls back to Monday 20:00 Denver's.
+      usage: sanitizeWeeklyUsage(parsed.usage),
+      // "auto", 1, 2 or 3; a hand-typed 4, "big" or 1.5 is `auto` rather than a broken chrome.
+      uiScale: clampUiScale(parsed.uiScale)
     };
     // A hand-edited plan is free text until it is checked. An unrecognised one becomes null,
     // which means "no budget" — better than silently metering against the wrong ceiling.
@@ -299,6 +367,39 @@ export function setFableResetsAt(iso: string | null): { ok: boolean; error?: str
   } catch (err) {
     return { ok: false, error: `COULD NOT WRITE ${settingsFile()} — ${(err as Error).message}` };
   }
+}
+
+/**
+ * Append weekly-pool readings, and ONLY those: `usage.pools.all` and/or `usage.pools.top`, each a
+ * percentage read off claude.ai/usage, stamped `at` (now by default). The last 20 per pool are
+ * kept. The anchor is not touched; it stays file-only.
+ *
+ * The same reasoning as `setUsagePlan`: a reading scales a bar on a meter. It grants no access,
+ * allows no path and elevates nothing. A user-only channel, in neither AGENT_METHODS nor
+ * REMOTE_METHODS, so no agent can tell the meter a pool is emptier than it is.
+ */
+export function addWeeklyReadings(
+  readings: Partial<Record<PoolId, number | null>>,
+  at: string = new Date().toISOString()
+): { ok: boolean; error?: string; usage?: WeeklyUsageSettings } {
+  const when = Date.parse(at);
+  if (!Number.isFinite(when)) return { ok: false, error: `NOT A TIME — ${at}` };
+  const current = getSettings();
+  const pools = { ...current.usage.pools };
+  let added = 0;
+  for (const id of ['all', 'top'] as const) {
+    const value = readings[id];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+      return { ok: false, error: `NOT A PERCENTAGE — ${String(value)} (0 to 100)` };
+    }
+    pools[id] = appendReading(pools[id], { at: new Date(when).toISOString(), percent: value });
+    added++;
+  }
+  if (!added) return { ok: false, error: 'NO READING GIVEN' };
+  const usage: WeeklyUsageSettings = { ...current.usage, pools };
+  const result = writeSwitch({ ...current, usage });
+  return result.ok ? { ok: true, usage } : result;
 }
 
 /**
@@ -406,6 +507,50 @@ export function setVoiceEnabled(on: boolean): { ok: boolean; error?: string } {
   }
 }
 
+/** One switch each for the JARVIS Voice blocks (docs/11). The rest of each block is file-only. */
+function writeSwitch(next: Settings): { ok: boolean; error?: string } {
+  try {
+    mkdirSync(userDataDir(), { recursive: true });
+    writeFileSync(settingsFile(), JSON.stringify(next, null, 2) + '\n', 'utf8');
+    cached = next;
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `COULD NOT WRITE ${settingsFile()} — ${(err as Error).message}` };
+  }
+}
+
+export function setHologramEnabled(on: boolean): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, hologram: { ...s.hologram, enabled: on === true } });
+}
+
+export function setSpeechEnabled(on: boolean): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, speech: { ...s.speech, enabled: on === true } });
+}
+
+/** Which voice JARVIS speaks with: Windows' own, or a profile through the synthesis server. */
+export function setSpeechBackend(backend: SpeechSettings['backend'], profile: string): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, speech: { ...s.speech, backend, profile } });
+}
+
+export function setDesktopEnabled(on: boolean): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, desktop: { ...s.desktop, enabled: on === true } });
+}
+
+/**
+ * The chrome's scale, and ONLY that (2026-09-27). The same reasoning as `setUsagePlan`: it sizes
+ * the chrome, grants no access, allows no path and elevates nothing. A user-only channel
+ * (`settings:setUiScale`), in neither AGENT_METHODS nor REMOTE_METHODS. Clamped to auto/1/2/3.
+ */
+export function setUiScale(raw: unknown): { ok: boolean; uiScale: UiScaleSetting; error?: string } {
+  const uiScale = clampUiScale(raw);
+  const result = writeSwitch({ ...getSettings(), uiScale });
+  return result.ok ? { ok: true, uiScale } : { ok: false, uiScale: getSettings().uiScale, error: result.error ?? 'COULD NOT WRITE settings.json' };
+}
+
 /** Forget the cache so the next read picks up a hand-edited file. */
 export function reloadSettings(): Settings {
   cached = null;
@@ -427,6 +572,5 @@ export function trustedRoots(): string[] {
   ].map(normaliseRoot);
 }
 
-export function normaliseRoot(p: string): string {
-  return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-}
+/** A root is a path: the one spelling `normalisePath` gives, so a root and a target compare equal. */
+export const normaliseRoot = normalisePath;

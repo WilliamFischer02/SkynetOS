@@ -1,6 +1,9 @@
+import { PanelHead } from './PanelHead.js';
+import { failureLine } from '@shared/ui-copy.js';
 import { useEffect, useState } from 'react';
-import { PLANS, PLAN_SPECS, parsePlanInput, planFromPeak, type PlanId } from '@shared/plans.js';
+import { FIXED_PLAN, PLANS, PLAN_SPECS, isPlanId, parsePlanInput, planFromPeak, type PlanId } from '@shared/plans.js';
 import { budgetFromPercent, formatTokens, type UsageCalibration } from '@shared/usage.js';
+import type { WeeklyReadout } from '@shared/usage-week.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 
 /**
@@ -16,6 +19,11 @@ import { useBoardStore } from '../store/useBoardStore.js';
  *
  * It also shows the account's own measured peak, so the estimate can be checked against evidence
  * rather than taken on trust. If a ceiling has ever been hit, that peak IS approximately it.
+ *
+ * William, 2026-09-27: "my plan never changes from max 20x and it always resets credits on Mondays
+ * at 8pm." So the plan select starts on Max 20x and says FIXED once it is set, the free-text and
+ * pick-one controls fold away under "Change plan", and the first thing the dialog asks for is the
+ * two WEEKLY percentages from claude.ai/usage. See packages/shared/usage-week.ts.
  */
 
 export interface PlanDialogProps {
@@ -26,12 +34,29 @@ export interface PlanDialogProps {
   usedTokens: number;
   /** What a real five-hour limit hit says the budget is, if one has been hit. */
   calibration?: UsageCalibration;
+  /** The plan in settings.json, if set. The select says FIXED when it is. */
+  plan?: string | null;
+  /** The weekly pools as they stand, for the reset caption and the last readings. */
+  weekly?: WeeklyReadout;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibration, onClose, onSaved }: PlanDialogProps): React.JSX.Element {
+export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibration, plan, weekly, onClose, onSaved }: PlanDialogProps): React.JSX.Element {
   const toast = useBoardStore((s) => s.toast);
+  const current = plan && isPlanId(plan) ? plan : null;
+  const [selected, setSelected] = useState<PlanId>(current ?? FIXED_PLAN);
+  const [weekAll, setWeekAll] = useState('');
+  const [weekTop, setWeekTop] = useState('');
+  /** Empty is "not given" (null); anything outside 0..100 is NaN, which blocks the save. */
+  const readPercent = (raw: string): number | null => {
+    if (!raw.trim()) return null;
+    const n = Number.parseFloat(raw);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : NaN;
+  };
+  const allValue = readPercent(weekAll);
+  const topValue = readPercent(weekTop);
+  const weeklyValid = (allValue !== null || topValue !== null) && !Number.isNaN(allValue) && !Number.isNaN(topValue);
   const [text, setText] = useState('');
   const [percent, setPercent] = useState('');
   const fromPercent = budgetFromPercent(usedTokens, Number.parseFloat(percent));
@@ -53,24 +78,109 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
     setSaving(true);
     const result = await window.skynet['settings:setPlan'](plan, tokenBudget);
     setSaving(false);
-    if (!result.ok) { toast('fault', result.error ?? 'COULD NOT SAVE'); return; }
+    if (!result.ok) { toast('fault', failureLine(result.error, 'COULD NOT SAVE THE PLAN', 'check settings.json is writable and try again')); return; }
     toast('ok', plan ? `plan set to ${PLAN_SPECS[plan].label}` : 'plan cleared');
     onSaved();
     onClose();
   };
 
+  const saveWeekly = async () => {
+    if (!weeklyValid) return;
+    setSaving(true);
+    const result = await window.skynet['settings:addUsageReadings']({ all: allValue, top: topValue });
+    setSaving(false);
+    if (!result.ok) { toast('fault', failureLine(result.error, 'COULD NOT SAVE THE READINGS', 'check settings.json is writable and try again')); return; }
+    const said = [allValue !== null ? `all ${allValue}%` : '', topValue !== null ? `Fable ${topValue}%` : ''].filter(Boolean).join(', ');
+    toast('ok', `weekly reading saved: ${said}`);
+    setWeekAll('');
+    setWeekTop('');
+    onSaved();
+  };
+
+  const lastReading = (id: 'all' | 'top'): string => {
+    const pool = weekly?.pools.find((p) => p.id === id);
+    if (!pool) return '';
+    if (pool.reading) return `last: ${Math.round(pool.reading.percent)}% at ${new Date(pool.reading.at).toLocaleString()}`;
+    return pool.lastWeek ? `none this week (${pool.lastWeek.label.toLowerCase()} ${Math.round(pool.lastWeek.percent)}%)` : 'none yet';
+  };
+
   return (
     <div className="plan-dialog">
-      <div className="plan-head">
-        <span>WHICH CLAUDE PLAN?</span>
-        <button type="button" className="btn tiny" onClick={onClose}>Close (Esc)</button>
-      </div>
+      <PanelHead name="WHICH CLAUDE PLAN?" icon="usage" onClose={onClose} />
 
       <p className="plan-note">
         SkynetOS cannot read this from your account — nothing local reports it. Tell it once and the
         meter can show a remaining pool instead of a dash.
       </p>
 
+      <div className="field-row">
+        <label className="field-label" htmlFor="plan-select">Plan</label>
+        <select
+          id="plan-select"
+          className="input"
+          value={selected}
+          disabled={saving}
+          title={current ? `${PLAN_SPECS[current].label} is set in settings.json.` : `Not set yet. ${PLAN_SPECS[FIXED_PLAN].label} is your plan.`}
+          onChange={(e) => { if (isPlanId(e.target.value)) setSelected(e.target.value); }}
+        >
+          {PLANS.filter((id) => id !== 'custom' || current === 'custom').map((id) => <option key={id} value={id}>{PLAN_SPECS[id].label}</option>)}
+        </select>
+        {current && selected === current
+          ? <span className="plan-match" title="Your plan does not change. Pick another above only if it ever does.">FIXED</span>
+          : <button type="button" className="btn primary" disabled={saving} onClick={() => void commit(selected, null)} title={`Meter usage against the ${PLAN_SPECS[selected].label} plan from now on`}>Set {PLAN_SPECS[selected].label}</button>}
+      </div>
+
+      {/*
+        * The weekly pools: the two percentages claude.ai/usage shows for the week, all models and
+        * Fable. Saved with the time they were typed; the meter carries them forward from there.
+        */}
+      <form className="plan-calibration" onSubmit={(e) => { e.preventDefault(); void saveWeekly(); }}>
+        <div className="section-head">This week, from claude.ai/usage</div>
+        {weekly ? <p className="plan-note">{weekly.reset.caption}</p> : null}
+        <label className="field-label" htmlFor="plan-week-all">
+          This week, all models (%)
+          <span className="field-hint" title={lastReading('all') || 'The weekly all-models bar on claude.ai → Settings → Usage.'}>?</span>
+        </label>
+        <input
+          id="plan-week-all"
+          className="input"
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          autoFocus
+          placeholder={lastReading('all') || '48'}
+          value={weekAll}
+          disabled={saving}
+          onChange={(e) => setWeekAll(e.target.value)}
+        />
+        <label className="field-label" htmlFor="plan-week-top">
+          This week, Fable (%)
+          <span className="field-hint" title={lastReading('top') || 'The weekly Fable bar on claude.ai → Settings → Usage: the percentage USED, not left.'}>?</span>
+        </label>
+        <input
+          id="plan-week-top"
+          className="input"
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          placeholder={lastReading('top') || '78'}
+          value={weekTop}
+          disabled={saving}
+          onChange={(e) => setWeekTop(e.target.value)}
+        />
+        <button type="submit" className="btn primary" disabled={!weeklyValid || saving} title="Save both weekly percentages, stamped with the time now (Enter)">
+          {saving ? 'Saving…' : 'Save readings'}
+        </button>
+        <p className="plan-note">
+          Percentages USED, as the page shows them. Stamped with the time you save them; between
+          readings the meter moves them by this machine&apos;s own usage, and says so.
+        </p>
+      </form>
+
+      <details open={!current}>
+        <summary className="section-head">Change plan</summary>
       <form
         className="plan-form"
         onSubmit={(e) => { e.preventDefault(); if (parsed.plan) void commit(parsed.plan, parsed.tokenBudget); }}
@@ -83,7 +193,6 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
           id="plan-input"
           className="input"
           type="text"
-          autoFocus
           spellCheck={false}
           placeholder="Max 20x"
           value={text}
@@ -93,7 +202,7 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
         <div className={parsed.plan ? 'plan-reading ok' : 'plan-reading'}>
           {text.trim() ? <>Read as: <strong>{parsed.reading}</strong></> : <>Also accepts a budget directly — <code>96M</code>, <code>96,000,000</code>.</>}
         </div>
-        <button type="submit" className="btn primary" disabled={!parsed.plan || saving}>
+        <button type="submit" className="btn primary" disabled={!parsed.plan || saving} title="Save the plan or budget you typed, as read above (Enter)">
           {saving ? 'Saving…' : 'Use that'}
         </button>
       </form>
@@ -118,6 +227,7 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
           );
         })}
       </div>
+      </details>
 
       <div className="plan-calibration">
         <div className="section-head">Your own numbers</div>
@@ -159,7 +269,7 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
               so that is your ceiling, measured rather than estimated
               {calibration.hits > 1 ? ` (the latest of ${calibration.hits} limit hits on record)` : ''}.
             </p>
-            <button type="button" className="btn primary" disabled={saving} onClick={() => void commit('custom', measured)}>
+            <button type="button" className="btn primary" disabled={saving} onClick={() => void commit('custom', measured)} title="Set your five-hour ceiling to what the last limit hit actually spent">
               Use the measured limit ({formatTokens(measured)})
             </button>
           </>
@@ -190,7 +300,7 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
             disabled={saving}
             onChange={(e) => setPercent(e.target.value)}
           />
-          <button type="button" className="btn" disabled={!fromPercent || saving} onClick={() => fromPercent && void commit('custom', fromPercent)}>
+          <button type="button" className="btn" disabled={!fromPercent || saving} onClick={() => fromPercent && void commit('custom', fromPercent)} title="Set your five-hour ceiling from the percentage Claude shows you">
             {fromPercent ? `Use ${formatTokens(fromPercent)}` : 'Use that'}
           </button>
         </div>
@@ -206,7 +316,8 @@ export function PlanDialog({ peakWindowTokens, windowHours, usedTokens, calibrat
       <div className="plan-foot">
         Every plan figure is an ESTIMATE: the multiplier is published, the baseline is calibrated
         from this machine&apos;s history. An exact budget always wins over one. Stored in
-        %APPDATA%/SkynetOS/settings.json — the only two settings this app will write for you.
+        %APPDATA%/SkynetOS/settings.json, beside your weekly readings: the only usage settings this
+        app will write for you.
       </div>
     </div>
   );

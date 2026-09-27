@@ -1,3 +1,4 @@
+import { PanelHead } from './PanelHead.js';
 import { useEffect } from 'react';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { Icon } from './Icon.js';
@@ -48,13 +49,10 @@ export function NotificationCentre(): React.JSX.Element | null {
   if (!open) return null;
   return (
     <div className="notif-panel" role="dialog" aria-label="Notifications">
-      <div className="notif-head">
-        <Icon name="bell" />
-        <span>Notifications</span>
+      <PanelHead name="Notifications" icon="bell" onClose={() => setOpen(false)}>
         <span className="notif-spacer" />
-        <button type="button" className="btn tiny" disabled={!list.length} onClick={clear}>Clear</button>
-        <button type="button" className="btn tiny" onClick={() => setOpen(false)}>Close (Esc)</button>
-      </div>
+        <button type="button" className="btn tiny" disabled={!list.length} onClick={clear} title="Clear every notification from this list">Clear</button>
+      </PanelHead>
       {list.length ? list.map((n) => (
         <div key={n.id} className={`notif-row ${n.level}`}>
           <Icon name={n.level} />

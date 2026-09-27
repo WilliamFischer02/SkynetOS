@@ -1,3 +1,4 @@
+import { failureLine } from '@shared/ui-copy.js';
 import { useEffect, useState } from 'react';
 import {
   MIN_SAMPLES,
@@ -51,12 +52,17 @@ export function GestureCatalogue(): React.JSX.Element {
    * which is a property of the catalogue as a whole and therefore invisible on any single row.
    */
   const [health, setHealth] = useState<LibraryHealth | null>(null);
+  // Set when the library could not be read. Built-in gestures always exist, so an empty catalogue
+  // is never a fact until a read has answered.
+  const [readError, setReadError] = useState<string | null>(null);
   const auditable = typeof window.skynet['gesture:health'] === 'function';
 
   useEffect(() => {
     if (!available) return;
     let live = true;
-    void window.skynet['gesture:library']().then((next) => { if (live) setLibrary(next); }).catch(() => undefined);
+    void window.skynet['gesture:library']()
+      .then((next) => { if (live) { setLibrary(next); setReadError(null); } })
+      .catch((error: unknown) => { if (live) setReadError(error instanceof Error ? error.message : String(error)); });
     if (auditable) {
       void window.skynet['gesture:health']().then((next) => { if (live) setHealth(next); }).catch(() => undefined);
     }
@@ -104,7 +110,7 @@ export function GestureCatalogue(): React.JSX.Element {
     if (next === null) return;
     const result = await window.skynet['gesture:saveGesture']({ id: gesture.id, name: gesture.name, utterance: next });
     setLibrary(result.library);
-    if (!result.ok) toast('warn', result.error ?? 'COULD NOT SAVE');
+    if (!result.ok) toast('warn', failureLine(result.error, `COULD NOT SAVE ${gesture.name}'S WORDS`, 'try again; the old words still apply'));
   };
 
   const toggle = async (gesture: GestureDefinition): Promise<void> => {
@@ -137,7 +143,7 @@ export function GestureCatalogue(): React.JSX.Element {
       {health && !health.ok ? (
         <div className="gesture-alarm">
           <span>{health.note}</span>
-          <button type="button" className="btn tiny" disabled={busy} onClick={() => void repair()}>
+          <button type="button" className="btn tiny" disabled={busy} onClick={() => void repair()} title="Drop the examples that would be misread as another gesture, then check the catalogue again">
             REPAIR
           </button>
         </div>
@@ -192,7 +198,11 @@ export function GestureCatalogue(): React.JSX.Element {
           })}
         </div>
       ) : (
-        <div className="look-note">No gestures yet.</div>
+        <div className="look-note">
+          {readError
+            ? `COULD NOT READ THE GESTURE LIBRARY — ${readError}. CLOSE AND REOPEN THE CATALOGUE TO TRY AGAIN`
+            : !library ? 'READING THE GESTURE LIBRARY…' : 'No gestures yet.'}
+        </div>
       )}
 
       <div className="gesture-add">
@@ -229,7 +239,7 @@ export function GestureCatalogue(): React.JSX.Element {
           <option value={2}>2 keyframes · a move</option>
           <option value={3}>3 keyframes · a move through</option>
         </select>
-        <button type="button" className="btn" disabled={!name.trim() || busy} onClick={() => void add()}>ADD</button>
+        <button type="button" className="btn" disabled={!name.trim() || busy} onClick={() => void add()} title="Add this gesture to the catalogue; teach it examples in the training wizard">ADD</button>
       </div>
     </div>
   );

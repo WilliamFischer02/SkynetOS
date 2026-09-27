@@ -15,7 +15,7 @@
  * and 22px only (docs/02); 75% of 11 is 8.25, which would be rendered by scaling a bitmap by a
  * fraction — the precise thing docs/02 anti-mush calls a crash-severity bug. The suffix therefore
  * steps DOWN one size where there is one to step down to (22 -> 11, which is 50%) and otherwise
- * stays at 11 and relies on colour and outline to read as subordinate. `SUFFIX_SIZE` below is the
+ * stays at 11 and relies on colour and outline to read as subordinate. `suffixSize()` below is the
  * whole of that decision.
  */
 

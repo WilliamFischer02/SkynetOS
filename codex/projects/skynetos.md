@@ -1,6 +1,6 @@
 ---
-updated: 2026-09-23
-status: ACTIVE — M0–M4 done, most of M5–M8 done, M9 built-off, M10 installer built-unrun, M11 FinanceOS built no real numbers yet, M12 Mail designed and surveyed only. Updated by an away-mode pass: the file had drifted two days behind handoff.md, missing the entire 2026-09-23 away-hour (FinanceOS, Mail, prime/).
+updated: 2026-09-27
+status: ACTIVE — M0–M4 done, most of M5–M8 done, M9 built-off, M10 installer built-unrun, M11 FinanceOS built no real numbers yet, M12 Mail designed and surveyed only, M13 JARVIS Voice through M13.4/M13.6–M13.8 built and unseen (the JARVIS globe session, 2026-09-26/27). Updated by an away-mode pass: frontmatter date and the Next section had drifted behind the body's own "JARVIS globe" section and handoff.md.
 purpose: What JARVIS needs to know about SkynetOS itself (the program you're running in) to route sessions and track state. See docs/06-ROADMAP.md for the authoritative milestone detail; this file tracks state only.
 ---
 
@@ -41,6 +41,25 @@ William publishes one. `agent.code` nodes can opt in to Claude Code's Remote Con
 (`remoteControl`). Tailscale on William-Desktop is ready; the REMOTE switches are his to press.
 `npm run verify` green at 103 files, 1,604 tests. See `docs/09-RELEASE.md` and handoff.md.
 
+## JARVIS Voice — 2026-09-24 (U3 JARVIS-PRIME, William present; roadmap M13 slice 1)
+
+Not yet in the "Next" list below — see it for the current top item. Full detail in `handoff.md`
+"JARVIS Voice — 2026-09-24" and docs/06-ROADMAP.md M13; summary here so this file stops lagging it:
+
+- **The hologram window, speech, the recorder, rule-based desktop control** (M13.1): a 240 px
+  always-on-top square (LOOK → System → "JARVIS Voice window"), Windows' own voice through a
+  PowerShell sidecar, a voice-profile recorder, and "open after effects on one and firefox on two"
+  parsed and executed (off by default, the DESK switch).
+- **A synthesis server for voice profiles** (M13.2): `tools/speech-server.py` (F5-TTS on the RTX
+  5070), William's 380 AIFF clips imported as profile `jarvis`, a line heard aloud in his own voice.
+- **Later the same day: conversation.** An unrecognised sentence now goes to headless `claude -p`
+  (Haiku) for a spoken two-sentence reply, then the microphone reopens once without the wake word
+  for a follow-up. The old hand-off that typed unrecognised sentences to the Face's own window is
+  gone — only "ask the face …" reaches it now (2026-09-24T23:31 mail to the Face). The VOICE button
+  opens the hologram window directly; its buttons now fit the square.
+- **Nothing committed, nothing seen on screen, no plan has touched the desktop.** `npm run verify`
+  green: 112 files, 1,747 tests (was 97/1,529 as of the last section below).
+
 ## The away hour — 2026-09-23 (U3 JARVIS-PRIME, William at work; not yet in the "Next" list below)
 
 Nothing committed, nothing deleted, no dialog raised, no account logged into, no mail sent or
@@ -65,22 +84,32 @@ lagging it:
 
 ## Next
 
-Per `handoff.md`'s own "For William, in order", the 2026-09-23 away-hour queue now sits ahead of
-the older items below:
+Per `handoff.md`'s own "For William, in order" under "The JARVIS globe — 2026-09-26", that queue
+is now the top item — it supersedes the 2026-09-24 JARVIS Voice queue below, which it builds on
+top of and which is itself still unseen on screen:
 
-0. **`npm run boot`, then work through `docs/guides/remote-setup-tailscale.md` sections 2–4**
-   (three presses and a QR scan) — everything main-process from today (toast, `finance:status`,
-   the remote lockout) needs the restart first.
+-2. **`npm run boot`** — everything from the globe session is main-process or a shader; watch the
+    terminal for `[boot]` lines and any WebGL error (falls back to the 2D orb if WebGL2 is refused).
+-1. **Press VOICE, say "Jarvis, hello."** WARMING THE VOICE for up to two minutes on the first
+    line, then his fine-tuned profile; the globe should move to the words. If it answers as David,
+    read the `[speech]` fallback lines. Then: open a file from a Claude Code session (should travel
+    to the globe's centre); DESK on, TRAIN ACTION a Notepad macro and replay it; listen to
+    `finetune\jarvis\eval\*_base.wav` against `*_tuned.wav`; try wheel zoom/drag and the new panels
+    on the board; drag a file onto a fresh terminal session for `/drop`.
+0. **ScheduleOS Phase 6**: Google Calendar → Settings → time zone → Mountain Time - Denver (MAIN,
+   Work – Shifts, Work – Prep Blocks, Reclaim), then the Reclaim browser login from a terminal in
+   this repo (`claude`, `/mcp`, Reclaim), then feed one real PBS shift so `npm run schedule:week`
+   shows a real chain. The room (D6, 31 nodes) is built; nothing here needs more agent work first.
 0a. **Fill FinanceOS with real numbers**: copy `private/finance/ledger.template.json` to
-    `ledger.json`, replace every figure, `npm run finance:report`, open LEDGER.
+    `ledger.json`, replace every figure, `npm run finance:report`, open LEDGER. Card issuer/APR are
+    already known (Bank of America, 24.49%); only the minimum is still a placeholder.
 0b. **Read `private/email/survey-2026-09-23.md`** (1 P0, 11 P1), then re-authorise the Gmail
     connector with the modify scope (docs/10 step 8) so labelling can run.
 0c. **Decide which institutions go on the public FinanceOS board** (J1–J4 are provisional) and
     whether hotmail forwards into Gmail.
 
-1. **Restart SkynetOS and put the 2026-09-12 voice/gesture/MATRIX work in front of William** —
-   it is entirely main-process and untested outside smoke captures. Concrete click-list is
-   handoff.md items 0 and 0(earlier).
+1. **The 2026-09-12 voice/gesture/MATRIX work** is still folded into the same "restart and watch
+   it" queue as everything above — nothing here has been clicked by a human yet.
 2. **The overnight batch's click-through list (items 1a–1h in handoff.md)** is still mostly
    unrun: the prompt node against real claude.ai, the Fable countdown, a drive auditor on a
    spare drive, PROMPT → NODE, Summon JARVIS, the corner prompt, phantoms tick/cross, and the
@@ -88,8 +117,9 @@ the older items below:
 3. **Prove standing orders end to end** with the Face's first real `standing:` brief — not yet
    run (handoff.md item 2).
 4. **William's five logged overhauls** (docs/06 "Known issues"): rotation not affecting
-   component art, node-editor layout, more fonts (check `TruthQuestRetro/content/` for
-   pixel-clean assets), usage calibration (first pass done), cross-machine usage ledger.
+   component art (fixed by hiding, real rotation still open), node-editor layout, more fonts (check
+   `TruthQuestRetro/content/` for pixel-clean assets), usage calibration (first pass done),
+   cross-machine usage ledger.
 5. **Remote (M9) on a real iPhone** — built, off by default, never tried outside this machine.
 
 ## Landmines
@@ -114,3 +144,15 @@ now" for the standing recommendation to start SkynetOS (or schedule it) before a
 begins, since one otherwise cannot leave board recommendations at all. This pass audited the
 codex's thirteen `projects/*.md` files against each repo's real `CLAUDE.md`/handoff and found no
 drift — the 2026-09-11/12 passes had already brought every "Next" section current.
+
+## The JARVIS globe — 2026-09-26/27 (U3 JARVIS-PRIME, William present; roadmap M13.4, M13.6, M13.7, M13.8 begun)
+
+Fourteen forks in one session, all uncommitted, verify green at 132 files / 2,007 tests, nothing
+seen on a screen: the boot voice fixed; a WebGL2 orb at 480 px moved by speech and microphone
+levels, with recent files orbiting and what Claude Code touches summoned to the centre; every control
+by voice, "stop" and "shut yourself down"; TRAIN ACTION recording and adaptive replay; dictation on
+Ctrl+Alt+D; eased integer zoom to 12, spring drag, depth; the orb in the face windows; themed confirm
+dialogs and a UX pass; a performance pass; a correctness review; JARVIS-TQR (U7) on root; claude.ai
+opened only from U1; a terminal drop hook installed; the jarvis voice fine-tuned and applied.
+State and the order to look at it: handoff.md "The JARVIS globe". Reasoning: docs/DECISIONS.md.
+Next: William's first boot and listen; then M13.3 (the planner) and M13.9.

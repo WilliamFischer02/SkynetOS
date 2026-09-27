@@ -46,7 +46,12 @@ export function buildSilkNote(node: BoardNode, theme: BoardTheme, glowStep = 0):
  * and lands as two half-lit rows. The corners are broken with a gap so the box reads as
  * silkscreen printing rather than as a component body.
  */
-export function buildZone(node: BoardNode, roomSignal: string): Container {
+/**
+ * A zone: an open box of corner brackets and dashed runs, with its label breaking the top edge.
+ * `maskDark`, when given, puts one pixel of shadow down and to the right under the brackets, so
+ * the printed outline sits a step above the substrate like the components do.
+ */
+export function buildZone(node: BoardNode, roomSignal: string, maskDark?: string): Container {
   const container = new Container();
   const fp = footprintOf(node);
   const w = Math.max(TILE, fp.w * TILE);
@@ -72,21 +77,32 @@ export function buildZone(node: BoardNode, roomSignal: string): Container {
   const inLabelGap = (px: number, runWidth: number): boolean =>
     rendered !== null && px < labelGapEnd && px + runWidth > labelGapStart;
 
-  const g = new Graphics();
-  // Top-left, top-right, bottom-left, bottom-right brackets only — an open box.
-  if (!inLabelGap(x, CORNER)) g.rect(x, y, CORNER, 1);
-  g.rect(x, y, 1, CORNER);
-  if (!inLabelGap(x + w - CORNER, CORNER)) g.rect(x + w - CORNER, y, CORNER, 1);
-  g.rect(x + w - 1, y, 1, CORNER);
-  g.rect(x, y + h - 1, CORNER, 1);
-  g.rect(x, y + h - CORNER, 1, CORNER);
-  g.rect(x + w - CORNER, y + h - 1, CORNER, 1);
-  g.rect(x + w - 1, y + h - CORNER, 1, CORNER);
-  // Dashed run along the top and bottom between the brackets, 8 on / 8 off.
-  for (let dx = CORNER + 8; dx < w - CORNER - 8; dx += 16) {
-    if (!inLabelGap(x + dx, 8)) g.rect(x + dx, y, 8, 1);
-    g.rect(x + dx, y + h - 1, 8, 1);
+  const outline = (g: Graphics, ox: number, oy: number): void => {
+    const gx = x + ox;
+    const gy = y + oy;
+    // Top-left, top-right, bottom-left, bottom-right brackets only — an open box.
+    if (!inLabelGap(x, CORNER)) g.rect(gx, gy, CORNER, 1);
+    g.rect(gx, gy, 1, CORNER);
+    if (!inLabelGap(x + w - CORNER, CORNER)) g.rect(gx + w - CORNER, gy, CORNER, 1);
+    g.rect(gx + w - 1, gy, 1, CORNER);
+    g.rect(gx, gy + h - 1, CORNER, 1);
+    g.rect(gx, gy + h - CORNER, 1, CORNER);
+    g.rect(gx + w - CORNER, gy + h - 1, CORNER, 1);
+    g.rect(gx + w - 1, gy + h - CORNER, 1, CORNER);
+    // Dashed run along the top and bottom between the brackets, 8 on / 8 off.
+    for (let dx = CORNER + 8; dx < w - CORNER - 8; dx += 16) {
+      if (!inLabelGap(x + dx, 8)) g.rect(gx + dx, gy, 8, 1);
+      g.rect(gx + dx, gy + h - 1, 8, 1);
+    }
+  };
+  if (maskDark) {
+    const shadow = new Graphics();
+    outline(shadow, 1, 1);
+    shadow.fill({ color: hexToNumber(maskDark) });
+    container.addChild(shadow);
   }
+  const g = new Graphics();
+  outline(g, 0, 0);
   g.fill({ color });
   container.addChild(g);
 

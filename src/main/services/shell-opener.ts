@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { dialog, shell } from 'electron';
+import { shell } from 'electron';
 import type { BoardNode } from '@shared/types.js';
 import type { TerminalOpenResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
@@ -11,6 +11,7 @@ import { officeRefusal, officeUri } from '@shared/office.js';
 import { elevatedProgramArgv, toWindowsPath as toWindows } from './launch-script.js';
 import { expandPath, resolveNodeTarget } from './target-resolver.js';
 import { openChatWindow } from './chat-window.js';
+import { confirmThemed } from './confirm-window.js';
 import { boardWindow } from './main-window.js';
 import { openTerminal } from './terminal.js';
 import { getSettings } from './settings.js';
@@ -40,19 +41,16 @@ const confirmedBinaries = new Set<string>();
 async function confirm(title: string, message: string, detail: string, confirmLabel: string): Promise<boolean> {
   refuseDialogWhenRemote(`"${title}"`);
   const win = boardWindow();
-  const options = {
-    type: 'warning' as const,
+  // SkynetOS's own window since 2026-09-26 (services/confirm-window.ts): same refusal default.
+  const { response } = await confirmThemed(win ?? null, {
+    kind: 'launch',
     buttons: [confirmLabel, 'Cancel'],
     defaultId: 1,
     cancelId: 1,
     title,
     message,
-    detail,
-    noLink: true
-  };
-  const { response } = win
-    ? await dialog.showMessageBox(win, options)
-    : await dialog.showMessageBox(options);
+    detail
+  });
   return response === 0;
 }
 
@@ -276,7 +274,7 @@ export async function openTarget(
    * the same person for the same reason. William: "I want to remove the confirmation messages as
    * much as possible."
    *
-   * They are now one dialog that says everything relevant, and `trusted()` decides whether it
+   * They are now one dialog that says everything relevant, and `trustedByUser()` decides whether it
    * appears at all. No consent is lost: the combined dialog carries the same path, the same
    * out-of-root warning, and the same refusal default.
    */

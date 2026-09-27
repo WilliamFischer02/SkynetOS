@@ -1,3 +1,4 @@
+import { failureLine } from '@shared/ui-copy.js';
 import { useCallback, useEffect, useState } from 'react';
 import { formatCountdown, parseResetText, type FableStatus } from '@shared/model-availability.js';
 
@@ -81,7 +82,7 @@ export function FableCores(): React.JSX.Element | null {
 
   const save = async (iso: string | null): Promise<void> => {
     const result = await window.skynet['models:setFableReset'](iso);
-    if (!result.ok) { setNote(result.error ?? 'COULD NOT SAVE'); return; }
+    if (!result.ok) { setNote(failureLine(result.error, 'COULD NOT SAVE THE RESET TIME', 'type it as HH:MM and press enter again')); return; }
     setEditing(false);
     setText('');
     setNote(null);
@@ -146,15 +147,15 @@ export function FableCores(): React.JSX.Element | null {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); } }}
           />
-          <button type="submit" className="btn">Set</button>
+          <button type="submit" className="btn" title="Save this as the time Fable's cores restart (Enter)">Set</button>
         </form>
       ) : status.resetSource !== 'recorded' ? (
         <div className="cores-actions">
-          <button type="button" className="usage-unset link" onClick={() => setEditing(true)}>
+          <button type="button" className="usage-unset link" onClick={() => setEditing(true)} title="Type when Fable's cores restart, in the CLI's own words (for example 8pm Monday)">
             {resetsAt === null ? 'SET RESTART TIME' : 'CHANGE'}
           </button>
           {status.resetSource === 'setting' ? (
-            <button type="button" className="usage-unset link" onClick={() => void save(null)}>CLEAR</button>
+            <button type="button" className="usage-unset link" onClick={() => void save(null)} title="Forget the restart time you typed">CLEAR</button>
           ) : null}
         </div>
       ) : null}

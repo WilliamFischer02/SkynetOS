@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { UsageSummary } from '@shared/usage.js';
 import { formatDuration, formatTokens, fraction, readout, weightedTokens } from '@shared/usage.js';
 import { PLAN_SPECS, planFromPeak, type PlanId } from '@shared/plans.js';
+import type { PoolReadout, WeeklyReadout } from '@shared/usage-week.js';
 import { PlanDialog } from './PlanDialog.js';
 import { FableCores } from './FableCores.js';
 import { useBoardStore } from '../store/useBoardStore.js';
@@ -27,19 +28,71 @@ import { Icon } from './Icon.js';
  *
  * With no budget configured only RATE has anything to measure against, so it is graded on the
  * account's own measured peak instead, and the other two say so. See packages/shared/plans.ts.
+ *
+ * Under those, two thin WEEKLY bars: ALL (every model) and FABLE, against 100% of each weekly cap,
+ * from William's own /usage readings carried forward by this machine's usage. Dotted once the
+ * reading is more than 12 h behind; greyed when the only reading is an earlier week's. See
+ * packages/shared/usage-week.ts.
  */
 
 const REFRESH_MS = 20_000;
 const CELLS = 16;
 
 /** One labelled bar. `fill` is 0..1; `over` draws the past-the-end state without a wider bar. */
-function Bar({ fill, level, unknown }: { fill: number; level: string; unknown?: boolean }): React.JSX.Element {
+function Bar({ fill, level, unknown, thin, dotted }: { fill: number; level: string; unknown?: boolean; thin?: boolean; dotted?: boolean }): React.JSX.Element {
   const filled = Math.round(Math.max(0, Math.min(1, fill)) * CELLS);
   return (
-    <div className={`meter-bar ${level}${unknown ? ' unknown' : ''}`}>
+    <div className={`meter-bar ${level}${unknown ? ' unknown' : ''}${thin ? ' thin' : ''}${dotted ? ' dotted' : ''}`}>
       {Array.from({ length: CELLS }, (_, i) => (
         <span key={i} className={i < filled ? 'cell on' : 'cell'} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * One weekly pool: its percent and a thin bar against the whole weekly cap.
+ *
+ * No reading this week draws an empty dotted track and says so, never a guess. A reading from an
+ * earlier week fills the track in the dim copper of a thing that is over, labelled with its week.
+ */
+function WeekRow({ pool }: { pool: PoolReadout }): React.JSX.Element {
+  const past = pool.percent === null ? pool.lastWeek : null;
+  const title = pool.percent !== null
+    ? `${pool.label} this week: ${pool.text}, ${pool.note}. Read ${Math.round(pool.reading?.percent ?? 0)}% from claude.ai/usage at ${pool.reading ? new Date(pool.reading.at).toLocaleString() : '?'}.` +
+      (pool.extrapolated ? ` Carried forward by this machine's ${pool.id === 'top' ? 'Fable ' : ''}usage since, at the rate the reading implied.` : '')
+    : `No ${pool.label} reading this week. Type one from claude.ai/usage in CALIBRATE.` +
+      (past ? ` ${past.label} it was ${Math.round(past.percent)}% (read ${new Date(past.at).toLocaleString()}).` : '');
+  return (
+    <div className={`meter-row week-row${past ? ' past' : ''}`} title={title}>
+      <div className="meter-line">
+        <span className="meter-label">WEEK · {pool.label}</span>
+        <span className="meter-value">
+          {pool.percent !== null
+            ? <>{pool.text}{pool.extrapolated ? <span className="meter-unit">~</span> : null}</>
+            : <span className="usage-unset">NO READING THIS WEEK</span>}
+          {past ? <span className="week-last"> · {past.label} {Math.round(past.percent)}%</span> : null}
+        </span>
+      </div>
+      <Bar
+        fill={(pool.percent ?? past?.percent ?? 0) / 100}
+        level={past ? 'past' : pool.level}
+        unknown={pool.percent === null && !past}
+        dotted={pool.stale}
+        thin
+      />
+      {pool.percent !== null ? <div className="week-note">({pool.note})</div> : null}
+    </div>
+  );
+}
+
+function WeekRows({ weekly }: { weekly: WeeklyReadout }): React.JSX.Element {
+  return (
+    <div className="usage-week">
+      {weekly.pools.map((pool) => <WeekRow key={pool.id} pool={pool} />)}
+      <div className="week-reset" title={`Both weekly pools reset together, in ${weekly.anchor.timeZone}. Set as usage.weeklyAnchor in settings.json.`}>
+        {weekly.reset.caption}
+      </div>
     </div>
   );
 }
@@ -119,6 +172,8 @@ export function UsageMeter(): React.JSX.Element | null {
   const plan = summary.plan && summary.plan in PLAN_SPECS ? PLAN_SPECS[summary.plan as PlanId] : null;
   const suggested = planFromPeak(summary.peakWindowTokens);
   const busiest = summary.projects.filter((p) => weightedTokens(p.window) > 0).slice(0, 6);
+  // A weekly pool with no reading this week is something to calibrate, whatever the budget says.
+  const weeklyMissing = summary.weekly?.pools.some((p) => p.percent === null) ?? false;
 
   return (
     <div className={`usage-meter ${budgeted ? level(poolFill) : ''}${minimized ? ' minimized' : ''}`}>
@@ -156,7 +211,7 @@ export function UsageMeter(): React.JSX.Element | null {
           * nothing, rather than on a budget you set. William: "if it can be calibrated it should show
           * an indicator (calibrate usage monitor)."
           */}
-        {summary.budgetSource !== 'setting' ? (
+        {summary.budgetSource !== 'setting' || weeklyMissing ? (
           <span
             role="button"
             tabIndex={0}
@@ -164,9 +219,11 @@ export function UsageMeter(): React.JSX.Element | null {
             onClick={(e) => { e.stopPropagation(); setAsking(true); }}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); setAsking(true); } }}
             title={
-              summary.calibration?.measuredBudget
-                ? `A real limit hit measured your ceiling at ${formatTokens(summary.calibration.measuredBudget)}. Click to meter against it.`
-                : "The pool and time left are estimates. Click to calibrate against Claude's own usage percentage."
+              weeklyMissing
+                ? 'No weekly reading this week. Click to type the two percentages from claude.ai/usage.'
+                : summary.calibration?.measuredBudget
+                  ? `A real limit hit measured your ceiling at ${formatTokens(summary.calibration.measuredBudget)}. Click to meter against it.`
+                  : "The pool and time left are estimates. Click to calibrate against Claude's own usage percentage."
             }
           >
             <Icon name="calibrate" />CALIBRATE
@@ -230,12 +287,16 @@ export function UsageMeter(): React.JSX.Element | null {
         <Bar fill={timeFill} level={level(timeFill, true)} unknown={remainingHours === null} />
       </div>
 
+      {summary.weekly ? <WeekRows weekly={summary.weekly} /> : null}
+
       {asking ? (
         <PlanDialog
           peakWindowTokens={summary.peakWindowTokens}
           windowHours={summary.windowHours}
           usedTokens={usedTokens}
           calibration={summary.calibration}
+          plan={summary.plan}
+          weekly={summary.weekly}
           onClose={() => setAsking(false)}
           onSaved={() => refreshRef.current()}
         />
@@ -271,7 +332,7 @@ export function UsageMeter(): React.JSX.Element | null {
                   : <>Not close enough to any plan&apos;s estimate to say which. An account that has never come near its limit has not revealed it.</>
               ) : <>No history yet.</>}
             </p>
-            <button type="button" className="btn" onClick={() => setAsking(true)}>
+            <button type="button" className="btn" onClick={() => setAsking(true)} title="Tell the meter which Claude plan you are on, so its pool and time left are right">
               {summary.plan ? 'Change plan…' : 'Set my plan…'}
             </button>
           </div>

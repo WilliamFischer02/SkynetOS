@@ -1,0 +1,651 @@
+{
+  "schemaVersion": 1,
+  "id": "scheduleos",
+  "name": "ScheduleOS",
+  "engraving": "SCHEDULEOS",
+  "parent": "root",
+  "theme": {
+    "maskDark": "#10201F",
+    "maskLight": "#183230",
+    "signal": "#9CF0FF",
+    "substrateSeed": 20260926
+  },
+  "grid": {
+    "tile": 16,
+    "width": 144,
+    "height": 96
+  },
+  "agentEditPolicy": "require-approval",
+  "relatedBoards": [
+    "financeos"
+  ],
+  "nodes": [
+    {
+      "id": "n0",
+      "kind": "note.silk",
+      "name": "header",
+      "pos": {
+        "x": 32,
+        "y": 22
+      },
+      "text": "SCHEDULEOS  //  TZ AMERICA/DENVER  //  QUIET 23:00–07:30",
+      "size": 22
+    },
+    {
+      "id": "n1",
+      "kind": "note.silk",
+      "name": "week note",
+      "pos": {
+        "x": 32,
+        "y": 38
+      },
+      "text": "WEEK.HTML AND TODAY.MD ARE WRITTEN BY SCHED-BUILD. PROVISIONAL UNTIL THE FIRST RUN.",
+      "size": 11
+    },
+    {
+      "id": "n2",
+      "kind": "note.silk",
+      "name": "engine note",
+      "pos": {
+        "x": 92,
+        "y": 38
+      },
+      "text": "SHIFTS IN, CHAINS OUT.",
+      "size": 11
+    },
+    {
+      "id": "n3",
+      "kind": "note.silk",
+      "name": "secretary note",
+      "pos": {
+        "x": 32,
+        "y": 71
+      },
+      "text": "READ BACK BEFORE WRITE  //  THE TITLE IS THE NOTIFICATION.",
+      "size": 11
+    },
+    {
+      "id": "n4",
+      "kind": "note.silk",
+      "name": "tasks note",
+      "pos": {
+        "x": 56,
+        "y": 57
+      },
+      "text": "ALL THREE OFF UNTIL WILLIAM TICKS ENABLED.",
+      "size": 11
+    },
+    {
+      "id": "z_week",
+      "kind": "group.zone",
+      "name": "THIS WEEK",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "footprint": {
+        "w": 44,
+        "h": 13
+      },
+      "text": "THIS WEEK",
+      "members": [
+        "j_week",
+        "f_today",
+        "j_gcal",
+        "j_gcal_shifts"
+      ]
+    },
+    {
+      "id": "z_engine",
+      "kind": "group.zone",
+      "name": "ENGINE",
+      "pos": {
+        "x": 78,
+        "y": 29
+      },
+      "footprint": {
+        "w": 30,
+        "h": 13
+      },
+      "text": "ENGINE",
+      "members": [
+        "j_reclaim",
+        "j_reclaim_habits",
+        "f_model",
+        "f_habits",
+        "f_shifts",
+        "f_changes"
+      ]
+    },
+    {
+      "id": "z_secretary",
+      "kind": "group.zone",
+      "name": "SECRETARY",
+      "pos": {
+        "x": 30,
+        "y": 53
+      },
+      "footprint": {
+        "w": 78,
+        "h": 22
+      },
+      "text": "SECRETARY",
+      "relation": "financeos",
+      "members": [
+        "u_cc_secretary",
+        "t_sched_build",
+        "t_sched_nudge",
+        "t_sched_week"
+      ]
+    },
+    {
+      "id": "j_week",
+      "designator": "J1",
+      "kind": "link.url",
+      "name": "WEEK VIEW",
+      "pos": {
+        "x": 32,
+        "y": 32
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "url": "file:///C:/dev/SkynetOS/schedule/week.html",
+      "tags": [
+        "schedule",
+        "panel"
+      ],
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 5,
+      "showDesignator": false,
+      "textPlate": true,
+      "plateBorder": "signal",
+      "notes": "The week, seven columns, prep chains as stripes above the PBS block, off days hatched. Written to schedule/week.html by SCHED-BUILD; provisional until the file exists."
+    },
+    {
+      "id": "f_today",
+      "designator": "F1",
+      "kind": "file.document",
+      "name": "TODAY",
+      "pos": {
+        "x": 40,
+        "y": 32
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "%SKYNET%/schedule/today.md",
+      "tags": [
+        "schedule"
+      ],
+      "provisional": true,
+      "priority": 3,
+      "showDesignator": false,
+      "notes": "The four-line morning card. Its mtime is when SCHED-BUILD last ran. Provisional until the first run writes it."
+    },
+    {
+      "id": "j_gcal",
+      "designator": "J2",
+      "kind": "link.url",
+      "name": "GCAL WEEK",
+      "pos": {
+        "x": 47,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://calendar.google.com/calendar/u/0/r/week",
+      "tags": [
+        "schedule"
+      ],
+      "frame": "fingers",
+      "priority": 3,
+      "showDesignator": false,
+      "notes": "Google Calendar, week view. The store Reclaim writes into."
+    },
+    {
+      "id": "j_gcal_shifts",
+      "designator": "J3",
+      "kind": "link.url",
+      "name": "SHIFTS CAL",
+      "pos": {
+        "x": 53,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://calendar.google.com/calendar/u/0/r/settings/calendar/MGFlYjA5YWFlZTExMmNiOGZhYWM2Y2ZhN2NiZTFhOTc5MjY2MDQxMTc3ZDFkOWUzMTM4YjZhOGEzMTA0OWQyMUBncm91cC5jYWxlbmRhci5nb29nbGUuY29t",
+      "tags": [
+        "schedule",
+        "pbs"
+      ],
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false,
+      "notes": "The Work – Shifts calendar's settings page. Provisional until the URL is seen to resolve while logged in; otherwise point it at the calendar's share page."
+    },
+    {
+      "id": "j_reclaim",
+      "designator": "J4",
+      "kind": "link.url",
+      "name": "RECLAIM",
+      "pos": {
+        "x": 80,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://app.reclaim.ai/planner",
+      "tags": [
+        "schedule",
+        "reclaim"
+      ],
+      "frame": "fingers",
+      "priority": 4,
+      "showDesignator": false,
+      "notes": "Reclaim's planner. The engine that places the flex blocks."
+    },
+    {
+      "id": "j_reclaim_habits",
+      "designator": "J5",
+      "kind": "link.url",
+      "name": "HABITS",
+      "pos": {
+        "x": 86,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://app.reclaim.ai/habits",
+      "tags": [
+        "schedule",
+        "reclaim"
+      ],
+      "provisional": true,
+      "frame": "fingers",
+      "priority": 2,
+      "showDesignator": false,
+      "notes": "Reclaim's habits page. Provisional until the exact path is seen while logged in."
+    },
+    {
+      "id": "f_model",
+      "designator": "F2",
+      "kind": "file.document",
+      "name": "TIME MODEL",
+      "pos": {
+        "x": 92,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "path": "%SKYNET%/codex/drops/skynetos-drop-2026-09-25-financeos-scheduleos/specs/schedule-model.md",
+      "tags": [
+        "schedule"
+      ],
+      "priority": 3,
+      "showDesignator": false,
+      "notes": "William's time model: anchors, flex blocks, the hour budget, the ADHD rules. Lives in the Face's drop (gitignored, on disk)."
+    },
+    {
+      "id": "f_habits",
+      "designator": "F3",
+      "kind": "file.document",
+      "name": "HABITS.JSON",
+      "pos": {
+        "x": 98,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "path": "%SKYNET%/private/schedule/reclaim/habits.json",
+      "tags": [
+        "schedule",
+        "reclaim"
+      ],
+      "priority": 2,
+      "showDesignator": false,
+      "notes": "The habit definitions the secretary maps onto Reclaim. Private, gitignored."
+    },
+    {
+      "id": "f_shifts",
+      "designator": "F4",
+      "kind": "file.document",
+      "name": "PBS SHIFTS",
+      "pos": {
+        "x": 80,
+        "y": 37
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "path": "%SKYNET%/schedule/pbs-shifts.json",
+      "tags": [
+        "schedule",
+        "pbs"
+      ],
+      "priority": 4,
+      "showDesignator": false,
+      "notes": "Every PBS shift William has fed in: date, call, end, sport, opponent, venue, role, source, confidence. Gitignored. The chains are materialised from this."
+    },
+    {
+      "id": "f_changes",
+      "designator": "F5",
+      "kind": "file.document",
+      "name": "CHANGE LOG",
+      "pos": {
+        "x": 86,
+        "y": 37
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "path": "%SKYNET%/schedule/changes.log.jsonl",
+      "tags": [
+        "schedule",
+        "audit"
+      ],
+      "priority": 2,
+      "showDesignator": false,
+      "notes": "Every calendar change the secretary made, one JSON line each: ts, action, calendar, title, from, to, reason. Gitignored."
+    },
+    {
+      "id": "u_cc_secretary",
+      "designator": "U1",
+      "kind": "agent.code",
+      "name": "CC-SECRETARY",
+      "pos": {
+        "x": 32,
+        "y": 56
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "%SKYNET%",
+      "launch": "popout",
+      "resume": true,
+      "persona": "%SKYNET%/codex/personas/persona.md",
+      "codexRef": "codex/projects/scheduleos.md",
+      "mcpServers": [
+        "skynet"
+      ],
+      "readOnLaunch": [
+        "codex/drops/skynetos-drop-2026-09-25-financeos-scheduleos/directives/30-schedule-secretary-agent.md",
+        "codex/drops/skynetos-drop-2026-09-25-financeos-scheduleos/specs/schedule-model.md",
+        "codex/drops/skynetos-drop-2026-09-25-financeos-scheduleos/specs/notification-copy.md",
+        "codex/personas/jarvis-voice.md",
+        "codex/projects/scheduleos.md"
+      ],
+      "initialPrompt": "You are CC-SECRETARY, JARVIS's hands in the ScheduleOS room. Read codex/drops/skynetos-drop-2026-09-25-financeos-scheduleos/directives/30-schedule-secretary-agent.md, specs/schedule-model.md and specs/notification-copy.md in full, then codex/projects/scheduleos.md, before speaking. Reclaim is in .mcp.json; if its tools are absent, say so and stop before any calendar work. Every calendar write is read back in one line first and approved by William. Nothing is scheduled 23:00–07:30. End every session with CODEX PATCH and HANDOFF.",
+      "tags": [
+        "schedule",
+        "agent",
+        "reclaim"
+      ],
+      "frame": "castellated",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "pulseColor": "ok",
+      "notes": "The schedule secretary. mcpServers names only skynet (the board tools); Reclaim reaches this chip through the repo's own .mcp.json in its cwd, which Claude Code loads itself and William approves once in the terminal. Google Calendar through the connector. Reads back every change before it lands; never writes 23:00–07:30."
+    },
+    {
+      "id": "t_sched_build",
+      "designator": "T1",
+      "kind": "task.scheduled",
+      "name": "SCHED-BUILD",
+      "pos": {
+        "x": 46,
+        "y": 57
+      },
+      "footprint": {
+        "w": 4,
+        "h": 1
+      },
+      "schedule": "45 6 * * *",
+      "enabled": false,
+      "action": {
+        "type": "agent.run"
+      },
+      "taskTarget": "u_cc_secretary",
+      "taskBrief": "codex/briefs/sched-build.md",
+      "catchUpHours": 4,
+      "showDesignator": false,
+      "notes": "06:45 daily while SkynetOS is open: the morning card. Writes schedule/today.md and week.html; proposes, never moves. Off until William ticks Enabled."
+    },
+    {
+      "id": "t_sched_nudge",
+      "designator": "T2",
+      "kind": "task.scheduled",
+      "name": "SCHED-NUDGE",
+      "pos": {
+        "x": 46,
+        "y": 59
+      },
+      "footprint": {
+        "w": 4,
+        "h": 1
+      },
+      "schedule": "30 21 * * *",
+      "enabled": false,
+      "action": {
+        "type": "agent.run"
+      },
+      "taskTarget": "u_cc_secretary",
+      "taskBrief": "codex/briefs/sched-nudge.md",
+      "catchUpHours": 1,
+      "showDesignator": false,
+      "notes": "21:30 daily: the one evening nudge, LOG IT. Off until William ticks Enabled."
+    },
+    {
+      "id": "t_sched_week",
+      "designator": "T3",
+      "kind": "task.scheduled",
+      "name": "SCHED-WEEK",
+      "pos": {
+        "x": 46,
+        "y": 61
+      },
+      "footprint": {
+        "w": 4,
+        "h": 1
+      },
+      "schedule": "45 18 * * 0",
+      "enabled": false,
+      "action": {
+        "type": "agent.run"
+      },
+      "taskTarget": "u_cc_secretary",
+      "taskBrief": "codex/briefs/sched-week.md",
+      "catchUpHours": 4,
+      "showDesignator": false,
+      "notes": "Sundays 18:45: drafts schedule/proposals.md so the week build with William starts from a draft. Off until William ticks Enabled."
+    },
+    {
+      "id": "p_screw_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 73,
+        "y": 41
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_3",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 78,
+        "y": 29
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_4",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 41
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_5",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 30,
+        "y": 53
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_screw_6",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 107,
+        "y": 74
+      },
+      "part": "screw",
+      "showDesignator": false
+    },
+    {
+      "id": "p_led_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 40,
+        "y": 56
+      },
+      "part": "led_ok",
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_1",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 27,
+        "y": 26
+      },
+      "part": "fiducial",
+      "showDesignator": false
+    },
+    {
+      "id": "p_fiducial_2",
+      "kind": "decor.part",
+      "name": "PART",
+      "pos": {
+        "x": 110,
+        "y": 78
+      },
+      "part": "fiducial",
+      "showDesignator": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "t_sched_build",
+      "to": "j_week",
+      "kind": "produces",
+      "width": 3
+    },
+    {
+      "id": "e2",
+      "from": "t_sched_build",
+      "to": "f_today",
+      "kind": "produces",
+      "width": 2
+    },
+    {
+      "id": "e3",
+      "from": "u_cc_secretary",
+      "to": "f_shifts",
+      "kind": "produces",
+      "width": 2
+    },
+    {
+      "id": "e4",
+      "from": "u_cc_secretary",
+      "to": "f_changes",
+      "kind": "produces",
+      "width": 2
+    },
+    {
+      "id": "e5",
+      "from": "u_cc_secretary",
+      "to": "f_model",
+      "kind": "reads",
+      "width": 2
+    },
+    {
+      "id": "e6",
+      "from": "u_cc_secretary",
+      "to": "j_reclaim",
+      "kind": "syncs",
+      "width": 3
+    },
+    {
+      "id": "e7",
+      "from": "f_habits",
+      "to": "j_reclaim",
+      "kind": "deploys",
+      "width": 2
+    },
+    {
+      "id": "e8",
+      "from": "t_sched_build",
+      "to": "u_cc_secretary",
+      "kind": "supervises"
+    },
+    {
+      "id": "e9",
+      "from": "t_sched_nudge",
+      "to": "u_cc_secretary",
+      "kind": "supervises"
+    },
+    {
+      "id": "e10",
+      "from": "t_sched_week",
+      "to": "u_cc_secretary",
+      "kind": "supervises"
+    }
+  ]
+}

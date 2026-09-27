@@ -420,7 +420,7 @@
 
 .usage-meter.minimized .usage-head-row { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .usage-calibrate-flag .ui-icon { margin-right: var(--p); }
-.explorer-tool .ui-icon { margin-right: calc(2 * var(--p)); }
+.explorer-toolbar .btn .ui-icon { margin-right: calc(2 * var(--p)); }
 .explorer-winbtn .ui-icon { vertical-align: 0; }
 .context-item .with-icon .ui-icon { color: var(--copper); }
 .context-item.active:not(:disabled) .with-icon .ui-icon { color: var(--silk); }
@@ -727,3 +727,62 @@ html.remote .breadcrumb .gesture-fab,
 html.remote .breadcrumb .voice-fab { display: none; }
 /* LOOK hangs where the planner put it: its usual top, or under the usage meter if they would meet. */
 html:not(.compact) .app .look-panel { top: var(--look-top, calc(16 * var(--gap))); }
+
+/* ── Window controls, the HUD's icons level, and hit sizes (2026-09-27) ────────────────────────
+ *
+ * William: "add a maximize button / window scalability to the program, a lot of the buttons and UI
+ * elements are squashed". Three things here:
+ *
+ *   1. MAXIMIZE / RESTORE sits in the breadcrumb row beside SETTINGS. A remote page has no desktop
+ *      window, so it is not shown there (window:* is in neither AGENT_METHODS nor REMOTE_METHODS).
+ *   2. The HUD's third level, `icons`: every chip behind +N, the buttons kept. Chips may also shrink
+ *      with an ellipsis, so a plan a few pixels out costs the end of a word, never a button.
+ *   3. Every control in the docked chrome is at least 24 × 24 CSS px at ui-scale 1 (24 × --p). In
+ *      :where(), so it has no specificity: any rule that sets its own minimum wins, the touch
+ *      layout's 44 px among them (mobile.css). The three bars lose their vertical padding instead of
+ *      growing, so the row they sit in keeps its height and nothing below them moves.
+ */
+html.remote .breadcrumb .window-fab { display: none; }
+
+.hud { align-items: center; }
+.hud:not(.hud-measure) .hud-chip { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hud-more,
+.hud-bell,
+.hud-tool { flex: none; justify-content: center; }
+.hud.icons .hud-more .ui-icon { margin-right: var(--p); }
+/* The 1100 px rule above, at every chrome scale: the planner sets it (SWITCH_WORDS_W x --ui-scale). */
+.app.switch-icons .breadcrumb .fab-word { display: none; }
+.app.switch-icons .breadcrumb .add-fab .ui-icon { margin-right: 0; }
+.hud-more.warn { border-color: var(--warn); }
+.hud-more.fault-text { border-color: var(--fault); }
+
+:where(.breadcrumb, .hud, .hud-more-panel, .usage-meter, .left-stack, .minimap, .inspector, .look-panel, .settings-panel, .notif-panel, .help)
+  :where(button, select, [role='button']) {
+  min-height: calc(24 * var(--p));
+}
+/*
+ * Width only for the controls that are icons or a character or two. Not for every button: an
+ * explicit min-width replaces a flex item's automatic one (its content), so a worded button in a
+ * tight row would shrink under its own words. It did: REPAIR in the gesture audit, by 19 px.
+ */
+:where(.hud-tool, .hud-bell, .hud-more, .help-x, .jarvis-min, .jarvis-tool, .minimap-grip, .minimap-toggle,
+  .usage-min, .swatch, .look-swatch, .look-step, .add-fab.icon-only, .window-fab) {
+  min-width: calc(24 * var(--p));
+}
+/* A span that is a button has to be a box for a minimum size to mean anything. */
+.usage-meter span[role='button'] { display: inline-flex; align-items: center; }
+.usage-head-row { align-items: center; }
+
+/* The bars keep their height: the 24 px controls take the padding's place, not the row below's. */
+.breadcrumb,
+.hud,
+.help { padding-top: 0; padding-bottom: 0; }
+.breadcrumb .add-fab { margin-block: 0; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Icon-only controls: the glyph in the middle of the 24 px square. */
+.help-x,
+.jarvis-min,
+.minimap-grip,
+.minimap-toggle { display: inline-flex; align-items: center; justify-content: center; }
+.jarvis-min { padding: 0; }
+.jarvis-dock .jarvis-quote { padding-right: calc(7 * var(--gap)); min-height: calc(28 * var(--p)); }

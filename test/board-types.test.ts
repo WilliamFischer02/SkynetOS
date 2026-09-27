@@ -50,9 +50,9 @@ describe('types.ts matches board.schema.json', () => {
 });
 
 describe('seeded board data', () => {
-  it('found the six rooms', () => {
-    expect(boardFiles.length).toBe(6);
-    expect(boards.map((b) => b.id).sort()).toEqual(['deductionos', 'financeos', 'gameos', 'minecraftos', 'root', 'storyos']);
+  it('found the seven rooms', () => {
+    expect(boardFiles.length).toBe(7);
+    expect(boards.map((b) => b.id).sort()).toEqual(['deductionos', 'financeos', 'gameos', 'minecraftos', 'root', 'scheduleos', 'storyos']);
   });
 
   it('uses only declared node kinds', () => {

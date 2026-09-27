@@ -1,3 +1,4 @@
+import { chipTitle } from '@shared/ui-copy.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BoardCanvas, type BoardCanvasStatus } from './board/BoardCanvas.js';
 import { formatZoom } from './board/camera.js';
@@ -34,23 +35,14 @@ import { useVoice } from './ui/useVoice.js';
 import { MatrixView } from './matrix/MatrixView.js';
 import { useBoardStore } from './store/useBoardStore.js';
 import { isBroken } from '@shared/targets.js';
+import { clampUiScale, resolveUiScale } from '@shared/ui-scale.js';
 
-/**
- * The DOM chrome's scale.
- *
- * Main forces `devicePixelRatio` to 1 so the board is pixel-exact at any OS scaling (docs/02
- * anti-mush rule 9). The side effect is that every CSS pixel is one *device* pixel, so on a
- * display at 200% the chrome came out half the physical size it should be — 11px silkscreen type
- * rendered 11 device pixels tall instead of 22. Correct, and unreadable.
- *
- * So the chrome gets its own integer scale, taken from the same scale factor the board cancels.
- * Integer only, and every chrome dimension is a multiple of `--p`, so a 1px border stays a whole
- * number of device pixels and Departure Mono stays on a multiple of 11 — pixel-perfect at 11, 22
- * and 33 and nowhere in between.
+/*
+ * The DOM chrome's scale lives in packages/shared/ui-scale.ts: `uiScaleFor` (the OS scale factor,
+ * rounded, 1 to 3) and, since 2026-09-27, William's override of it (settings.json `uiScale`, set in
+ * LOOK → SYSTEM or the palette's "UI scale"). Integer only, so a 1px border stays a whole number of
+ * device pixels and Departure Mono stays on a multiple of 11.
  */
-function uiScaleFor(scaleFactor: number): number {
-  return Math.min(3, Math.max(1, Math.round(scaleFactor)));
-}
 
 /** Every key, grouped by what you are doing. Shown with ?. */
 const KEY_GROUPS: { title: string; keys: [string, string][] }[] = [
@@ -59,7 +51,7 @@ const KEY_GROUPS: { title: string; keys: [string, string][] }[] = [
     keys: [
       ['DRAG · WASD · ARROWS', 'pan'],
       ['WHEEL · - =', 'zoom'],
-      ['1 – 8', 'zoom level (1X to 8X)'],
+      ['1 – 8', 'zoom level (1X to 8X · wheel reaches 10X and 12X)'],
       ['0', 'whole board'],
       ['TAB', 'next node'],
       ['F', 'focus on the selection'],
@@ -79,7 +71,9 @@ const KEY_GROUPS: { title: string; keys: [string, string][] }[] = [
       ['CTRL+Z · CTRL+Y', 'undo · redo'],
       ['RIGHT-CLICK', 'copy · paste · summon JARVIS'],
       ['CTRL+C · CTRL+V', 'copy · paste nodes'],
-      ['/', 'message JARVIS (corner prompt)'],
+      ['/', 'message JARVIS (corner prompt · U1 must be open)'],
+      ['CTRL+ALT+D', 'dictate into the focused window · press again to stop'],
+      ['VOICE · SHIFT+CLICK VOICE', 'open JARVIS Voice · hard mute'],
       ['SHIFT+Z', 'sleep now (away mode)']
     ]
   },
@@ -100,8 +94,10 @@ const KEY_GROUPS: { title: string; keys: [string, string][] }[] = [
     keys: [
       ['CTRL+K', 'find a node, a room or an action'],
       ['CTRL+,', 'settings'],
+      ['F11', 'maximise · restore the window'],
       ['?', 'this list'],
       ['L', 'board look · colour, vignette, floor'],
+      ['G', 'THE MATRIX · every file on a globe'],
       ['`', 'renderer diagnostics'],
       ['ESC', 'close · deselect']
     ]
@@ -262,14 +258,42 @@ export function App(): React.JSX.Element {
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshFiles]);
 
+  const uiScaleSetting = useBoardStore((s) => s.uiScaleSetting);
+  const osScaleFactor = useBoardStore((s) => s.osScaleFactor);
+  const setDisplayScale = useBoardStore((s) => s.setDisplayScale);
   useEffect(() => {
     void window.skynet['display:info']().then((info) => {
-      const scale = uiScaleFor(info.scaleFactor);
-      setUiScale(scale);
-      document.documentElement.style.setProperty('--ui-scale', String(scale));
-      console.info(`[ui] OS scaleFactor ${info.scaleFactor} -> chrome scale ${scale}x (silkscreen at ${11 * scale}px)`);
+      setDisplayScale(info.scaleFactor, clampUiScale(info.uiScale ?? 'auto'));
     });
-  }, []);
+  }, [setDisplayScale]);
+  /*
+   * The chrome scale: William's choice, or the OS's when it is `auto`. The layout planner
+   * (ui/useChromeLayout.ts) watches the store, so this re-plans the chrome on the next frame, and it
+   * forgets the natural sizes it remembered at the old scale.
+   */
+  useEffect(() => {
+    const scale = resolveUiScale(uiScaleSetting, osScaleFactor);
+    setUiScale(scale);
+    document.documentElement.style.setProperty('--ui-scale', String(scale));
+    console.info(`[ui] OS scaleFactor ${osScaleFactor}, setting ${String(uiScaleSetting)} -> chrome scale ${scale}x (silkscreen at ${11 * scale}px)`);
+  }, [uiScaleSetting, osScaleFactor, setUiScale]);
+
+  /*
+   * The window's frame (2026-09-27). The MAXIMIZE / RESTORE button shows the state the window is
+   * really in: read once, then pushed by main on every maximise, restore and resize, however it
+   * happened (the title bar, Win+Up, a snap). A remote page has no desktop window to follow.
+   */
+  const windowMaximized = useBoardStore((s) => s.windowMaximized);
+  const setWindowMaximized = useBoardStore((s) => s.setWindowMaximized);
+  const toggleMaximize = useBoardStore((s) => s.toggleMaximize);
+  const isRemote = document.documentElement.classList.contains('remote');
+  useEffect(() => {
+    if (isRemote || typeof window.skynet['window:state'] !== 'function') return;
+    let live = true;
+    void window.skynet['window:state']().then((w) => { if (live) setWindowMaximized(w.maximized); }).catch(() => undefined);
+    const off = window.skynet.on('window:changed', (w) => setWindowMaximized(w.maximized));
+    return () => { live = false; off(); };
+  }, [isRemote, setWindowMaximized]);
 
   const editMode = mode === 'edit';
 
@@ -311,6 +335,12 @@ export function App(): React.JSX.Element {
         return;
       }
       if (event.code === 'F5') { event.preventDefault(); void refreshFiles({ announce: true }); return; }
+      // F11 maximises or restores the window, from anywhere, as the MAXIMIZE button beside SETTINGS does.
+      if (event.code === 'F11' && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        if (!document.documentElement.classList.contains('remote')) void useBoardStore.getState().toggleMaximize();
+        return;
+      }
       if (inForm) return;
 
       // ? lists every key; ` shows the renderer's diagnostics. Chrome only, both toggles.
@@ -463,11 +493,11 @@ export function App(): React.JSX.Element {
           type="button"
           className={gestureStatus.phase === 'unavailable' ? 'away-chip warn' : tracking ? 'away-chip ok-text' : 'away-chip'}
           onClick={() => void setGestureEnabled(false)}
-          title={
-            gestureStatus.error
-              ? gestureStatus.error
-              : `${gestureStatus.cameras.map((c) => `${c.label}: ${c.fps} fps`).join(' · ') || 'starting'} — click to switch manual control off`
-          }
+          title={chipTitle(
+            gestureStatus.error,
+            gestureStatus.cameras.map((c) => `${c.label}: ${c.fps} fps`).join(' · ') || 'starting',
+            'click to switch manual control off'
+          )}
         >
           {gestureStatus.phase === 'unavailable'
             ? 'MANUAL CONTROL FAILED'
@@ -502,24 +532,45 @@ export function App(): React.JSX.Element {
   } else {
     chip('init', true, <span>INITIALISING RENDERER…</span>);
   }
-  const hiddenChips = layout.hudCompact ? hudChips.filter((c) => !c.primary) : [];
-  const renderHud = (measure: boolean): React.JSX.Element => (
+  /*
+   * Three levels, chosen by the layout planner from three invisible copies measured side by side:
+   * `full` (every chip), `compact` (the primary chips, the rest behind +N) and `icons` (no chips,
+   * all of them behind +N, then find, bell and settings). `icons` is what keeps the HUD whole beside
+   * an open inspector in a narrow window; before it, the HUD's own buttons were cut off there.
+   */
+  type HudLevel = 'full' | 'compact' | 'icons';
+  const shownLevel: HudLevel = layout.hudIcons ? 'icons' : layout.hudCompact ? 'compact' : 'full';
+  const chipsAt = (level: HudLevel): typeof hudChips => (level === 'full' ? hudChips : level === 'compact' ? hudChips.filter((c) => c.primary) : []);
+  const hiddenAt = (level: HudLevel): typeof hudChips => (level === 'full' ? [] : level === 'compact' ? hudChips.filter((c) => !c.primary) : hudChips);
+  const hiddenChips = hiddenAt(shownLevel);
+  // Folded to icons, the HUD must still say when something is wrong: +N takes the worst colour behind it.
+  const hudAlarm = status && status.brokenCount > 0
+    ? 'fault-text'
+    : staleCount > 0 || gestureStatus.phase === 'unavailable' || (status?.fallbackCount ?? 0) > 0 || status?.atlasFrames === 0
+      ? 'warn'
+      : '';
+  const renderHud = (level: HudLevel, measure: boolean): React.JSX.Element => (
     <div
-      className={['hud', measure ? 'hud-measure' : '', !measure && layout.hudCompact ? 'compact' : ''].filter(Boolean).join(' ')}
+      className={['hud', measure ? 'hud-measure' : '', !measure && level !== 'full' ? 'compact' : '', !measure && level === 'icons' ? 'icons' : ''].filter(Boolean).join(' ')}
+      data-level={measure ? level : undefined}
       aria-hidden={measure || undefined}
     >
-      {hudChips.map((c) => (
+      {chipsAt(level).map((c) => (
         <span key={c.id} className={c.primary ? 'hud-chip' : 'hud-chip hud-secondary'}>{c.node}</span>
       ))}
-      {!measure && hiddenChips.length > 0 ? (
+      {hiddenAt(level).length > 0 ? (
         <button
           type="button"
-          className="hud-more"
+          className={level === 'icons' && hudAlarm ? `hud-more ${hudAlarm}` : 'hud-more'}
+          tabIndex={measure ? -1 : undefined}
           aria-expanded={chromePrefs.hudExpanded}
           onClick={() => setChromePref('hudExpanded', !chromePrefs.hudExpanded)}
-          title={`${hiddenChips.length} more: the window is too narrow for the whole HUD on one line`}
+          title={level === 'icons'
+            ? `The HUD, folded: ${hiddenAt(level).length} readings. The window is too narrow for them beside the inspector.`
+            : `${hiddenAt(level).length} more: the window is too narrow for the whole HUD on one line`}
+          aria-label={`${hiddenAt(level).length} more HUD readings`}
         >
-          +{hiddenChips.length}
+          {level === 'icons' ? <Icon name="list" /> : null}+{hiddenAt(level).length}
         </button>
       ) : null}
       <button type="button" className="hud-tool" onClick={() => setCommandPaletteOpen(true)} title="Find a node, a room or an action (Ctrl+K)" aria-label="Find (Ctrl+K)">
@@ -547,7 +598,9 @@ export function App(): React.JSX.Element {
         // anything must be visible without being read.
         gestureStatus.phase === 'watching' || gestureStatus.phase === 'tracking' ? 'manual-control' : '',
         // The MATRIX covers the board; this lifts the row of switches above it so it can be left again.
-        matrixOpen ? 'matrix-mode' : ''
+        matrixOpen ? 'matrix-mode' : '',
+        // The breadcrumb row's switches as icons alone: the planner's call, at any chrome scale.
+        layout.switchIcons ? 'switch-icons' : ''
       ].filter(Boolean).join(' ')}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -628,6 +681,21 @@ export function App(): React.JSX.Element {
           <Icon name="gear" /><span className="fab-word">SETTINGS</span>
         </button>
         {/*
+          * Maximise or restore the window (2026-09-27, William: "add a maximize button / window
+          * scalability"). Icon-only: the row is the switches' and the glyph is the Windows one. F11
+          * does the same from anywhere. Hidden on a remote page (mobile layer), which has no window.
+          */}
+        <button
+          type="button"
+          className="add-fab icon-only window-fab"
+          aria-pressed={windowMaximized}
+          aria-label={windowMaximized ? 'Restore the window (F11)' : 'Maximize the window (F11)'}
+          title={windowMaximized ? 'Restore the window to its size (F11)' : 'Maximize the window to fill the screen (F11)'}
+          onClick={() => void toggleMaximize()}
+        >
+          <Icon name={windowMaximized ? 'restore' : 'maximize'} />
+        </button>
+        {/*
           * Manual control, on the board itself rather than buried in a menu: it turns the cameras
           * on, so it should never take more than one obvious press to turn them off again.
           */}
@@ -658,21 +726,30 @@ export function App(): React.JSX.Element {
           <Icon name="globe" /><span className="fab-word">MATRIX</span>
         </button>
         {/*
-          * Voice, beside manual control and for the same reason: it opens a microphone, so turning it off
-          * must never take more than one press. Off is the hard mute — the wake phrase, the speech engine
-          * and the microphone window all stop (docs/07-SECURITY.md, Voice).
+          * Voice, beside manual control. William, 2026-09-24: "when the voice button in SkynetOS I want
+          * it to directly open the Jarvis program". A click opens (or restores and focuses) the JARVIS
+          * Voice window, whose MIC switch is the microphone. The hard mute stays one press away:
+          * Shift+click here switches voice off outright, as does "Voice off" in the palette and
+          * "stop listening" (docs/07-SECURITY.md, Voice). On a copy that predates the window, the
+          * click still toggles voice as before.
           */}
         <button
           type="button"
           className={voiceStatus.phase === 'off' ? 'add-fab manual-fab voice-fab' : 'add-fab manual-fab voice-fab live'}
           aria-pressed={voiceStatus.phase !== 'off'}
-          onClick={() => void setVoiceEnabled(voiceStatus.phase === 'off')}
+          onClick={(event) => {
+            const canOpen = typeof window.skynet['hologram:open'] === 'function';
+            if (event.shiftKey || !canOpen) { void setVoiceEnabled(voiceStatus.phase === 'off'); return; }
+            void window.skynet['hologram:open']().catch((err: unknown) => {
+              useBoardStore.getState().toast('fault', `COULD NOT OPEN THE JARVIS WINDOW — ${(err as Error).message}`);
+            });
+          }}
           title={
             voiceStatus.phase === 'off'
-              ? 'Voice: listen for "Hey JARVIS". Nothing is transcribed before it, and no audio leaves this machine.'
+              ? 'Open JARVIS: the hologram window, with the microphone switch, a command box and the voice profiles. Shift+click switches voice on without it.'
               : voiceStatus.phase === 'unavailable'
-                ? `Voice cannot start — ${voiceStatus.error ?? 'see Settings, Audio'}. Click to switch it off.`
-                : `Voice is ON (${voiceStatus.model ?? 'whisper'}). Click to switch it off: the microphone closes.`
+                ? `Voice cannot start — ${voiceStatus.error ?? 'see Settings, Audio'}. Click to open JARVIS; Shift+click to switch voice off.`
+                : `Voice is ON (${voiceStatus.model ?? 'whisper'}). Click to open JARVIS; Shift+click to switch voice off: the microphone closes.`
           }
         >
           <Icon name="mic" />
@@ -698,8 +775,10 @@ export function App(): React.JSX.Element {
       <SystemMonitor />
       <Explorer />
 
-      {renderHud(false)}
-      {renderHud(true)}
+      {renderHud(shownLevel, false)}
+      {renderHud('full', true)}
+      {renderHud('compact', true)}
+      {renderHud('icons', true)}
       {hiddenChips.length > 0 && chromePrefs.hudExpanded ? (
         <div className="hud-more-panel" role="group" aria-label="The rest of the HUD">
           {hiddenChips.map((c) => <span key={c.id}>{c.node}</span>)}

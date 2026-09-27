@@ -1,6 +1,7 @@
 import type { Intent, IntentContext } from '@shared/intent.js';
 import { resolveIntent } from '@shared/intent.js';
 import type { Actor } from '@shared/commands.js';
+import { replyFor } from '@shared/desktop.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 
 /**
@@ -25,7 +26,9 @@ export function intentContext(actor: Actor): IntentContext | null {
     nodes: state.board.nodes,
     edges: state.board.edges,
     selectedId: state.selectedId,
-    actor
+    actor,
+    apps: state.desktopApps,
+    monitors: state.desktopMonitors
   };
 }
 
@@ -83,11 +86,90 @@ export async function actOnIntent(intent: Intent): Promise<string> {
         case 'voiceControl':
           await store.setVoiceEnabled(action.on);
           break;
+        case 'faceSend': {
+          // The only path from a sentence to claude.ai, and only because William named the Face.
+          store.setVoiceMoment({ stage: 'sending', text: action.text });
+          try {
+            const result = await window.skynet['prompt:send']({ boardId: 'root', text: action.text, files: [] });
+            store.toast(result.stage === 'failed' ? 'fault' : result.ok ? 'ok' : 'warn', result.message);
+            return result.ok ? intent.say : result.message;
+          } catch (err) {
+            const why = `NOT SENT — ${(err as Error).message}`;
+            store.toast('fault', why);
+            return why;
+          }
+        }
         case 'matrix':
           store.setMatrixOpen(action.open);
           break;
+        case 'stop': {
+          // "Jarvis, stop": what Esc does in the hologram window. Speech, the desktop, the caption.
+          store.setVoiceMoment(null);
+          if (typeof window.skynet['speech:stop'] === 'function') void window.skynet['speech:stop']().catch(() => undefined);
+          if (typeof window.skynet['desktop:halt'] === 'function') void window.skynet['desktop:halt']().catch(() => undefined);
+          break;
+        }
       }
       return intent.say;
+    }
+
+    case 'hologram': {
+      /*
+       * A control in the JARVIS Voice window, by voice. Main opens the window if it must and hands
+       * the control to it; the renderer there presses the element with that data-control id, so a
+       * spoken "go to the train panel" and a click on TRAIN are the same event.
+       */
+      if (typeof window.skynet['hologram:control'] !== 'function') return 'RESTART SKYNETOS TO DRIVE THE JARVIS WINDOW BY VOICE — THE RUNNING COPY PREDATES IT';
+      try {
+        const result = await window.skynet['hologram:control'](intent.control);
+        if (!result.ok) {
+          const why = result.error ?? 'THE JARVIS WINDOW DID NOT ANSWER';
+          store.toast('warn', why);
+          return why;
+        }
+        return intent.say;
+      } catch (err) {
+        const why = (err as Error).message || 'THE JARVIS WINDOW DID NOT ANSWER';
+        store.toast('fault', why);
+        return why;
+      }
+    }
+
+    case 'action': {
+      // A saved desktop action by name. Main says which one it found before it moves anything,
+      // and refuses in the desktop's own words when desktop control is off.
+      if (typeof window.skynet['hologram:runAction'] !== 'function') return 'RESTART SKYNETOS TO RUN SAVED ACTIONS — THE RUNNING COPY PREDATES IT';
+      try {
+        const result = await window.skynet['hologram:runAction'](intent.name);
+        if (!result.ok) {
+          const why = result.error ?? 'THAT ACTION DID NOT RUN';
+          store.toast('warn', why);
+          return why;
+        }
+        return `${result.name ?? intent.name} done.`;
+      } catch (err) {
+        const why = (err as Error).message || 'THAT ACTION DID NOT RUN';
+        store.toast('fault', why);
+        return why;
+      }
+    }
+
+    case 'desktop': {
+      /*
+       * The desktop, through the user-only `desktop:run`. Main refuses unless desktop control is
+       * switched on, and the refusal is a sentence, so it is shown and spoken like any result.
+       */
+      if (typeof window.skynet['desktop:run'] !== 'function') return 'RESTART SKYNETOS TO CONTROL THE DESKTOP — THE RUNNING COPY PREDATES IT';
+      try {
+        const result = await window.skynet['desktop:run'](intent.plan);
+        const reply = replyFor(intent.plan, result);
+        if (!result.ok) store.toast('warn', reply);
+        return reply;
+      } catch (err) {
+        const reply = (err as Error).message || 'THE DESKTOP DID NOT ANSWER';
+        store.toast('fault', reply);
+        return reply;
+      }
     }
 
     case 'ambiguous':

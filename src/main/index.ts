@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { app, BrowserWindow, screen, session, shell } from 'electron';
 import { DEFAULT_FOOTPRINT, type Board, type NodeKind } from '@shared/types.js';
 import { findFreeSpaceOnBoard } from './services/placement.js';
@@ -6,10 +7,11 @@ import { callAsAgent, registerIpc } from './ipc.js';
 import { controlFile, startControlServer, stopControlServer } from './services/control-server.js';
 import { programRoot } from './services/home.js';
 import { writeMcpConfig } from './services/mcp-config.js';
+import { bootMark, bootStart, setBootWriter } from './services/boot-timing.js';
 import { dispatchMail } from './services/mail-dispatch.js';
 import { applyStandingOrders } from './services/face-brief.js';
 import { getSettings } from './services/settings.js';
-import { boardRoot, loadBoard, pruneSnapshots } from './services/board-store.js';
+import { boardRoot, loadBoard, pruneSnapshotsAsync } from './services/board-store.js';
 import { closeDb, reapDeadSessions } from './services/db.js';
 import { onSessionsChanged, restoreSessions, sweepSessions } from './services/session-manager.js';
 import { onServicesChanged, stopAllServices, sweepServices } from './services/service-runner.js';
@@ -20,17 +22,24 @@ import { startScheduler, stopScheduler } from './services/scheduler.js';
 import { onUpdateStatus, startUpdater, stopUpdater, updateStatus } from './services/updater.js';
 import { claimSingleInstance } from './services/instance.js';
 import { singleInstanceApplies } from '@shared/boot.js';
+import type { EventName } from '@shared/ipc.js';
 import { onAwayLog, onAwayState, startPresence, stopPresence } from './services/presence.js';
 import { ensureAvatarFolder, stopAvatarWatchers } from './services/avatar-frames.js';
 import { closeAllFaces, initAvatarWindows } from './services/avatar-window.js';
+import { attachHologramScene, closeHologramWindow, hologramWindow, initHologramWindow, sendToHologram } from './services/hologram-window.js';
+import { setSpeechHandlers, startSpeechAtBoot } from './services/speech.js';
+import { onScene, startActivityFeed, stopActivityFeed } from './services/activity-feed.js';
+import { setDesktopHandlers } from './services/desktop.js';
 import { remoteBroadcast, setRemoteDispatch, startRemoteIfEnabled, stopRemote } from './services/remote.js';
 import { callAsRemote } from './ipc.js';
 import { stopNodeMoods } from './services/avatar-mood.js';
 import { stopWindowTracker } from './services/window-tracker.js';
 import { loadWindowState, trackWindowState } from './services/window-state.js';
+import { watchWindowChanges } from './services/window-controls.js';
 import { denyAllPermissions } from './services/permissions.js';
 import { installVisionProtocol, registerVisionScheme, restoreVision, setVisionHandlers, stopVision } from './services/vision.js';
 import { restoreVoice, setVoiceHandlers, stopVoice } from './services/voice.js';
+import { attachMinimizeToTray, destroyTray, initTray } from './services/tray.js';
 
 /*
  * One SkynetOS at a time, newest wins: a copy started while another runs asks it to close and
@@ -70,6 +79,16 @@ registerVisionScheme();
 
 app.commandLine.appendSwitch('disable-lcd-text');
 app.commandLine.appendSwitch('disable-font-subpixel-positioning');
+/*
+ * A smoke run shares userData with William's live copy, so Chromium's disk caches are locked by
+ * the other process ("Unable to move the cache: Access is denied", then a GPU cache that fails to
+ * create). The capture gets its own cache folder, beside its screenshots. Real runs are untouched.
+ */
+if (process.env['SKYNET_SMOKE_DIR']) {
+  // `sessionData` is where Chromium keeps Cache, Code Cache, GPUCache and storage; `userData`
+  // (settings.json, skynet.db, the control file) stays shared with the live copy, as before.
+  app.setPath('sessionData', join(process.env['SKYNET_SMOKE_DIR'], 'session'));
+}
 
 /**
  * Anti-mush rule 9: the window must not be fractionally scaled.
@@ -133,6 +152,8 @@ function createWindow(): BrowserWindow {
     win.show();
   });
   if (!smokeRun) trackWindowState(win);
+  // The chrome's MAXIMIZE / RESTORE button follows the window however it changed (services/window-controls.ts).
+  watchWindowChanges(win);
 
   // Re-apply when the window is dragged to a monitor with a different scale factor.
   win.on('moved', () => neutralizeDisplayScaling(win));
@@ -155,8 +176,10 @@ function createWindow(): BrowserWindow {
   });
 
   const devServer = process.env['ELECTRON_RENDERER_URL'];
-  if (isDev && devServer) void win.loadURL(devServer);
-  else void win.loadFile(join(__dirname, '../renderer/index.html'));
+  // SKYNET_PERF=1 turns on the renderer's `[ui] perf` counters (src/renderer/board/perf.ts).
+  const perf = Boolean(process.env['SKYNET_PERF']);
+  if (isDev && devServer) void win.loadURL(perf ? `${devServer}${devServer.includes('?') ? '&' : '?'}perf=1` : devServer);
+  else void win.loadFile(join(__dirname, '../renderer/index.html'), perf ? { query: { perf: '1' } } : undefined);
 
   // Every dialog is parented to this window by reference, never by position in getAllWindows().
   setBoardWindow(win);
@@ -374,7 +397,41 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
               if (c && (c.right > r.right + 1 || c.left < r.left - 1)) { clipped.push(s); return; }
             }
           });
-          return { view: innerWidth + 'x' + innerHeight, present: chrome.map((c) => c.s), modals: modals.map((m) => m.s), overlaps, offscreen, clipped };
+          // A control too small to hit (2026-09-27, William: "a lot of the buttons and UI elements are
+          // squashed"): under 24 CSS px at ui-scale 1, i.e. 24 x --ui-scale, in either direction.
+          const unit = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-scale')) || 1;
+          const HIT = ['.breadcrumb', '.hud:not(.hud-measure)', '.hud-more-panel', '.usage-meter', '.left-stack', '.minimap', '.inspector', '.look-panel', '.help'];
+          const name = (b) => (b.tagName.toLowerCase() + (b.classList[0] ? '.' + b.classList[0] : '') + ' "' + ((b.getAttribute('aria-label') || b.textContent || b.getAttribute('title') || '').trim().slice(0, 18)) + '"');
+          const undersized = [];
+          for (const s of HIT) document.querySelectorAll(s).forEach((root) => {
+            if (!vis(root)) return;
+            root.querySelectorAll('button, select, [role="button"]').forEach((b) => {
+              const r = vis(b);
+              if (!r) return;
+              if (r.height < 24 * unit - 0.5 || r.width < 24 * unit - 0.5) {
+                const line = s + ' ' + name(b) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
+                if (!undersized.includes(line)) undersized.push(line);
+              }
+            });
+          });
+          // A scrolling panel whose content is wider than it: a sideways scrollbar, and something cut.
+          for (const s of ['.look-panel', '.inspector']) document.querySelectorAll(s).forEach((panel) => {
+            if (!vis(panel) || panel.scrollWidth <= panel.clientWidth + 1) return;
+            const edge = panel.getBoundingClientRect().left + panel.clientWidth;
+            let worst = null;
+            panel.querySelectorAll('*').forEach((el) => {
+              const r = el.getBoundingClientRect();
+              // Its box past the edge, or its own content spilling out of a box that is not.
+              const spill = el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX === 'visible' ? r.left + el.scrollWidth : r.right;
+              // >= so the deepest of a chain spilling by the same amount is the one named.
+              if (r.width > 0 && spill > edge + 1 && (!worst || spill >= worst.r)) worst = { r: spill, el };
+            });
+            const label = (el) => el.tagName.toLowerCase() + (typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0] : '');
+            const path = worst ? [worst.el.parentElement?.parentElement, worst.el.parentElement, worst.el].filter(Boolean).map(label).join(' > ') : '';
+            const kids = worst ? [...worst.el.children].map((c) => { const r = c.getBoundingClientRect(); return label(c) + '@' + Math.round(r.left - edge) + '+' + Math.round(r.width) + '/' + c.scrollWidth; }).join(' ') : '';
+            clipped.push(s + ' wider than itself' + (worst ? ' at ' + path + ' (+' + Math.round(worst.r - edge) + ' px; cw ' + worst.el.clientWidth + ' sw ' + worst.el.scrollWidth + '; ' + kids + ')' : ''));
+          });
+          return { view: innerWidth + 'x' + innerHeight, present: chrome.map((c) => c.s), modals: modals.map((m) => m.s), overlaps, offscreen, clipped, undersized };
         })()`;
       // The same probe audits the phone and tablet windows further down (docs/08).
       if (process.env['SKYNET_SMOKE_LAYOUT'] !== '0') {
@@ -409,37 +466,66 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
           { name: 'notifications', setup: `(() => { const s = window.__skynetStore.getState(); s.toast('ok', 'LAYOUT PROBE - SAVED'); s.toast('fault', 'LAYOUT PROBE - A FAULT THAT FADED'); s.setNotificationsOpen(true); })()` },
           { name: 'palette', setup: `window.__skynetStore.getState().setCommandPaletteOpen(true)` },
           { name: 'settings', setup: `window.__skynetStore.getState().setSettingsOpen(true)` },
-          { name: 'about', setup: `window.__skynetStore.getState().setAboutOpen(true)` }
+          { name: 'about', setup: `window.__skynetStore.getState().setAboutOpen(true)` },
+          // The node editor (F2) and LOOK's SYSTEM section: renderer state only, nothing is saved.
+          { name: 'node-editor', setup: `(() => { const s = window.__skynetStore.getState(); const n = s.board.nodes.find((x) => x.kind === 'agent.code') ?? s.board.nodes[0]; s.beginEdit(n.id); })()` },
+          { name: 'look-system', setup: `${key('l', 'KeyL')} setTimeout(() => { const b = [...document.querySelectorAll('.look-panel .look-section')].find((x) => /SYSTEM/i.test(x.textContent || '')); if (b && b.getAttribute('aria-expanded') !== 'true') b.click(); setTimeout(() => b?.scrollIntoView({ block: 'start' }), 60); }, 120);` }
         ];
         const sizes: [number, number][] = [[1280, 720], [1584, 961], [1920, 1080], [1024, 768]];
         const before = win.getContentSize();
         const summary: string[] = [];
+        const small: string[] = [];
         if (await run(`Boolean(document.querySelector('.firstrun'))`) === true) {
           await run(`document.documentElement.classList.remove('smoke-capture')`);
           await wait(150);
           await shoot('L-first-run.png');
           await run(`document.documentElement.classList.add('smoke-capture')`);
         }
-        for (const [w, h] of sizes) {
+        /*
+         * Every size at the machine's own chrome scale, then the few states that stress the chrome at
+         * the UI scale setting's 2x and 3x (2026-09-27). The scale is set in the renderer's store only
+         * (setDisplayScale), so settings.json is never written, and it is put back after.
+         */
+        const scaleSet = (scale: string): Promise<unknown> => run(`(() => { const s = window.__skynetStore?.getState(); s?.setDisplayScale?.(s.osScaleFactor, ${scale}); })()`);
+        const SCALED = new Set(['base', 'inspector-toasts', 'look-inspector', 'edge-inspector', 'node-editor', 'look-system', 'dock-3']);
+        const passes: { w: number; h: number; scale: 'auto' | 2 | 3; list: typeof states }[] = [
+          ...sizes.map(([w, h]) => ({ w, h, scale: 'auto' as const, list: states })),
+          // 2x on a 1440p screen and on a 1080p one; 3x on a 4K one. Each is at least the 960 x 540 of
+          // a 1080p screen at 2x in logical pixels. (3x on a 1080p screen is 640 x 360: below the
+          // window's own 960 x 640 minimum, and not audited.)
+          { w: 2560, h: 1440, scale: 2, list: states.filter((x) => SCALED.has(x.name)) },
+          { w: 1920, h: 1080, scale: 2, list: states.filter((x) => SCALED.has(x.name)) },
+          { w: 3840, h: 2160, scale: 3, list: states.filter((x) => SCALED.has(x.name)) }
+        ];
+        for (const { w, h, scale, list } of passes) {
           win.setContentSize(w, h);
+          await scaleSet(scale === 'auto' ? `'auto'` : String(scale));
           await wait(700);
-          for (const state of states) {
+          const tag = scale === 'auto' ? '' : `x${scale}-`;
+          for (const state of list) {
             await reset();
             if (state.setup) await run(state.setup);
             await wait(450);
-            const result = await run(layoutProbe) as { view: string; overlaps: string[]; offscreen: string[]; clipped: string[] } | string;
-            if (typeof result === 'string') { console.log(`[smoke] layout ${w}x${h} ${state.name}: ${result}`); continue; }
-            const line = `[smoke] layout ${result.view} ${state.name}: overlaps=${JSON.stringify(result.overlaps)} offscreen=${JSON.stringify(result.offscreen)} clipped=${JSON.stringify(result.clipped)}`;
+            const result = await run(layoutProbe) as { view: string; overlaps: string[]; offscreen: string[]; clipped: string[]; undersized: string[] } | string;
+            if (typeof result === 'string') { console.log(`[smoke] layout ${w}x${h} ${tag}${state.name}: ${result}`); continue; }
+            const line = `[smoke] layout ${result.view} ${tag}${state.name}: overlaps=${JSON.stringify(result.overlaps)} offscreen=${JSON.stringify(result.offscreen)} clipped=${JSON.stringify(result.clipped)}`;
             console.log(line);
             if (result.overlaps.length || result.offscreen.length || result.clipped.length) summary.push(line);
-            await shoot(`L-${w}x${h}-${state.name}.png`);
+            if (result.undersized.length) {
+              const tiny = `[smoke] layout ${result.view} ${tag}${state.name}: undersized=${JSON.stringify(result.undersized)}`;
+              console.log(tiny);
+              small.push(tiny);
+            }
+            await shoot(`L-${w}x${h}-${tag}${state.name}.png`);
           }
           // The usage meter toggles on click; put it back before the next size.
           await run(`(() => { const h = document.querySelector('.usage-meter .usage-head-row, .usage-meter .usage-head'); if (h && document.querySelector('.usage-meter.expanded, .usage-meter .usage-projects')) h.click(); })()`);
         }
+        await scaleSet(`'auto'`);
         await reset();
         win.setContentSize(before[0] ?? 1584, before[1] ?? 961);
         console.log(`[smoke] layout audit: ${summary.length} state(s) with overlaps or clipping`);
+        console.log(`[smoke] hit-size audit: ${small.length} state(s) with a control under 24 px x ui-scale`);
 
         /*
          * The command palette end to end: type a node that lives in a room, press Enter, and read back
@@ -1603,9 +1689,39 @@ async function runSmokeCapture(win: BrowserWindow, outDir: string): Promise<void
 app.whenReady().then(async () => {
   // A copy that could not take over from a running one starts nothing, and goes.
   if (!(await instanceClaim)) { app.exit(0); return; }
+  // Boot timing (services/boot-timing.ts): printed as `[boot]` lines and written to
+  // userData/boot-timing.json a moment after the first board load. Bookkeeping only.
+  bootStart();
+  setBootWriter((timing) => {
+    const dir = app.getPath('userData');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'boot-timing.json'), JSON.stringify(timing, null, 2) + '\n', 'utf8');
+  });
   const settings = getSettings();
+  bootMark('settings');
   console.log(`[settings] devRoots=${settings.devRoots.join(', ')} reducedMotion=${settings.reducedMotion} streamMode=${settings.streamMode}`);
-  pruneSnapshots(settings.snapshotRetentionDays);
+
+  /*
+   * Deferred until after the first paint (2026-09-26 audit). Everything queued here used to run
+   * inline before or beside the window's load: the snapshot prune walks board/.snapshots, the
+   * speech server spawns Python, the activity feed scans ~/.claude/projects, the faces and the
+   * hologram open more windows, the updater and presence start timers. None of it is needed to
+   * draw the board, and all of it competed with the renderer for the same first second. Order
+   * inside the batch is the order it always ran in; the batch runs after `did-finish-load` plus one
+   * idle turn, or after 4 s if the page never reports loading, whichever comes first.
+   */
+  const deferred: { name: string; run: () => void }[] = [];
+  let deferredRan = false;
+  const runDeferred = (): void => {
+    if (deferredRan) return;
+    deferredRan = true;
+    bootMark('deferred-start');
+    for (const { name, run } of deferred) {
+      try { run(); } catch (err) { console.error(`[boot] deferred ${name} failed:`, (err as Error).message); }
+      bootMark(`deferred:${name}`);
+    }
+  };
+  deferred.push({ name: 'prune-snapshots', run: () => { void pruneSnapshotsAsync(settings.snapshotRetentionDays); } });
 
   /*
    * Reap before restore. A crash, a reboot or a Task Manager kill all leave rows claiming to be
@@ -1615,8 +1731,10 @@ app.whenReady().then(async () => {
    */
   reapDeadSessions();
   restoreSessions();
+  bootMark('sessions');
 
   registerIpc();
+  bootMark('ipc');
 
   /*
    * Every OS permission refused, everywhere, before a single window opens. Until 2026-09-11 main
@@ -1651,8 +1769,29 @@ app.whenReady().then(async () => {
   // absolute path that differs between this repo and an installed build.
   const mcpConfig = writeMcpConfig();
   if (mcpConfig) console.log(`[mcp] skynet tools configured at ${mcpConfig}`);
+  bootMark('control+mcp');
 
   const win = createWindow();
+  bootMark('window-created');
+  /*
+   * The tray icon (services/tray.ts, M13.5): a second home for the board and the JARVIS window.
+   * Not during a smoke capture, which runs beside William's own copy and would put a second icon
+   * beside his. Closing the board quits, the same `app.quit()` as the tray's Quit: without this, a
+   * hologram minimised by its own close (or any hidden window) kept `window-all-closed` from ever
+   * firing, and SkynetOS ran on with no board.
+   */
+  if (!process.env['SKYNET_SMOKE_DIR']) {
+    initTray();
+    attachMinimizeToTray(win);
+  }
+  win.on('closed', () => app.quit());
+  win.once('ready-to-show', () => bootMark('ready-to-show'));
+  win.webContents.once('did-start-loading', () => bootMark('did-start-loading'));
+  win.webContents.once('dom-ready', () => bootMark('dom-ready'));
+  win.webContents.once('did-fail-load', (_e, code, desc) => console.warn(`[boot] renderer failed to load: ${code} ${desc}`));
+  win.webContents.once('did-finish-load', () => { bootMark('did-finish-load'); setImmediate(runDeferred); });
+  // A page served by the vite dev server takes about 6 s to load; the fallback must not beat it.
+  setTimeout(runDeferred, 8000).unref?.();
 
   // Push live session and service state to the renderer. The dock must not have to poll.
   // Every push also goes to connected remote devices (a no-op while remote is off).
@@ -1689,18 +1828,41 @@ app.whenReady().then(async () => {
     onStatus: (status) => { if (!win.isDestroyed()) win.webContents.send('gesture:state', status); }
   });
   // Manual control comes back on if it was on when the app closed, as remote does.
-  if (!process.env['SKYNET_SMOKE_DIR']) restoreVision();
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'vision', run: () => restoreVision() });
+  /*
+   * Voice, speech and desktop events go to the board AND to the JARVIS Voice window
+   * (services/hologram-window.ts), which is a view over the same three streams (docs/11). The
+   * board still does the acting; the hologram only shows it.
+   */
+  const toBoardAndHologram = (channel: EventName, payload: unknown): void => {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload);
+    const holo = hologramWindow();
+    if (holo) holo.webContents.send(channel, payload);
+  };
   setVoiceHandlers({
-    onStatus: (status) => { if (!win.isDestroyed()) win.webContents.send('voice:state', status); },
-    onWake: (wake) => { if (!win.isDestroyed()) win.webContents.send('voice:wake', wake); },
-    onHeard: (heard) => { if (!win.isDestroyed()) win.webContents.send('voice:heard', heard); }
+    onStatus: (status) => toBoardAndHologram('voice:state', status),
+    onWake: (wake) => toBoardAndHologram('voice:wake', wake),
+    onHeard: (heard) => toBoardAndHologram('voice:heard', heard),
+    // Levels go to the hologram alone: the board has nothing to move to them (F1, 2026-09-26).
+    onLevels: (levels) => { sendToHologram('voice:levels', levels); }
   });
+  setSpeechHandlers({
+    onState: (state) => toBoardAndHologram('speech:state', state),
+    onLevels: (levels) => { sendToHologram('speech:levels', levels); }
+  });
+  // The synthesis server takes minutes to load its model; start it early, but after the board is up.
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'speech', run: () => startSpeechAtBoot() });
+  // The globe's scene: what Claude is touching on this machine, from the transcripts it writes.
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'activity-feed', run: () => startActivityFeed() });
+  setDesktopHandlers({ onState: (state) => toBoardAndHologram('desktop:state', state) });
+  // The scene (what Claude Code is touching) reaches the JARVIS window as `hologram:scene` (F1).
+  attachHologramScene(onScene);
   // Voice, like manual control, comes back on only if it was on when the app closed.
-  if (!process.env['SKYNET_SMOKE_DIR']) restoreVoice();
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'voice', run: () => restoreVoice() });
 
   onAwayState((status) => { if (!win.isDestroyed()) win.webContents.send('away:state', status); remoteBroadcast('away:state', status); });
   onAwayLog((event) => { if (!win.isDestroyed()) win.webContents.send('away:log', event); remoteBroadcast('away:log', event); });
-  if (!process.env['SKYNET_SMOKE_DIR']) startPresence();
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'presence', run: () => startPresence() });
 
   // A detached popout terminal can be closed in ways that never reach our 'exit' handler, so the
   // dock is reconciled against the OS on a slow timer as well as on events.
@@ -1710,14 +1872,14 @@ app.whenReady().then(async () => {
    * task.scheduled nodes run while the app is open (services/scheduler.ts). Not during a smoke
    * capture: a screenshot run at 8 am must not start the morning's Prime session.
    */
-  if (!process.env['SKYNET_SMOKE_DIR']) startScheduler();
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'scheduler', run: () => startScheduler() });
 
   /*
    * Program updates: an installed copy only, and never during a smoke run. Pushed to the board
    * window alone, not to remote devices: a phone can do nothing about an update (docs/07).
    */
   onUpdateStatus(() => { if (!win.isDestroyed()) win.webContents.send('update:state', updateStatus()); });
-  if (!process.env['SKYNET_SMOKE_DIR']) void startUpdater();
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'updater', run: () => { void startUpdater(); } });
 
   /*
    * JARVIS face windows (services/avatar-window.ts): beside the web Face and every JARVIS Prime
@@ -1725,7 +1887,9 @@ app.whenReady().then(async () => {
    * smoke capture, which re-adopts William's live sessions and would open their faces over it.
    */
   ensureAvatarFolder();
-  if (!process.env['SKYNET_SMOKE_DIR']) initAvatarWindows();
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'faces', run: () => initAvatarWindows() });
+  // The JARVIS Voice window, when William has switched it on (docs/11). Not during a smoke capture.
+  if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'hologram', run: () => initHologramWindow() });
 
   /*
    * Head -> Prime. A message the Face flagged with `run:` starts a real session on the Hands node.
@@ -1771,6 +1935,12 @@ app.whenReady().then(async () => {
     stopVoice();
     // The faces, the helper that watches terminal windows, and the frames-folder watcher go with it.
     closeAllFaces();
+    // The JARVIS Voice window is ours too: close is minimise while we run, close for real now.
+    closeHologramWindow();
+    // The tray icon, so Windows does not keep a dead one until the pointer passes over it.
+    destroyTray();
+    // The transcript tail and the pin atlas's pending write.
+    stopActivityFeed();
     stopWindowTracker();
     stopAvatarWatchers();
     // The animated-face logos' mood watch (services/avatar-mood.ts) goes with the board.

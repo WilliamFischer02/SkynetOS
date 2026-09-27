@@ -36,6 +36,7 @@ import {
   type PhantomLink
 } from './types.js';
 import { fieldsFor, missingRequired } from './node-fields.js';
+import { idSlug } from './id-slug.js';
 
 /** The cap, per board. Enforced here, in the schema (`maxItems`), and stated to every agent. */
 export const MAX_PHANTOMS_PER_BOARD = 4;
@@ -174,7 +175,7 @@ export function findPhantomSpot(
 
 /** `ph_<slug>`, unique against both phantoms and nodes so an approved one can never collide. */
 export function freePhantomId(board: Board, name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'node';
+  const slug = idSlug(name);
   const taken = new Set([...(board.phantoms ?? []).map((p) => p.id), ...board.nodes.map((n) => n.id)]);
   if (!taken.has(`ph_${slug}`)) return `ph_${slug}`;
   for (let i = 2; i < 500; i++) if (!taken.has(`ph_${slug}_${i}`)) return `ph_${slug}_${i}`;

@@ -2,7 +2,7 @@
 
 You are building SkynetOS: a Windows desktop app that renders an overhead pixel-art motherboard, where every visual component is bound to a real agent, repo, folder, or file on this machine.
 
-Read `docs/01-ARCHITECTURE.md` through `docs/07-SECURITY.md` before writing code. `docs/09-RELEASE.md` is the installed program: where its data lives, and how it updates. They are normative, not suggestions. `docs/08-REMOTE.md` is the design for iPhone remote control (M9): normative for how it must be built, and not yet built.
+Read `docs/01-ARCHITECTURE.md` through `docs/07-SECURITY.md` before writing code. `docs/09-RELEASE.md` is the installed program: where its data lives, and how it updates. They are normative, not suggestions. `docs/08-REMOTE.md` is the design for iPhone remote control (M9): normative for how it must be built, and not yet built. `docs/10-EMAIL.md` is the mail hub (M12). `docs/11-JARVIS-VOICE.md` is JARVIS Voice (M13): the hologram window, speech, voice profiles and desktop control, with its rules in docs/07 § JARVIS Voice.
 
 ---
 

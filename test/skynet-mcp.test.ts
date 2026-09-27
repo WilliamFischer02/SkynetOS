@@ -217,6 +217,7 @@ describe('what an agent may reach', () => {
     for (const forbidden of [
       // "Settings, allowlists and elevation are user-only."
       'settings:setPlan',
+      'settings:addUsageReadings',
       // The approval dialog. An agent that can call it is an agent that approves its own deletes.
       'command:confirmDestructive',
       // Summons a native modal in front of the user.

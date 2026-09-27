@@ -94,6 +94,16 @@ export const PLAN_SPECS: Record<PlanId, PlanSpec> = {
   }
 };
 
+/**
+ * The plan William's account is on, and stays on.
+ *
+ * William, 2026-09-27: "my plan never changes from max 20x and it always resets credits on Mondays
+ * at 8pm." So the plan dialog starts on this one, and once `plan` is set in settings.json it says
+ * FIXED rather than inviting a change every time it opens. The weekly reset lives beside it, in
+ * packages/shared/usage-week.ts (DEFAULT_WEEKLY_ANCHOR), with the two weekly pools it resets.
+ */
+export const FIXED_PLAN: PlanId = 'max-20x';
+
 export function isPlanId(value: string): value is PlanId {
   return (PLANS as readonly string[]).includes(value);
 }

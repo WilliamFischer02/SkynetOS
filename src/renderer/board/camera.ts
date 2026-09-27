@@ -41,7 +41,12 @@
  * as serious as a crash. 5x to 8x are for reading a node's pixels up close; 1/8 fits even a tripled
  * room on one screen.
  */
-export const ZOOM_LEVELS = [0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+/*
+ * 2026-09-26: 10x and 12x join the list, still whole numbers. William asked for "more zoom steps
+ * for more finite zooming"; the finer FEEL comes from motion.ts, which eases the shown zoom
+ * between these levels without ever rendering at a fraction of one.
+ */
+export const ZOOM_LEVELS = [0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12] as const;
 export type Zoom = (typeof ZOOM_LEVELS)[number];
 
 export const TILE = 16;

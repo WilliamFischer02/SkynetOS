@@ -30,6 +30,31 @@ on staging), and `story-universe-map` (an Obsidian plugin, with `obsidian-dev-va
 harness). All six now have `codex/projects/*.md` files and index entries. This was inferred from
 each repo's own CLAUDE.md/handoff — verify against the repo before acting on a stale figure.
 
+### 2026-09-26 note (away-mode pass, PLAN level; adds to the notes below)
+
+Bash denied this pass too (no `git log`/`git status`); repo state came from `Read`/`Glob` on each
+repo's own `CLAUDE.md`/handoff files. No mail on `to-hands`, nothing to undo/redo.
+
+- **No drift, fifth pass in a row:** re-checked `BitRunners` and `StackAssembler` against their
+  `.claude/handoff.md` directly (still 2026-07-12 / 2026-08-12), and `TimeServed`, `MCCamOp`,
+  `LociBook`, `Just1Nudge`, `There Could Be Giants` against their codex entries — same picture as
+  2026-09-19: no `handoff.md` yet in TimeServed/MCCamOp/LociBook, nothing else moved. The
+  2026-09-19 suggestion stands and is repeated here: **skip PLAN-level away passes over the
+  Minecraft/GoobOS/GameOS cluster** until a phantom is ticked or a handoff changes — a fifth
+  no-op pass over the same ground is the cost this note warned about.
+- **Where the real capacity is:** the `financeos` room (built 2026-09-23, Face's drop merged
+  2026-09-25) had **0/4 phantoms** — the only board with open slots this pass. Verified
+  `private/finance/research/` (216 options, top-picks.md, plan-30-day.json, sources.txt) and the
+  Rent Run claude.ai artifact are both real and referenced from `codex/projects/rent-run.md`, but
+  neither had board presence. Proposed `ph_rent_run` (link.url, the artifact) and
+  `ph_rent_run_research` (store.folder, the research folder) on `financeos`, right of the LEDGER
+  zone, both wired `reads`/`syncs` to `s1_ledger`.
+- **Not board work, William's / a build session's:** FinanceOS Phase 2 (the interactive 60–90 min
+  session — card issuer/APR/minimum, PBS schedule, Ross question) and Phase 4 (live SimpleFIN
+  feed) per `codex/handoffs/financeos-scheduleos.md`; ScheduleOS Phase 5 (the room itself doesn't
+  exist yet — `board/scheduleos/room.board.json` is not on disk, so no phantom can bind to it; a
+  real M2-style room build is needed first, out of this pass's write bounds).
+
 ## Right now (updated 2026-09-15 evening by an away-mode JARVIS Prime pass — supersedes the 2026-09-13 note below)
 
 **SkynetOS was running this time** — every `board_*`/`phantom_*`/`mailbox_*` MCP tool worked, unlike
@@ -325,6 +350,10 @@ From William, in his words where it matters. Not scheduled yet; each one needs a
 4. **Usage calibration.** "If it can be calibrated it should show an indicator (calibrate usage
    monitor) and the user can input information the program needs." First pass done 2026-09-11:
    see docs/DECISIONS.md for what the calibration takes and what it still cannot know.
+   - [x] **Weekly pools** (2026-09-27): plan fixed at Max 20x, both weekly caps (ALL, FABLE) from
+     William's claude.ai/usage readings, reset Monday 20:00 America/Denver, carried forward by local
+     usage between readings. `packages/shared/usage-week.ts`; DECISIONS 2026-09-27. Not yet seen
+     on screen: the running instance predates it.
 5. **Usage across machines.** Claude's limits are per ACCOUNT; each SkynetOS sees only its own
    machine's transcripts. On 2026-09-11 the one recorded five-hour limit hit (2026-09-08) had no
    local usage in its window at all: the work that reached it ran on another desktop. Every meter
@@ -341,7 +370,10 @@ From William, in his words where it matters. Not scheduled yet; each one needs a
 
 Found by morning maintenance, not fixed (2026-09-15):
 
-7. **The chrome re-measures itself every 400 ms** (`src/renderer/ui/useChromeLayout.ts`, the
+7. **FIXED 2026-09-26** (performance pass, fork K): `useChromeLayout` measures on ResizeObserver,
+   MutationObserver and store changes, coalesced to one rAF; the layout audit ran 58 states with 0
+   overlaps and 0 off-screen after the change. As logged:
+   **The chrome re-measures itself every 400 ms** (`src/renderer/ui/useChromeLayout.ts`, the
    `setInterval(soon, 400)`). Each tick reads `scrollWidth` on the HUD and help, which forces a
    layout, and `samePlan` then discards the result almost every time. A `ResizeObserver` on the
    breadcrumb, HUD and help, plus the existing `resize` listener, would do the same work only when
@@ -395,33 +427,54 @@ Found by morning maintenance, not fixed (2026-09-19):
 
 Found by morning maintenance, not fixed (2026-09-23). All renderer, so none has a unit test (10):
 
-11. **The mailbox says "NOTHING WAITING." before it has read anything, and when the read fails**
+11. **FIXED 2026-09-26** (morning maintenance): `mail` starts `null`, `refresh` keeps a failed read
+    as `readError`, and the list shows READING codex/mailbox/…, then COULD NOT READ codex/mailbox/
+    with the reason and how to retry, before it ever says NOTHING WAITING; the gesture catalogue got
+    the same two states in place of "No gestures yet." while `library` was still `null`. No test
+    (renderer, item 10); `npm run verify` green. As logged: **The mailbox says "NOTHING WAITING."
+    before it has read anything, and when the read fails**
     (`src/renderer/ui/Mailbox.tsx`, `refresh` at line 34, the list at line 136). `mail` starts as
     `[]` and `refresh` has no catch. Start it `null`, keep the failure, and render READING… or
     COULD NOT READ codex/mailbox/ before the empty message. Same shape in
     `src/renderer/ui/GestureCatalogue.tsx` line 192: "No gestures yet." while `library` is still
     `null`, though built-in gestures always exist.
-12. **"Copy for the Face" has no failure path** (`Mailbox.tsx` line 73). A clipboard write that
+12. **FIXED 2026-09-26** (`Mailbox.tsx` `copy`, the `AboutBox` shape: a clipboard write that throws
+    now toasts COULD NOT REACH THE CLIPBOARD and names the file to copy by hand). As logged:
+    **"Copy for the Face" has no failure path** (`Mailbox.tsx` line 73). A clipboard write that
     throws is uncaught and the panel says nothing. `AboutBox.tsx` lines 71–78 already handle the
     same call; copy that.
-13. **A failed away-mode save leaves the typed value on screen** (`src/renderer/ui/AwayScreen.tsx`
-    lines 331–334). On `ok: false` the After minutes and Model inputs keep what was typed, so it
-    looks saved. Reset them from `status` and say the old values are back.
-14. **The MANUAL chip's tooltip drops its instruction when manual control has failed**
-    (`src/renderer/App.tsx` lines 466–474): it shows the raw error alone, and "click to switch
-    manual control off" only when nothing is wrong.
-15. **Bare fallbacks.** `'COULD NOT SAVE'`, `'could not stop'`, `'NO CODE'` appear when
-    `result.error` is missing: `useBoardStore.ts` 844 and 857, `GestureCatalogue.tsx` 107,
-    `PlanDialog.tsx` 56, `RemotePanel.tsx` 74, `DragBadges.tsx` 138. Each wants one line that ends
-    in what to do.
-16. **Five comments name things that do not exist** (found 2026-09-23, after the run's bound; each a
-    one-word fix): `src/main/services/shell-opener.ts:279` says `trusted()`, the function is
+13. **FIXED 2026-09-26** (UX pass, fork M): on `ok:false` the inputs reset from `status` and the
+    toast says the old values are back. As logged: **A failed away-mode save leaves the typed
+    value on screen** (`src/renderer/ui/AwayScreen.tsx` lines 331–334). On `ok: false` the After
+    minutes and Model inputs keep what was typed, so it looks saved.
+14. **FIXED 2026-09-26** (`chipTitle` in `packages/shared/ui-copy.ts`, `test/ui-copy.test.ts`). As
+    logged: **The MANUAL chip's tooltip drops its instruction when manual control has failed**
+    (`src/renderer/App.tsx` lines 466–474).
+15. **FIXED 2026-09-26** (`failureLine` in `packages/shared/ui-copy.ts`; all six sites plus
+    `FableCores.tsx:84`, which the list missed). As logged: **Bare fallbacks.** `'COULD NOT SAVE'`,
+    `'could not stop'`, `'NO CODE'` appear when `result.error` is missing: `useBoardStore.ts` 844
+    and 857, `GestureCatalogue.tsx` 107, `PlanDialog.tsx` 56, `RemotePanel.tsx` 74,
+    `DragBadges.tsx` 138.
+    The same pass gave every panel one title strip (`PanelHead.tsx`), one status box
+    (`StateBox.tsx`), a 2 px signal focus ring on every control, and `prefers-reduced-motion` for
+    the chrome. Left for another pass: the explorer window's own Win-3.1 strip, the vision-train
+    wizard, and a control-by-control tooltip audit.
+16. **FIXED 2026-09-26** (morning maintenance's roadmap step: the five words changed, nothing else;
+    `npm run verify` green, 113 files, 1,751 tests). The `suffixSize()` ternary that returns 11 both
+    ways is left as it is: it is behaviour, and the header comment above it explains the choice.
+    As logged: **Five comments name things that do not exist** (found 2026-09-23, after the run's
+    bound; each a one-word fix): `src/main/services/shell-opener.ts:279` says `trusted()`, the function is
     `trustedByUser()`; `packages/shared/vision.ts:7` says `src/renderer/vision.tsx`, the file is
     `vision.ts`; `src/main/services/watchers.ts:46` says `test/watchers.test.ts`, the tests are in
     `test/artifacts.test.ts`; `packages/shared/room-title.ts:18` says `SUFFIX_SIZE`, it is
     `suffixSize()`, whose ternary at line 48 returns 11 both ways; `packages/shared/usage.ts:20` says
     `remainingTime`, the field is `remainingHours`.
-17. **The same helper three times.** The id slug (`name.toLowerCase().replace(/[^a-z0-9]+/g, '_')…`)
+17. **FIXED 2026-09-26** (`packages/shared/id-slug.ts` `idSlug`, imported by all three;
+    `normaliseRoot` in `settings.ts` is now `normalisePath` under its old name, and
+    `session-manager.ts` no longer pre-replaces the backslashes it was about to replace. Test:
+    `test/id-slug.test.ts`, 4 cases, the last holding that a phantom id and a node id are built from
+    the same slug). As logged: **The same helper three times.** The id slug
+    (`name.toLowerCase().replace(/[^a-z0-9]+/g, '_')…`)
     is in `packages/shared/phantoms.ts:177`, `src/main/services/ingest.ts:32` and
     `src/main/services/node-factory.ts:63`; and `normaliseRoot` (`settings.ts:430`) has the same body
     as `normalisePath` (`packages/shared/usage.ts:290`), with `session-manager.ts:95` replacing
@@ -434,6 +487,16 @@ Found by morning maintenance, not fixed (2026-09-23). All renderer, so none has 
     call (docs/07); the alternative is the test each comment promises. Also `test/layout.test.ts:74`
     and `:82` return silently when a MinecraftOS node is missing, so a board edit could leave them
     asserting nothing; `expect(zone).toBeDefined()` would hold them.
+    - [x] **The two layout tests now fail when their node is gone** (2026-09-26): each `return`
+      became a `throw` that names the node. The twelve exports are still William's call.
+
+Found by morning maintenance, not fixed (2026-09-26):
+
+19. **`test/watch-plan.test.ts` "survives `gradlew clean`" tripped its 8 s deadline once in six lone
+    runs** of `npm run verify` this morning (`reasons` was still `[]` at line 151; the rerun passed
+    in 3.1 s). The handoff's landmine says it fails only when three verifies run at once; it does not.
+    The wait is real filesystem time on a watcher, so the fix is either a longer deadline for that one
+    step or a wait on the re-plan event rather than a poll. Not loosened here.
 
 ---
 
@@ -510,6 +573,77 @@ about 10,000 threads, read to zero, roughly nine tenths promotions and notificat
 
 **Exit:** a morning digest in the notification centre naming what needs him, and nothing in his
 inbox older than a week that he has not decided about.
+
+## M13 — JARVIS Voice: the hologram, speech, voice profiles, desktop control — **slice 1 built 2026-09-24, unseen**
+William: "a launch-on-boot fully voice controlled mini program … open after effects on one and
+firefox on two … see it move the mouse … a small square window … a blue hologram … talk back … a
+'train' button … agentic." Then: his own voice as the dataset. Design: `docs/11-JARVIS-VOICE.md`.
+Rules: docs/07 § JARVIS Voice.
+
+- [x] **M13.1 The window, speech, the recorder, desktop commands by rule** (2026-09-24). Evidence:
+  `test/hologram.test.ts` (11), `test/speech.test.ts` (14), `test/desktop.test.ts` (24),
+  `test/intent.test.ts` (+3), `test/jarvis-voice-contract.test.ts` (5); `npm run speech:probe`
+  spoke a line with Microsoft David in 8 s; `npm run desktop:probe` listed 20 windows read-only.
+  **Not seen on screen, and no plan has run against the desktop:** the first one is with William
+  watching. A LOOK → System switch "JARVIS Voice window" opens it.
+- [x] **M13.2 A synthesis server for voice profiles** (2026-09-24, heard). `tools/speech-server.py`
+  (F5-TTS, reference-clip synthesis, 127.0.0.1:47832), `npm run speech:install` (Python 3.10 venv,
+  torch 2.11.0+cu128 on the RTX 5070, f5-tts 1.1.22), `npm run speech:serve`, `npm run
+  profile:import`. Evidence: William's 380 AIFF clips imported as profile `jarvis` (358 in, 22 too
+  short, all transcribed by whisper, 122 usable as a reference); a test line synthesised in his
+  voice (400 KB WAV, 8 s) and played through the speakers; `settings.json` now `speech.backend:
+  server`, `profile: jarvis`. Found by doing: torchaudio 2.9+ decodes through torchcodec, which
+  wants FFmpeg; the server reads its own WAVs with soundfile instead. Still open: **USE THIS VOICE**
+  and SkynetOS's own start of the server, unseen in the app; the fine-tuned voice (shape 2).
+- [x] **Later 2026-09-24: the profile is heard, and JARVIS talks back** (from `handoff.md` "JARVIS
+  Voice — 2026-09-24" items 8–11, not yet on this roadmap). William's 380 AIFF clips imported and
+  synthesised aloud in his own voice; `settings.json` now `speech.backend: server`, `profile:
+  jarvis`. An unrecognised sentence now goes to headless `claude -p` (Haiku, no tools) for a spoken
+  two-sentence reply, then the microphone reopens once without the wake phrase for a follow-up
+  sentence (`converse.ts`, `voice.ts` `listenAgain`, `test/converse.test.ts` 11,
+  `test/voice-service.test.ts` +6). The old 2.2 s hand-off that typed unrecognised sentences into
+  the Face's own conversation is gone — only "ask the face …" reaches it now. The VOICE button now
+  opens the hologram window directly, and its five buttons fit the 240 px square without clipping.
+  **Not heard live**, per `handoff.md` and the 2026-09-24T23:31 mail to the Face.
+- [ ] **M13.3 The planner** (docs/11 slice 2): `desktop:plan` through headless `claude -p` with a
+  screenshot, speaking the plan before running it. "Open my most recent project in After Effects."
+- [x] **M13.4 Action recording** (2026-09-26, TRAIN ACTION in the DESK panel). The helper's watch
+  mode records clicks with their UI Automation target, wheel and keys while the light is on, pauses
+  itself on sign-in windows, saves to `userData/desktop/recordings/`, and replays through three
+  adaptation tiers (element by name, window-relative, screen). `packages/shared/actions.ts`,
+  `services/action-recorder.ts`, `test/actions.test.ts` (14). **No recording or replay has been
+  run**; the first is with William watching. Recordings are also the worked examples M13.3 wants.
+- [x] **M13.5 A tray icon** (2026-09-27), so the minimised window has a second home. The JARVIS
+  orb in the hologram's six blues, 16/32 px (`npm run icon:tray` → `assets/tray/`); left click brings
+  the board back; the menu opens the board or JARVIS Voice, switches Voice, Desk control and Start
+  with Windows, and quits. `tray.minimizeToTray` (default off). `src/main/services/tray.ts`,
+  `packages/shared/tray.ts`, `test/tray.test.ts` (13). No new channel. Not yet seen on the taskbar.
+  The 240 px question is closed by M13.6: the window is 480 px, and full height in DESK mode.
+- [x] **M13.6 The globe** (2026-09-26): a hand-written WebGL2 renderer (`src/renderer/hologram/`),
+  480 px, a gridded short-depth sphere with wisps, driven by `speech:levels` (eight bands →
+  horizontal distortion, rms → vertical) and `voice:levels`; LISTENING brightens the whole picture;
+  recent files and programs orbit as icons and sit pinned at permanent coordinates
+  (`globe-atlas.ts`, `userData/globe-atlas.json`); what Claude Code touches is summoned to the
+  centre and drawn as paper, a typed terminal, a wireframe or a folder (`activity-feed.ts`,
+  `holo-content.ts`, `holo-scene.ts`); CLOSE closes, DESK moves it to monitor one at full height.
+  Tests: `hologram-levels` 18, `hologram-controls` 6, `globe-atlas` 34, `activity-events` 11,
+  `holo-content` 10. **Not seen on screen: the first `npm run boot` is the shader compile.**
+- [x] **M13.7 Every control by voice** (2026-09-26): `hologram-control.ts` ids on every control,
+  spoken forms for each (`test/intent.test.ts` walks the list), "stop" variants, "shut yourself
+  down" (the program only), dictation on `Ctrl+Alt+D`, saved actions by name.
+- [ ] **M13.8 The fine-tuned voice** (begun 2026-09-26): `npm run speech:finetune -- prepare|train|
+  status|prune|apply|eval jarvis`; a 1,500-update F5-TTS fine-tune on 117 clips (7.8 min) started
+  on the RTX 5070; `tools/speech-server.py` loads a profile's `finetune` checkpoint and scores
+  reference clips. Tick when `apply` has run and William has heard it. Next if timbre is still
+  short: an RVC (Applio) layer, the survey's route 2.
+- [ ] **M13.9 The Iron Man globe, the rest of it**: a real scroll for long documents with a page
+  cache on disk, code diffs from Edit tool inputs rather than a file re-read, 3D model textures,
+  a session picker when several sessions run, and the planner (M13.3) driving desktop actions
+  from the recorded examples.
+
+**Exit:** SkynetOS starts with Windows, the square is bottom-right, and "Jarvis, open after effects
+on one and firefox on two" does exactly that while the sphere talks him through it in his own
+recorded voice.
 
 ### Built 2026-09-11: boot, replace-on-launch, start with Windows
 

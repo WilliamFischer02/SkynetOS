@@ -1,5 +1,6 @@
 import type { Board, BoardNode, GridPos, NodeKind } from '@shared/types.js';
 import { DEFAULT_FOOTPRINT } from '@shared/types.js';
+import { idSlug } from '@shared/id-slug.js';
 
 /**
  * Making a new node from nothing but a kind.
@@ -60,7 +61,7 @@ function designatorLetterFor(kind: NodeKind): string | null {
 /** A free id of the form `<prefix>_<base>`, `<prefix>_<base>_2`, and so on. */
 export function freeNodeId(board: Board, kind: NodeKind, base: string): string {
   const prefix = prefixFor(kind);
-  const slug = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24) || 'node';
+  const slug = idSlug(base);
   const taken = new Set(board.nodes.map((n) => n.id));
   const first = `${prefix}_${slug}`;
   if (!taken.has(first)) return first;

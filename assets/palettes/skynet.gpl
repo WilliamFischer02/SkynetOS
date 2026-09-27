@@ -39,6 +39,10 @@ Columns: 6
  26  27  34	fin-mask-dark
  38  39  47	fin-mask-light
  92 220 208	fin-signal
+# Room: ScheduleOS
+ 16  32  31	sched-mask-dark
+ 24  50  48	sched-mask-light
+156 240 255	sched-signal
 # --- RESERVED THEME KEYS — do not use as literal art colors ---
 # These are baked into sprites by tools/bake-assets.mjs and swapped per room at draw time
 # by an exact-match palette shader. They are legal in the atlas and illegal everywhere else.

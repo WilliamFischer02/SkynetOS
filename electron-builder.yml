@@ -45,6 +45,10 @@ extraResources:
   # William's JARVIS face frames. Data, seeded with the rest.
   - from: assets/avatar
     to: assets/avatar
+  # The tray icon, 16 and 32 px (tools/make-tray-icon.mjs). services/tray.ts reads it from
+  # resources/assets/tray in an install and from assets/tray in the repo (programRoot()).
+  - from: assets/tray
+    to: assets/tray
   # Manual (gesture) control. @mediapipe/tasks-vision is a devDependency, so it is not in app.asar;
   # the vision page is served these two from resources/mediapipe (src/main/services/vision.ts).
   - from: node_modules/@mediapipe/tasks-vision/vision_bundle.mjs

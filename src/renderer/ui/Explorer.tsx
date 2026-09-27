@@ -11,7 +11,9 @@ import {
   type ExplorerSort
 } from '@shared/explorer.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+import { closeLabel, failureLine } from '@shared/ui-copy.js';
 import { Icon } from './Icon.js';
+import { StateBox } from './StateBox.js';
 import { isMarkdownFile, isTextFile, type EditorOpenWith } from '@shared/open-with.js';
 
 /**
@@ -167,6 +169,13 @@ const joinRel = (rel: string, name: string): string => (rel ? `${rel}/${name}` :
 /** Let a long filename break after its separators instead of overflowing the cell. */
 const wrappable = (name: string): string => name.replace(/([._-])/g, '$1​');
 
+/** The folder as Windows would spell it, for a failure line that has to say where. */
+const fullPath = (root: string, rel: string): string => {
+  const base = root.replace(/[\\/]+$/, '');
+  if (!rel) return base || '(no root folder)';
+  return `${base}\\${rel.replace(/\//g, '\\')}`;
+};
+
 const SORTS: { id: ExplorerSort; label: string }[] = [
   { id: 'name', label: 'NAME' },
   { id: 'date', label: 'DATE' },
@@ -178,6 +187,15 @@ function titleOf(node: BoardNode | undefined): string | null {
   return node.designator ? `${node.designator} ${node.name}` : node.name;
 }
 
+/*
+ * The keys, in one place. The grid's keys act only while the grid has focus, so Enter on a toolbar
+ * button presses that button; the window's keys act wherever focus is inside the window; Esc acts
+ * while the window is open at all.
+ *
+ *   grid    ← → previous / next   ↑ ↓ a row up / down   Home End first / last   Enter open
+ *   window  Backspace up one folder   Alt+← back   F5 read again
+ *   always  Esc close
+ */
 export function Explorer(): React.JSX.Element | null {
   const target = useBoardStore((s) => s.explorer);
   const close = useBoardStore((s) => s.closeExplorer);
@@ -196,23 +214,30 @@ export function Explorer(): React.JSX.Element | null {
   const [sort, setSort] = useState<ExplorerSort>('name');
   const [descending, setDescending] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** The folder the last read asked for, so a failure can name it even when main could not. */
+  const [asked, setAsked] = useState('');
 
   const panelRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  /** The root as last reported, for a failure that came back without one. */
+  const rootRef = useRef('');
 
-  const load = useCallback(async (next: string | null, from: string | null) => {
+  /** Read `next`; `from` is where we were (for BACK); `select` is the entry to land on. */
+  const load = useCallback(async (next: string | null, from: string | null, select?: string) => {
     if (!target) return;
     setBusy(true);
+    setAsked(next ?? '');
     try {
       const result = await window.skynet['explorer:list'](target.boardId, target.nodeId, next);
+      if (result.root) rootRef.current = result.root;
       setListing(result);
       if (result.ok) {
         setRel(result.rel);
         if (from !== null && from !== result.rel) setBack((stack) => [...stack, from]);
-        setSelected(null);
+        setSelected(select ?? null);
       }
     } catch (err) {
-      setListing({ ok: false, root: '', rel: next ?? '', rest: null, entries: [], truncated: false, error: (err as Error).message });
+      setListing({ ok: false, root: rootRef.current, rel: next ?? '', rest: null, entries: [], truncated: false, error: (err as Error).message });
     } finally {
       setBusy(false);
     }
@@ -223,6 +248,7 @@ export function Explorer(): React.JSX.Element | null {
     if (!target) return;
     setBack([]);
     setListing(null);
+    rootRef.current = '';
     void load(null, null);
   }, [target, load]);
 
@@ -241,14 +267,18 @@ export function Explorer(): React.JSX.Element | null {
     else if (result.error !== 'CANCELLED') toast('warn', result.error ?? `COULD NOT OPEN ${entry.name}`);
   }, [target, rel, load, toast]);
 
-  const goUp = useCallback(() => { if (rel) void load(parentRel(rel), rel); }, [rel, load]);
+  // Up lands on the folder it came out of, so Backspace then Enter is a round trip.
+  const goUp = useCallback(() => {
+    if (!rel) return;
+    void load(parentRel(rel), rel, rel.split('/').pop());
+  }, [rel, load]);
   const goBack = useCallback(() => {
     const previous = back[back.length - 1];
     if (previous === undefined) return;
     setBack((stack) => stack.slice(0, -1));
     void load(previous, null);
   }, [back, load]);
-  const refresh = useCallback(() => { void load(rel, null); }, [rel, load]);
+  const refresh = useCallback(() => { void load(rel, null, selected ?? undefined); }, [rel, selected, load]);
 
   const openInEditor = async (editor: EditorOpenWith): Promise<void> => {
     if (!target || !selectedEntry || selectedEntry.kind === 'dir') return;
@@ -301,7 +331,7 @@ export function Explorer(): React.JSX.Element | null {
   /*
    * Esc closes, and ONLY closes: captured ahead of the board, which would otherwise deselect or
    * leave the room. While focus is inside the window every key stays inside it, so reading a folder
-   * never pans the camera underneath.
+   * never pans the camera underneath. See the key table above the component.
    */
   useEffect(() => {
     if (!target) return;
@@ -314,8 +344,14 @@ export function Explorer(): React.JSX.Element | null {
       }
       if (!panelRef.current?.contains(document.activeElement)) return;
       event.stopImmediatePropagation();
-      if (document.activeElement !== gridRef.current) return;
 
+      // The window's keys: wherever focus is inside it.
+      if (event.altKey && event.code === 'ArrowLeft') { event.preventDefault(); goBack(); return; }
+      if (event.code === 'Backspace' && !event.altKey && !event.ctrlKey) { event.preventDefault(); goUp(); return; }
+      if (event.code === 'F5') { event.preventDefault(); refresh(); return; }
+
+      // The grid's keys: only while it has focus, so Enter on a button still presses the button.
+      if (document.activeElement !== gridRef.current) return;
       const last = entries.length - 1;
       const move = (to: number): void => {
         event.preventDefault();
@@ -324,7 +360,6 @@ export function Explorer(): React.JSX.Element | null {
         if (next) setSelected(next.name);
       };
       const from = selectedIndex < 0 ? -1 : selectedIndex;
-      if (event.altKey && event.code === 'ArrowLeft') { event.preventDefault(); goBack(); return; }
       switch (event.code) {
         case 'ArrowRight': move(from + 1); break;
         case 'ArrowLeft': move(from < 0 ? 0 : from - 1); break;
@@ -336,9 +371,8 @@ export function Explorer(): React.JSX.Element | null {
         case 'NumpadEnter':
           event.preventDefault();
           if (selectedEntry) void open(selectedEntry);
+          else move(0);
           break;
-        case 'Backspace': event.preventDefault(); goUp(); break;
-        case 'F5': event.preventDefault(); refresh(); break;
         default: break;
       }
     };
@@ -346,8 +380,13 @@ export function Explorer(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [target, close, entries, selectedIndex, selectedEntry, open, goUp, goBack, refresh]);
 
-  // Focus the grid on open, so the arrow keys work without a click first.
-  useEffect(() => { if (target) gridRef.current?.focus(); }, [target]);
+  // Focus the grid on open, so the arrow keys work without a click first; hand focus back on close.
+  useEffect(() => {
+    if (!target) return;
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    gridRef.current?.focus();
+    return () => { if (before?.isConnected) before.focus(); };
+  }, [target]);
 
   // Keep the selection on screen as the arrow keys walk past the fold.
   useEffect(() => {
@@ -357,11 +396,42 @@ export function Explorer(): React.JSX.Element | null {
 
   if (!target) return null;
 
-  const rootName = (listing?.root ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'ROOT';
+  const root = listing?.root || rootRef.current;
+  const rootName = root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'ROOT';
   const segments = rel ? rel.split('/') : [];
   const isResting = listing?.ok === true && (listing.rest ?? '') === rel;
   const folders = entries.filter((e) => e.kind === 'dir').length;
   const files = entries.length - folders;
+  const hereName = segments[segments.length - 1] ?? rootName;
+
+  /*
+   * Loading, empty and failed, in the one status box every panel uses. A failure names the folder
+   * and says what to do, because "COULD NOT READ" on its own leaves him guessing which and why.
+   */
+  const failedAt = listing && !listing.ok ? fullPath(listing.root || rootRef.current, listing.rel || asked) : '';
+  const state: React.JSX.Element | null = !listing ? (
+    <StateBox className="explorer-state" tone="dim" line="READING THE FOLDER…" detail={root ? fullPath(root, asked) : undefined} />
+  ) : !listing.ok ? (
+    <StateBox
+      className="explorer-state"
+      tone="fault"
+      line={failureLine(
+        listing.error,
+        'COULD NOT READ THIS FOLDER',
+        asked || rel ? 'press Backspace to go up, or F5 to try again' : 'check the node’s ROOT folder in the inspector, then press F5'
+      )}
+      detail={<span className="state-path">{failedAt}</span>}
+    />
+  ) : !entries.length ? (
+    <StateBox
+      className="explorer-state"
+      tone="dim"
+      line="THIS FOLDER IS EMPTY"
+      detail={rel ? 'Backspace goes up a folder. Files added in Windows show after F5.' : 'Files added in Windows show after F5.'}
+    />
+  ) : null;
+
+  const statusHint = listing?.restRefused ?? 'ENTER OPENS · BACKSPACE GOES UP · DRAG A FILE OUT';
 
   return (
     <div className="explorer-backdrop">
@@ -369,21 +439,30 @@ export function Explorer(): React.JSX.Element | null {
         <div className="explorer-title">
           <PixelIcon icon="folder" />
           <span className="explorer-title-text">{title ?? rootName} — FILE EXPLORER</span>
-          <button type="button" className="explorer-winbtn" onClick={close} title="Close (Esc)" aria-label="Close"><Icon name="close" /></button>
+          <button
+            type="button"
+            className="btn tiny icon-only explorer-winbtn"
+            onClick={close}
+            title={`Close the file explorer — ${closeLabel()}`}
+            aria-label="Close the file explorer"
+          >
+            <Icon name="close" />
+          </button>
         </div>
 
         <div className="explorer-toolbar">
-          <button type="button" className="explorer-tool" disabled={!back.length} onClick={goBack} title="Back (Alt+Left)"><Icon name="left" />BACK</button>
-          <button type="button" className="explorer-tool" disabled={!rel} onClick={goUp} title="Up one folder (Backspace)"><Icon name="up" />UP</button>
-          <button type="button" className="explorer-tool" onClick={refresh} title="Read the folder again (F5)"><Icon name="refresh" />REFRESH</button>
+          <button type="button" className="btn tiny" disabled={!back.length} onClick={goBack} title="Go back to the folder you were in before (Alt+Left)"><Icon name="left" />BACK</button>
+          <button type="button" className="btn tiny" disabled={!rel} onClick={goUp} title="Go up to the folder that holds this one (Backspace)"><Icon name="up" />UP</button>
+          <button type="button" className="btn tiny" onClick={refresh} title="Read this folder from disk again (F5)"><Icon name="refresh" />REFRESH</button>
           <span className="explorer-sep" aria-hidden="true" />
           {SORTS.map((s) => (
             <button
               key={s.id}
               type="button"
-              className={sort === s.id ? 'explorer-tool on' : 'explorer-tool'}
+              className={sort === s.id ? 'btn tiny primary' : 'btn tiny'}
+              aria-pressed={sort === s.id}
               onClick={() => { if (sort === s.id) setDescending(!descending); else { setSort(s.id); setDescending(s.id !== 'name'); } }}
-              title={`Sort by ${s.label.toLowerCase()}. Click again to reverse. Folders stay first.`}
+              title={`Sort by ${s.label.toLowerCase()}${sort === s.id ? ` (now ${descending ? 'descending' : 'ascending'}; click to reverse)` : ''}. Folders stay first.`}
             >
               {s.label}{sort === s.id ? (descending ? ' ▼' : ' ▲') : ''}
             </button>
@@ -392,7 +471,7 @@ export function Explorer(): React.JSX.Element | null {
           {/* Open With for text and notes: Notepad++ for any text file, Obsidian for markdown in a vault. */}
           <button
             type="button"
-            className="explorer-tool"
+            className="btn tiny"
             disabled={!selectedEntry || selectedEntry.kind === 'dir' || !isTextFile(selectedEntry.name)}
             onClick={() => void openInEditor('notepadpp')}
             title="Open the selected text file in Notepad++"
@@ -401,20 +480,21 @@ export function Explorer(): React.JSX.Element | null {
           </button>
           <button
             type="button"
-            className="explorer-tool"
+            className="btn tiny"
             disabled={!selectedEntry || selectedEntry.kind === 'dir' || !isMarkdownFile(selectedEntry.name)}
             onClick={() => void openInEditor('obsidian')}
             title="Open the selected note in Obsidian (it must be inside a vault)"
           >
             <Icon name="gem" />OBSIDIAN
           </button>
-          <button type="button" className="explorer-tool" onClick={() => void reveal()} disabled={!listing?.ok} title="Show the selection (or this folder) in Windows Explorer"><Icon name="open" />SHOW IN WINDOWS</button>
+          <button type="button" className="btn tiny" onClick={() => void reveal()} disabled={!listing?.ok} title="Show the selection (or this folder) in Windows Explorer"><Icon name="open" />SHOW IN WINDOWS</button>
           <button
             type="button"
-            className={isResting ? 'explorer-tool on' : 'explorer-tool'}
+            className={isResting ? 'btn tiny primary' : 'btn tiny'}
+            aria-pressed={isResting}
             disabled={!listing?.ok || isResting}
             onClick={() => void setResting()}
-            title="Open this node at this folder from now on. A board edit: Ctrl+Z takes it back."
+            title={isResting ? 'This node already opens at this folder' : 'Open this node at this folder from now on. A board edit: Ctrl+Z takes it back.'}
           >
             <Icon name="pin" />{isResting ? 'RESTING HERE' : 'SET AS RESTING FOLDER'}
           </button>
@@ -423,11 +503,18 @@ export function Explorer(): React.JSX.Element | null {
         <div className="explorer-address">
           <span className="explorer-address-label">ADDRESS</span>
           <div className="explorer-crumbs">
-            <button type="button" className="explorer-crumb" onClick={() => void load('', rel)} title={listing?.root}>{rootName}</button>
+            <button type="button" className="explorer-crumb" onClick={() => void load('', rel)} title={`Go to the root folder — ${root || rootName}`}>{rootName}</button>
             {segments.map((segment, i) => (
               <span key={`${i}.${segment}`} className="explorer-crumb-wrap">
                 <span className="explorer-crumb-sep" aria-hidden="true">\</span>
-                <button type="button" className="explorer-crumb" onClick={() => void load(segments.slice(0, i + 1).join('/'), rel)}>{segment}</button>
+                <button
+                  type="button"
+                  className="explorer-crumb"
+                  onClick={() => void load(segments.slice(0, i + 1).join('/'), rel)}
+                  title={i === segments.length - 1 ? `Read ${segment} again` : `Go to ${segments.slice(0, i + 1).join('\\')}`}
+                >
+                  {segment}
+                </button>
               </span>
             ))}
           </div>
@@ -438,16 +525,11 @@ export function Explorer(): React.JSX.Element | null {
           ref={gridRef}
           tabIndex={0}
           role="listbox"
-          aria-label="Files and folders"
+          aria-label={`Files and folders in ${hereName}`}
+          aria-busy={busy}
           aria-activedescendant={selectedIndex >= 0 ? `explorer-item-${selectedIndex}` : undefined}
         >
-          {listing && !listing.ok ? (
-            <div className="explorer-empty fault">{listing.error ?? 'COULD NOT READ THIS FOLDER'}</div>
-          ) : listing && !entries.length ? (
-            <div className="explorer-empty">THIS FOLDER IS EMPTY</div>
-          ) : !listing ? (
-            <div className="explorer-empty">READING…</div>
-          ) : null}
+          {state}
           {entries.map((entry, i) => (
             <div
               key={entry.name}
@@ -455,7 +537,7 @@ export function Explorer(): React.JSX.Element | null {
               role="option"
               aria-selected={i === selectedIndex}
               className={i === selectedIndex ? 'explorer-item selected' : 'explorer-item'}
-              title={entry.kind === 'dir' ? `${entry.name}\nFolder` : `${entry.name}\n${formatSize(entry.size)}${entry.mtime ? ` · ${new Date(entry.mtime).toLocaleString()}` : ''}\nDrag out into another program`}
+              title={entry.kind === 'dir' ? `${entry.name}\nFolder — Enter or double-click to open it` : `${entry.name}\n${formatSize(entry.size)}${entry.mtime ? ` · ${new Date(entry.mtime).toLocaleString()}` : ''}\nEnter or double-click to open it · drag it out into another program`}
               draggable={entry.kind === 'file'}
               onClick={() => { setSelected(entry.name); gridRef.current?.focus(); }}
               onDoubleClick={() => void open(entry)}
@@ -476,7 +558,7 @@ export function Explorer(): React.JSX.Element | null {
           <span className="explorer-cell grow">
             {selectedEntry
               ? `${selectedEntry.name}${selectedEntry.kind === 'file' ? ` · ${formatSize(selectedEntry.size)}` : ''}${selectedEntry.mtime ? ` · ${new Date(selectedEntry.mtime).toLocaleDateString()}` : ''}`
-              : listing?.restRefused ?? 'DOUBLE-CLICK TO OPEN · DRAG A FILE OUT'}
+              : statusHint}
           </span>
           <span className="explorer-cell">{listing?.rest ? `RESTS AT ${listing.rest}` : 'RESTS AT THE ROOT'}</span>
         </div>

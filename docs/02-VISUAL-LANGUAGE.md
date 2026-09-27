@@ -24,6 +24,7 @@ Per-room, exactly two values — a dark mask and a light mask (the mask is shade
 | **StoryOS** | `#1B1420` | `#271C2E` | `#A87BD6` |
 | **GameOS** | `#101C26` | `#182734` | `#4FA8D8` |
 | **FinanceOS** | `#1A1B22` | `#26272F` | `#5CDCD0` |
+| **ScheduleOS** | `#10201F` | `#183230` | `#9CF0FF` |
 
 ### Relation colour
 
@@ -161,7 +162,29 @@ These exist because the number one failure mode of a project like this is art th
 1. **Alpha is binary.** Every pixel is `alpha == 0` or `alpha == 255`. No feathered edges.
 2. **Palette lock.** Every pixel must exactly match a hex in `assets/palettes/skynet.gpl`. Max 6 unique colors per sprite.
 3. **Authored at 1x.** Source sprite dimensions must be multiples of 8. Never upscale source art and re-save.
-4. **Integer scaling only, above 1x.** Working zoom ∈ {1,2,3,4,5,6,7,8}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+4. **Integer scaling only, above 1x.** Working zoom ∈ {1,2,3,4,5,6,7,8,10,12}. Camera x/y rounded to device pixels each frame. `roundPixels: true`.
+
+   > **Amended 2026-09-26: the rest points stay integers, the travel between them is eased.**
+   > William asked for finer zooming and a smooth, transcoded feel to the wheel, to dragging and to
+   > gestures. The answer is not fractional zoom. The wheel sets a TARGET level; a critically
+   > damped spring (`src/renderer/board/motion.ts`, settle 160 ms for zoom, 90 ms for a mouse pan,
+   > 180 ms for a gesture pan, a ≤ 250 ms glide on release) eases a shown value toward it. During
+   > the tween the stage is rendered at the nearest exact level at or below the shown zoom and the
+   > CANVAS ELEMENT is scaled by CSS with `image-rendering: pixelated` about the cursor, so every
+   > colour on screen is a rendered palette colour and the world point under the pointer never
+   > moves; when the spring settles it snaps to the integer and re-renders once. The cost, accepted
+   > with his eyes open: for at most 160 ms the pixel blocks are momentarily uneven (2 px next to
+   > 3 px). Camera x/y is still rounded to whole device pixels every frame. Two more integers, 10
+   > and 12, join the list. Hit-tests use the target camera, so a click during the tween lands
+   > where the zoom is going.
+   >
+   > **Depth, the same day.** Three rendering tricks give the board a Z axis without a seventh
+   > colour: the substrate moves at 0.94× of the camera and the decorative parts at 0.97×, each
+   > offset rounded to whole device pixels per layer; every drawn package casts a one-world-pixel
+   > shadow down-right in mask-dark (zones a 1 px one); the top and left edge pixels of a drawn
+   > package are lit in mask-light. Both are theme colours already in every frame's budget. Drag
+   > badges and phantom plates carry the same solid offset shadow (`box-shadow` with zero blur and
+   > zero spread, which is a rectangle, not a filter).
 
    > **Widened 2026-09-11** at William's request for "more finite zoom levels". The integers
    > run to **8x**, for reading a node's pixels up close, and a third overview level, **1/8**,
@@ -246,7 +269,18 @@ toasts, LOOK and the help line. `ui/chrome-layout.ts` decides; `ui/useChromeLayo
 applies. The rules:
 
 - **The HUD keeps to one line.** It goes compact, with a +N list, rather than wrapping into the row
-  below.
+  below. When even its primary chips do not fit (an open inspector in a narrow window) it folds to
+  icons: every chip behind +N, which takes the worst chip's warn or fault colour, then find, bell
+  and settings. *(Added 2026-09-27.)*
+- **The inspector gives way before the HUD's buttons do.** If the icons HUD still does not fit, an
+  open inspector narrows, in whole `--p`, to no less than 320 px (and at most 320 × `--p` or 30% of
+  the window above 1x), and scrolls inside itself. *(2026-09-27.)*
+- **The breadcrumb switches drop their words below 1100 px × `--ui-scale`.** The planner decides
+  (`switchIcons`), because a media query cannot see the chrome scale. *(2026-09-27.)*
+- **Every control in the docked chrome is at least 24 × 24 px × `--ui-scale`** (44 px on the touch
+  layout, which wins). The breadcrumb row, the HUD and the help line give up their vertical padding
+  to the 24 px controls rather than grow. `npm run smoke:shots` reports it as the hit-size audit.
+  *(2026-09-27.)*
 - **What gives way, lowest priority first:**
   1. the help line;
   2. the minimap, to its button, shown in warn;

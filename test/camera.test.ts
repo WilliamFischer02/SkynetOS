@@ -26,7 +26,7 @@ const board = boardPixelSize({ width: 64, height: 40 }); // the real root board:
 
 describe('zoom', () => {
   it('offers whole numbers for working and exact binary fractions for overview', () => {
-    expect(ZOOM_LEVELS).toEqual([0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(ZOOM_LEVELS).toEqual([0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12]);
     for (const z of ZOOM_LEVELS) {
       if (z >= 1) expect(Number.isInteger(z)).toBe(true);
       // A power-of-two fraction: 1/z is a whole power of two, so the scale is exact in floating point.
@@ -48,7 +48,9 @@ describe('zoom', () => {
   });
 
   it('saturates at the ends instead of wrapping', () => {
-    expect(stepZoom(8, 1)).toBe(8);
+    expect(stepZoom(12, 1)).toBe(12);
+    expect(stepZoom(8, 1)).toBe(10);
+    expect(stepZoom(10, 1)).toBe(12);
     expect(stepZoom(0.125, -1)).toBe(0.125);
     expect(stepZoom(4, 1)).toBe(5);
     expect(stepZoom(0.25, -1)).toBe(0.125);

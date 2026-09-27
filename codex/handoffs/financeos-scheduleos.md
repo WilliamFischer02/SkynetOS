@@ -57,3 +57,19 @@ Outputs: `private/finance/selections.json` (≥5 entries, ≥2 applied/active wi
   scheduleos snippet's `d6_scheduleos` is free. Grids in the snippets are 48×30; the existing rooms
   are 144×96 in tiles; match the existing scale at the merge.
 - The drop proposes signal `#FF7AC8` for FinanceOS; the room today is `#5CDCD0`. Ask at Phase 3.
+
+## Phase 2 — in progress 2026-09-25
+
+- Ross ended; PBS is the only base income. WorkJam calendar removal queued for Phase 5.
+- **New fact, stated by William:** up to $200,000 in savings accounts, which he will not touch.
+  Recorded in `private/finance/settings.json` (`savings_do_not_touch: true`). Consequences: SNAP is
+  off (Montana applies the federal resource limit; he passed on it anyway, lowest priority);
+  Medicaid stays open (income-based, no asset test) but is queued behind income work at his
+  request; the card hardship call is no longer a relief item Prime will push, because the honest
+  fact is that he can pay; "runway" arithmetic and every advisor review must carry the cushion.
+  The Face's research assumed no cushion; the goal (+$1,000/mo without drawing down) stands.
+- **2026-09-26, William:** the DataAnnotation Starter Assessment is done, both parts (he calls them
+  the two entrance exams). The site ended on "we will email you when we have reviewed your
+  responses". `selections.json`: DA generalist → `applied`, awaiting the review email; DA coding
+  stays `selected` (its qualification is offered from the dashboard only after approval). Nothing
+  to do on DA until the email; the Prolific activation email was the other one pending on 09-25.

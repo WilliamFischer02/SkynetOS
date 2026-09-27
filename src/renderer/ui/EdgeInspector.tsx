@@ -81,6 +81,7 @@ export function EdgeInspector(): React.JSX.Element | null {
           className="input"
           value={edge.kind}
           disabled={busy}
+          title="Choose what this trace means; the kind sets its default pattern (Ctrl+Z undoes it)"
           onChange={(e) => change({ kind: e.target.value as EdgeKind })}
         >
           {EDGE_KINDS.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
@@ -106,6 +107,7 @@ export function EdgeInspector(): React.JSX.Element | null {
               type="button"
               className={(edge.width ?? 2) === width ? 'btn primary' : 'btn'}
               aria-pressed={(edge.width ?? 2) === width}
+              title={`Make the copper run ${width} pixel${width === 1 ? '' : 's'} wide`}
               disabled={busy}
               onClick={() => change({ width })}
             >
@@ -128,6 +130,7 @@ export function EdgeInspector(): React.JSX.Element | null {
               type="button"
               className={edge.dash === dash ? 'btn primary' : 'btn'}
               aria-pressed={edge.dash === dash}
+              title={dash ? `Draw the copper run ${dash}` : "Use the kind's own run pattern"}
               disabled={busy}
               onClick={() => change({ dash })}
             >
@@ -146,6 +149,7 @@ export function EdgeInspector(): React.JSX.Element | null {
               type="button"
               className={edge.outlineDash === dash ? 'btn primary' : 'btn'}
               aria-pressed={edge.outlineDash === dash}
+              title={dash ? `Draw the black outline ${dash}` : 'Outline each piece of the run, following its pattern'}
               disabled={busy}
               onClick={() => change({ outlineDash: dash })}
             >
@@ -164,6 +168,7 @@ export function EdgeInspector(): React.JSX.Element | null {
               type="button"
               className={(edge.outlineWidth ?? 1) === width ? 'btn primary' : 'btn'}
               aria-pressed={(edge.outlineWidth ?? 1) === width}
+              title={width ? `Give the trace a ${width} pixel black outline on each side` : 'Draw the trace with no outline'}
               disabled={busy}
               onClick={() => change({ outlineWidth: width === 1 ? undefined : width })}
             >
@@ -209,6 +214,7 @@ export function EdgeInspector(): React.JSX.Element | null {
           className="input"
           value={edge.relation ?? ''}
           disabled={busy}
+          title="Choose the room this trace leads to; its inner strand takes that room's signal colour"
           onChange={(e) => change({ relation: e.target.value || undefined })}
         >
           <option value="">none</option>
@@ -217,9 +223,9 @@ export function EdgeInspector(): React.JSX.Element | null {
       </div>
 
       <div className="inspector-actions">
-        <button type="button" className="btn" onClick={() => select(edge.from)}><Icon name="target" />Select start</button>
-        <button type="button" className="btn" onClick={() => select(edge.to)}><Icon name="target" />Select end</button>
-        <button type="button" className="btn danger" disabled={busy} onClick={() => void deleteEdge(edge.id)}>
+        <button type="button" className="btn" onClick={() => select(edge.from)} title="Select the node this trace starts from"><Icon name="target" />Select start</button>
+        <button type="button" className="btn" onClick={() => select(edge.to)} title="Select the node this trace ends at"><Icon name="target" />Select end</button>
+        <button type="button" className="btn danger" disabled={busy} onClick={() => void deleteEdge(edge.id)} title="Delete this trace after you confirm; both nodes stay (Ctrl+Z undoes it)">
           <Icon name="close" />Delete trace
         </button>
       </div>

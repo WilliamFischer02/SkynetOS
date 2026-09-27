@@ -3,18 +3,20 @@ import { isAbsolute } from 'node:path';
 import { clipboard, dialog, nativeImage, type WebContents } from 'electron';
 import {
   PROMPT_LIMITS,
+  PROMPT_WINDOW_CLOSED,
   checkAttachments,
   fileNameOf,
   isImageFile,
   mimeFor,
   promptModeOf,
+  promptSendRoute,
   resolvePromptTarget,
   type PromptFileInfo,
   type PromptSendRequest,
   type PromptSendResult
 } from '@shared/prompt.js';
 import { loadBoard } from './board-store.js';
-import { chatWindowFor, openChatWindow } from './chat-window.js';
+import { chatWindowFor } from './chat-window.js';
 import { boardWindow } from './main-window.js';
 import { refuseDialogWhenRemote } from './remote-context.js';
 import {
@@ -36,8 +38,9 @@ import {
  *
  * ── The order, and why each step waits for evidence ───────────────────────────────────────────
  *
- *   1. Open or focus the TARGET node's conversation window: the same window a click on the JARVIS
- *      chip opens, on the same conversation, never a fresh one.
+ *   1. Find the TARGET node's conversation window, the one a click on the JARVIS chip opened. Since
+ *      2026-09-26 a box never opens it: if it is not open, the send is refused in words (William:
+ *      nothing launches a JARVIS session from the web UI except the one on the board).
  *   2. Wait for claude.ai's message box to exist. A new window is still loading, and a signed-out
  *      one never shows a box at all.
  *   3. Hand over the files first, then type, so the text is the last thing in the box.
@@ -180,9 +183,12 @@ export async function sendPrompt(request: PromptSendRequest): Promise<PromptSend
     return fail(`CANNOT READ A FILE — ${(err as Error).message.split('\n')[0]}`);
   }
 
-  openChatWindow(target, target.url);
+  /*
+   * 2026-09-26: a prompt box never opens the Face's window. Only William's click on U1 does
+   * (shell-opener.ts). If it is not open, refuse in words; the text stays on the clipboard.
+   */
   const win = chatWindowFor(target.id);
-  if (!win) return fail('THE CONVERSATION WINDOW DID NOT OPEN');
+  if (promptSendRoute({ windowOpen: win !== null }) === 'refuse' || !win) return fail(PROMPT_WINDOW_CLOSED);
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();

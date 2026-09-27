@@ -44,7 +44,7 @@ export function FirstRunHints(): React.JSX.Element | null {
             <span className="firstrun-what">{what}</span>
           </div>
         ))}
-        <button type="button" className="btn primary" onClick={dismiss} autoFocus>Got it</button>
+        <button type="button" className="btn primary" onClick={dismiss} autoFocus title="Hide these getting-started hints (Settings can show them again)">Got it</button>
       </div>
     </div>
   );

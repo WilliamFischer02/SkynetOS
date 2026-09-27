@@ -43,7 +43,7 @@ export function onFileChanged(listener: WatchListener): () => void {
 /**
  * Should this path be polled rather than watched natively?
  *
- * Pure and exported so test/watchers.test.ts can pin the rules — this is exactly the kind of
+ * Pure and exported so test/artifacts.test.ts can pin the rules — this is exactly the kind of
  * heuristic that gets quietly broken by a refactor and shows up months later as "the board
  * stopped noticing my builds".
  */

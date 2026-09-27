@@ -2,7 +2,41 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
-**Last session (2026-09-23, U3 JARVIS-PRIME, the away hour):**
+**Last session (2026-09-24, U3 JARVIS-PRIME, JARVIS Voice slice 1):** the hologram window, speech
+through Windows' own voice, the voice-profile recorder, and rule-based desktop control ("open after
+effects on one and firefox on two"), all off or unseen until William restarts and switches them on.
+Design docs/11, rules docs/07 § JARVIS Voice, roadmap M13. Verify green: 109 files, 1,708 tests.
+
+**Last session (2026-09-27 afternoon, U3 JARVIS-PRIME, William present): the window and the
+meter.** Four Opus workers, paced for credits: MAXIMIZE/RESTORE in the chrome (F11) and a UI SCALE
+setting (AUTO/1×/2×/3×) with the HUD and inspector reflowing so nothing is squashed (layout audit 8
+→ 0 clipped, 64 → 0 undersized controls); the usage meter with the fixed Max 20x plan, both weekly
+pools and the Monday 8 pm Denver reset (today's 48% / 78% seeded); the tray orb with a live menu;
+the explorer, the training wizard and 77 missing tooltips fixed. Verify green: 137 files, 2,078
+tests. Details under "The window and the meter — 2026-09-27". **Restart before changing any
+setting in the running app, or the seeded readings are overwritten.**
+
+**Session before (2026-09-26 evening into 09-27, U3 JARVIS-PRIME, William present): the JARVIS
+globe and everything around it.** Fourteen forks: the boot voice fixed, a WebGL2 orb at 480 px that
+moves to its own audio and shows what Claude Code touches, every control by voice, TRAIN ACTION
+recording and replay, dictation, the eased board with depth, themed dialogs, a UX pass, a
+performance pass, a correctness review, JARVIS-TQR on the board, the claude.ai window gated to U1,
+a drop hook for terminals, and a fine-tuned voice trained and applied. Verify green: 132 files,
+2,007 tests. **Nothing seen on screen; `npm run boot` is the first compile.** Details under
+"The JARVIS globe — 2026-09-26" below; reasoning in docs/DECISIONS.md, same date.
+
+**Session before (2026-09-26 afternoon, U3 JARVIS-PRIME, William present): ScheduleOS Phase 5.**
+Reclaim declared in `.mcp.json` (his browser login still to do), the ScheduleOS room built (31
+nodes, D6 on root), `npm run schedule:week` renders PBS shifts and their prep chains into
+`schedule/week.html`. Verify green: 114 files, 1,773 tests. Timezone still Los Angeles on every
+calendar: his hands, first. Details under "ScheduleOS Phase 5 — 2026-09-26" below.
+
+**This morning (2026-09-26, MORNING MAINTENANCE, unattended):** one `idSlug` for three copies, the
+mailbox and gesture catalogue no longer claim emptiness before they have read, two layout tests that
+could pass on nothing now fail, and the five wrong-name comments (roadmap 16) fixed. Verify green:
+113 files, 1,751 tests. Details under "Morning maintenance 2026-09-26" below. Nothing committed.
+
+**Session before (2026-09-23, U3 JARVIS-PRIME, the away hour):**
 - The Tailscale guide for William's side: `docs/guides/remote-setup-tailscale.md`.
 - FinanceOS: a room, a ledger model, `npm run finance:report`, a finance-advisor persona; numbers
   live only in gitignored `private/finance/`, which William fills from a template.
@@ -18,6 +52,335 @@ docs/DECISIONS.md. Nothing committed; William has not asked. Nothing has been se
 **Session before (2026-09-12, voice and THE MATRIX):** voice control end to end, two raised hands
 place the cursor, a Windows 3.1 arrow, THE MATRIX (`G`). Nothing tried with a microphone or on
 camera. Details under "Voice, two hands and THE MATRIX — 2026-09-12".
+
+## The window and the meter — 2026-09-27 (U3 JARVIS-PRIME, William present, four Opus workers)
+
+William: a maximize button and window scalability because "a lot of the buttons and UI elements
+are squashed"; the usage meter tuned to a plan that never changes (Max 20x) and always resets
+Mondays 8 pm; keep refining UI and adding features; pace the credits to the Monday reset (22% of
+the week's Fable left, 48% of the week's overall used). Workers ran on Opus 5.5 with self-contained
+briefs. All uncommitted; verify green, 137 files, 2,078 tests. Each worker appended its own entry
+to docs/DECISIONS.md (2026-09-27). Nothing seen on screen.
+
+1. **Window (O):** `window:maximize|minimize|state` + `window:changed` (board window only, new
+   `WINDOW_METHODS` gate); MAXIMIZE/RESTORE icon after SETTINGS in the breadcrumb row, F11, palette
+   entries; `settings.uiScale` AUTO/1×/2×/3× in LOOK → SYSTEM, carried in `display:info`; the HUD
+   gains an icons level and chips fold behind +N; an open inspector narrows to 320 px and scrolls;
+   every docked control ≥ 24 px; the smoke probe now audits hit sizes, sideways overflow and 2×/3×.
+   Audit: 8 → 0 clipped states, 64 → 0 states with an undersized control, at 85 desktop states.
+2. **Meter (P):** `packages/shared/usage-week.ts` (DST-safe week window via Intl, `percentNow`
+   extrapolated by tokens actually spent since the reading), `settings.usage.weeklyAnchor` and
+   `usage.pools` (last 20 readings each), `settings:addUsageReadings` user-only, PlanDialog inputs
+   for both weekly percentages, WEEK · ALL and WEEK · FABLE bars with RESETS MON 8:00 PM · 1d 6h.
+   Seeded: all 48%, top 78% at 2026-09-27T19:03Z. Test: `test/usage-week.test.ts` (24).
+3. **Tray (Q):** `services/tray.ts`, `assets/tray/tray-16.png|32.png` (six palette blues,
+   `npm run icon:tray`), menu Open board / JARVIS Voice / Voice ✓ / Desk control ✓ / Start with
+   Windows ✓ / Quit; `tray.minimizeToTray` (default false, file only). **Behaviour change:** closing
+   the board window now quits SkynetOS (before, the hologram or capture window kept it alive
+   headless). Test: `test/tray.test.ts` (13).
+4. **UX leftovers (R):** the explorer aligned (StateBox states, keyboard: arrows, Home/End, Enter,
+   Backspace, Alt+←, F5, Esc); the vision wizard with the panel head, state boxes, Esc rules per
+   screen, `gate:wizard` clean on all seven phases; `npm run audit:tooltips` and
+   `test/tooltip-audit.test.ts` hold missing tooltips at 0 (was 77 of 138).
+
+**For William, in order:** (1) `npm run boot` FIRST, before touching any setting in the old
+instance. (2) Press the new MAXIMIZE icon, then LOOK → SYSTEM → UI SCALE 2×: nothing should clip.
+(3) Open the usage meter: two weekly bars with today's readings; CALIBRATE to enter new ones from
+claude.ai /usage. (4) The tray orb: right-click for the menu. (5) Everything from the 26th is still
+unseen: VOICE, the globe, TRAIN ACTION, the eval WAVs.
+
+**Landmines:** the dev server running since the 26th serves a stale module (`scratchFor is not
+defined` in router.ts) until it restarts; the built renderer is fine. `ELECTRON_RENDERER_URL` is
+inherited by smoke runs from the running app: use `env -u ELECTRON_RENDERER_URL npm run
+smoke:shots` for the built path. 3× UI scale on a 1080p screen is below the window minimum and is
+not audited.
+
+## The JARVIS globe — 2026-09-26 (U3 JARVIS-PRIME, William present, fourteen forks)
+
+William's brief and the eight defaults he accepted are in docs/DECISIONS.md "2026-09-26 — The
+JARVIS globe". **All uncommitted. Nothing seen on a screen.** `npm run verify` green: 132 files,
+2,007 tests. Snapshots before the two board edits:
+`board/.snapshots/2026-09-27T03-06-04-036Z-agent-tqr-agent/` (and the ScheduleOS one earlier in the
+day). **Ctrl+Z will not undo either.**
+
+**What exists now, by fork:**
+- **C, the boot voice:** `startSpeechAtBoot` (index.ts) starts and warms the synthesis server;
+  `speechRoute` (packages/shared/speech.ts) holds a line up to `speech.warmWaitMs` (120 s) and
+  shows WARMING instead of falling back to David.
+- **F1, the renderer:** `src/renderer/hologram/` (gl, globe, wisps, post, content, scene,
+  renderer, controls); 480 px default (`clampHologramSize` 160–960); `speech:levels` and
+  `voice:levels` at 30 Hz; LISTENING brightens everything; DESK = monitor one, full height;
+  CLOSE (✕) closes; `hologram:close|shutdown|setDesk`; every control has `data-control`.
+- **F2, the feed:** `services/activity-feed.ts` tails `~/.claude/projects/**/*.jsonl`;
+  `globe-atlas.ts` + `userData/globe-atlas.json` pin every path; `activity-events.ts` scheduler
+  (2.5–12 s holds, pre-empt at +10 priority, queue of 3); `holo-content.ts` paper / terminal diff
+  / OBJ+STL wireframe / folder. Contract: `holo-scene.ts` (+ `redactScene` for stream mode).
+- **G, the voice:** `hologram-control.ts` ids; spoken forms for every control (`intent.ts`,
+  `test/intent.test.ts` walks the list); "stop" variants; "shut yourself down" (program only; a
+  sentence naming the computer is refused); `dictate:*` with `Ctrl+Alt+D` (SendKeys, ≤ 60 s);
+  "do the <name>" runs a saved action.
+- **H, TRAIN ACTION:** `packages/shared/actions.ts`, `services/action-recorder.ts`; the helper
+  records clicks with UIA targets, wheel and keys, pauses on sign-in titles; replay tiers element /
+  window / screen with a `.replay.log`; channels `desktop:recordStart|recordStop|recordStatus|
+  actionSave|actionList|actionRun`, no delete. **No recording or replay has been run.**
+- **I, the board:** `motion.ts` springs (zoom 160 ms, mouse 90, gesture 180, glide ≤ 250);
+  ZOOM_LEVELS + 10, 12; CSS-scaled tween at integer render; parallax 0.94/0.97; package shadow and
+  lit edge; the orb replaces the head in `AvatarApp.tsx`.
+- **J, gates and drops:** `prompt:send` refuses unless U1's window is open; `tools/claude-hooks/`
+  + `npm run drop:install` → `~/.claude/hooks/drop-attach.mjs`, `~/.claude/skills/drop/`, hook in
+  `~/.claude/settings.json` (backup beside it).
+- **L, the voice:** `npm run speech:finetune -- prepare|train|status|prune|apply|eval jarvis`;
+  1,500 updates in 56 min; `model_1500_pruned.pt` (1.3 GB) applied in `profile.json`
+  (`use_ema:false`); `tools/speech-server.py` loads it and scores references; eval WAVs in
+  `%LOCALAPPDATA%\SkynetOS\voice\tts\finetune\jarvis\eval\`.
+- **D:** `u_jarvis_tqr` U7 at (106,90) beside GameOS, `cwd C:/dev/TruthQuestRetro`.
+- **E:** `confirm-window.ts` + `ConfirmApp.tsx` replace every `dialog.showMessageBox`.
+- **M:** `PanelHead.tsx`, `StateBox.tsx`, `ui-copy.ts`; focus ring; reduced motion; roadmap 13–15.
+- **K:** deferred boot (`did-finish-load`), async snapshot prune, router scratch, `route-cache.ts`,
+  placeholder canvas cache, render-when-dirty, observers in `useChromeLayout` (roadmap 7),
+  `SKYNET_PERF=1`, `userData/boot-timing.json`, `tools/png-census.mjs`.
+- **N:** `isSecretPath`, `redactScene`, the scene generation guard, the 8 MB model cap, the
+  recorder stop that tolerates a dead helper, the replayed last scene on load, refused chords
+  shared by plan/replay/helper. `test/holo-redact.test.ts`.
+
+**For William, in order (one action each):**
+1. `npm run boot`. Everything is main-process or a shader. Watch the terminal for `[boot]` lines
+   and any WebGL error; the window falls back to the 2D orb if WebGL2 is refused.
+2. Press VOICE. Say "Jarvis, hello": WARMING THE VOICE for up to two minutes on the first line
+   after boot, then his profile. The globe should move to the words. If it is David, read
+   `[speech]` lines: the fine-tune load failing falls back to the base model, and the base model
+   failing falls back to David.
+3. Open any file from a Claude Code session: it should travel to the centre of the globe.
+4. DESK on: the window goes to monitor one. Press TRAIN ACTION, open Notepad and type a word,
+   press it again, name it "notepad test", SAVE, then "Jarvis, do the notepad test" with Notepad
+   closed. Watch the first replay.
+5. Listen to `finetune\jarvis\eval\`: `*_base.wav` against `*_tuned.wav`. Say which is closer.
+6. On the board: wheel zoom and drag; `L` and `M` and About for the new panels; a launch outside
+   the dev roots for the themed confirm.
+7. In a fresh terminal session: drag a file onto it and press Enter; `/drop` explains it.
+
+**Landmines from today:**
+- `"mcpServers": ["Reclaim"]` on a node is dropped silently (only `skynet` resolves by name).
+- The drop hook fires on ANY prompt naming a path, including pasted reports; over 1,500 characters
+  it lists rather than inlines. It applies to sessions started after the install.
+- A smoke run beside a running app used to share Chromium's cache and stall 6 s; now it has its own
+  `sessionData`. Never start `release/win-unpacked/SkynetOS.exe` plainly beside the live copy.
+- Smoke runs and the fine-tune fought for the GPU: training went from 1 s to 19 s per update.
+- The `speech:finetune status` watcher matched "NOT RUNNING" against "RUNNING"; read the second
+  line, not the first.
+- `test/watch-plan.test.ts` still trips its 8 s deadline now and then in a lone run (roadmap 19).
+
+## ScheduleOS Phase 5 — 2026-09-26 (U3 JARVIS-PRIME, William present)
+
+William: Reclaim hooked up to a scheduling OS so he can feed it his PBS schedule, then on to Fiverr
+and the sign-ups. Two forks, one owner per file; reasoning in docs/DECISIONS.md "2026-09-26 —
+ScheduleOS". **Nothing committed, nothing deleted, no calendar touched, no Reclaim login made.**
+`npm run verify` green: 114 files, 1,773 tests (was 113 / 1,751).
+
+**What exists now:**
+1. **Reclaim in `.mcp.json`** (repo root, tracked, no secret): `Reclaim`, http,
+   `https://mcp.reclaim.ai`. Answers 401 unauthenticated. Any `claude` session with cwd
+   `C:/dev/SkynetOS` gets it after William allows it once. Tool names: none recorded yet
+   (`private/schedule/reclaim/mcp-tools.md` says what to do).
+2. **The room** `board/scheduleos/room.board.json` (31 nodes, 10 traces; THIS WEEK, ENGINE,
+   SECRETARY zones; `u_cc_secretary` CC-SECRETARY with `mcpServers: ["skynet"]`; SCHED-BUILD 06:45,
+   SCHED-NUDGE 21:30, SCHED-WEEK Sunday 18:45, all `agent.run` on briefs `codex/briefs/sched-*.md`,
+   all disabled). Root: `d6_scheduleos` D6 at (135,92), `e_scheduleos` from JARVIS. Palette row
+   `scheduleos` `#9CF0FF` in palette.ts, skynet.gpl, docs/02, `test/palette.test.ts`. Snapshot
+   `board/.snapshots/2026-09-26T21-29-42-504Z-agent-scheduleos-room/`; **Ctrl+Z will not undo it.**
+3. **The week tool** `npm run schedule:week`: `schedule/pbs-shifts.json` (+ optional
+   `private/schedule/events.json`) → `schedule/week.html`, `schedule/today.md`; prints a line per
+   day and any 23:00–07:30 violation. `packages/shared/schedule-week.ts`,
+   `test/schedule-week.test.ts` (15). Ran once against the empty inputs: seven empty days.
+4. **Record:** `codex/projects/scheduleos.md` State, `private/schedule/reclaim/mcp-tools.md`,
+   `codex/handoffs/financeos-scheduleos.md` (Phase 2 line, DataAnnotation done).
+
+**Not built:** the habit import (needs the Reclaim tool list), the Hours schemes (William, in
+Reclaim), CC-SECRETARY's first run, `schedule/proposals.md`, the smoke screenshot.
+
+**For William, in order (one action each):**
+1. Timezone: Google Calendar → Settings → General → Time zone → Mountain Time - Denver, then each
+   of `Work – Shifts`, `Work – Prep Blocks`, `BitRunners Development`; Reclaim → Settings → time
+   zone. I verify with one calendar read.
+2. Reclaim login: a terminal in `C:/dev/SkynetOS`, `claude`, `/mcp`, Reclaim, finish in the
+   browser, then tell me and I record the tools.
+3. Feed one shift: say "PBS <day> <call time> <sport>" here, or paste rows; they go into
+   `schedule/pbs-shifts.json` and `npm run schedule:week` shows the chain. The chip and the
+   room appear after a restart (`npm run boot`) or the next `board:load` of root.
+
+**Landmines:**
+- `"mcpServers": ["Reclaim"]` on a node is dropped silently by `resolveMcpConfigs`; only `skynet`
+  resolves. Project servers come from `.mcp.json` in the cwd.
+- `f_model` points into `codex/drops/…`, which is gitignored: real here, absent on a fresh clone.
+- `schedule/week.html` and `today.md` are gitignored outputs; the WEEK VIEW node is provisional
+  until the first real render.
+
+## Morning maintenance 2026-09-26
+
+The MORNING MAINTENANCE task, fired on time for the 08:00 slot (the session's first verify started at
+09:46). Unattended, per `codex/briefs/morning-maintenance.md`. Nothing committed, nothing deleted, no
+board file touched, no dependency added, no mail on `to-hands`, no `codex/face-brief.md` on disk.
+`npm run verify` was green before (112 files, 1,747 tests; up from the 109/1,708 the lead block
+records, the Face's 2026-09-25 drop having landed since) and after every change (113 files, 1,751).
+Stopped at the brief's bound: three improvements and one roadmap step. Reasoning in
+docs/DECISIONS.md "2026-09-26 — Morning maintenance".
+
+**Changes, all uncommitted:**
+
+1. **Roadmap step, docs/06 "Known issues" 16** — five comments that named things that do not
+   exist: `src/main/services/shell-opener.ts:279` (`trustedByUser()`), `packages/shared/vision.ts:7`
+   (`vision.ts`), `src/main/services/watchers.ts:46` (`test/artifacts.test.ts`),
+   `packages/shared/room-title.ts:18` (`suffixSize()`), `packages/shared/usage.ts:20`
+   (`remainingHours`). One word each. Verify: green.
+2. **One id slug** (roadmap 17) — new `packages/shared/id-slug.ts` (`idSlug`), imported by
+   `packages/shared/phantoms.ts`, `src/main/services/ingest.ts` and
+   `src/main/services/node-factory.ts` in place of three identical lines. `normaliseRoot` in
+   `src/main/services/settings.ts` is now `normalisePath` (`packages/shared/usage.ts`) under its old
+   name; `session-manager.ts` `underTrustedRoot` drops its redundant backslash replace. Test:
+   `test/id-slug.test.ts` (4), the last one holding that `freePhantomId` and `freeNodeId` build from
+   the same slug. Verify: green, 1,751.
+3. **The mailbox and the gesture catalogue read before they speak** (roadmap 11 and 12) —
+   `src/renderer/ui/Mailbox.tsx`: `mail` starts `null`; READING codex/mailbox/… until the first
+   answer; a failed read shows COULD NOT READ with the reason and the retry (close and reopen); the
+   count reads `…` until known; "Copy for the Face" toasts COULD NOT REACH THE CLIPBOARD and names
+   the file when the clipboard refuses. `src/renderer/ui/GestureCatalogue.tsx`: READING THE GESTURE
+   LIBRARY… and COULD NOT READ in place of "No gestures yet." before a read has answered. No test
+   (renderer, roadmap 10). Verify: green. **Not seen on screen.**
+4. **Two layout tests that could pass on nothing** (roadmap 18, the test half) —
+   `test/layout.test.ts` "picks the component, not the zone" and "still allows selecting a zone by
+   its empty margin" returned silently when their MinecraftOS node was missing; each now throws,
+   naming the node. Verify: green.
+
+**Found, left alone**, now roadmap "Known issues" 19: `test/watch-plan.test.ts` "survives `gradlew
+clean`" tripped its 8 s deadline once in six lone verifies (passed in 3.1 s on the rerun). The
+landmine below that says it fails only under three parallel verifies is wrong by one case. The 1 s
+tickers in `FableCores.tsx` and `RemotePanel.tsx` were checked and are already gated on a countdown.
+
+**For William:** 3 hot-reloads in `npm run dev`; 1, 2 and 4 are main-process or tests and need a
+restart to matter. To see 3: press `M` and watch the head count read `…` for a frame before the
+list; the failure states need a broken `codex/mailbox/` to appear. Ctrl+Z has nothing to undo here;
+this session made no board edits.
+
+## JARVIS Voice — 2026-09-24 (U3 JARVIS-PRIME, William present)
+
+William: a launch-on-boot voice-controlled window with a blue hologram that opens programs on named
+monitors, moves the mouse visibly, talks back, trains, and plans. First asked for a voice trained on
+Paul Bettany's lines; declined (a real person's voice without consent); he amended it to his own
+recordings as the dataset, which is the design. Built as **roadmap M13, slice 1**: design
+`docs/11-JARVIS-VOICE.md`, rules docs/07 § JARVIS Voice, reasoning docs/DECISIONS.md 2026-09-24.
+The contract (types, channels, settings, skeleton services) was laid first; three forks built on it.
+`npm run verify` green: 109 files, 1,708 tests (was 105 and 1,651). **Nothing seen on screen; no
+plan has touched the desktop.** Nothing committed.
+
+**What exists now:**
+1. **The window** (`services/hologram-window.ts`, `ui/HologramApp.tsx`, `hologram.css`,
+   `packages/shared/hologram.ts`): a 240 px square, frameless, bottom-right of the primary display,
+   always-on-top by setting, on the taskbar, **close is minimise**, opens with SkynetOS when
+   `hologram.enabled`. A Bayer-dithered six-blue sphere at whole-number scale with rings, scanlines
+   as pixels, a flicker frame; moods fault/acting/speaking/listening/thinking/idle/off from
+   `moodFrom`; one ALL-CAPS caption. Buttons MIC / SAY / DESK / TRAIN / minimise, a text box (Enter →
+   `voice:typed` → the board's own intent path), Esc halts and stops. TRAIN is the voice-profile
+   recorder. Switch: LOOK → System → **JARVIS Voice window** (`SystemSettings.tsx`). It may call only
+   `HOLOGRAM_ALLOWED`; it opens no microphone.
+2. **Speech** (`services/speech.ts`, `packages/shared/speech.ts`): System.Speech in a PowerShell
+   sidecar with word-boundary progress (`speech:state`), a queue, interrupt; a `server` backend
+   (`POST /synthesize`, loopback only) that falls back to `sapi`. `npm run speech:probe` spoke one
+   line with Microsoft David (this PC has no en-GB voice; System.Speech sees only Desktop voices).
+   After `actOnIntent`, the board now speaks its one-line result (`useVoice.ts`).
+3. **Voice profiles**: `PROFILE_LINES` (40 original lines in the register), profiles under
+   `%LOCALAPPDATA%/SkynetOS/voice-profiles/<name>/`, recorded one line at a time through the existing
+   capture window (`voice:record`, `recordOnce` in `voice.ts`, the renderer's `listen` with `maxMs`).
+   `trained` stays null: the synthesis server (M13.2, not installed) trains.
+4. **Desktop control** (`services/desktop.ts`, `packages/shared/desktop.ts`, `intent.ts`,
+   `actOnIntent.ts`, the store's `desktopApps`/`desktopMonitors`): a separate PowerShell helper with
+   `SetWindowPos`, `SetCursorPos`, `SendInput`; a Start Menu catalogue (299 shortcuts here) plus
+   `settings.desktop.apps`; monitors numbered primary first then left to right ("one" = DISPLAY3,
+   "two" = the 1920×1080 to its left, "three" = the portrait); `parseDesktopCommand` for "open X on
+   N (and Y on M)", "move X to N", "open <site> in <browser>", "open <site>"; `replyFor` composes the
+   spoken reply; ≤12 steps, halt between steps, `alt+f4`/`win+l`/`ctrl+alt+delete` refused; the
+   tracker untouched. **OFF by default**: the DESK switch or `desktop.enabled`. `npm run desktop:probe`
+   is read-only and ran (20 windows).
+5. **The contract**: `packages/shared/ipc.ts` (19 channels, 3 events, `HOLOGRAM_ALLOWED`),
+   `test/jarvis-voice-contract.test.ts` holds that none is an agent's or a phone's.
+
+**Later the same day, M13.2 begun (William: "keep building", AIFF samples to import):**
+6. **The importer** (`packages/shared/aiff.ts`, `tools/profile-import.ts`, `npm run profile:import
+   -- william`): decodes AIFF and WAV in-repo (no ffmpeg here), mono, 16 kHz, silence trimmed,
+   `line-import-NN.wav` plus an imported line in `profile.json`; transcripts from `transcripts.txt`,
+   `--transcribe` (whisper-server), or typed in the TRAIN panel (`profile:setText`, NEEDS A
+   TRANSCRIPT until then). Drop folder: `%LOCALAPPDATA%\SkynetOS\voice-profiles\william\import\`
+   (created, empty at the time of writing; `profile.json` for `william` exists with 0 lines).
+7. **The synthesis server**: `tools/speech-server.py` (F5-TTS, reference-clip synthesis, 127.0.0.1:
+   47832, picks the longest transcribed line 2–15 s), `npm run speech:install` (Python 3.10 venv at
+   `%LOCALAPPDATA%\SkynetOS\voice\tts\venv`, CUDA 12.8 torch, F5-TTS; **installed 2026-09-24: torch 2.11.0+cu128, CUDA seen on the RTX
+   5070, f5-tts 1.1.22**), `npm run speech:serve`. The speech service
+   now starts the server itself when `speech.backend` is `server` and nothing answers
+   (`startSynthServer`), and kills it on quit. **USE THIS VOICE** in the TRAIN panel
+   (`speech:setBackend`, user-only) switches to a profile; pressing it again goes back to Windows'
+   voice. Every failure falls back to Windows' voice and says so. The first synthesis downloads the
+   model weights (about 1.3 GB) into the Hugging Face cache. **Nothing has been heard through the
+   server yet.**
+
+8. **The profile is heard.** William dropped 380 AIFF clips (his own JARVIS impression, 2024) in
+   `voice-profiles/Jarvis/import/` inside the repo; `.gitignore` now excludes `voice-profiles/`.
+   `npm run profile:import -- jarvis <that folder> --transcribe`: 358 imported, 22 refused (under
+   0.5 s after trimming), all transcribed by whisper, 122 usable as a reference. The first synthesis
+   failed on torchcodec wanting FFmpeg; `tools/speech-server.py` now reads its WAVs with soundfile.
+   The second produced an 8 s line in his voice, played aloud. `settings.json` set by the Hands at
+   his request: `speech.backend: server`, `profile: jarvis`. The service's synthesis timeout went
+   8 s → 90 s and the server gets a `/warm` call after it comes up, so the first line after a restart
+   does not fall back to David. My trial server was stopped; SkynetOS starts its own.
+
+9. **The VOICE button opens JARVIS** (`src/renderer/App.tsx`, `hologram:open`, `openHologram` in
+   `hologram-window.ts`). A click switches the window on if needed, opens or restores it, and
+   focuses it; MIC inside it is the microphone. Shift+click is the old toggle (the hard mute), and
+   "Voice off" in the palette and "stop listening" still work. docs/07 Voice row updated.
+
+10. **The buttons fit the square** (William: TRAIN ran off the right edge). `hologram.css`: the five
+    nav buttons share the row's width (`flex: 1 1 0`, clip rather than push), minimise is fixed
+    width, every TRAIN-panel row clips with an ellipsis, and the profile switch reads USE VOICE /
+    THIS VOICE ●. Labels are held to five characters. Not seen on screen; the arithmetic at 240 px
+    leaves about 45 px per button for at most 36 px of text.
+
+11. **JARVIS answers, then listens once more** (William: "it opened a U1 jarvis window in claude
+    web and said nothing … talk back to me conversationally and me to be able to continue by saying
+    my next command"). Two forks:
+    - **Reply** (`packages/shared/converse.ts`, `services/converse.ts`, `converse:ask` user-only,
+      `useVoice.ts` rewritten, `intent.ts` `faceSend`): an unrecognised sentence goes to headless
+      `claude -p` (Haiku, `converse.model`, no tools, empty MCP set, 25 s), the reply is trimmed to
+      two spoken sentences and spoken by main, the exchange logged to `userData/conversation.jsonl`.
+      Smoke test: 8.2 s to a two-sentence reply in the register. The 2.2 s hand-off to the Face is
+      gone; "ask the face …" is the only road to claude.ai now. `test/converse.test.ts` (11).
+    - **Follow-up** (`packages/shared/voice.ts`, `services/voice.ts` `listenAgain`, renderer
+      `voice.ts`, `services/speech.ts` hook): after JARVIS finishes an answer to a sentence heard
+      within 20 s, 350 ms later the microphone opens once without the wake phrase, for one
+      sentence or 5 s of silence; silence ends the exchange. `voice.followUp: false` removes it.
+      `test/voice-service.test.ts` (+6). docs/07 Voice table: two rows changed, one added.
+    **Not heard live.** The 8 s on Haiku shows as `thinking` on the sphere.
+
+**Not built (M13.3–M13.5, designed in docs/11):** the `claude -p` planner ("open my most recent
+project"); action recording; a tray icon; the fine-tuned voice (shape 2) and its training trigger;
+a streaming reply to cut the 8 s; an inspector for the conversation log.
+
+**For William, in order:**
+1. `npm run boot` (all main-process).
+2. `L` → System → tick **JARVIS Voice window**. The square appears bottom-right.
+3. MIC on. SAY is on already: type `hello` in the box; JARVIS should answer aloud with David.
+4. Type `open firefox on one` with DESK off: refused in words and speech. DESK on, again: Firefox
+   opens filled on the primary display. **Watch the first one.** Esc stops it.
+5. Say "Jarvis, open after effects on one and firefox on two."
+6. TRAIN: a profile name, CREATE, read the line, RECORD, PLAY.
+7. Install an en-GB voice: Settings → Time & Language → Speech → Add voices → English (United
+   Kingdom). It must be a Desktop/SAPI voice for System.Speech to see it.
+
+**Landmines from today:**
+- The speech sidecar starts `powershell.exe` first (pwsh 7's Add-Type cannot reference
+  System.Speech); the wake sidecar does the reverse. Do not "fix" either to match the other.
+- Three forks running `npm run verify` at once trip the 8 s real-filesystem deadline in
+  `test/watch-plan.test.ts`; alone it passes. Serialise the final verify.
+- The sidecar's `play` blocks its stdin loop for the WAV's duration, so `stop` cannot interrupt a
+  playing profile line.
+- The `url` step opens an existing browser's window and cannot tell which tab it landed in.
 
 ## The away hour — 2026-09-23 (U3 JARVIS-PRIME, William at work)
 

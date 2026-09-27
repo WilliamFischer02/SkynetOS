@@ -68,6 +68,19 @@ export interface ChromeInput {
   minimapButton: { w: number; h: number };
   /** The HUD's width on one line with every chip. */
   hudNaturalW: number;
+  /**
+   * The HUD's width compact: the primary chips, a +N and its three tools. Left out (0), the planner
+   * assumes compact always fits, as it did before the icons level existed.
+   */
+  hudCompactW?: number;
+  /** The HUD's width as icons: +N and its three tools, no chips. */
+  hudIconsW?: number;
+  /**
+   * The inspector's natural width while it is open (--inspector-width before any plan), or 0 when
+   * none is open. Given, the planner may narrow it so the HUD keeps its buttons (see `inspectorW`),
+   * and the dodge is worked out from the width it plans rather than from `dodge`.
+   */
+  inspectorNaturalW?: number;
   /** The help line's full width. */
   helpNaturalW: number;
   lookOpen: boolean;
@@ -85,7 +98,21 @@ export interface ChromePlan {
   usageMinimized: boolean;
   minimapSqueezed: boolean;
   hudCompact: boolean;
+  /** Narrower still: every chip behind +N, only the HUD's buttons shown. Implies `hudCompact`. */
+  hudIcons: boolean;
+  /**
+   * The breadcrumb row's switches show their icons alone (each keeps its title). The window is
+   * narrower than SWITCH_WORDS_W at this chrome scale: the old `max-width: 1100px` media query, which
+   * could not see `--ui-scale` and so left 3x switches in words across two thirds of the screen.
+   */
+  switchIcons: boolean;
   hudMaxW: number;
+  /**
+   * The inspector's planned width in px, or 0 for "as the stylesheet says". Non-zero only when an
+   * open inspector left too little room for even the icons HUD: it gives up width, down to
+   * MIN_INSPECTOR_W, and scrolls inside itself, rather than push the HUD's buttons off.
+   */
+  inspectorW: number;
   helpHidden: boolean;
   helpMaxW: number;
   toastsBottom: number;
@@ -111,7 +138,10 @@ export const EMPTY_PLAN: ChromePlan = {
   usageMinimized: false,
   minimapSqueezed: false,
   hudCompact: false,
+  hudIcons: false,
+  switchIcons: false,
   hudMaxW: 0,
+  inspectorW: 0,
   helpHidden: false,
   helpMaxW: 0,
   toastsBottom: 0,
@@ -129,6 +159,10 @@ const MIN_LOOK_H = 280;
 /** Below this, the help line is not worth showing truncated; it is hidden. */
 const MIN_HELP_W = 240;
 const MIN_TOAST_W = 160;
+/** Below this many px x --ui-scale, the breadcrumb row's switches drop their words. */
+export const SWITCH_WORDS_W = 1100;
+/** The narrowest the inspector gives way to, in px: 320 x --p, or 30% of the window above 1x. It scrolls inside itself. */
+export const MIN_INSPECTOR_W = 320;
 
 export function planChrome(input: ChromeInput): ChromePlan {
   const { gap: g, prefs } = input;
@@ -140,14 +174,38 @@ export function planChrome(input: ChromeInput): ChromePlan {
   /*
    * The HUD stays on one line, between the breadcrumb and the right-hand chrome. Two lines would
    * reach down into the usage meter's row. When the chips do not fit, the HUD goes compact: the
-   * secondary chips move into a drop-down.
+   * secondary chips move into a drop-down. When even the primary chips do not fit (an open
+   * inspector in a narrow window, 2026-09-27), it folds to its buttons: +N, find, bell, settings.
+   * And when not even those fit, an open inspector gives up width, down to MIN_INSPECTOR_W.
    */
+  const switchIcons = W < SWITCH_WORDS_W * unit;
   const breadcrumbRight = input.breadcrumb ? right(input.breadcrumb) : 2 * g;
-  const hudMaxW = Math.max(0, Math.floor(W - input.dodge - breadcrumbRight - 2 * g));
+  const naturalInspector = Math.max(0, input.inspectorNaturalW ?? 0);
+  let inspectorW = 0;
+  let dodge = input.inspectorNaturalW !== undefined ? (naturalInspector > 0 ? naturalInspector + 2 * g : 2 * g) : input.dodge;
+  const roomFor = (d: number): number => Math.max(0, Math.floor(W - d - breadcrumbRight - 2 * g));
+  let hudMaxW = roomFor(dodge);
   const hudCompact = input.hudNaturalW > hudMaxW;
-  if (hudCompact) reasons.push(`HUD compact: ${Math.round(input.hudNaturalW)} px of chips in ${hudMaxW} px`);
+  const hudIcons = hudCompact && input.hudCompactW !== undefined && input.hudCompactW > hudMaxW;
+  if (hudIcons) reasons.push(`HUD icons: ${Math.round(input.hudCompactW ?? 0)} px of primary chips in ${hudMaxW} px`);
+  else if (hudCompact) reasons.push(`HUD compact: ${Math.round(input.hudNaturalW)} px of chips in ${hudMaxW} px`);
+  const iconsW = input.hudIconsW ?? 0;
+  if (hudIcons && naturalInspector > 0 && !input.compact && iconsW > hudMaxW) {
+    // MIN_INSPECTOR_W at any scale, and 320 x --p where the window allows; at 3x in a 1920 window
+    // that would be half of it, so above 1x the floor is also held to 30% of the window.
+    const floor = Math.min(naturalInspector, Math.max(MIN_INSPECTOR_W, Math.min(MIN_INSPECTOR_W * unit, Math.floor((0.3 * W) / unit) * unit)));
+    // Whole multiples of --p, like the stylesheet's own width (docs/02: integer everything).
+    const wanted = Math.floor((naturalInspector - (iconsW - hudMaxW)) / unit) * unit;
+    const narrowed = Math.max(floor, wanted);
+    if (narrowed < naturalInspector) {
+      inspectorW = narrowed;
+      dodge = narrowed + 2 * g;
+      hudMaxW = roomFor(dodge);
+      reasons.push(`inspector narrowed to ${narrowed} px: the HUD's buttons need ${Math.round(iconsW)} px`);
+    }
+  }
 
-  const lookLeft = W - input.dodge - input.lookW;
+  const lookLeft = W - dodge - input.lookW;
   const leftStackTop = input.leftStack ? bottom(input.leftStack) - input.leftStackFullH : H;
   const leftStackRight = input.leftStack ? right(input.leftStack) : 0;
 
@@ -188,7 +246,7 @@ export function planChrome(input: ChromeInput): ChromePlan {
    * keeps it.
    */
   const mm = input.minimapSize;
-  const mmBox: Box = { x: W - input.dodge - mm.w, y: H - 2 * g - mm.h, w: mm.w, h: mm.h };
+  const mmBox: Box = { x: W - dodge - mm.w, y: H - 2 * g - mm.h, w: mm.w, h: mm.h };
   let minimapSqueezed = false;
   if (input.minimapOpen && !input.minimapForced) {
     if (input.leftStack && mmBox.x < leftStackRight + g && mmBox.y < bottom(input.leftStack)) {
@@ -222,12 +280,12 @@ export function planChrome(input: ChromeInput): ChromePlan {
   const cornerH = minimapVisible ? mm.h : input.minimapButton.h;
   const cornerW = minimapVisible ? mm.w : input.minimapButton.w;
   const toastsBottom = Math.round(2 * g + cornerH + 2 * g);
-  const toastsRight = Math.round(input.lookOpen ? input.dodge + input.lookW + g : input.dodge);
+  const toastsRight = Math.round(input.lookOpen ? dodge + input.lookW + g : dodge);
   const leftBound = input.leftStack ? leftStackRight + g : 2 * g;
   const toastsMaxW = Math.round(Math.max(MIN_TOAST_W * unit, Math.min(W * 0.45, W - toastsRight - leftBound)));
 
   // The help line runs along the bottom until the corner occupant; too little room and it hides.
-  const helpMaxW = Math.max(0, Math.floor(W - input.dodge - cornerW - g - 2 * g));
+  const helpMaxW = Math.max(0, Math.floor(W - dodge - cornerW - g - 2 * g));
   let helpHidden = prefs.helpHidden;
   if (!helpHidden && helpMaxW < Math.min(input.helpNaturalW, MIN_HELP_W * unit)) {
     helpHidden = true;
@@ -238,7 +296,10 @@ export function planChrome(input: ChromeInput): ChromePlan {
     usageMinimized,
     minimapSqueezed,
     hudCompact,
+    hudIcons,
+    switchIcons,
     hudMaxW,
+    inspectorW,
     helpHidden,
     helpMaxW,
     toastsBottom,
@@ -257,7 +318,10 @@ export function samePlan(a: ChromePlan, b: ChromePlan): boolean {
   return a.usageMinimized === b.usageMinimized
     && a.minimapSqueezed === b.minimapSqueezed
     && a.hudCompact === b.hudCompact
+    && a.hudIcons === b.hudIcons
+    && a.switchIcons === b.switchIcons
     && a.hudMaxW === b.hudMaxW
+    && a.inspectorW === b.inspectorW
     && a.helpHidden === b.helpHidden
     && a.helpMaxW === b.helpMaxW
     && a.toastsBottom === b.toastsBottom

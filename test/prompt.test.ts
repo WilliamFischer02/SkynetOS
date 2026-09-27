@@ -5,12 +5,14 @@ import type { Board, BoardNode } from '../packages/shared/types.js';
 import { DEFAULT_FOOTPRINT } from '../packages/shared/types.js';
 import {
   PROMPT_LIMITS,
+  PROMPT_WINDOW_CLOSED,
   checkAttachments,
   fileNameOf,
   isImageFile,
   mimeFor,
   promptLayout,
   promptModeOf,
+  promptSendRoute,
   resolvePromptTarget
 } from '../packages/shared/prompt.js';
 import { AGENT_METHODS, CHANNELS } from '../packages/shared/ipc.js';
@@ -173,5 +175,26 @@ describe('a new prompt node from the palette', () => {
     const jarvis = root.nodes.find((n) => n.id === 'u1_jarvis');
     expect(box?.promptTarget).toBe('u1_jarvis');
     expect(box && jarvis && box.pos.y).toBeGreaterThan((jarvis?.pos.y ?? 0) + (jarvis?.footprint?.h ?? 0) - 1);
+  });
+});
+
+describe('a box never opens the Face (2026-09-26)', () => {
+  /*
+   * William: "make sure no version of launching a JARVIS session launches from the web UI anymore,
+   * beside the one on the board." Only his click on U1 opens the claude.ai window. A prompt box,
+   * the corner prompt and "ask the face" deliver into an OPEN window or refuse in words.
+   */
+  it('delivers only into a window that is already open', () => {
+    expect(promptSendRoute({ windowOpen: true })).toBe('deliver');
+    expect(promptSendRoute({ windowOpen: false })).toBe('refuse');
+  });
+
+  it('refuses with an instruction that names the chip', () => {
+    expect(PROMPT_WINDOW_CLOSED).toMatch(/CLICK U1 ON THE BOARD/);
+  });
+
+  it('is not undone by prompt-send.ts opening the window itself', () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'main', 'services', 'prompt-send.ts'), 'utf8');
+    expect(source).not.toMatch(/openChatWindow\(/);
   });
 });

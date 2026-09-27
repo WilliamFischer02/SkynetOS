@@ -10,15 +10,36 @@
  * ScriptProcessorNode rather than an AudioWorklet: a worklet is a module the page must fetch, and this
  * page is served from a file with a CSP that gives it nothing to fetch from. The processor is
  * deprecated but supported, and a sentence is short.
+ *
+ * While the microphone is open, an AnalyserNode on the same stream reduces it to eight band levels
+ * and a loudness thirty times a second (`voice:levels`, packages/shared/speech-levels.ts) so the
+ * hologram's globe can move to William's own voice. Numbers only; no audio leaves this page by that
+ * path, and the analyser stops with the tracks.
  */
 
-import { DEFAULT_ENDPOINT, createEndpointer, downsample, encodeWav, rms } from '@shared/voice-capture.js';
+import { DEFAULT_ENDPOINT, createEndpointer, downsample, encodeWav, rms, type EndpointConfig } from '@shared/voice-capture.js';
 import type { VoiceCapture, VoiceListen } from '@shared/voice.js';
+import { BAND_EDGES_HZ, LEVEL_BANDS, LEVEL_HOP_MS } from '@shared/speech-levels.js';
 
 let busy = false;
 
 window.skynet.on('voice:listen', (request) => {
-  void listen(request);
+  // A follow-up window (docs/07 § Voice) asks for its own silence budget; everything else about
+  // the capture is the same: the same endpointer, the same 8 s of sentence, the tracks stopped.
+  const noSpeechMs = request.noSpeechMs === undefined ? DEFAULT_ENDPOINT.noSpeechMs : Math.max(2000, Math.min(8000, Number(request.noSpeechMs) || DEFAULT_ENDPOINT.noSpeechMs));
+  void listen(request, noSpeechMs === DEFAULT_ENDPOINT.noSpeechMs ? DEFAULT_ENDPOINT : { ...DEFAULT_ENDPOINT, noSpeechMs });
+});
+
+/*
+ * A profile line (docs/11 § Voice profiles): the same microphone, the same endpointer, one line,
+ * with more room to read it (up to 15 s) and more patience before giving up (6 s of silence). The
+ * capture label is whatever the last `voice:listen` used; main asks for a line only while voice is
+ * on, so one has always arrived first.
+ */
+let lastLabel = '';
+window.skynet.on('voice:record', (request) => {
+  const maxMs = Math.max(2000, Math.min(15_000, Number(request.maxMs) || 12_000));
+  void listen({ captureLabel: lastLabel }, { ...DEFAULT_ENDPOINT, maxMs, noSpeechMs: 6000 });
 });
 
 /** A microphone whose name contains `label`, if Windows has told this page the names yet. */
@@ -39,14 +60,58 @@ const join = (parts: Float32Array[]): Float32Array => {
   return out;
 };
 
-async function listen(request: VoiceListen): Promise<void> {
+/**
+ * Levels from an AnalyserNode: the same eight log-spaced bands the speech side uses, each the mean
+ * magnitude of its bins, against a slowly forgetting peak so a quiet room still moves the globe a
+ * little and a shout does not pin it. Posts until `stop` is called.
+ */
+function startLevels(context: AudioContext, source: MediaStreamAudioSourceNode): () => void {
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.2;
+  source.connect(analyser);
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  const time = new Uint8Array(analyser.fftSize);
+  const binHz = context.sampleRate / analyser.fftSize;
+  let peak = 0.05;
+  const timer = window.setInterval(() => {
+    analyser.getByteFrequencyData(data);
+    analyser.getByteTimeDomainData(time);
+    const sums = new Array<number>(LEVEL_BANDS).fill(0);
+    const counts = new Array<number>(LEVEL_BANDS).fill(0);
+    for (let k = 1; k < data.length; k++) {
+      const hz = k * binHz;
+      if (hz < BAND_EDGES_HZ[0]!) continue;
+      let b = LEVEL_BANDS - 1;
+      for (let e = 0; e < BAND_EDGES_HZ.length - 1; e++) if (hz < BAND_EDGES_HZ[e + 1]!) { b = e; break; }
+      sums[b] = sums[b]! + data[k]! / 255;
+      counts[b] = counts[b]! + 1;
+    }
+    let sq = 0;
+    for (let i = 0; i < time.length; i++) { const v = (time[i]! - 128) / 128; sq += v * v; }
+    const loud = Math.sqrt(sq / time.length);
+    peak = Math.max(loud, peak * 0.995, 0.02);
+    const bands = sums.map((s, b) => (counts[b]! > 0 ? Math.min(1, s / counts[b]!) : 0));
+    void window.skynet['voice:levels']({ t: Date.now(), bands, rms: Math.min(1, loud / peak) }).catch(() => undefined);
+  }, LEVEL_HOP_MS);
+  return () => {
+    window.clearInterval(timer);
+    try { source.disconnect(analyser); } catch { /* already gone */ }
+    try { analyser.disconnect(); } catch { /* already gone */ }
+  };
+}
+
+async function listen(request: VoiceListen, config: EndpointConfig): Promise<void> {
   if (busy) return;
   busy = true;
+  lastLabel = request.captureLabel;
   let stream: MediaStream | null = null;
   let context: AudioContext | null = null;
+  let stopLevels: (() => void) | null = null;
 
   const close = async (): Promise<void> => {
     // The microphone first. Everything after this line works on audio already in memory.
+    if (stopLevels) { stopLevels(); stopLevels = null; }
     stream?.getTracks().forEach((track) => track.stop());
     stream = null;
     if (context && context.state !== 'closed') await context.close().catch(() => undefined);
@@ -74,15 +139,16 @@ async function listen(request: VoiceListen): Promise<void> {
     context = new AudioContext();
     await context.resume();
     const rate = context.sampleRate;
-    const frameSize = Math.max(1, Math.round((rate * DEFAULT_ENDPOINT.frameMs) / 1000));
+    const frameSize = Math.max(1, Math.round((rate * config.frameMs) / 1000));
     const source = context.createMediaStreamSource(stream);
     const processor = context.createScriptProcessor(2048, 1, 1);
-    const endpointer = createEndpointer();
+    const endpointer = createEndpointer(config);
     const chunks: Float32Array[] = [];
     let pending = new Float32Array(0);
+    stopLevels = startLevels(context, source);
 
     const outcome = await new Promise<'done' | 'nothing'>((resolve) => {
-      const backstop = window.setTimeout(() => resolve('nothing'), DEFAULT_ENDPOINT.noSpeechMs + DEFAULT_ENDPOINT.maxMs + 1500);
+      const backstop = window.setTimeout(() => resolve('nothing'), config.noSpeechMs + config.maxMs + 1500);
       processor.onaudioprocess = (event) => {
         const fresh = new Float32Array(event.inputBuffer.getChannelData(0));
         chunks.push(fresh);

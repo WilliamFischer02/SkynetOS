@@ -3,6 +3,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { app, BrowserWindow, session, type WebContents } from 'electron';
 import {
+  clampFollowUpNoSpeech,
+  FOLLOW_UP_PAUSE_MS,
+  mayListenAgain,
   parseWakeLine,
   transcriptOf,
   voiceReadiness,
@@ -10,9 +13,12 @@ import {
   VOICE_OFF,
   type VoiceCapture,
   type VoiceHeard,
+  type VoiceListen,
   type VoiceStatus,
   type VoiceWake
 } from '@shared/voice.js';
+import { LEVEL_BANDS, type AudioLevels } from '@shared/speech-levels.js';
+import type { ProfileRecordRequest } from '@shared/speech.js';
 import { encodeWav } from '@shared/voice-capture.js';
 import { getSettings, setVoiceEnabled as saveVoiceEnabled } from './settings.js';
 import { allowMicrophoneOnly } from './permissions.js';
@@ -68,6 +74,8 @@ export interface VoiceHandlers {
   onStatus: (status: VoiceStatus) => void;
   onWake: (wake: VoiceWake) => void;
   onHeard: (heard: VoiceHeard) => void;
+  /** Microphone levels while LISTENING, for the hologram's globe. Optional: nothing else needs them. */
+  onLevels?: (levels: AudioLevels) => void;
 }
 
 let handlers: VoiceHandlers | null = null;
@@ -81,6 +89,11 @@ let busy = false;
 let wokeAt = 0;
 let wakeConfidence = 0;
 let listenTimer: NodeJS.Timeout | null = null;
+/* The follow-up window (docs/07 § Voice): the one capture that opens without the wake phrase. */
+let followUpCapture = false;
+let lastHeardAt = 0;
+let lastCaptureWasSilence = false;
+let followUpTimer: NodeJS.Timeout | null = null;
 
 export function setVoiceHandlers(next: VoiceHandlers): void {
   handlers = next;
@@ -149,6 +162,13 @@ export function stopVoice(): void {
 function stop(): void {
   run++;
   busy = false;
+  followUpCapture = false;
+  lastCaptureWasSilence = false;
+  if (followUpTimer) {
+    clearTimeout(followUpTimer);
+    followUpTimer = null;
+  }
+  if (pendingRecord) pendingRecord.resolve({ reason: 'error', error: 'VOICE WAS SWITCHED OFF' });
   if (listenTimer) {
     clearTimeout(listenTimer);
     listenTimer = null;
@@ -350,24 +370,117 @@ function onWakeLine(raw: string, mine: number): void {
   }
   // A wake phrase inside the sentence being captured is part of the sentence, not a second wake.
   if (busy) return;
+  if (followUpTimer) { clearTimeout(followUpTimer); followUpTimer = null; }
+  lastCaptureWasSilence = false;
+  openMicrophone(mine, line.confidence, line.phrase, { captureLabel: voice.captureLabel });
+}
+
+/** One sentence into the capture window, on a wake or as a follow-up. `busy` until it answers. */
+function openMicrophone(mine: number, confidence: number, phrase: string, request: VoiceListen): void {
   busy = true;
+  followUpCapture = request.followUp === true;
   wokeAt = Date.now();
-  wakeConfidence = line.confidence;
+  wakeConfidence = confidence;
   publish({ phase: 'listening' });
-  handlers?.onWake({ confidence: line.confidence, phrase: line.phrase });
+  handlers?.onWake({ confidence, phrase });
 
   const target = ensureWindow();
   const send = (): void => {
-    if (run === mine && !target.isDestroyed()) target.webContents.send('voice:listen', { captureLabel: voice.captureLabel });
+    if (run === mine && !target.isDestroyed()) target.webContents.send('voice:listen', request);
   };
   if (target.webContents.isLoading()) target.webContents.once('did-finish-load', send);
   else send();
   listenTimer = setTimeout(() => finish('', mine, 'THE MICROPHONE DID NOT ANSWER'), LISTEN_TIMEOUT_MS);
 }
 
+/** Was a sentence heard within the last `ms`? services/speech.ts asks before a follow-up. */
+export function heardRecently(ms: number): boolean {
+  return lastHeardAt > 0 && Date.now() - lastHeardAt <= ms;
+}
+
+/**
+ * The follow-up window (docs/07 § Voice): reopen the microphone for ONE more sentence without the
+ * wake phrase, right after JARVIS has answered. The rules are `mayListenAgain` in @shared/voice.ts;
+ * this is the clock and the window. It waits FOLLOW_UP_PAUSE_MS so the room's echo of JARVIS's
+ * last word is not the first thing it hears. Silence closes it without a transcript
+ * (`voiceCaptured`), and after silence the next sentence needs the wake phrase again.
+ */
+export function listenAgain(reason: 'spoken' | 'acted'): boolean {
+  const voice = getSettings().voice;
+  if (busy || pendingRecord) return false;
+  if (!mayListenAgain(status, voice, lastHeardAt ? Date.now() - lastHeardAt : Number.POSITIVE_INFINITY, lastCaptureWasSilence)) return false;
+  if (!win || win.isDestroyed()) return false;
+  const mine = run;
+  if (followUpTimer) clearTimeout(followUpTimer);
+  followUpTimer = setTimeout(() => {
+    followUpTimer = null;
+    if (run !== mine || busy || pendingRecord || status.phase !== 'waiting') return;
+    console.log(`[voice] follow-up window after ${reason}`);
+    openMicrophone(mine, 1, 'follow-up', { captureLabel: voice.captureLabel, followUp: true, noSpeechMs: clampFollowUpNoSpeech(voice.followUpNoSpeechMs) });
+  }, FOLLOW_UP_PAUSE_MS);
+  return true;
+}
+
+/*
+ * The profile recorder (docs/11 § Voice profiles): ONE line into the same capture window, on a
+ * user-only `profile:record` call. The window opens the microphone for that line and returns the
+ * WAV the way it returns a sentence; `busy` is held so a wake phrase in the recording is not a
+ * second wake. services/speech.ts writes the file into the profile folder; nothing is written here.
+ */
+let pendingRecord: { resolve: (capture: VoiceCapture) => void; timer: NodeJS.Timeout } | null = null;
+
+export function recordOnce(req: ProfileRecordRequest): Promise<VoiceCapture> {
+  if (!win || win.isDestroyed() || status.phase === 'off' || status.phase === 'unavailable' || status.phase === 'starting') {
+    return Promise.resolve({ reason: 'error', error: 'THE MICROPHONE IS NOT ON' });
+  }
+  if (busy || pendingRecord) return Promise.resolve({ reason: 'error', error: 'THE MICROPHONE IS ALREADY IN USE' });
+  const mine = run;
+  const target = win;
+  busy = true;
+  publish({ phase: 'listening' });
+  return new Promise<VoiceCapture>((resolve) => {
+    const finishRecord = (capture: VoiceCapture): void => {
+      if (pendingRecord) clearTimeout(pendingRecord.timer);
+      pendingRecord = null;
+      busy = false;
+      if (run === mine) publish({ phase: 'waiting' });
+      resolve(capture);
+    };
+    pendingRecord = {
+      resolve: finishRecord,
+      timer: setTimeout(() => finishRecord({ reason: 'error', error: 'THE MICROPHONE DID NOT ANSWER' }), req.maxMs + 8000)
+    };
+    const send = (): void => {
+      if (run === mine && !target.isDestroyed()) target.webContents.send('voice:record', req);
+      else finishRecord({ reason: 'error', error: 'VOICE WAS SWITCHED OFF' });
+    };
+    if (target.webContents.isLoading()) target.webContents.once('did-finish-load', send);
+    else send();
+  });
+}
+
+/**
+ * Band levels from the capture window while it listens (F1, 2026-09-26). Forwarded to the
+ * hologram and nowhere else; no audio, no recording, eight numbers and a loudness. Accepted only
+ * while a capture is actually open, so a stale page cannot animate a closed microphone.
+ */
+export function voiceLevels(levels: AudioLevels): { ok: boolean } {
+  if (!busy && !pendingRecord) return { ok: false };
+  if (!levels || !Array.isArray(levels.bands)) return { ok: false };
+  const bands = levels.bands.slice(0, LEVEL_BANDS).map((v) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0));
+  while (bands.length < LEVEL_BANDS) bands.push(0);
+  const rms = typeof levels.rms === 'number' && Number.isFinite(levels.rms) ? Math.min(1, Math.max(0, levels.rms)) : 0;
+  handlers?.onLevels?.({ t: Date.now(), bands, rms });
+  return { ok: true };
+}
+
 /** A sentence, or the reason there is none, from the capture window. */
 export async function voiceCaptured(capture: VoiceCapture): Promise<{ ok: boolean }> {
   const mine = run;
+  if (pendingRecord) {
+    pendingRecord.resolve(capture);
+    return { ok: true };
+  }
   if (!busy) return { ok: false };
   if (listenTimer) {
     clearTimeout(listenTimer);
@@ -378,6 +491,15 @@ export async function voiceCaptured(capture: VoiceCapture): Promise<{ ok: boolea
   const raw = capture?.wav;
   const wav = raw && ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : null;
   if (!wav) {
+    if (followUpCapture && capture?.reason !== 'error') {
+      // Silence in a follow-up window: nothing heard, nothing transcribed, nothing answered. The
+      // exchange is over; the next sentence needs the wake phrase.
+      followUpCapture = false;
+      lastCaptureWasSilence = true;
+      busy = false;
+      if (run === mine) publish({ phase: 'waiting' });
+      return { ok: true };
+    }
     finish('', mine, capture?.reason === 'error' ? `THE MICROPHONE WOULD NOT OPEN — ${capture.error ?? 'no reason given'}` : undefined);
     return { ok: true };
   }
@@ -402,6 +524,9 @@ function finish(text: string, mine: number, error?: string): void {
   }
   if (run !== mine) return;
   busy = false;
+  followUpCapture = false;
+  lastCaptureWasSilence = false;
+  if (text) lastHeardAt = Date.now();
   handlers?.onHeard({ text, confidence: wakeConfidence, ms: Date.now() - wokeAt, ...(error ? { error } : {}) });
   publish({ phase: 'waiting' });
 }

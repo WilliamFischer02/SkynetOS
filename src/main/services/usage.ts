@@ -19,6 +19,16 @@ import {
   type UsageSummary
 } from '@shared/usage.js';
 import { resolveBudget } from '@shared/plans.js';
+import {
+  isTopTierModel,
+  percentNow,
+  poolsFrom,
+  timeToReset,
+  tokensBetweenFrom,
+  weekWindow,
+  type WeeklyReadout,
+  type WeeklyUsageSettings
+} from '@shared/usage-week.js';
 import { loadBoard, loadBoardByFile } from './board-store.js';
 import { expandPath } from './target-resolver.js';
 import { claudeProjectsDir } from './conversations.js';
@@ -52,6 +62,8 @@ interface CacheEntry {
   usage: ProjectUsage;
   /** [timestampMs, weightedTokens] for every assistant message, for the peak calculation. */
   events: [number, number][];
+  /** The same, for Fable messages only: what the top-tier weekly pool is extrapolated by. */
+  topEvents: [number, number][];
   /** Every assistant message inside the window, with the files its tool calls named. */
   activity: ActivityEvent[];
   /** Every refusal for a reached limit, for calibration. */
@@ -116,7 +128,8 @@ function scanProject(
   windowStart: number,
   events: [number, number][],
   activity: ActivityEvent[],
-  limits: LimitHit[]
+  limits: LimitHit[],
+  topEvents: [number, number][]
 ): ProjectUsage {
   let allTime: TokenCounts = ZERO_TOKENS;
   let windowTokens: TokenCounts = ZERO_TOKENS;
@@ -157,7 +170,7 @@ function scanProject(
         totalCostUSD?: number;
         /** The conversation's working directory, recorded on every line. Resolves relative tool paths. */
         cwd?: string;
-        message?: { usage?: Record<string, unknown>; content?: unknown };
+        message?: { usage?: Record<string, unknown>; content?: unknown; model?: unknown };
         quotaLimits?: { status?: string; resetsAt?: number; rateLimitType?: string };
       };
       try {
@@ -191,6 +204,7 @@ function scanProject(
       if (Number.isFinite(at)) {
         if (lastActivity === null || at > lastActivity) lastActivity = at;
         events.push([at, weightedTokens(tokens)]);
+        if (isTopTierModel(record.message?.model)) topEvents.push([at, weightedTokens(tokens)]);
         if (at >= windowStart) {
           windowTokens = addTokens(windowTokens, tokens);
           messagesInWindow++;
@@ -260,12 +274,15 @@ export function readUsage(windowHours?: number): UsageSummary {
       budgetSource: 'none',
       plan: settings.plan,
       peakWindowTokens: 0,
+      // The readings are William's, not the disk's: they still show, as read, without telemetry.
+      weekly: weeklyReadout(settings.usage, takenAt, null, null),
       error: `CANNOT READ ${root} — ${(err as Error).message}`
     };
   }
 
   const projects: ProjectUsage[] = [];
   const allEvents: [number, number][] = [];
+  const allTopEvents: [number, number][] = [];
   const activity: ActivityEvent[] = [];
   const limits: LimitHit[] = [];
   for (const projectDir of dirs) {
@@ -281,6 +298,7 @@ export function readUsage(windowHours?: number): UsageSummary {
     if (cached && sameWindow && cached.newestMtime === signature.newestMtime && cached.fileCount === signature.fileCount) {
       projects.push(cached.usage);
       allEvents.push(...cached.events);
+      allTopEvents.push(...cached.topEvents);
       activity.push(...cached.activity);
       limits.push(...cached.limits);
       continue;
@@ -289,10 +307,12 @@ export function readUsage(windowHours?: number): UsageSummary {
     const events: [number, number][] = [];
     const windowActivity: ActivityEvent[] = [];
     const projectLimits: LimitHit[] = [];
-    const usage = scanProject(dir, projectDir, windowStart, events, windowActivity, projectLimits);
-    cache.set(projectDir, { ...signature, windowStart, usage, events, activity: windowActivity, limits: projectLimits });
+    const topEvents: [number, number][] = [];
+    const usage = scanProject(dir, projectDir, windowStart, events, windowActivity, projectLimits, topEvents);
+    cache.set(projectDir, { ...signature, windowStart, usage, events, topEvents, activity: windowActivity, limits: projectLimits });
     projects.push(usage);
     allEvents.push(...events);
+    allTopEvents.push(...topEvents);
     activity.push(...windowActivity);
     limits.push(...projectLimits);
   }
@@ -312,7 +332,32 @@ export function readUsage(windowHours?: number): UsageSummary {
     budgetSource: budget.source,
     plan: settings.plan,
     peakWindowTokens: peakWindow(allEvents, hours),
-    calibration: calibrateFromLimits(limits, allEvents)
+    calibration: calibrateFromLimits(limits, allEvents),
+    weekly: weeklyReadout(settings.usage, takenAt, allEvents, allTopEvents)
+  };
+}
+
+/**
+ * Both weekly pools, now: the latest reading this week, carried forward by this machine's own
+ * usage since it (every model for ALL, Fable only for FABLE). See packages/shared/usage-week.ts for
+ * the arithmetic. Only this week's messages are handed over; nothing earlier can move a pool.
+ */
+function weeklyReadout(
+  usage: WeeklyUsageSettings,
+  now: number,
+  events: [number, number][] | null,
+  topEvents: [number, number][] | null
+): WeeklyReadout {
+  const anchor = usage.weeklyAnchor;
+  const week = weekWindow(now, anchor);
+  const inWeek = (list: [number, number][] | null) =>
+    list ? tokensBetweenFrom(list.filter(([at]) => at >= week.start && at <= now)) : undefined;
+  const between = { all: inWeek(events), top: inWeek(topEvents) };
+  return {
+    anchor,
+    week,
+    reset: timeToReset(now, anchor),
+    pools: poolsFrom(usage).map((pool) => percentNow(pool, now, anchor, between[pool.id]))
   };
 }
 

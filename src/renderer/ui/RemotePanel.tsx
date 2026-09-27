@@ -1,3 +1,4 @@
+import { failureLine } from '@shared/ui-copy.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RemoteStatusView } from '@shared/remote.js';
 import { qrMatrix } from '@shared/qr.js';
@@ -71,7 +72,7 @@ export function RemotePanel(): React.JSX.Element | null {
   const makeCode = async (): Promise<void> => {
     try {
       const result = await window.skynet['remote:pairCode']();
-      if (!result.ok || !result.code || !result.urls || !result.expiresAt) { toast('warn', result.error ?? 'NO CODE'); return; }
+      if (!result.ok || !result.code || !result.urls || !result.expiresAt) { toast('warn', failureLine(result.error, 'NO PAIRING CODE', 'switch remote on, then press pair a device again')); return; }
       setPair({ code: result.code, expiresAt: result.expiresAt, urls: result.urls });
       setNow(Date.now());
     } catch (err) {
@@ -106,7 +107,7 @@ export function RemotePanel(): React.JSX.Element | null {
   return (
     <div className="remote-panel">
       <label className="look-check">
-        <input type="checkbox" disabled={busy || !status} checked={status?.enabled === true} onChange={(e) => void toggle(e.target.checked)} />
+        <input type="checkbox" disabled={busy || !status} checked={status?.enabled === true} onChange={(e) => void toggle(e.target.checked)} title={status?.enabled ? 'Stop serving this board to other devices' : 'Let paired devices reach this board through Tailscale'} />
         Allow remote devices (phone, tablet, another computer)
       </label>
       <div className="look-note">
@@ -118,7 +119,7 @@ export function RemotePanel(): React.JSX.Element | null {
       {status?.enabled && !status.built ? <div className="look-note warn">No built renderer to serve yet. On this PC: npm run build:app</div> : null}
 
       {status?.listening ? (
-        <button type="button" className="btn" onClick={() => void makeCode()}>{pair ? 'NEW CODE' : 'PAIR A DEVICE'}</button>
+        <button type="button" className="btn" onClick={() => void makeCode()} title="Make a one-time code and QR to pair a phone, tablet or another computer">{pair ? 'NEW CODE' : 'PAIR A DEVICE'}</button>
       ) : null}
       {/*
         * Order matters and the panel now says so. PAIR used to be offered the moment the server was
@@ -151,7 +152,7 @@ export function RemotePanel(): React.JSX.Element | null {
             <div key={d.id} className="remote-device">
               <span className="remote-device-name">{d.name}</span>
               <span className="remote-device-seen">{d.lastSeenAt ? `seen ${new Date(d.lastSeenAt).toLocaleString()}` : 'never connected'}</span>
-              <button type="button" className="btn tiny" onClick={() => void revoke(d.id, d.name)}>REVOKE</button>
+              <button type="button" className="btn tiny" onClick={() => void revoke(d.id, d.name)} title={`Disconnect ${d.name} and make it pair again before it can reach the board`}>REVOKE</button>
             </div>
           ))}
         </div>

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve as resolvePath } from 'node:path';
 import { briefingModeOf, buildBriefing, claudeArgs } from './launch-args.js';
-import { dialog } from 'electron';
+import { confirmThemed } from './confirm-window.js';
 import type { BoardNode, LaunchMode } from '@shared/types.js';
 import type { SessionInfo, SessionStartResult } from '@shared/ipc.js';
 import { primeStepsFor } from '@shared/prime-steps.js';
@@ -92,7 +92,7 @@ function isDirectory(path: string): boolean {
 }
 
 function underTrustedRoot(path: string): boolean {
-  const normalised = normaliseRoot(path.replace(/\\/g, '/'));
+  const normalised = normaliseRoot(path);
   return trustedRoots().some((root) => normalised === root || normalised.startsWith(`${root}/`));
 }
 
@@ -552,18 +552,15 @@ export function briefingActive(node: BoardNode): boolean {
 async function confirm(title: string, message: string, detail: string): Promise<boolean> {
   refuseDialogWhenRemote(`"${title}"`);
   const win_ = boardWindow();
-  const options = {
-    type: 'warning' as const,
+  // SkynetOS's own window since 2026-09-26 (services/confirm-window.ts): same refusal default.
+  const { response } = await confirmThemed(win_ ?? null, {
+    kind: 'launch',
     buttons: ['Launch', 'Cancel'],
     defaultId: 1,
     cancelId: 1,
     title,
     message,
-    detail,
-    noLink: true
-  };
-  const { response } = win_
-    ? await dialog.showMessageBox(win_, options)
-    : await dialog.showMessageBox(options);
+    detail
+  });
   return response === 0;
 }

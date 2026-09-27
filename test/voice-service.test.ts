@@ -4,7 +4,20 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VOICE, parseWakeLine, transcriptOf, voiceReadiness, wakeScript } from '@shared/voice.js';
+import {
+  DEFAULT_VOICE,
+  FOLLOW_UP_HEARD_WINDOW_MS,
+  FOLLOW_UP_NO_SPEECH_MAX_MS,
+  FOLLOW_UP_NO_SPEECH_MIN_MS,
+  FOLLOW_UP_PAUSE_MS,
+  clampFollowUpNoSpeech,
+  mayListenAgain,
+  parseWakeLine,
+  transcriptOf,
+  voiceReadiness,
+  wakeScript,
+  type VoiceListen
+} from '@shared/voice.js';
 import { resolveIntent, type IntentContext } from '@shared/intent.js';
 
 describe('the wake grammar', () => {
@@ -102,5 +115,50 @@ describe('the MATRIX and the board, by voice', () => {
 
   it('zooms in on the board, written the way the speech engine actually heard it', () => {
     expect(resolveIntent('Zoom in on the board.', context)).toMatchObject({ kind: 'view', action: { type: 'zoom', to: 'in' } });
+  });
+});
+
+describe('the follow-up window (docs/07 § Voice)', () => {
+  const waiting = { phase: 'waiting', enabled: true } as const;
+  const on = { followUp: true };
+
+  it('opens only right after JARVIS has answered a sentence heard within 20 s', () => {
+    expect(mayListenAgain(waiting, on, 1200, false)).toBe(true);
+    expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS, false)).toBe(true);
+    expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS + 1, false)).toBe(false);
+    expect(mayListenAgain(waiting, on, Number.POSITIVE_INFINITY, false)).toBe(false);
+    expect(mayListenAgain(waiting, on, -1, false)).toBe(false);
+  });
+
+  it('never opens while voice is off, unavailable, starting or already listening', () => {
+    for (const phase of ['off', 'unavailable', 'starting', 'listening', 'thinking'] as const) {
+      expect(mayListenAgain({ phase, enabled: phase !== 'off' }, on, 500, false)).toBe(false);
+    }
+    expect(mayListenAgain({ phase: 'waiting', enabled: false }, on, 500, false)).toBe(false);
+  });
+
+  it('does not chain from silence: after a follow-up heard nothing, the wake phrase is needed again', () => {
+    expect(mayListenAgain(waiting, on, 500, true)).toBe(false);
+  });
+
+  it('is removed entirely by voice.followUp: false', () => {
+    expect(mayListenAgain(waiting, { followUp: false }, 500, false)).toBe(false);
+    expect(DEFAULT_VOICE.followUp).toBe(true);
+  });
+
+  it('keeps its silence budget within bounds and waits for the room to go quiet first', () => {
+    expect(clampFollowUpNoSpeech(DEFAULT_VOICE.followUpNoSpeechMs)).toBe(5000);
+    expect(clampFollowUpNoSpeech(100)).toBe(FOLLOW_UP_NO_SPEECH_MIN_MS);
+    expect(clampFollowUpNoSpeech(60_000)).toBe(FOLLOW_UP_NO_SPEECH_MAX_MS);
+    expect(clampFollowUpNoSpeech('nonsense')).toBe(DEFAULT_VOICE.followUpNoSpeechMs);
+    const request: VoiceListen = { captureLabel: '', followUp: true, noSpeechMs: clampFollowUpNoSpeech(5000) };
+    expect(request.noSpeechMs).toBeGreaterThanOrEqual(FOLLOW_UP_NO_SPEECH_MIN_MS);
+    expect(request.noSpeechMs).toBeLessThanOrEqual(FOLLOW_UP_NO_SPEECH_MAX_MS);
+    expect(FOLLOW_UP_PAUSE_MS).toBeGreaterThan(0);
+  });
+
+  it('leaves the wake grammar and its lines exactly as they were', () => {
+    expect(parseWakeLine('WAKE 0.95 hey jarvis')).toEqual({ type: 'wake', confidence: 0.95, phrase: 'hey jarvis' });
+    expect(wakeScript(['jarvis'])).not.toMatch(/follow/i);
   });
 });

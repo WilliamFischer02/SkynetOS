@@ -82,6 +82,7 @@ import {
   type CalibrationProfile,
   type HandObservation
 } from '@shared/calibration.js';
+import { closeLabel, failureLine } from '@shared/ui-copy.js';
 
 type Phase = 'intro' | 'level' | 'reach' | 'train' | 'done';
 
@@ -218,13 +219,26 @@ export function createWizard(options: {
   // ── the shell ───────────────────────────────────────────────────────────────────────────────
   host.innerHTML = '';
   const shell = el('div', 'wz');
+  /*
+   * The head every panel on the board carries (src/renderer/ui/PanelHead.tsx), written out by hand
+   * because this page is not React: the ALL-CAPS name, the panel's own controls (here, the four
+   * steps), and the close button at the right naming the key that closes it. Pinned above the
+   * scrolling body, as the actions are pinned below it.
+   */
+  const head = el('div', 'panel-head wz-head');
+  const headName = el('span', 'with-icon panel-head-name', 'CALIBRATE AND TRAIN');
   const steps = el('div', 'wz-steps');
+  const closeButton = el('button', 'btn tiny panel-head-close');
+  closeButton.type = 'button';
+  head.append(headName, steps, closeButton);
   const title = el('h1', 'wz-title');
   const lead = el('p', 'wz-lead');
   const stage = el('div', 'wz-stage');
   const count = el('div', 'wz-count');
   const strip = el('div', 'wz-strip');
-  const advice = el('div', 'wz-advice');
+  /* The status line is the shared status box (ui/StateBox.tsx): the state in caps, then what to do. */
+  const advice = el('div', 'state wz-state');
+  advice.setAttribute('role', 'status');
   const dots = el('div', 'wz-dots');
   const frameRow = el('div', 'wz-frames');
   const actions = el('div', 'wz-actions');
@@ -238,8 +252,8 @@ export function createWizard(options: {
    * controls are now the one thing that cannot be. `npm run gate:wizard` checks it.
    */
   const body = el('div', 'wz-body');
-  body.append(steps, title, lead, stage, count, strip, advice, dots, frameRow);
-  shell.append(body, actions);
+  body.append(title, lead, stage, count, strip, advice, dots, frameRow);
+  shell.append(head, body, actions);
   host.append(shell);
   stage.append(views);
 
@@ -258,11 +272,52 @@ export function createWizard(options: {
     }
   };
 
-  const button = (label: string, onClick: () => void, kind = ''): HTMLButtonElement => {
+  /**
+   * Every button says what pressing it does, on hover as well as on its face (the tooltip rule the
+   * board's panels follow, tools/tooltip-audit.mjs). They are native buttons, so Tab reaches every
+   * one and Enter and Space press it.
+   */
+  const button = (label: string, onClick: () => void, kind: string, tip: string): HTMLButtonElement => {
     const node = el('button', `wz-btn ${kind}`.trim(), label);
     node.type = 'button';
+    node.title = tip;
     node.addEventListener('click', onClick);
     return node;
+  };
+
+  /**
+   * What Esc does on this screen, and whether that is leaving the wizard. Set by every screen, and
+   * only ever to something safe: a step back, STOP, or leaving before anything is pending. On the
+   * gesture card it is nothing (beyond disarming a two-click discard), because leaving from there
+   * is one keypress from losing his place in a fifteen-gesture pass.
+   */
+  let onEscape: { run: () => void; leaves: boolean } | null = null;
+  const setEscape = (run: (() => void) | null, leaves = false): void => {
+    onEscape = run ? { run, leaves } : null;
+    closeButton.textContent = onEscape?.leaves ? closeLabel('Esc') : 'Close';
+    closeButton.title = `Leave the wizard and go back to the camera monitor. Every example taken so far is already saved.${onEscape?.leaves ? ' (Esc)' : ''}`;
+  };
+  const leave = (): void => {
+    stopRun();
+    onFinished();
+  };
+  closeButton.addEventListener('click', leave);
+
+  /**
+   * Replace the action row. When the old row took focus with it (the usual case: the button just
+   * pressed is gone), focus lands on this screen's main button, so the keyboard carries on from
+   * where it was instead of starting again from the top of the page.
+   */
+  const setActions = (...nodes: HTMLButtonElement[]): void => {
+    const focused = document.activeElement;
+    const hadFocus = actions.contains(focused) || frameRow.contains(focused);
+    // A redraw of the same screen (SWAP pressed, CHECK DIRECTION finished) keeps focus on that control.
+    const was = hadFocus && focused && actions.contains(focused) ? (focused.textContent ?? '') : '';
+    actions.replaceChildren(...nodes);
+    const lost = hadFocus || document.activeElement === document.body || document.activeElement === null;
+    if (!lost) return;
+    const same = was ? nodes.find((node) => node.textContent === was || node.textContent?.startsWith(was) || was.startsWith(node.textContent ?? '\u0000')) : undefined;
+    (same ?? nodes.find((node) => node.classList.contains('go')) ?? nodes[0])?.focus();
   };
 
   const setDots = (filled: number, total: number): void => {
@@ -271,9 +326,31 @@ export function createWizard(options: {
     for (let i = 0; i < total; i++) dots.append(el('span', `wz-dot${i < filled ? ' on' : ''}`));
   };
 
-  const say = (text: string, tone: '' | 'ok' | 'bad' = ''): void => {
-    advice.textContent = text;
-    advice.className = `wz-advice${tone ? ` ${tone}` : ''}`;
+  const TONE = { '': '', ok: ' ok', bad: ' warn', fault: ' fault' } as const;
+  /**
+   * The status box. The first sentence is the state, in caps; the rest is what to do. A caller
+   * that already has the two halves passes `detail` (an empty string for "no detail, do not split").
+   */
+  const say = (text: string, tone: keyof typeof TONE = '', detail?: string): void => {
+    let line = text.trim();
+    let rest = detail ?? '';
+    if (detail === undefined) {
+      const split = /^([\s\S]+?[.…!?])\s+(?=\S)([\s\S]*)$/u.exec(line);
+      if (split) {
+        line = split[1] ?? line;
+        rest = split[2] ?? '';
+      }
+    }
+    advice.className = `state wz-state${TONE[tone]}`;
+    advice.setAttribute('role', tone === 'fault' ? 'alert' : 'status');
+    advice.replaceChildren();
+    if (!line) return;
+    advice.append(el('div', 'state-line', line));
+    if (rest) advice.append(el('div', 'state-detail', rest));
+  };
+  /** A failure: what failed and what to do, in the shape every panel uses (packages/shared/ui-copy.ts). */
+  const fail = (error: string | undefined, fallback: string, action: string): void => {
+    say(failureLine(error, fallback, action), 'fault', '');
   };
 
   /** Clear everything the training panels use, so no phase inherits another's furniture. */
@@ -315,13 +392,16 @@ export function createWizard(options: {
     drawSteps();
     clearPanels();
     stopRun();
-    title.textContent = 'CALIBRATE AND TRAIN';
+    title.textContent = 'BEFORE YOU START';
     lead.textContent =
       'Four steps: aim the cameras, learn how far you reach, refresh the examples for every gesture, then check that nothing you taught contradicts anything else. Nothing is recorded until you press a button, and no picture is ever saved.';
     say('');
     setDots(0, 0);
-    actions.innerHTML = '';
-    actions.append(button('START', () => showLevel(), 'go'), button('NOT NOW', () => onFinished()));
+    setEscape(leave, true);
+    setActions(
+      button('START', () => showLevel(), 'go', 'Begin step 1: aim the cameras. Nothing is recorded yet.'),
+      button('NOT NOW', leave, '', 'Leave the wizard and go back to the camera monitor (Esc)')
+    );
   }
 
   function showLevel(): void {
@@ -349,16 +429,21 @@ export function createWizard(options: {
    * way to answer it incorrectly and no need to understand why it was ever wrong.
    */
   function drawLevelActions(): void {
-    actions.innerHTML = '';
-    actions.append(
-      button('NEXT', () => showReach(), 'go'),
-      button(mirroredBy.size ? 'CHECK DIRECTION AGAIN' : 'CHECK DIRECTION', () => startDirectionCheck(), 'alt'),
+    setEscape(leave, true);
+    setActions(
+      button('NEXT', () => showReach(), 'go', 'Go on to step 2: sweep out how far you reach'),
+      button(
+        mirroredBy.size ? 'CHECK DIRECTION AGAIN' : 'CHECK DIRECTION',
+        () => startDirectionCheck(),
+        'alt',
+        'Move your open hand to your right for two seconds, so each camera learns which way is which'
+      ),
       button('NO — SWAP LEFT AND RIGHT', () => {
         labelsSwapped = !labelsSwapped;
         drawLevelActions();
         onLevelFrame();
-      }, 'alt'),
-      button('CANCEL', () => onFinished())
+      }, 'alt', 'The hand named above is the wrong one: swap which hand is called left and which right'),
+      button('CANCEL', leave, '', 'Leave the wizard without saving anything (Esc)')
     );
   }
 
@@ -374,7 +459,7 @@ export function createWizard(options: {
    */
   function startDirectionCheck(): void {
     motion = { from: new Map(), to: new Map() };
-    say('Move your open hand slowly to YOUR right — about a shoulder’s width — and keep it moving…');
+    say('Move your open hand to YOUR right', '', 'Slowly, about a shoulder’s width, and keep it moving…');
     window.setTimeout(finishDirectionCheck, 2500);
   }
 
@@ -415,8 +500,13 @@ export function createWizard(options: {
       'With an open hand, sweep the corners of the area you want to use — as far left, right, up and down as is comfortable. The box you draw becomes the whole screen.';
     say('Move your hand to begin.');
     setDots(0, 0);
-    actions.innerHTML = '';
-    actions.append(button('SAVE AND CONTINUE', () => void saveReach(), 'go'), button('SKIP', () => void startTraining()));
+    // Back to AIM is safe: the sweep so far is only in memory, and AIM keeps nothing either.
+    setEscape(() => showLevel());
+    setActions(
+      button('SAVE AND CONTINUE', () => void saveReach(), 'go', 'Save the aim and this reach, then start teaching the gestures'),
+      button('SKIP', () => void startTraining(), '', 'Keep the reach saved last time and go straight to the gestures'),
+      button('◀ BACK', () => showLevel(), '', 'Go back to step 1: aim the cameras (Esc)')
+    );
   }
 
   async function saveReach(): Promise<void> {
@@ -433,8 +523,10 @@ export function createWizard(options: {
       ...(labelsSwapped ? { labelsSwapped: true } : {})
     };
     const saved = await window.skynet['gesture:saveCalibration'](profile);
-    say(saved.ok ? 'Calibration saved.' : saved.error ?? 'Could not save the calibration.', saved.ok ? 'ok' : 'bad');
     await startTraining();
+    // Said after the gesture card is drawn, which would otherwise write over it before he could read it.
+    if (saved.ok) say('Calibration saved.', 'ok', 'Now teach the gestures, one card at a time.');
+    else fail(saved.error, 'Could not save the calibration', 'the gestures still train; save the reach again next time');
   }
 
   async function startTraining(): Promise<void> {
@@ -484,7 +576,7 @@ export function createWizard(options: {
       armed = null;
       const result = await window.skynet['gesture:setFrames']({ gestureId: gesture.id, frames });
       if (!result.ok) {
-        say(result.error ?? 'Could not change the keyframes.', 'bad');
+        fail(result.error, 'Could not change the keyframes', 'press it again, or carry on with these');
         return;
       }
       library = result.library.gestures;
@@ -492,11 +584,13 @@ export function createWizard(options: {
     };
 
     if (gesture.frames > 1) {
-      const less = button('−', () => void reshape((gesture.frames - 1) as FrameCount, less), 'tiny');
+      const less = button('−', () => void reshape((gesture.frames - 1) as FrameCount, less), 'tiny',
+        `Use ${gesture.frames - 1} keyframe${gesture.frames - 1 === 1 ? '' : 's'}${gesture.samples.length ? ' — discards its examples, so it asks twice' : ''}`);
       frameRow.append(less);
     }
     if (gesture.frames < 3) {
-      const more = button('+', () => void reshape((gesture.frames + 1) as FrameCount, more), 'tiny');
+      const more = button('+', () => void reshape((gesture.frames + 1) as FrameCount, more), 'tiny',
+        `Use ${gesture.frames + 1} keyframes${gesture.samples.length ? ' — discards its examples, so it asks twice' : ''}`);
       frameRow.append(more);
     }
 
@@ -511,8 +605,15 @@ export function createWizard(options: {
     const mode = modeOf(gesture);
     frameRow.append(el('span', 'wz-frames-label', 'HANDS'));
     for (const value of ['one', 'two', 'both'] as HandMode[]) {
-      const chip = button(MODE_NAMES[value].short, () => void reMode(gesture, value, chip), value === mode ? 'tiny on' : 'tiny');
-      chip.title = MODE_NAMES[value].blurb;
+      const chip = button(
+        MODE_NAMES[value].short,
+        () => void reMode(gesture, value, chip),
+        value === mode ? 'tiny on' : 'tiny',
+        value === mode
+          ? `Now: ${MODE_NAMES[value].blurb}`
+          : `Make it ${MODE_NAMES[value].short.toLowerCase()}: ${MODE_NAMES[value].blurb}${gesture.samples.length ? ' Discards its examples, so it asks twice.' : ''}`
+      );
+      chip.setAttribute('aria-pressed', String(value === mode));
       frameRow.append(chip);
     }
 
@@ -528,9 +629,12 @@ export function createWizard(options: {
     const travelChip = button(
       gesture.travel ? 'TRAVEL: ON' : 'TRAVEL: OFF',
       () => void reTravel(gesture),
-      gesture.travel ? 'tiny on' : 'tiny'
+      gesture.travel ? 'tiny on' : 'tiny',
+      gesture.travel
+        ? 'Turn travel off: the gesture is a shape again, wherever it is done. Keeps the examples.'
+        : 'Turn travel on: the gesture goes from one place in frame to another, like a drag or a scroll. Keeps the examples.'
     );
-    travelChip.title = 'The gesture goes from one place in frame to another — a drag, a scroll.';
+    travelChip.setAttribute('aria-pressed', String(gesture.travel === true));
     frameRow.append(travelChip);
 
     /*
@@ -538,8 +642,7 @@ export function createWizard(options: {
      * training, not while aiming, and a fix he has to leave the screen to reach is a fix he will not
      * make.
      */
-    const swap = button('SWAP L/R', () => void flipMirror(), 'tiny');
-    swap.title = 'Swap which hand is called left and which right.';
+    const swap = button('SWAP L/R', () => void flipMirror(), 'tiny', 'Swap which hand is called left and which right, and remember it');
     frameRow.append(swap);
     frameRow.append(el('span', 'wz-frames-note', gesture.travel ? 'Start point, then finish point.' : MODE_NAMES[mode].blurb));
   }
@@ -559,7 +662,7 @@ export function createWizard(options: {
     armed = null;
     const result = await window.skynet['gesture:setMode']({ gestureId: gesture.id, mode });
     if (!result.ok) {
-      say(result.error ?? 'Could not change the hands.', 'bad');
+      fail(result.error, 'Could not change the hands', 'press it again, or carry on as it is');
       return;
     }
     library = result.library.gestures;
@@ -588,7 +691,7 @@ export function createWizard(options: {
   async function reTravel(gesture: GestureDefinition): Promise<void> {
     const result = await window.skynet['gesture:setTravel']({ gestureId: gesture.id, travel: !gesture.travel });
     if (!result.ok) {
-      say(result.error ?? 'Could not change that.', 'bad');
+      fail(result.error, 'Could not switch travel', 'press TRAVEL again, or carry on as it is');
       return;
     }
     library = result.library.gestures;
@@ -642,38 +745,56 @@ export function createWizard(options: {
     drawShapeEditor(gesture);
     drawVariantChips(gesture);
 
-    actions.innerHTML = '';
+    const row: HTMLButtonElement[] = [];
     const clean = gesture.samples.filter((sample) => !sample.variant).length;
-    actions.append(button(clean ? 'MORE CLEAN EXAMPLES' : 'CAPTURE EXAMPLES', () => startRun(gesture, 'clean'), 'go'));
+    row.push(
+      button(
+        clean ? 'MORE CLEAN EXAMPLES' : 'CAPTURE EXAMPLES',
+        () => startRun(gesture, 'clean'),
+        'go',
+        `Record ${gesture.name}: an ${COUNT_MS / 1000}-second countdown per keyframe, from every camera`
+      )
+    );
     if (clean >= MIN_SAMPLES) {
       for (const spec of VARIANTS) {
         if (spec.key === 'clean') continue;
         if (spec.key === 'left-hand' && mode !== 'one') continue;
-        actions.append(button(`+ ${spec.name}`, () => startRun(gesture, spec.key), 'alt'));
+        row.push(button(`+ ${spec.name}`, () => startRun(gesture, spec.key), 'alt', `Record a variant of ${gesture.name}. ${spec.blurb}`));
       }
     }
     if (gesture.samples.length) {
-      const retryButton = button('RETRY CAPTURES', () => void retry(gesture, retryButton));
-      actions.append(retryButton);
+      const many = gesture.samples.length;
+      const retryButton = button(
+        'RETRY CAPTURES',
+        () => void retry(gesture, retryButton),
+        '',
+        `Throw away all ${many} example${many === 1 ? '' : 's'} of ${gesture.name} and start it again. Asks twice.`
+      );
+      row.push(retryButton);
     }
     /*
      * BACK. William, 2026-09-12: "Add the ability to go back to the last gesture (I accidentally
      * clicked past one of the gesture trainings and had to cycle all the way back)."
      */
-    if (trainIndex > 0) {
-      actions.append(
+    const previous = library[trainIndex - 1];
+    if (previous) {
+      row.push(
         button('◀ BACK', () => {
           trainIndex--;
           showGesture();
-        })
+        }, '', `Go back to the previous gesture, ${previous.name}`)
       );
     }
-    actions.append(
-      button(trainIndex === library.length - 1 ? 'FINISH' : 'NEXT ▶', () => {
+    const next = library[trainIndex + 1];
+    row.push(
+      button(next ? 'NEXT ▶' : 'FINISH', () => {
         trainIndex++;
         showGesture();
-      })
+      }, '', next ? `Go on to the next gesture, ${next.name}. What was taken here is already saved.` : 'Finish teaching and check what was taught')
     );
+    // Esc on the card only takes back a half-pressed discard; see `setEscape`.
+    setEscape(null);
+    setActions(...row);
   }
 
   /**
@@ -696,7 +817,7 @@ export function createWizard(options: {
     armed = null;
     const result = await window.skynet['gesture:resetSamples'](gesture.id);
     if (!result.ok) {
-      say(result.error ?? 'Could not clear the examples.', 'bad');
+      fail(result.error, 'Could not clear the examples', 'nothing was lost; press RETRY CAPTURES again');
       return;
     }
     library = result.library.gestures;
@@ -779,8 +900,10 @@ export function createWizard(options: {
     const how = gesture.travel ? 'Two positions in frame: where it starts, where it finishes.' : '';
     lead.textContent = `${which} ${how} ${spec?.blurb ?? ''} The shutter fires on the count, whatever it can see.`.replace(/\s+/g, ' ');
     drawShots();
-    actions.innerHTML = '';
-    actions.append(button('STOP', () => { stopRun(); showGesture(); }, 'stop'));
+    const stop = (): void => { stopRun(); showGesture(); };
+    // Esc is STOP: nothing from an unfinished take has been stored, so stopping loses nothing.
+    setEscape(stop);
+    setActions(button('STOP', stop, 'stop', 'Stop this take and go back to the gesture card. Nothing from it is kept. (Esc)'));
     say(promptFor(gesture, 0));
     clock = window.setInterval(step, 100);
   }
@@ -969,14 +1092,18 @@ export function createWizard(options: {
     setDots(Math.min(gesture.samples.length, MIN_SAMPLES), MIN_SAMPLES);
     drawShots();
 
-    actions.innerHTML = '';
-    actions.append(button('ANOTHER TAKE', () => startRun(gesture, run!.variant), 'go'));
+    const variant = run.variant;
+    const done = (): void => { stopRun(); showGesture(); };
+    const row = [button('ANOTHER TAKE', () => startRun(gesture, variant), 'go', `Record ${gesture.name} again, the same way`)];
     if (kept) {
-      actions.append(
-        button(`DISCARD THIS TAKE`, () => void discardTake(), 'stop')
+      row.push(
+        button(`DISCARD THIS TAKE`, () => void discardTake(), 'stop', `Delete the ${kept} example${kept === 1 ? '' : 's'} this take just stored, and take it again`)
       );
     }
-    actions.append(button('DONE WITH THIS GESTURE', () => { stopRun(); showGesture(); }));
+    row.push(button('DONE WITH THIS GESTURE', done, '', 'Keep what was taken and go back to the gesture card (Esc)'));
+    // Esc keeps the take: DONE is the safe way out of this screen, DISCARD never is.
+    setEscape(done);
+    setActions(...row);
   }
 
   /** Drop exactly the examples the take just stored, and offer it again. */
@@ -1052,19 +1179,27 @@ export function createWizard(options: {
     }
 
     setDots(0, 0);
-    actions.innerHTML = '';
-    if (!health.ok) actions.append(button(`REPAIR — DROP ${health.drop.length}`, () => void repair(), 'go'));
+    const row: HTMLButtonElement[] = [];
+    if (!health.ok) {
+      const drop = health.drop.length;
+      row.push(
+        button(`REPAIR — DROP ${drop}`, () => void repair(), 'go', `Delete the ${drop} example${drop === 1 ? '' : 's'} that would be misread as a different gesture`)
+      );
+    }
     /*
      * TUNE is the point of the whole phase. Every gesture ships with one threshold; this fits each
      * one to its own measured scatter and to how close its nearest neighbour actually gets, so a
      * tight class stops matching things it should not and a loose one stops failing to match
      * itself. It is the training data changing the recogniser rather than just describing it.
      */
-    actions.append(button('TUNE FROM MY DATA', () => void tune(), health.ok ? 'go' : ''));
-    actions.append(
-      button('◀ BACK TO TRAINING', () => void backToTraining()),
-      button(health.ok ? 'DONE' : 'LEAVE IT', () => onFinished())
+    row.push(
+      button('TUNE FROM MY DATA', () => void tune(), health.ok ? 'go' : '', 'Fit each gesture’s match threshold to your own examples'),
+      button('◀ BACK TO TRAINING', () => void backToTraining(), '', 'Go back to the gesture cards, at the last one'),
+      button(health.ok ? 'DONE' : 'LEAVE IT', leave, '', 'Leave the wizard; everything taught is already saved (Esc)')
     );
+    // Nothing is pending on this screen, so Esc may leave.
+    setEscape(leave, true);
+    setActions(...row);
   }
 
   async function tune(): Promise<void> {
@@ -1178,6 +1313,24 @@ export function createWizard(options: {
     }
   }
 
+  /*
+   * Esc. First it takes back a half-pressed discard (RETRY CAPTURES, a keyframe or hands change
+   * that has armed but not fired); otherwise it does what this screen's `setEscape` says. Enter and
+   * Space need nothing here: every control is a native button.
+   */
+  const onKey = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || event.repeat) return;
+    event.preventDefault();
+    if (armed && phase === 'train' && !run) {
+      armed = null;
+      showGesture();
+      say('Nothing discarded.', 'ok', '');
+      return;
+    }
+    onEscape?.run();
+  };
+  window.addEventListener('keydown', onKey);
+
   showIntro();
   void loadCalibration();
 
@@ -1207,6 +1360,7 @@ export function createWizard(options: {
     },
     destroy() {
       stopRun();
+      window.removeEventListener('keydown', onKey);
       host.innerHTML = '';
     }
   };

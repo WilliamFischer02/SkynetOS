@@ -4363,3 +4363,446 @@ never logs in, never invents a number, and ends every turn with one sized action
 and the Monday BILLS DUE toast are on the board **disabled** until he ticks them. The root board was
 edited on disk (D5, snapshot `2026-09-23T17-51-27-000Z-agent-financeos`); Ctrl+Z will not undo it.
 What the mail survey showed about his institutions is in `private/finance/institutions.md`, not here.
+
+## 2026-09-24 — JARVIS Voice: a hologram that watches three streams, a voice that is William's own, a helper that moves things
+
+William asked for a launch-on-boot, voice-controlled "mini program": a small square window with a
+blue audio-reactive hologram, wake-word commands that open programs on named monitors and place
+them, visible mouse and keyboard automation, talk-back in a JARVIS voice, a TRAIN button, and an
+agentic planner. Built inside SkynetOS as M13 (docs/11-JARVIS-VOICE.md; rules in docs/07 § JARVIS
+Voice), because the ear, the wake grammar, the window hardening and the persona already lived here.
+
+**The voice is not Paul Bettany's.** The first brief asked for a voice trained on his lines, for
+private use. Declined: a real person's voice taken without consent is not a thing to build, however
+private. William amended it the same hour: he records the lines himself, an impression, and the
+program treats that dataset as a voice profile. His voice, his consent, and a better feature: any
+profile, not one. `PROFILE_LINES` are original lines in the register, never film quotes.
+
+**The hologram window owns nothing that hears, speaks or moves.** It is a view over the existing
+voice pipeline (`voice:*`), the speech service (`speech:state`) and the desktop helper
+(`desktop:state`). So it opens no microphone, and the docs/07 Voice rules stand unchanged with it on
+screen all day. **Rejected:** a continuous level meter on a live microphone for the "audio reactive"
+look. It would have broken "nothing is heard after the sentence" for a visual; the sphere reacts to
+the wake, the capture, the words JARVIS speaks and the steps it takes instead, which is what the look
+is for. **Rejected:** a second program registered with Windows. SkynetOS already starts with
+Windows; `hologram.enabled` makes the square appear with it.
+
+**A typed command takes the spoken path.** `voice:typed` hands the line to the board window as a
+`voice:heard`, so `resolveIntent` and `actOnIntent` stay the one place a sentence is understood.
+Nothing is re-implemented in the small window, which may call only `HOLOGRAM_ALLOWED`: switches,
+status, typing, the recorder, halt. `test/jarvis-voice-contract.test.ts` holds that none of the new
+channels is an agent's or a phone's.
+
+**Speech is Windows' own synthesiser until a server exists.** System.Speech in a sidecar reports word
+boundaries, which is what the sphere breathes to; the `server` backend takes `{text, profile}` and a
+WAV back from 127.0.0.1 only, and falls back to `sapi` so JARVIS is never mute. Which synthesis
+server (a reference-clip model or a fine-tunable one) is M13.2 and William's download; SkynetOS never
+trains, never uploads. This PC has only US voices; an en-GB voice is a Windows add-on he installs.
+
+**Desktop control is a separate helper, off by default, with one switch.** The window tracker stays
+read-only by contract (its test forbids `SendInput` and friends); a second PowerShell sidecar holds
+`SetWindowPos`, `SetCursorPos` and `SendInput`. It launches only Start Menu shortcuts and
+`settings.desktop.apps` (installing a program is the consent), never a path; at most 12 steps; Esc,
+"stop" or the switch halts it; `alt+f4` is refused. **Rejected:** a native input module (robotjs,
+nut.js): a native dependency, `npmRebuild: false` in the builder, and PowerShell P/Invoke is the
+pattern the tracker and the wake grammar already use. **Rejected:** routing voice launches through
+the node-activation dialogs: a confirm per sentence defeats the point, and the Start Menu rule is a
+narrower consent than "anything in a dev root".
+
+**The planner will be headless `claude -p`, not an API key.** Away mode already proves the shape;
+the subscription pays; nothing to store. It writes steps, `runPlan` runs them under the same switch,
+cap and halt, and only after the line is spoken. Not built today (M13.3), nor action recording
+(M13.4): both designed in docs/11 with their rules already in docs/07 so the code cannot drift from
+them when it comes.
+
+**Built by three forks with one owner per file, on a contract laid first:** the channels, types,
+settings blocks and skeleton services were written by the main session before any fork started, so
+every fork saw a green typecheck and none touched another's files. The fold-in of what each
+delivered is in handoff.md "JARVIS Voice — 2026-09-24".
+
+**The synthesis server is F5-TTS in its own Python 3.10 venv, and it needs no training step
+(later the same day).** William has voice samples in AIFF and wants a voice from them now. Of the two
+shapes docs/11 names, the reference-clip one speaks the moment a clip with a transcript exists; the
+fine-tuned one needs a training run and a longer setup. F5-TTS was chosen over Chatterbox because
+its torch requirement is not pinned to a release older than the RTX 5070 can use (Blackwell needs
+CUDA 12.8 wheels), and over GPT-SoVITS because it is a `pip install`, not an integrated package.
+Python 3.10 (`py -3.10`, already on this PC) rather than the default 3.14, on which the TTS packages
+are untested. The venv lives beside whisper's folders in `%LOCALAPPDATA%/SkynetOS/voice/tts/`, per
+machine, never committed. `tools/speech-server.py` is standard-library HTTP on 127.0.0.1 only; it
+picks the longest transcribed line between 2 and 15 s as the reference, refuses in a sentence when
+there is none, and the speech service falls back to Windows' voice on any failure. **Downloads:**
+about 4 GB of wheels by `npm run speech:install`, run with William present and asking, and about
+1.3 GB of weights on the first synthesis, fetched by F5-TTS into its own cache; SkynetOS fetches
+nothing. **Rejected:** ffmpeg for the AIFF clips (not installed, and a decoder for uncompressed
+AIFF is a page of code); the repo's own `packages/shared/aiff.ts` reads them.
+
+**The profile is heard (the same evening).** William's 380 AIFF clips, his own JARVIS impression
+recorded in 2024, went in through `npm run profile:import -- jarvis <folder> --transcribe`: 358
+imported, 22 refused as shorter than half a second after trimming, every one transcribed by
+whisper-server on this PC. The first synthesis failed: torchaudio 2.9+ decodes through torchcodec,
+which needs FFmpeg's shared libraries, absent here. **Decision:** the server reads reference audio
+with soundfile, patched over `torchaudio.load` before F5-TTS imports it, because the only audio it
+ever loads is its own 16 kHz PCM WAV. **Rejected:** installing FFmpeg (a system install for one
+call) and pinning torchaudio 2.8 (a 3 GB re-download to avoid a ten-line patch). The second attempt
+produced an eight-second line in his voice from an eleven-second reference, played aloud.
+`settings.json` was set to `speech.backend: server, profile: jarvis` by the Hands at his request:
+settings have no write channel by design, and this is the one edit he asked for in words. The clips
+sit in `voice-profiles/` inside the repo, which `.gitignore` now excludes: a recording of William is
+not for a public repository.
+
+**The VOICE button opens JARVIS (the same evening).** William: "when the voice button in SkynetOS I
+want it to directly open the Jarvis program you've been working on." The button beside MANUAL used
+to be the microphone toggle and, by docs/07, the hard mute one press away. Now a click calls
+`hologram:open`: the window is switched on if it was off (so it returns at the next start), opened
+or restored, and focused; the MIC switch inside it is the microphone. The mute stays one press away
+in four places: MIC in that window, Shift+click on VOICE, "Voice off" in the palette, and "stop
+listening". docs/07 says so. **Rejected:** a click that both opens the window and switches the
+microphone on: opening a microphone should be its own press, and the window's MIC is that press.
+On a copy that predates the channel the click toggles voice as before.
+
+**JARVIS answers himself, and listens once more (the same evening).** William pressed VOICE, spoke,
+and got the claude.ai window opened with his sentence typed into it and no reply: the voice path's
+rule since 2026-09-12 was that an unrecognised sentence is a question for the Face. He wants
+conversation: an answer aloud, and his next sentence taken without saying "Jarvis" again.
+**Decision:** `converse:ask` runs headless Claude Code (`claude -p`, the subscription, no key), Haiku
+by default for latency, with the persona's spoken-register rules and the last eight turns; the reply
+is trimmed to two sentences and spoken by main itself, because it is an answer to William's own
+sentence and not an agent starting speech. The 2.2 s hand-off to the Face is removed; "ask the face
+…" remains as the explicit road. **Decision:** after JARVIS finishes an answer, the capture window
+opens for one sentence with a 5 s silence limit and no wake phrase. This is a real change to docs/07
+"nothing is transcribed before the wake phrase" and is recorded there as the one exception, bounded:
+only right after an answer, one sentence, silence ends it without transcription, LISTENING shown,
+`voice.followUp: false` removes it. **Rejected:** keeping the microphone open for the whole
+conversation (that is a listening room, which docs/07 forbids). **Rejected:** answering through
+the Face window (his words: no need for it to open; and the consumer terms forbid scripting it).
+
+## 2026-09-26 — Morning maintenance: three copies of one slug, two panels that claimed emptiness, two tests that could pass on nothing
+
+An unattended run of the MORNING MAINTENANCE task (`codex/briefs/morning-maintenance.md`) for the
+08:00 slot. Three small changes and one roadmap step, each green on `npm run verify` (113 files,
+1,751 tests; was 112 and 1,747). Nothing committed, nothing deleted, no board file touched, no
+dependency added.
+
+**One `idSlug`, in `packages/shared/id-slug.ts`.** The slug inside every minted id was written three
+times, character for character, in `phantoms.ts`, `ingest.ts` and `node-factory.ts`. The three must
+agree, because an approved phantom becomes a node on the same board and `freePhantomId` checks both
+lists; a fourth copy drifting by one character would let a phantom collide with the node it becomes.
+It lives in shared rather than in `phantoms.ts` because ingest and the factory have no other reason
+to import phantoms. Its behaviour is unchanged, trailing-underscore-after-the-cut included: the cut
+runs after the trim, so a name whose 24th character is punctuation keeps a `_` at the end. Not fixed,
+because ids on disk were minted that way and a change would make the next `freeNodeId` on the same
+name differ from the one already on the board. **`normaliseRoot` is `normalisePath`** under its old
+name: same body, and `underTrustedRoot` no longer replaces backslashes it was about to replace.
+**Rejected:** moving `normalisePath` out of `usage.ts` into a paths module. It belongs there less than
+it belongs in one place, but the move touches five files for no behaviour.
+
+**A panel does not say "nothing" before it has looked.** The mailbox's `mail` started as `[]`, so
+NOTHING WAITING was on screen for the whole first read and, since `refresh` had no catch, for as long
+as a read failed, with the count reading a confident 0. It now starts `null`, shows READING
+codex/mailbox/…, and a failed read stays on screen as COULD NOT READ with the reason and the way to
+retry (close and reopen, which is what triggers the read). The gesture catalogue had the same shape,
+"No gestures yet." while `library` was still `null`, which cannot be true because built-in gestures
+always exist; same two states. "Copy for the Face" now toasts when the clipboard refuses, the way
+ABOUT's copy already did, and names the file so the message can still be carried by hand. All
+renderer, so proved by typecheck and reading only (roadmap item 10).
+
+**A test that returns early asserts nothing.** Two `layout.test.ts` cases returned silently when a
+MinecraftOS node was missing, so a board edit that removed `u1_agent_stalker` or `z1` would have kept
+them green while the thing they test was gone. Each `return` is a `throw` naming the node. `expect(
+zone).toBeDefined()` would also have held them, but TypeScript still sees `undefined` after it, so the
+guard would have stayed as well; one line that does both is clearer.
+
+**Roadmap step, "Known issues" 16:** the five comments that named things that do not exist. Five
+words changed. The `suffixSize()` ternary that returns 11 both ways stays: the header above it says
+why the suffix never renders at 8.25 px, and the ternary is the shape of a decision, not a bug.
+
+**Found, left alone:** `test/watch-plan.test.ts` "survives `gradlew clean`" tripped its 8 s deadline
+once in six lone runs this morning and passed in 3.1 s on the rerun. The handoff's landmine said
+it fails only under three parallel verifies; it does not. Roadmap "Known issues" 19. Not loosened.
+The 1 s tickers in `FableCores.tsx` and `RemotePanel.tsx` were checked and are already gated on a
+countdown being shown, so nothing on a timer was found doing unseen work.
+
+## 2026-09-26 — ScheduleOS: the room, the week tool, and Reclaim declared but not yet logged in
+
+William: "can we get reclaim hooked up to a scheduling OS so I can start feeding it my PBS schedule".
+Phase 5 of the Face's master directive (`codex/drops/skynetos-drop-2026-09-25-financeos-scheduleos/`),
+built by this session and two forks, one owning the board and one the tool. Nothing committed.
+
+**Reclaim is a project MCP server, in `.mcp.json`, not a named server on the node.** `claude mcp add
+-s project -t http Reclaim https://mcp.reclaim.ai` wrote the file; the endpoint answers 401 to an
+unauthenticated GET, which is what an OAuth-protected MCP server does, and is as far as verification
+can go without his browser. `resolveMcpConfigs` (services/mcp-config.ts) maps only the bare name
+`skynet`, so `"mcpServers": ["Reclaim"]` on the chip, as the Face's snippet had it, would have been
+dropped with a console warning and no tools. The chip keeps `["skynet"]`; Claude Code loads the cwd's
+`.mcp.json` itself and asks William once per project to allow it. The tool list goes in
+`private/schedule/reclaim/mcp-tools.md` after the first authenticated session; until then the
+secretary may not promise habit writes (directive 30). **Rejected:** the unofficial `reclaim-mcp`
+with an API key today; it is the fallback if the official server lacks habit create/update.
+
+**The three tasks are `agent.run` with briefs, not `jarvis.headless`.** The snippet used
+`jarvis.headless`, which the roadmap (M8) records as kept but inert. `agent.run` on `u_cc_secretary`
+with `codex/briefs/sched-{build,nudge,week}.md` is the action that exists. All three are
+`enabled: false`: a scheduled secretary that writes calendar events unattended is exactly what
+directive 30 forbids, so each brief ends in proposals, not writes.
+
+**The week tool reads files, never a calendar.** `npm run schedule:week` (`tools/schedule-week.ts`,
+pure half `packages/shared/schedule-week.ts`, 15 tests) expands `schedule/pbs-shifts.json` into the
+§1 prep chain and renders `schedule/week.html` and `schedule/today.md`. Live events arrive only as
+`private/schedule/events.json`, an export the secretary writes from the Reclaim or Google Calendar
+MCP in a session William is in. **Rejected:** the script fetching each calendar's secret iCal URL;
+that puts a credential-equivalent URL on disk for a script that runs on a timer. **Rejected:** the
+script calling the Calendar API; that is an OAuth client and a token store, a dependency and a
+secret, for a picture. Departures from the spec, each named in the fork's report and the tests:
+seven chain blocks (the T−5 margin is not an event); the shift-night bend covers HOME as well as
+DECOMPRESS, both allowed to 23:30; "earned so far this month" is left out because the file the
+spec names (`finance/ledger.jsonl`) does not exist.
+
+**The room is at the existing scale.** The snippet's 48×30 grid became 144×96 (×3), the FinanceOS
+convention, with `%SKYNET%` paths, designators hidden, screws, an LED and fiducials. Every path is
+real on disk; `f_model` points into the gitignored drop because that is where the rules live today.
+`test/board-types.test.ts` "found the six rooms" became seven, with `scheduleos` in the sorted list:
+a count that pins the seeded boards is meant to move when a room is added, and it did.
+
+**Timezone is still Los Angeles**, on every calendar, read through the connector today. It is the
+first item in `private/schedule/reclaim/hours-and-timezone.md` and it is William's hands. No habit
+is re-timed and no chain is written until it reads Denver.
+
+## 2026-09-26 — The JARVIS globe, every control by voice, TRAIN ACTION, the eased board, and a fine-tuned voice: one long session, fourteen forks
+
+William, present, in one message: a close button that really closes; the profile voice that came up
+as David after a boot; a "significantly more advanced" voice from his 358 clips; DESK mode moving
+the window to monitor one at full height with TRAIN ACTION recording his mouse and keyboard and
+replaying with adaptation; the orb at double resolution, audio-reactive, a rotating short-depth
+globe with recent projects orbiting as icons and every file pinned at a permanent coordinate,
+summoned to the centre and rendered (paper, a typed terminal, crude models) as Claude works; a
+listening animation that brightens the whole picture; voice commands for every control, "stop" and
+"shut yourself down"; the head sprite replaced by the orb; a UI/UX pass with themed dialogs; more
+zoom steps and eased zoom, drag and gesture motion; depth on the board; the claude.ai window opened
+only from U1; drag-and-drop and a dictate button for terminal sessions; a JARVIS-TQR agent; and a
+second pass for quality and speed. He asked for questions up front and answered "defaults".
+Everything below is uncommitted. `npm run verify`: 132 files, 2,007 tests (was 114 / 1,773).
+**Nothing has been seen on a screen. The first `npm run boot` compiles the shaders.**
+
+**The eight defaults he accepted.** Downloads and GPU training under `%LOCALAPPDATA%\SkynetOS\voice\`;
+recording only while the light is on, under userData, paused on sign-in windows; the Face's window
+opens only from a U1 click; integer zoom rest points with an eased tween; a DICTATE button plus
+`Ctrl+Alt+D`; a Claude Code hook in his user settings for dropped paths; "shut yourself down" is the
+JARVIS Voice program only; the globe watches every Claude Code session on the machine.
+
+**Why the boot voice was David** (fork C). Nothing started the synthesis server at boot; the first
+line started it, could not wait for the model, and fell back. `startSpeechAtBoot` starts and warms
+it; `speechRoute` holds a line for up to `speech.warmWaitMs` (120 s) while the server is cold and
+shows WARMING; the fallback is kept for a server that is up and fails. **Rejected:** speaking a
+Windows "one moment" while warming: two voices for one assistant is the fault he reported.
+
+**The globe is WebGL2 by hand, not a library** (fork F1). three.js would be the first render
+dependency in the repo and would arrive with its own ideas about textures and colour; the sphere is
+a grid of lines and points, the wisps a particle buffer, the post pass the same ordered dither, so
+it still reads as the orb he likes. Distortion is data: eight bands from the WAV main already holds
+(`speech-levels.ts`), an envelope from word boundaries for the Windows voice, and an AnalyserNode in
+the capture window for the microphone. **Rejected:** a loopback audio capture of the speakers
+(another device open, and it would hear the room).
+
+**What Claude touches is read from its transcripts, not from a tool bus** (fork F2). Every Claude
+Code session writes `~/.claude/projects/**/*.jsonl`; tailing them is read-only, needs no change to
+any agent, and covers sessions SkynetOS did not launch, which is what he asked for. A permanent
+coordinate is a hash of the parent folder for the cell and the file for the jitter, remembered in
+`userData/globe-atlas.json` so it survives a change to the hash. The scheduler shows four of a
+burst of forty reads. **Rejected:** a PostToolUse hook in his Claude settings that reports to
+SkynetOS: more surface, and it would miss sessions started without it.
+
+**One shutdown path.** Two forks each wrote one; both now end in `shutdownHologram()`.
+
+**The recorder is the existing helper, not a new sidecar** (fork H). It is already `powershell.exe`,
+which can load UIAutomationClient; a click is stored with the element under the cursor (name, type,
+class, its rect and the click's position within it), so a replay finds the control by name today
+and falls to window-relative, then screen, coordinates, logging the tier. No screenshots at clicks:
+the UIA target is smaller, searchable and never a picture of a password field. The recorder pauses
+itself on sign-in titles. **Rejected:** a low-level keyboard hook for keys (a message pump in a
+second thread for what a 125 Hz poll of key-down edges gives), and an `actionDelete` channel.
+
+**Dictation types with SendKeys, not the helper** (fork G): the helper is behind the desktop switch
+by design, and dictation must work with DESK off. Text goes in 200-character chunks; nothing is
+written to disk.
+
+**Zoom stays integer; the travel is eased** (fork I). See docs/02 for the amended rule. The
+in-between frames scale the canvas element, never the stage, so every colour on screen is a rendered
+one; the cost is 160 ms of uneven pixel blocks. Springs are critically damped and closed-form, so a
+30 Hz and a 240 Hz machine land in the same place. Depth is parallax in whole pixels, a one-pixel
+mask-dark shadow, and a mask-light lit edge: three tricks, zero new colours.
+
+**The drop hook attaches only when the prompt looks like a drop** (fork J, after it bit this very
+session): contents only for prompts under 1,500 characters naming at most six paths; a list above
+that; nothing above twenty. Secrets, `.git/` and `node_modules/` are refused by name. The hook and
+the `/drop` skill are installed by `npm run drop:install`; the repo keeps the source. **Rejected:**
+a terminal with buttons: there is none; the DICTATE button lives in the JARVIS window and the hotkey
+is global.
+
+**The fine-tune ran in the venv that was already there** (fork L, from a read-only survey of the
+field). 117 clips, 7.8 minutes, 1,500 updates of F5-TTS v1 on the RTX 5070 in 56 minutes (slowed to
+19 s per update whenever a smoke run took the GPU); pruned to 1.3 GB; `profile.json` now names it
+with `use_ema: false`. The eval's similarity is a log-mel cosine, which cannot tell the two apart
+(0.98 both); the five paired WAVs under `finetune/jarvis/eval/` are the test. If the timbre is
+still short, the survey's route 2 is an RVC (Applio) layer; route 3 is GPT-SoVITS in its own 8 GB
+environment. **Rejected for now:** both, until he has heard route 1.
+
+**Native message boxes are gone** (fork E): a SkynetOS confirm window with the same button contract,
+focus on the refusal, Enter only on the focused button, one gated channel, and a fall back to the
+native box if the window cannot be made. **The UX pass** (fork M) gave every panel one title strip,
+one status box, a visible 2 px focus ring, and closed roadmap 13, 14 and 15.
+
+**Speed** (fork K): the 6 s the harness measured at boot was the harness sharing Chromium's cache
+with the live copy, now separated; what William paid was the snapshot prune and the service starts
+before first paint, all deferred behind `did-finish-load`. The router's per-route buffers are one
+scratch; routed traces are cached by a geometry key; placeholder packages are cached canvases;
+Pixi renders only when dirty; the 400 ms chrome poll (roadmap 7) is observers. Click round trip p50
+26.8 ms, p95 96 ms, dominated by the seven-board snapshot docs/07 requires.
+
+**The review** (fork N) found two things the builders missed: secret files under a dev root would
+have been drawn on the globe (`isSecretPath` now refuses them), and stream mode did not redact the
+centre panel (`redactScene`). Both tested. Left as findings: `dictate:state` fans out to every
+window; `close`/`minimise` go through the renderer.
+
+**Unfinished, said plainly:** the planner (M13.3) that adapts a recording beyond the three tiers;
+a page cache for long documents; the tray icon; the explorer window and vision wizard in the UX
+pass; hologram frame time unmeasured; the fine-tune unheard.
+
+## 2026-09-27 — The weekly pools: Max 20x fixed, Monday 20:00 Denver, two bars from William's own readings
+
+William: "the credit and usage tracking can be tuned to be more finite considering my plan never
+changes from max 20x and it always resets credits on Mondays at 8pm." Max plans carry two weekly
+caps besides the five-hour window, all models and Fable, and claude.ai/usage shows both as
+percentages. Nothing on this disk does.
+
+**Decided.** `packages/shared/usage-week.ts` (pure). The week is `weekWindow(now, anchor)`, from
+`usage.weeklyAnchor` (default Monday 20:00 America/Denver), computed with Intl on the zone's own
+calendar, so the week across 2026-11-01 is 169 h and the one across 2027-03-14 is 167 h. A pool's
+figure is the latest reading inside the current week, carried forward by this machine's weighted
+tokens at the ratio the reading implied: `k = reading% ÷ B`, `now = reading% + k × S`, where B is
+local tokens from the week's start to the reading and S local tokens since (every model for ALL,
+`claude-fable*` only for FABLE). Clamped to 100. With no reading this week: NO READING THIS WEEK,
+and an earlier week's reading is greyed and labelled with its week, never carried forward. Dotted
+past 12 h from the reading. Readings live in `usage.pools.{all,top}` (last 20 each), appended only
+through `settings:addUsageReadings`, user-only like `settings:setPlan`. `FIXED_PLAN = 'max-20x'` in
+plans.ts; the dialog's plan select starts there and says FIXED once `plan` is set.
+
+**Rejected.** A fixed UTC offset (wrong for half the year). Treating a new week as 0% (it is a
+guess about other machines and claude.ai chats). Multiplying the five-hour rate by the hours since
+the reading, as first sketched: a five-hour rate says nothing about the night in between, so the
+tokens actually spent since the reading are used instead (the integral of the same rate). Counting
+Opus in the Fable pool: Opus is what runs when Fable is out, so it counts in ALL only.
+
+**Seeded** 2026-09-27T19:03:14Z through the writer: all 48%, Fable 78%.
+
+## 2026-09-27 — The tray icon (M13.5): main-side only, and closing the board quits
+
+**Decided.** `src/main/services/tray.ts`, made at app ready (never in a smoke capture, which runs
+beside William's copy). No IPC channel: Voice, Desk control and Start with Windows call
+`setVoiceEnabled`, `setDesktopEnabled` and `setAutostart` in main, the same functions the user-only
+channels reach, and JARVIS Voice calls `openHologram`. The menu is rebuilt on every right click
+from `trayMenuTemplate` (packages/shared/tray.ts, pure, tested), so its ticks are the state now;
+the Run value is read in the background (reg.exe is too slow to hold a click) and Start with Windows
+is greyed until it has been read once. After Desk control changes, main pushes a not-busy
+`desktop:state`, and the hologram re-reads `desktop:status` on any not-busy state so its DESK switch
+follows. The icon is 16 px as the 1x representation and 32 px as the 2x of one nativeImage, so
+Windows picks by display scale; at 125% or 150% Windows resamples one of them, which is outside
+our reach. `tray.minimizeToTray` (file-only, default false) hides the board on minimise, and only
+while the tray exists, so a failed icon can never strand a hidden board.
+
+**Closing the board now calls `app.quit()`** (index.ts, `win.on('closed')`). Before, the app
+quit through `window-all-closed`, which never fires while any other window lives: the hologram
+turns its OS close into a minimise, and the voice capture window is hidden. So closing the board
+with the JARVIS window up left SkynetOS running with no board. The tray's Quit is the same
+`app.quit()`, so both run before-quit then will-quit.
+
+**Rejected.** `setContextMenu` with a menu rebuilt on state events: there is no event for the Run
+value or for a hand-edited settings file, and a stale tick on a switch that opens a microphone is
+worse than a menu built on demand. A `tray:*` channel: nothing outside main needs one. Closing the
+board to the tray: not asked for, and it would change what the X has always done.
+
+## 2026-09-27 — UX pass, the three leftovers: the explorer, the wizard, and a tooltip on every control
+
+**Decided.** The file explorer keeps its Win 3.1 character (the signal title strip, bevelled
+wells, pixel icons) but its controls are now the chrome's own `.btn.tiny` keycaps, an ON sort or
+resting folder is `.btn.primary` with `aria-pressed` (as a selected width is in the wire
+inspector), focus is the shared 2p signal ring (in the mask colour on the signal strip, and drawn
+inside the grid's well), and loading, empty and failed listings are `StateBox`es. A failed listing
+names the folder as Windows spells it and says what to do (Backspace up, or F5; at the root, check
+the node's ROOT in the inspector). Keys: in the grid, arrows move, Home/End jump, Enter opens (and
+with nothing selected, selects the first entry); anywhere in the window, Backspace goes up and
+lands ON the folder it came out of, Alt+Left goes back, F5 re-reads; Esc closes while it is open.
+Closing hands focus back to where it was.
+
+The calibration wizard carries the panel head by hand (vision-train.ts is not React): name, the
+four steps as the panel's own controls, and a close button at the right. Its status line is the
+shared status box: the first sentence is the state in caps, the rest what to do; failures go
+through `failureLine`. Every button has a title. After an action row is replaced, focus lands on
+the screen's main button, so the keyboard carries on. **Esc is bound only where it is safe:**
+intro, AIM and CHECK leave (nothing is pending); REACH steps back to AIM (the sweep is only in
+memory) and gains a visible ◀ BACK that does the same; a running take STOPs (nothing from it is
+stored); the take's confirmation is DONE WITH THIS GESTURE (keeps the take, never DISCARD). On the
+gesture card Esc only takes back a half-pressed two-click discard; it does not leave, because
+from there one keypress would lose his place in a fifteen-gesture pass. The head's close says
+`Close (Esc)` only on the screens where Esc closes. `npm run gate:wizard` now mirrors the head,
+the status box and the whole keyframe editor (it had omitted − and SWAP L/R), and also fails a
+body button that falls off the side.
+
+`npm run audit:tooltips` (tools/tooltip-audit.mjs) reads src/renderer/ui's TSX as text and lists
+every `<button>`, `role="button"`, `<select>` and checkbox or range input whose own tag has no
+`title`. An `aria-label` alone does not pass: it does not show on hover. test/tooltip-audit.test.ts
+holds it at zero, excluding HologramApp, AvatarApp, ConfirmApp and SystemSettings (other workers'
+files that day; `--all` lists them).
+
+**Rejected.** Esc leaving from the gesture card (see above). A real TSX parser for the audit: a new
+dependency for a rule a brace-aware scan already reads correctly, and the test pins the cases that
+matter (an arrow function's `=>`, a template literal, a title on a child). Restyling the whole
+wizard onto --p and the board's palette: its off-palette greys and 13px type predate this and
+changing them would move every phase's layout; only the rules it now shares with the chrome are
+written in the board's tokens.
+
+## 2026-09-27 — Window controls, UI scale as a setting, and the unsquashed chrome
+
+**Asked.** William: "add a maximize button / window scalability to the program, a lot of the buttons
+and UI elements are squashed at the program's current scale."
+
+**Decided.**
+- **MAXIMIZE / RESTORE in the breadcrumb row**, icon-only beside SETTINGS, plus F11 and the palette
+  ("Maximize the window", "Minimize the window"). Three board-window-only channels, `window:maximize`
+  (toggle), `window:minimize`, `window:state`, and a `window:changed` push coalesced to one per
+  100 ms of quiet (packages/shared/window-state.ts), so the glyph follows the title bar, Win+Up and
+  snaps too. The native frame stays. In neither AGENT_METHODS nor REMOTE_METHODS, and refused from
+  any sender but the board window (`WINDOW_METHODS`). Two new 9x9 glyphs, `maximize` and `restore`.
+- **`settings.uiScale`: `auto` | 1 | 2 | 3**, default `auto` (the old behaviour). Written only by the
+  user-only `settings:setUiScale`, clamped (packages/shared/ui-scale.ts); a hand-typed 4, "big" or
+  1.5 reads as `auto`. Chosen in LOOK → SYSTEM (AUTO / 1× / 2× / 3×) or by the palette's "UI scale",
+  which steps through them. Delivered to the renderer inside `display:info`, not `settings:read`,
+  because a remote page answers `display:info` itself: a phone never inherits the desktop's choice.
+  The board's pixel zoom is untouched. The chrome planner forgets its remembered natural sizes when
+  the scale changes.
+- **The HUD's third level, icons**, and **the inspector narrowing** when even that does not fit, and
+  **`switchIcons`** replacing the 1100 px media query at scales above 1. See docs/02, the chrome's
+  layout manager.
+- **24 × 24 px × `--ui-scale` minimum hit size** in the docked chrome, by a zero-specificity rule so
+  the touch layout's 44 px wins; the three bars give up vertical padding instead of growing. The
+  24 px minimum WIDTH is given only to named icon and one-character controls: set on every button,
+  it replaced flex items' automatic minimum and let REPAIR shrink under its own word.
+- **The smoke layout probe grew**: a hit-size audit, a sideways-overflow check on LOOK and the
+  inspector (naming the element that spills), the node editor and LOOK →
+  SYSTEM as states, and passes at 2x (2560x1440, 1920x1080) and 3x (3840x2160), set in the renderer
+  store only so settings.json is never written. (The sideways check caught my own first cut of the
+  hit-size rule, above.)
+
+**Measured.** Layout audit before: 8 failing states (the known 6, the HUD clipped beside an open
+inspector at 1280x720 and 1024x768, plus the new node-editor state at both). After: 0, across 64
+states at 1x and 21 at 2x and 3x. Hit-size audit before: all 64 states had a control under 24 px
+(HUD tools, breadcrumb switches, usage-meter chips, minimap buttons, JARVIS tools, help X, LOOK
+section headers and gesture words, wire swatches). After: 0.
+
+**Rejected.** A frameless window with drawn window buttons: the native frame already snaps, drags
+and double-clicks correctly, and replacing it buys only the look. Fractional UI scales (1.5×):
+Departure Mono is exact only at 11 × n and every border must stay whole. Letting the HUD wrap to two
+lines: it would reach into the usage meter's row, which is why docs/02 keeps it to one.
+
+**Not fitted.** 3× chrome on a 1080p screen is a 640 x 360 layout, below the window's own 960 x 640
+minimum; it is offered but not audited, and panels will overlap there.
+

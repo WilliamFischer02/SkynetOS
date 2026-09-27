@@ -1,3 +1,4 @@
+import { PanelHead } from './PanelHead.js';
 import { useEffect, useState } from 'react';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { AwaySettings } from './AwayScreen.js';
@@ -58,7 +59,7 @@ function SettingsBody(): React.JSX.Element {
 
   const check = (label: string, checked: boolean, onChange: (on: boolean) => void): React.JSX.Element => (
     <label className="look-check">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} title={`${checked ? 'Turn off' : 'Turn on'}: ${label}`} />
       {label}
     </label>
   );
@@ -86,6 +87,7 @@ function SettingsBody(): React.JSX.Element {
           <button
             type="button"
             className="btn tiny"
+            title="Show the getting-started card the next time SkynetOS opens"
             onClick={() => { resetFirstRunHints(); toast('ok', 'The getting-started card shows again next time SkynetOS opens'); }}
           >
             Show the getting-started card again
@@ -109,6 +111,7 @@ function SettingsBody(): React.JSX.Element {
         <button
           type="button"
           className="btn"
+          title="Open the plan dialog to set your plan or calibrate the usage meter's ceiling"
           onClick={() => { setPref('usageMinimized', false); requestPlanDialog(); setOpen(false); }}
         >
           <Icon name="calibrate" />Calibrate or set my plan
@@ -120,16 +123,14 @@ function SettingsBody(): React.JSX.Element {
   return (
     <div className="settings-backdrop">
       <div className="settings-panel" role="dialog" aria-label="Settings">
-        <div className="look-head">
-          <span className="with-icon"><Icon name="gear" />Settings</span>
-          <button type="button" className="btn tiny" onClick={() => setOpen(false)}>Close (Esc)</button>
-        </div>
+        <PanelHead name="Settings" icon="gear" onClose={() => setOpen(false)} />
         {SECTIONS.map(({ id, label, icon }) => (
           <div key={id}>
             <button
               type="button"
               className="look-section"
               aria-expanded={open[id]}
+              title={open[id] ? `Fold the ${label} settings` : `Unfold the ${label} settings`}
               onClick={() => setSectionOpen((o) => ({ ...o, [id]: !o[id] }))}
             >
               <span className="look-section-mark">{open[id] ? '[-]' : '[+]'}</span>
@@ -140,9 +141,9 @@ function SettingsBody(): React.JSX.Element {
           </div>
         ))}
         <div className="settings-row">
-          <button type="button" className="btn tiny" onClick={() => { setOpen(false); setLookOpen(true); }}><Icon name="look" />Board look (L)</button>
-          <button type="button" className="btn tiny" onClick={() => setKeysOpen(true)}><Icon name="keys" />All keys (?)</button>
-          <button type="button" className="btn tiny" onClick={() => setAboutOpen(true)}><Icon name="info" />About</button>
+          <button type="button" className="btn tiny" onClick={() => { setOpen(false); setLookOpen(true); }} title="Close settings and open this room's look: colour, vignette, background (L)"><Icon name="look" />Board look (L)</button>
+          <button type="button" className="btn tiny" onClick={() => setKeysOpen(true)} title="Show every keyboard shortcut (?)"><Icon name="keys" />All keys (?)</button>
+          <button type="button" className="btn tiny" onClick={() => setAboutOpen(true)} title="Show the version, where the data lives, and check for updates"><Icon name="info" />About</button>
         </div>
       </div>
     </div>

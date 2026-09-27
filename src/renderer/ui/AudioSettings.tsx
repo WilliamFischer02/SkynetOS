@@ -44,7 +44,7 @@ export function AudioSettings(): React.JSX.Element {
     <>
       <div className="setting-row">
         <span>Voice</span>
-        <button type="button" className="btn tiny" aria-pressed={on} onClick={() => void setVoiceEnabled(!on)}>
+        <button type="button" className="btn tiny" aria-pressed={on} onClick={() => void setVoiceEnabled(!on)} title={on ? 'Switch voice off: stops the wake phrase, the speech engine and the microphone' : 'Switch voice on: JARVIS listens for the wake phrase'}>
           {on ? 'SWITCH OFF' : 'SWITCH ON'}
         </button>
       </div>

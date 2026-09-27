@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CHROME_PREFS, planChrome, samePlan, type ChromeInput } from '../src/renderer/ui/chrome-layout.js';
+import { DEFAULT_CHROME_PREFS, MIN_INSPECTOR_W, SWITCH_WORDS_W, planChrome, samePlan, type ChromeInput } from '../src/renderer/ui/chrome-layout.js';
 
 /*
  * Numbers from the smoke layout audit of 2026-09-11, at chrome scale 1 (gap 4). The usage meter is
@@ -147,5 +147,117 @@ describe('planChrome', () => {
     const a = planChrome(input());
     expect(samePlan(a, { ...a, reasons: ['x'] })).toBe(true);
     expect(samePlan(a, { ...a, hudCompact: !a.hudCompact })).toBe(false);
+  });
+});
+
+/*
+ * The HUD's icons level and the narrowing inspector (2026-09-27). The smoke audit's six known
+ * failures were the HUD clipped beside an open inspector at 1280x720 and 1024x768: compact was the
+ * last resort, and the primary chips alone were wider than the room left. Numbers from that audit:
+ * the breadcrumb row is about 242 px wide at 1024 with its switches as icons, the full HUD about
+ * 760, compact about 420, icons (+N, find, bell, settings) about 130.
+ */
+describe('planChrome: the HUD beside an open inspector', () => {
+  const narrow = (over: Partial<ChromeInput> = {}): ChromeInput => input({
+    view: { w: 1024, h: 768 },
+    breadcrumb: { x: 8, y: 8, w: 234, h: 26 },
+    hudNaturalW: 760,
+    hudCompactW: 420,
+    hudIconsW: 130,
+    inspectorNaturalW: 450,
+    ...over
+  });
+
+  it('folds to icons when even the primary chips do not fit, and the icons do fit', () => {
+    const plan = planChrome(narrow());
+    // 1024 - (450 + 8) - 242 - 8 = 316 px for the HUD.
+    expect(plan.hudMaxW).toBe(316);
+    expect(plan.hudCompact).toBe(true);
+    expect(plan.hudIcons).toBe(true);
+    expect(plan.hudMaxW).toBeGreaterThanOrEqual(130);
+    expect(plan.inspectorW).toBe(0);
+    expect(plan.reasons.some((r) => r.startsWith('HUD icons'))).toBe(true);
+  });
+
+  it('stays compact, not icons, when the primary chips fit', () => {
+    const plan = planChrome(narrow({ hudCompactW: 300 }));
+    expect(plan.hudCompact).toBe(true);
+    expect(plan.hudIcons).toBe(false);
+  });
+
+  it('stays full when nothing is open', () => {
+    const plan = planChrome(narrow({ view: { w: 1920, h: 1080 }, inspectorNaturalW: 0 }));
+    expect(plan.hudCompact).toBe(false);
+    expect(plan.hudIcons).toBe(false);
+    expect(plan.inspectorW).toBe(0);
+  });
+
+  it('works the dodge out from the inspector it plans, not the measured one', () => {
+    // A measured dodge left over from a narrowed inspector must not change the plan.
+    const a = planChrome(narrow({ dodge: 8 }));
+    const b = planChrome(narrow({ dodge: 999 }));
+    expect(samePlan(a, b)).toBe(true);
+  });
+
+  it("narrows the inspector, in whole --p, rather than push the HUD's buttons off", () => {
+    // A 3x chrome in a 1920 window: the breadcrumb row is 726 px, the inspector 844, the icons HUD 390.
+    const plan = planChrome(narrow({
+      view: { w: 1920, h: 1080 },
+      gap: 12,
+      breadcrumb: { x: 24, y: 24, w: 702, h: 78 },
+      hudNaturalW: 2280,
+      hudCompactW: 1260,
+      hudIconsW: 390,
+      inspectorNaturalW: 843
+    }));
+    expect(plan.hudIcons).toBe(true);
+    expect(plan.inspectorW).toBeGreaterThan(0);
+    expect(plan.inspectorW).toBeLessThan(843);
+    expect(plan.inspectorW % 3).toBe(0);
+    // 30% of the window, since 320 x 3 would be half of it.
+    expect(plan.inspectorW).toBeGreaterThanOrEqual(576);
+    expect(plan.inspectorW).toBe(756);
+    expect(plan.hudMaxW).toBeGreaterThanOrEqual(390);
+  });
+
+  it('never narrows it below the minimum; the HUD then takes what is left', () => {
+    const plan = planChrome(narrow({ view: { w: 960, h: 640 }, breadcrumb: { x: 8, y: 8, w: 500, h: 26 }, hudIconsW: 300, inspectorNaturalW: 422 }));
+    expect(plan.inspectorW).toBe(MIN_INSPECTOR_W);
+    expect(plan.hudMaxW).toBe(960 - (MIN_INSPECTOR_W + 8) - 508 - 8);
+  });
+
+  it("leaves the touch layout's bottom-sheet inspector alone", () => {
+    const plan = planChrome(narrow({ compact: true, hudIconsW: 900 }));
+    expect(plan.inspectorW).toBe(0);
+  });
+
+  it('moves the toasts and the minimap with a narrowed inspector', () => {
+    const wide = planChrome(narrow({ view: { w: 960, h: 640 }, breadcrumb: { x: 8, y: 8, w: 500, h: 26 }, hudIconsW: 300, inspectorNaturalW: 422 }));
+    expect(wide.toastsRight).toBe(MIN_INSPECTOR_W + 8);
+  });
+
+  it('counts the icons level and the inspector width as part of the plan', () => {
+    const a = planChrome(narrow());
+    expect(samePlan(a, { ...a, hudIcons: !a.hudIcons })).toBe(false);
+    expect(samePlan(a, { ...a, inspectorW: 400 })).toBe(false);
+  });
+});
+
+describe('planChrome: the breadcrumb switches at every chrome scale', () => {
+  it('keeps the words at 1x from 1100 px up, as the stylesheet always did', () => {
+    expect(planChrome(input({ view: { w: 1280, h: 720 } })).switchIcons).toBe(false);
+    expect(planChrome(input({ view: { w: 1024, h: 768 } })).switchIcons).toBe(true);
+    expect(SWITCH_WORDS_W).toBe(1100);
+  });
+
+  it('scales the threshold with the chrome: icons at 2x below 2200 px, at 3x below 3300', () => {
+    expect(planChrome(input({ view: { w: 1920, h: 1080 }, gap: 8 })).switchIcons).toBe(true);
+    expect(planChrome(input({ view: { w: 2560, h: 1440 }, gap: 8 })).switchIcons).toBe(false);
+    expect(planChrome(input({ view: { w: 2560, h: 1440 }, gap: 12 })).switchIcons).toBe(true);
+  });
+
+  it('is part of the plan', () => {
+    const a = planChrome(input());
+    expect(samePlan(a, { ...a, switchIcons: !a.switchIcons })).toBe(false);
   });
 });

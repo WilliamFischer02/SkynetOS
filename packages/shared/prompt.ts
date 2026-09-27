@@ -236,3 +236,20 @@ export function promptLayout(width: number, height: number, options: { tab?: num
     tab
   };
 }
+
+/**
+ * Whether `prompt:send` may deliver at all.
+ *
+ * William, 2026-09-26: "make sure no version of launching a JARVIS session launches from the web UI
+ * anymore, beside the one on the board." So a prompt box never OPENS the Face's claude.ai window;
+ * only his click on the U1 chip does. If the window is already open, the box delivers into it as
+ * before; if not, it refuses in words and leaves the text where it was.
+ */
+export type PromptSendRoute = 'deliver' | 'refuse';
+
+export function promptSendRoute(state: { windowOpen: boolean }): PromptSendRoute {
+  return state.windowOpen ? 'deliver' : 'refuse';
+}
+
+/** The refusal, in the imperative: what to do, then what happens. */
+export const PROMPT_WINDOW_CLOSED = 'OPEN JARVIS FIRST — CLICK U1 ON THE BOARD, THEN SEND';

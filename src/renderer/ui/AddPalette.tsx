@@ -246,7 +246,7 @@ export function AddPalette(): React.JSX.Element | null {
     <div className="palette">
       <div className="palette-head">
         <span>ADD COMPONENT</span>
-        <button type="button" className="btn tiny" onClick={() => setOpen(false)}>Close (Esc)</button>
+        <button type="button" className="btn tiny" onClick={() => setOpen(false)} title="Close the component palette without adding anything (Esc)">Close (Esc)</button>
       </div>
 
       <div className="palette-grid">

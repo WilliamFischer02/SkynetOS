@@ -1,3 +1,4 @@
+import { PanelHead } from './PanelHead.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 
 /**
@@ -20,9 +21,10 @@ export function IngestWizard(): React.JSX.Element | null {
 
   return (
     <div className="ingest">
-      <div className="ingest-head">
-        DROPPED {pending.suggestions.length} ITEM{pending.suggestions.length === 1 ? '' : 'S'} — PLACE ON THE BOARD?
-      </div>
+      <PanelHead
+        name={`DROPPED ${pending.suggestions.length} ITEM${pending.suggestions.length === 1 ? '' : 'S'} — PLACE ON THE BOARD?`}
+        icon="folder"
+      />
 
       {pending.suggestions.map((s) => (
         <div className="ingest-row" key={s.path}>
@@ -32,14 +34,14 @@ export function IngestWizard(): React.JSX.Element | null {
           <div className="ingest-reason">{s.reason}</div>
           {s.fields.glob ? <div className="ingest-field">glob: {s.fields.glob}</div> : null}
           {s.fields.exclude?.length ? <div className="ingest-field">exclude: {s.fields.exclude.join(', ')}</div> : null}
-          <button type="button" className="btn primary" onClick={() => void accept(s)}>
+          <button type="button" className="btn primary" onClick={() => void accept(s)} title={`Place ${s.name} on the board as a ${s.kind} node (Ctrl+Z undoes it)`}>
             Place as {s.kind}
           </button>
         </div>
       ))}
 
       <div className="ingest-actions">
-        <button type="button" className="btn" onClick={cancel}>Cancel</button>
+        <button type="button" className="btn" onClick={cancel} title="Place nothing and close the drop-in wizard">Cancel</button>
       </div>
     </div>
   );

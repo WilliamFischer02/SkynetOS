@@ -1,5 +1,5 @@
 import { readdirSync, realpathSync, statSync, type Dirent } from 'node:fs';
-import { dialog, shell, type WebContents } from 'electron';
+import { shell, type WebContents } from 'electron';
 import type { BoardNode } from '@shared/types.js';
 import {
   EXPLORER_MAX_ENTRIES,
@@ -20,6 +20,7 @@ import { boardWindow } from './main-window.js';
 import { dragPathOut, type DragOutResult } from './drag-out.js';
 import { openWithEditor } from './editors.js';
 import { refuseDialogWhenRemote } from './remote-context.js';
+import { confirmThemed } from './confirm-window.js';
 
 /**
  * The disk half of the explorer node. See packages/shared/explorer.ts for the pure half.
@@ -43,23 +44,22 @@ type RootResult =
 const toWindowsPath = (path: string): string => path.replace(/\//g, '\\');
 
 /**
- * A native yes/no, parented to the board window. Its own small copy rather than shell-opener's:
+ * A yes/no, parented to the board window. Its own small copy rather than shell-opener's:
  * that module brings the session database in with it, and this one is tested without Electron.
+ * SkynetOS's own window since 2026-09-26 (services/confirm-window.ts): same refusal default.
  */
 async function confirm(title: string, message: string, detail: string, confirmLabel: string): Promise<boolean> {
   refuseDialogWhenRemote(`"${title}"`);
   const win = boardWindow();
-  const options = {
-    type: 'warning' as const,
+  const { response } = await confirmThemed(win ?? null, {
+    kind: 'launch',
     buttons: [confirmLabel, 'Cancel'],
     defaultId: 1,
     cancelId: 1,
     title,
     message,
-    detail,
-    noLink: true
-  };
-  const { response } = win ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    detail
+  });
   return response === 0;
 }
 

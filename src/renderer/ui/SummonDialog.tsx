@@ -1,3 +1,4 @@
+import { PanelHead } from './PanelHead.js';
 import { useEffect, useState } from 'react';
 import { useBoardStore } from '../store/useBoardStore.js';
 
@@ -43,10 +44,7 @@ export function SummonDialog(): React.JSX.Element | null {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); }
         }}
       >
-        <div className="summon-head">
-          <span>SUMMON JARVIS PRIME</span>
-          <button type="button" className="btn tiny" onClick={close}>Close (Esc)</button>
-        </div>
+        <PanelHead name="SUMMON JARVIS PRIME" icon="hand" onClose={close} />
         <div className="summon-target">
           <div className="summon-name">{node.designator ? `${node.designator} ` : ''}{node.name}</div>
           <div className="summon-kind">{node.kind}</div>
@@ -66,7 +64,7 @@ export function SummonDialog(): React.JSX.Element | null {
         />
         <div className="summon-foot">
           <span className="summon-note">Opens a fresh JARVIS Prime terminal on this target. Enter sends, Shift+Enter is a new line.</span>
-          <button type="submit" className="btn primary" disabled={sending}>{sending ? 'Summoning…' : 'Summon'}</button>
+          <button type="submit" className="btn primary" disabled={sending} title="Open a fresh JARVIS Prime terminal on this target with your note (Enter)">{sending ? 'Summoning…' : 'Summon'}</button>
         </div>
       </form>
     </div>

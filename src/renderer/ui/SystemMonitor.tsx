@@ -150,7 +150,7 @@ export function SystemMonitor(): React.JSX.Element | null {
     <div className="sysmon" ref={panelRef} role="dialog" aria-label="System monitor">
       <div className="sysmon-head">
         <span>SYSTEM MONITOR{title ? ` · ${title}` : ''}</span>
-        <button ref={closeRef} type="button" className="btn tiny" onClick={() => setOpen(false)}>Close (Esc)</button>
+        <button ref={closeRef} type="button" className="btn tiny" onClick={() => setOpen(false)} title="Close the system monitor (Esc)">Close (Esc)</button>
       </div>
 
       {!s ? (

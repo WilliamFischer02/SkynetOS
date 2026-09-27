@@ -860,6 +860,8 @@ canvas {
   max-width: calc(320 * var(--p));
   background: var(--mask-dark);
   border: var(--p) solid var(--copper);
+  /* One pixel of hard shadow, no blur: the plate sits a step above the board (anti-mush rule 6 forbids blur, not offset). */
+  box-shadow: var(--p) var(--p) 0 0 var(--mask-dark);
   color: var(--silk);
   font-size: var(--f);
   line-height: calc(16 * var(--p));
@@ -1055,6 +1057,21 @@ canvas {
 
 /* Nothing to measure against: the track is drawn, empty, so the row keeps its shape. */
 .meter-bar.unknown .cell { border-style: dotted; }
+
+/*
+ * The weekly pools (UsageMeter WeekRow): half-height bars under the five-hour three. Status
+ * colours only, no new ones (docs/02). DOTTED: a figure carried more than 12 h past its reading,
+ * so the lit cells go hollow in their level's colour. PAST: the only reading is an earlier week's,
+ * drawn in the copper every finished thing on the chrome wears.
+ */
+.meter-bar.thin { height: calc(4 * var(--p)); margin-top: calc(0.5 * var(--gap)); }
+.meter-bar.dotted .cell { border-style: dotted; }
+.meter-bar.dotted .cell.on { background: var(--mask-light); }
+.meter-bar.past .cell.on { background: var(--copper-dark); border-color: var(--copper-dark); }
+.usage-week { margin-top: calc(1.5 * var(--gap)); padding-top: var(--gap); border-top: var(--p) solid var(--copper-dark); }
+.week-row { margin-bottom: var(--gap); }
+.week-note, .week-last, .week-reset { color: var(--copper-dark); }
+.week-row.past .meter-label { color: var(--copper-dark); }
 
 /*
  * `.fault` is also the boot and fault SCREEN (above): a full-height centred column with padding. The
@@ -1679,6 +1696,7 @@ canvas {
   color: var(--silk);
   background: var(--mask-dark);
   border: var(--p) solid var(--signal);
+  box-shadow: var(--p) var(--p) 0 0 var(--mask-dark);
   pointer-events: auto;
 }
 .phantom-plate:focus-visible { outline: var(--p) solid var(--silk); outline-offset: var(--p); }
@@ -2071,36 +2089,26 @@ canvas {
 .explorer-title .px-icon { width: calc(16 * var(--p)); height: calc(16 * var(--p)); }
 .explorer-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.explorer-winbtn,
-.explorer-tool,
+/*
+ * The window's controls are the chrome's own keycaps (.btn.tiny), so they press, disable, hover
+ * and take focus exactly like every other panel's; the Win 3.1 character stays in the signal title
+ * strip, the bevelled wells and the pixel icons. A sort or the resting folder that is ON is
+ * .btn.primary with aria-pressed, as a selected width is in the wire inspector.
+ */
+.explorer-title .btn.tiny.explorer-winbtn { margin-left: auto; flex: none; }
+/* The strip is signal, so a signal ring would vanish on it: same ring, in the mask. */
+.explorer-title .btn:focus-visible { outline-color: var(--mask-dark); }
+.explorer-toolbar .btn.tiny { margin-left: 0; }
 .explorer-crumb {
   font: inherit;
   color: var(--silk);
-  background: var(--mask-light);
+  background: transparent;
   border: none;
-  padding: calc(2 * var(--p)) calc(2 * var(--gap));
-  text-transform: uppercase;
+  padding: 0 calc(2 * var(--p));
   cursor: pointer;
-  box-shadow: inset var(--p) var(--p) 0 var(--silk), inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--mask-dark);
 }
-.explorer-winbtn {
-  padding: 0 var(--gap);
-  color: var(--mask-dark);
-  background: var(--silk);
-  box-shadow: inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--copper-dark);
-}
-.explorer-tool.on,
-.explorer-tool:active:not(:disabled),
-.explorer-winbtn:active {
-  box-shadow: inset var(--p) var(--p) 0 var(--mask-dark), inset calc(-1 * var(--p)) calc(-1 * var(--p)) 0 var(--silk);
-}
-.explorer-tool.on { color: var(--signal); }
-.explorer-tool:disabled { color: var(--copper-dark); cursor: default; }
-.explorer-tool:focus-visible,
-.explorer-crumb:focus-visible,
-.explorer-winbtn:focus-visible { outline: var(--p) dotted var(--signal); outline-offset: calc(-3 * var(--p)); }
 
-.explorer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(2 * var(--p)); }
+.explorer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 .explorer-sep { align-self: stretch; width: var(--p); margin: 0 var(--gap); background: var(--copper-dark); }
 .explorer-spacer { flex: 1; }
 
@@ -2113,7 +2121,6 @@ canvas {
 .explorer-address-label { color: var(--copper); }
 .explorer-crumbs { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; }
 .explorer-crumb-wrap { display: inline-flex; align-items: center; }
-.explorer-crumb { padding: 0 calc(2 * var(--p)); background: transparent; box-shadow: none; text-transform: none; }
 .explorer-crumb:hover { color: var(--signal); }
 .explorer-crumb-sep { color: var(--copper-dark); }
 
@@ -2130,7 +2137,8 @@ canvas {
   padding: calc(2 * var(--gap));
   background: var(--mask-dark);
 }
-.explorer-grid:focus-visible { outline: none; }
+/* The shared focus ring, drawn inside the well so it never touches the address bar above. */
+.explorer-grid:focus-visible { outline-offset: calc(-2 * var(--p)); }
 .explorer-item {
   display: flex;
   flex-direction: column;
@@ -2153,9 +2161,10 @@ canvas {
 }
 /* The era's selection: the name inverted into a solid block. */
 .explorer-item.selected .explorer-name { color: var(--mask-dark); background: var(--signal); }
-.explorer-grid:focus-visible .explorer-item.selected .explorer-name { outline: var(--p) dotted var(--silk); }
-.explorer-empty { grid-column: 1 / -1; padding: calc(2 * var(--gap)); color: var(--copper); }
-.explorer-empty.fault { color: var(--fault); }
+.explorer-grid:focus-visible .explorer-item.selected .explorer-name { outline: var(--p) solid var(--silk); outline-offset: var(--p); }
+/* Loading, empty and failed: the shared StateBox, across the whole row of the grid. */
+.explorer-state { grid-column: 1 / -1; justify-self: stretch; }
+.explorer-state .state-path { margin-top: 0; }
 
 .explorer-status { display: flex; gap: calc(2 * var(--p)); }
 .explorer-cell {
@@ -2167,3 +2176,50 @@ canvas {
   text-overflow: ellipsis;
 }
 .explorer-cell.grow { flex: 1; min-width: 0; color: var(--silk); }
+
+/* ---------- one title strip for every panel (2026-09-26 UX pass) ----------
+   PanelHead.tsx. The older per-panel heads are aliases of it so nothing drifts again. */
+.panel-head,
+.look-head,
+.mailbox-head,
+.plan-head,
+.notif-head,
+.summon-head,
+.ingest-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  color: var(--copper);
+  text-transform: uppercase;
+  padding-bottom: var(--gap);
+  border-bottom: var(--p) solid var(--copper-dark);
+  min-height: calc(24 * var(--p));
+}
+.panel-head-name { color: var(--signal); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-head .btn.tiny.panel-head-close { margin-left: auto; }
+.panel-head .btn:not(.panel-head-close) { margin-left: 0; }
+
+/* Focus is visible, pixel-aligned and the same everywhere: 2p signal, 1p gap. */
+button:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible,
+a:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+input:focus-visible,
+.btn:focus-visible {
+  outline: calc(2 * var(--p)) solid var(--signal);
+  outline-offset: var(--p);
+}
+.input:focus-visible { outline: calc(2 * var(--p)) solid var(--signal); outline-offset: 0; border-color: var(--signal); }
+input[type='checkbox']:focus-visible, input[type='radio']:focus-visible { outline-offset: calc(2 * var(--p)); }
+
+/* Chrome motion honours the OS setting. The board canvas has no CSS motion to honour. */
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toasts, .panel-head, .look-panel, .settings-panel, .about-panel, .mailbox, .plan-dialog,
+  .notif-panel, .summon-panel, .ingest, .drag-badge, .phantom-plate, .context-menu, .jarvis-dock,
+  .first-run, .keys-panel, .iris {
+    animation: none !important;
+    transition: none !important;
+  }
+}

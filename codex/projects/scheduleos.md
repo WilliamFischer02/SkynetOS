@@ -40,9 +40,22 @@ catch attention at a glance.
 
 ## State
 
-- Not built. Phase 5 (room + Reclaim) and Phase 6 (first week build) pending.
+- **2026-09-26, Phase 5 built (U3, William present).** The room exists:
+  `board/scheduleos/room.board.json`, 31 nodes, 10 traces, D6 on root, reached from the root board.
+  `.mcp.json` at the repo root declares `Reclaim` (http, `https://mcp.reclaim.ai`); the endpoint
+  answers 401 unauthenticated, so it is real and still wants his browser login — no session has
+  authenticated yet, so no tool names are recorded in `private/schedule/reclaim/mcp-tools.md`.
+  `npm run schedule:week` exists and ran once against empty inputs (seven empty days); it has not
+  run against a real shift. CC-SECRETARY (`u_cc_secretary`) has not had its first run. 0/4
+  phantoms on the room, checked in full on 2026-09-26 (away pass, 16:13) — every real fact already
+  has a node, nothing deserves a recommendation yet.
+- **Timezone still wrong as of 2026-09-26:** every calendar reads `America/Los_Angeles` through
+  the Google Calendar connector. William's hands (`private/schedule/reclaim/hours-and-timezone.md`
+  §1), before any habit is re-timed or any chain is written.
+- Phase 6 (first week build with William: timezone fix, Reclaim login, one real shift fed in)
+  pending — see `codex/projects/skynetos.md` "Next" for the concrete one-action-each queue.
 
 ## Blockers
 
 - How the PBS schedule arrives: unknown. Asked in Phase 2.
-- Whether Ross is still a job: unknown. Asked in Phase 2.
+- Ross: ended (William, 2026-09-25). The `Work (WorkJam)` calendar is to be hidden or removed by him, and no WorkJam workflow survives.
