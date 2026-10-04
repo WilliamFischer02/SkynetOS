@@ -19,6 +19,7 @@ import { describePromptFiles, pickPromptFiles, sendPrompt } from './services/pro
 import { isPlanId } from '@shared/plans.js';
 import { archiveMail, listMail, sendMail } from './services/mailbox.js';
 import { financeStatus } from './services/finance.js';
+import { calendarStatus } from './services/schedule-feed.js';
 import {
   listSessions,
   startSession,
@@ -68,17 +69,24 @@ import {
   setGestureTravel,
   tuneGestureLibrary
 } from './services/gesture-store.js';
-import { isVoiceSender, setVoiceEnabled, voiceCaptured, voiceLevels, voiceStatus } from './services/voice.js';
-import { closeHologram, hologramStatus, isHologramSender, minimizeHologram, openHologram, setHologramDesk, setHologramEnabled, shutdownHologram } from './services/hologram-window.js';
+import { isVoiceSender, setVoiceEnabled, voiceCaptured, voiceLevels, voiceMic, voiceStatus } from './services/voice.js';
+import { reportTurn, sentence as turnSentence, stopTurn, turnState } from './services/turn.js';
+import { setBoardContext } from './services/board-context.js';
+import { closeHologram, hologramStatus, isHologramSender, minimizeHologram, openHologram, setHologramDesk, setHologramEnabled, setHologramSize, shutdownHologram } from './services/hologram-window.js';
 import { answerConfirm, confirmThemed, isConfirmSender } from './services/confirm-window.js';
 // fork G, 2026-09-26: spoken controls for the JARVIS window, saved actions by name, dictation.
 import { runNamedAction, sendHologramControl } from './services/hologram-control.js';
 import { dictateStatus, initDictate, toggleDictation } from './services/dictate.js';
-import { createProfile, listProfiles, playProfileLine, readProfile, recordProfileLine, say, setSpeechBackend, setProfileLineText, setSpeechEnabled, speechStatus, stopSpeaking } from './services/speech.js';
+// 2026-09-27: a dictation target window, and the split beside a terminal.
+import { dictateSetTarget } from './services/dictate-target.js';
+import { hologramSplit } from './services/window-split.js';
+import { createProfile, listProfiles, playProfileLine, readProfile, recordProfileLine, say, setSpeechBackend, setProfileLineText, setSpeechEnabled, setSpeechVoice, speechStatus, stopSpeaking } from './services/speech.js';
+import { setSessionFilter } from './services/activity-feed.js';
 import { desktopStatus, haltPlan, listApps, listDesktopWindows, runPlan, setDesktopEnabled } from './services/desktop.js';
 // fork H, 2026-09-26: TRAIN ACTION.
 import { listSavedActions, recordStatus, runSavedAction, saveAction, startRecording, stopRecording } from './services/action-recorder.js';
 import { converse } from './services/converse.js';
+import { planAndRun } from './services/planner.js';
 import { noteVisit, readVisits } from './services/visits.js';
 import { refuseDialogWhenRemote, runAsRemote } from './services/remote-context.js';
 import { avatarDir, loadAvatar } from './services/avatar-frames.js';
@@ -245,6 +253,28 @@ async function openNode(
   }
 
   /*
+   * A calendar pane opens the week view, `schedule/week.html`, as a document node would: through
+   * openTarget, so the same resolution, the same confirm policy and the same "not there yet"
+   * answer apply. The pane itself has no target of its own; it IS the week (calendar-face.ts).
+   */
+  if (node.kind === 'panel.calendar') {
+    const weekView: BoardNode = {
+      ...node,
+      kind: 'file.document',
+      path: '%SKYNET%/schedule/week.html',
+      openWith: 'default'
+    };
+    const result = await openTarget(weekView, by);
+    const missing = result.target.state === 'missing';
+    return {
+      ok: result.ok,
+      action: result.ok ? `opened the week view (${node.name})` : result.action,
+      target: result.target,
+      ...(result.error || missing ? { error: missing ? 'NO WEEK VIEW YET — RUN npm run schedule:week IN THE SKYNETOS FOLDER' : result.error } : {})
+    };
+  }
+
+  /*
    * A journal task (a task.scheduled with a vault): a click writes today's journal note into
    * William's Obsidian vault now. There is no scheduler yet (M8), so the click IS the run. User
    * only: it writes into his vault, and an agent asking it to would be a note he did not ask for.
@@ -280,6 +310,8 @@ const handlers: Handlers = {
   'board:loadRoom': (boardFile) => loadBoardByFile(boardFile),
 
   'board:list': () => listBoards(),
+  // 2026-09-27: what the conversation can see. The board window alone (checked in registerIpc).
+  'board:context': (ctx) => setBoardContext(ctx),
 
   'display:info': () => {
     const win = boardWindow();
@@ -553,6 +585,8 @@ const handlers: Handlers = {
   'task:runNow': (boardId, nodeId) => runTaskNow(boardId, nodeId),
 
   'finance:status': () => financeStatus(),
+  // The merged calendar. Board window only (checked in registerIpc); in neither allowlist.
+  'schedule:calendar': () => calendarStatus(),
 
   'node:open': async (boardId, nodeId) => {
     const result = await openNode(boardId, nodeId, 'user');
@@ -625,14 +659,19 @@ const handlers: Handlers = {
   'gesture:train': (on) => setTrainMode(on === true),
   'voice:status': () => voiceStatus(),
   'voice:setEnabled': (on) => setVoiceEnabled(on === true),
-  // A typed command takes the spoken path: main hands it to the board as if it had been heard.
+  // A typed command takes the spoken path: through the turn engine (held while a turn is busy,
+  // "stop" obeyed at once), then to the board as if it had been heard (docs/11 § One turn at a time).
   'voice:typed': (text) => {
     const line = typeof text === 'string' ? text.trim() : '';
     const win = boardWindow();
     if (!line || !win || win.isDestroyed()) return { ok: false };
-    win.webContents.send('voice:heard', { text: line, confidence: 1, ms: 0 });
+    turnSentence(line.slice(0, 600), { confidence: 1, ms: 0, origin: 'typed' });
     return { ok: true };
   },
+  // 2026-09-27, one turn at a time: user-only; turn:report is the board window's alone (below).
+  'turn:state': () => turnState(),
+  'turn:report': (report) => reportTurn(report),
+  'turn:stop': () => stopTurn(),
 
   /* ── JARVIS Voice (docs/11-JARVIS-VOICE.md): all user-only, none in AGENT_METHODS or REMOTE_METHODS ── */
   'hologram:status': () => hologramStatus(),
@@ -642,6 +681,9 @@ const handlers: Handlers = {
   'hologram:close': () => closeHologram(),
   'hologram:shutdown': () => shutdownHologram(),
   'hologram:setDesk': (on) => setHologramDesk(on === true),
+  'hologram:setSize': (size) => setHologramSize(size),
+  // 2026-09-27: the session picker; the feed refuses an id it has not seen.
+  'hologram:setSessionFilter': (id) => setSessionFilter(id),
   // Gated in registerIpc: only the confirm window that owns `id` reaches this handler.
   'confirm:answer': (id, index) => answerConfirm(String(id), Number(index)),
   'converse:ask': (req) => converse(req?.text, req?.source === 'typed' ? 'typed' : 'voice'),
@@ -650,6 +692,7 @@ const handlers: Handlers = {
   'speech:say': (req) => say(req),
   'speech:stop': () => stopSpeaking(),
   'speech:setBackend': (req) => setSpeechBackend(req),
+  'speech:setVoice': (name) => setSpeechVoice(name),
   'profile:list': () => listProfiles(),
   'profile:read': (name) => readProfile(name),
   'profile:create': (name) => createProfile(name),
@@ -662,6 +705,8 @@ const handlers: Handlers = {
   'desktop:apps': () => listApps(),
   'desktop:run': (plan) => runPlan(plan),
   'desktop:halt': () => haltPlan(),
+  // M13.3: user-only (the board's voice path; HOLOGRAM_ALLOWED grants the hologram window).
+  'desktop:plan': (sentence) => planAndRun(typeof sentence === 'string' ? sentence : ''),
   // fork H, 2026-09-26: TRAIN ACTION, user-only (HOLOGRAM_ALLOWED grants the hologram window).
   'desktop:recordStart': () => startRecording(),
   'desktop:recordStop': () => stopRecording(),
@@ -674,8 +719,12 @@ const handlers: Handlers = {
   'hologram:runAction': (name) => runNamedAction(typeof name === 'string' ? name : ''),
   'dictate:toggle': () => toggleDictation(),
   'dictate:status': () => dictateStatus(),
+  // 2026-09-27: user-only; the board and hologram windows (HOLOGRAM_ALLOWED grants the latter).
+  'dictate:setTarget': (req) => dictateSetTarget(req),
+  'hologram:split': (req) => hologramSplit(req),
   'voice:captured': (capture) => voiceCaptured(capture),
-  'voice:levels': (levels) => voiceLevels(levels)
+  'voice:levels': (levels) => voiceLevels(levels),
+  'voice:mic': (state) => voiceMic(state)
 };
 
 /**
@@ -815,6 +864,10 @@ export function registerIpc(): void {
         // The confirmation window: one channel, for its own question only, and nobody else's
         // (docs/07 § Path and execution policy).
         // The board window's frame controls: the board window alone, not any window with the bridge.
+        // The end of a turn is reported by the window that acted on it: the board, and nobody else.
+        if ((channel === 'turn:report' || channel === 'board:context' || channel === 'schedule:calendar') && event.sender !== boardWindow()?.webContents) {
+          throw new Error(`"${channel}" MAY ONLY BE CALLED BY THE BOARD WINDOW`);
+        }
         if (isWindowMethod(channel) && event.sender !== boardWindow()?.webContents) {
           throw new Error(`"${channel}" MAY ONLY BE CALLED BY THE BOARD WINDOW`);
         }

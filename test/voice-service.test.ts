@@ -121,28 +121,30 @@ describe('the MATRIX and the board, by voice', () => {
 describe('the follow-up window (docs/07 § Voice)', () => {
   const waiting = { phase: 'waiting', enabled: true } as const;
   const on = { followUp: true };
+  /** The turn has ENDED (2026-09-27): every rule below is tested with the turn out of the way. */
+  const ended = { phase: 'done', mic: 'closed' } as const;
 
   it('opens only right after JARVIS has answered a sentence heard within 20 s', () => {
-    expect(mayListenAgain(waiting, on, 1200, false)).toBe(true);
-    expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS, false)).toBe(true);
-    expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS + 1, false)).toBe(false);
-    expect(mayListenAgain(waiting, on, Number.POSITIVE_INFINITY, false)).toBe(false);
-    expect(mayListenAgain(waiting, on, -1, false)).toBe(false);
+    expect(mayListenAgain(waiting, on, 1200, false, ended)).toBe(true);
+    expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS, false, ended)).toBe(true);
+    expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS + 1, false, ended)).toBe(false);
+    expect(mayListenAgain(waiting, on, Number.POSITIVE_INFINITY, false, ended)).toBe(false);
+    expect(mayListenAgain(waiting, on, -1, false, ended)).toBe(false);
   });
 
   it('never opens while voice is off, unavailable, starting or already listening', () => {
     for (const phase of ['off', 'unavailable', 'starting', 'listening', 'thinking'] as const) {
-      expect(mayListenAgain({ phase, enabled: phase !== 'off' }, on, 500, false)).toBe(false);
+      expect(mayListenAgain({ phase, enabled: phase !== 'off' }, on, 500, false, ended)).toBe(false);
     }
-    expect(mayListenAgain({ phase: 'waiting', enabled: false }, on, 500, false)).toBe(false);
+    expect(mayListenAgain({ phase: 'waiting', enabled: false }, on, 500, false, ended)).toBe(false);
   });
 
   it('does not chain from silence: after a follow-up heard nothing, the wake phrase is needed again', () => {
-    expect(mayListenAgain(waiting, on, 500, true)).toBe(false);
+    expect(mayListenAgain(waiting, on, 500, true, ended)).toBe(false);
   });
 
   it('is removed entirely by voice.followUp: false', () => {
-    expect(mayListenAgain(waiting, { followUp: false }, 500, false)).toBe(false);
+    expect(mayListenAgain(waiting, { followUp: false }, 500, false, ended)).toBe(false);
     expect(DEFAULT_VOICE.followUp).toBe(true);
   });
 
@@ -155,6 +157,26 @@ describe('the follow-up window (docs/07 § Voice)', () => {
     expect(request.noSpeechMs).toBeGreaterThanOrEqual(FOLLOW_UP_NO_SPEECH_MIN_MS);
     expect(request.noSpeechMs).toBeLessThanOrEqual(FOLLOW_UP_NO_SPEECH_MAX_MS);
     expect(FOLLOW_UP_PAUSE_MS).toBeGreaterThan(0);
+  });
+
+  it('waits for the TURN to end, not for a line to stop being spoken (2026-09-27)', () => {
+    // The first live session: the planner's read-back finished, the follow-up opened, and only
+    // then did the plan start moving things. Now nothing opens while the turn is still going.
+    for (const phase of ['listening', 'heard', 'thinking', 'speaking', 'acting'] as const) {
+      expect(mayListenAgain(waiting, on, 500, false, { phase, mic: 'closed' })).toBe(false);
+    }
+    // A failed turn never opens it.
+    expect(mayListenAgain(waiting, on, 500, false, { phase: 'failed', mic: 'closed' })).toBe(false);
+    // Done, a question asked (waiting) and idle may, under every other rule as before.
+    for (const phase of ['done', 'waiting', 'idle'] as const) {
+      expect(mayListenAgain(waiting, on, 500, false, { phase, mic: 'closed' })).toBe(true);
+      expect(mayListenAgain(waiting, on, FOLLOW_UP_HEARD_WINDOW_MS + 1, false, { phase, mic: 'closed' })).toBe(false);
+      expect(mayListenAgain(waiting, on, 500, true, { phase, mic: 'closed' })).toBe(false);
+      expect(mayListenAgain(waiting, { followUp: false }, 500, false, { phase, mic: 'closed' })).toBe(false);
+    }
+    // Never with a sentence held (it is the next turn), never over an open microphone.
+    expect(mayListenAgain(waiting, on, 500, false, { phase: 'done', mic: 'closed', pending: 'open notepad' })).toBe(false);
+    expect(mayListenAgain(waiting, on, 500, false, { phase: 'done', mic: 'open' })).toBe(false);
   });
 
   it('leaves the wake grammar and its lines exactly as they were', () => {

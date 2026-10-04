@@ -104,7 +104,73 @@ export interface SpeechStatus {
   speaking: boolean;
   /** `server`: the model is loaded, so the next line will be in the profile's voice. */
   warm?: boolean;
+  /** `server`: the profile lines are spoken with (`speech.profile`), so the window can name it. */
+  profile?: string;
+  /**
+   * `server`: the checkpoint the profile speaks with, as the server's `GET /profile/<name>` names it
+   * (`model_1500_pruned.pt` for a fine-tune, `F5TTS_v1_Base` for the base model). Fetched and cached
+   * per profile by main; absent until the server has answered once. Never waited for by a line.
+   */
+  model?: string;
   error?: string;
+}
+
+/** The name the server gives its base model when no fine-tune is applied (tools/speech-server.py). */
+export const BASE_SPEECH_MODEL = 'F5TTS_v1_Base';
+
+/** Who is speaking the line in progress: the profile through the server, Windows' voice, or a recording played back. */
+export type SpeechVia = 'server' | 'sapi' | 'recording';
+
+/** A Windows voice's name without the status's advisory suffix ("(no British voice installed yet)"). */
+export function windowsVoiceName(voice: string | null | undefined): string | null {
+  const name = (voice ?? '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return name || null;
+}
+
+/** A checkpoint's short name (`model_1500_pruned`), or null when it is the base model or unknown. */
+export function fineTuneName(model: string | null | undefined): string | null {
+  const name = (model ?? '').trim().replace(/^.*[\\/]/, '').replace(/\.(pt|pth|ckpt|safetensors)$/i, '');
+  if (!name || name.toLowerCase() === BASE_SPEECH_MODEL.toLowerCase()) return null;
+  return name;
+}
+
+/**
+ * Which voice will actually speak, in one line (William, 2026-09-27: after a reboot the voice was
+ * Microsoft David although the "jarvis" profile was chosen, because settings.json said `sapi` and
+ * nothing on screen did). Shown in the TRAIN panel and, while a line is spoken, under the caption.
+ *
+ *   sapi                         WINDOWS VOICE · Microsoft David Desktop
+ *   server, down                 PROFILE jarvis · UNAVAILABLE — WINDOWS VOICE · Microsoft David Desktop
+ *   server, loading              PROFILE jarvis · WARMING
+ *   server, warm, base model     PROFILE jarvis · READY
+ *   server, warm, fine-tune      PROFILE jarvis · FINE-TUNED model_1500_pruned
+ *
+ * `via` is who is speaking the line in progress, when there is one: a server-backend line that fell
+ * back to Windows' voice says so instead of claiming the profile.
+ */
+export function voiceLabel(status: SpeechStatus | null | undefined, via?: SpeechVia): string {
+  if (!status) return 'VOICE UNKNOWN';
+  if (!status.enabled) return 'SPEECH OFF';
+  if (via === 'recording') return 'PLAYING YOUR RECORDING';
+  const windows = `WINDOWS VOICE · ${windowsVoiceName(status.voice) ?? 'STARTING'}`;
+  if (status.backend !== 'server') return windows;
+  const profile = `PROFILE ${status.profile?.trim() || 'default'}`;
+  if (via === 'sapi') return `${windows} — ${profile} NOT READY`;
+  if (status.error) return `${profile} · UNAVAILABLE — ${windows}`;
+  if (!status.warm) return `${profile} · WARMING`;
+  const tuned = fineTuneName(status.model);
+  return tuned ? `${profile} · FINE-TUNED ${tuned}` : `${profile} · READY`;
+}
+
+/**
+ * The USE THIS VOICE button, reading as what a press will do so its direction is never ambiguous:
+ * on Windows' voice (or another profile) it offers the chosen profile; on the chosen profile it
+ * offers Windows' voice.
+ */
+export function useVoiceAction(status: SpeechStatus | null | undefined, chosen: string | null): { backend: SpeechBackend; label: string } {
+  const onChosen = status?.backend === 'server' && Boolean(chosen) && (status.profile ?? '') === chosen;
+  if (onChosen) return { backend: 'sapi', label: 'USE WINDOWS VOICE' };
+  return { backend: 'server', label: chosen ? `USE THE ${chosen.toUpperCase()} PROFILE` : 'USE A PROFILE' };
 }
 
 export interface SpeechRequest {
@@ -112,9 +178,9 @@ export interface SpeechRequest {
   /** Stop whatever is being said first. Default: queue behind it. */
   interrupt?: boolean;
   /**
-   * This line answers something William said: when it finishes, the microphone may reopen for his
-   * next sentence without the wake phrase (docs/07 § Voice, the follow-up window). A line spoken
-   * within 20 s of a heard sentence counts as answering it whether or not this is set.
+   * No longer read (2026-09-27). The follow-up window used to open when a line that answered
+   * William finished; it now opens only when the TURN ends (services/turn.ts, docs/11 § One turn at
+   * a time), whatever was said. Kept so an older caller still type-checks.
    */
   followUp?: boolean;
 }
@@ -134,6 +200,8 @@ export interface SpeechState {
   progress?: number;
   /** A pulse per word boundary, 0..1, decaying; what the hologram breathes to. */
   level?: number;
+  /** Who is speaking this line (set while `speaking`): the profile, Windows' voice, or a recording. */
+  via?: SpeechVia;
 }
 
 /* ────────────────────────── voice profiles ────────────────────────── */
@@ -283,7 +351,36 @@ export function speechScript(): string {
     '    synth.Volume = Math.Max(0, Math.Min(100, volume));',
     '    synth.SpeakAsync(text);',
     '  }',
-    '  public void Stop() { synth.SpeakAsyncCancelAll(); }',
+    // A WAV plays on its own thread, so the read loop stays free and {"stop":true} ends it at once
+    // (2026-09-27: PlaySync on the loop meant "stop" waited for the whole line to finish).
+    // A WAV plays asynchronously and a thread waits out its length, so the read loop stays free and
+    // {"stop":true} ends it at once (2026-09-27: PlaySync on the loop meant "stop" waited for the
+    // whole line; a synchronous PlaySound cannot be stopped from another thread either).
+    '  private System.Media.SoundPlayer player;',
+    '  private readonly System.Threading.ManualResetEvent cut = new System.Threading.ManualResetEvent(false);',
+    '  public void Play(string path) {',
+    '    int byteRate = 32000; long bytes = 0;',
+    '    using (var fs = File.OpenRead(path)) { bytes = fs.Length; var br = new BinaryReader(fs); fs.Seek(28, SeekOrigin.Begin); byteRate = Math.Max(1, br.ReadInt32()); }',
+    '    int ms = (int)Math.Min(300000L, Math.Max(0L, (bytes - 44) * 1000L / byteRate));',
+    '    var p = new System.Media.SoundPlayer(path);',
+    '    p.Load();',
+    '    cut.Reset();',
+    '    player = p;',
+    '    p.Play();',
+    '    var t = new System.Threading.Thread(() => {',
+    '      cut.WaitOne(ms + 40);',
+    '      if (player == p) player = null;',
+    '      p.Dispose();',
+    '      Emit("PLAYED " + path);',
+    '    });',
+    '    t.IsBackground = true;',
+    '    t.Start();',
+    '  }',
+    '  public void Stop() {',
+    '    synth.SpeakAsyncCancelAll();',
+    '    var p = player;',
+    '    if (p != null) { try { p.Stop(); } catch (Exception) { } cut.Set(); }',
+    '  }',
     '}',
     '"@',
     'Add-Type -TypeDefinition $source -ReferencedAssemblies $speechAsm',
@@ -298,7 +395,7 @@ export function speechScript(): string {
     '  try { $msg = $line | ConvertFrom-Json } catch { Write-Output "FAULT not json"; continue }',
     '  if ($msg.stop) { $speaker.Stop(); continue }',
     '  if ($msg.play) {',
-    "    try { $player = New-Object System.Media.SoundPlayer ([string]$msg.play); $player.PlaySync(); $player.Dispose(); Write-Output ('PLAYED ' + $msg.play) } catch { Write-Output ('FAULT play ' + $_.Exception.Message) }",
+    "    try { $speaker.Play([string]$msg.play) } catch { Write-Output ('FAULT play ' + $_.Exception.Message) }",
     '    continue',
     '  }',
     '  if ($null -ne $msg.say) {',

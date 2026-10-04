@@ -24,7 +24,7 @@ export const NODE_KINDS = [
   'store.repo', 'store.folder', 'store.explorer', 'store.cloud',
   'file.document', 'file.exe', 'file.artifact',
   'link.url', 'service.process', 'task.scheduled',
-  'monitor.system', 'note.silk', 'group.zone', 'decor.image', 'decor.part'
+  'monitor.system', 'panel.calendar', 'note.silk', 'group.zone', 'decor.image', 'decor.part'
 ] as const;
 export type NodeKind = (typeof NODE_KINDS)[number];
 
@@ -399,6 +399,20 @@ export interface BoardNode {
    */
   showSystemGraphics?: boolean;
 
+  /*
+   * panel.calendar: the week drawn on the board (packages/shared/calendar-face.ts), read from
+   * schedule/calendar.json. William: "a live pane in the SkynetOS program that shows the calendar,
+   * both within the room and on the main board."
+   */
+  /** How many day columns, 1 to 14. Default 7. Ignored when `compact` (always 3). */
+  days?: number;
+  /** The first column: today, or this week's Monday. Default today. */
+  start?: 'today' | 'monday';
+  /** The hours drawn, [from, to), whole hours, 0 to 24. Default [7, 23]. */
+  showHours?: [number, number];
+  /** Three days and no hour labels: the small copy on the root board. */
+  compact?: boolean;
+
   /** Pulse glow speed, percent. */
   pulseSpeed?: number;
   /** The colour at the pulse's crest. Absent: two rungs up the room's own ramp. */
@@ -605,6 +619,8 @@ export const DEFAULT_FOOTPRINT: Record<NodeKind, Footprint> = {
   'service.process': { w: 3, h: 2 },
   'task.scheduled': { w: 2, h: 1 },
   'monitor.system': { w: 4, h: 4 },
+  // Seven columns of a week want room: 24 x 12 tiles is 384 x 192 art pixels, ~10 px an hour.
+  'panel.calendar': { w: 24, h: 12 },
   'note.silk': { w: 0, h: 0 },
   'group.zone': { w: 0, h: 0 },
   /*
@@ -715,7 +731,9 @@ export function spriteKeyOf(node: Pick<BoardNode, 'kind' | 'part'>, state = 'idl
     'link.url': 'component.jack_link',
     'service.process': 'component.vreg_service',
     'task.scheduled': 'component.xtal_task',
-    'monitor.system': 'component.psu_monitor'
+    'monitor.system': 'component.psu_monitor',
+    // Drawn, never baked: the pane's face is the calendar itself (calendar-widget.ts).
+    'panel.calendar': 'component.panel_calendar'
     // decor.image has no package art at all: it IS its picture.
   };
   const base = byKind[node.kind];

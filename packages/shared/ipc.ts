@@ -25,7 +25,9 @@ import type {
 } from './gesture-library.js';
 import type { CalibrationProfile } from './calibration.js';
 import type { GestureStatus, VisionReport } from './vision.js';
-import type { VoiceCapture, VoiceHeard, VoiceListen, VoiceStatus, VoiceWake } from './voice.js';
+import type { VoiceCapture, VoiceHeard, VoiceListen, VoiceMicState, VoiceStatus, VoiceWake } from './voice.js';
+import type { TurnReport, TurnState } from './turn.js';
+import type { BoardContext } from './board-context.js';
 import type { FieldControl } from './node-fields.js';
 import type { TargetInfo } from './targets.js';
 import type { Board, BoardNode, Footprint, LaunchMode, NodeKind, Phantom } from './types.js';
@@ -40,14 +42,16 @@ import type { BoardClipboard } from './clipboard.js';
 import type { RemoteStatusView } from './remote.js';
 import type { TaskStatusView } from './schedule.js';
 import type { FinanceStatus } from './finance.js';
+import type { CalendarStatus } from './schedule-calendar.js';
 import type { AutostartState } from './boot.js';
 import type { UpdateStatus } from './update.js';
 import type { AwayLogEvent, AwayStatus } from './away.js';
 import type { AwayMode } from './presence.js';
 import type { AvatarMood, AvatarPayload } from './avatar.js';
-import type { HologramStatus } from './hologram.js';
+import type { HologramSize, HologramStatus } from './hologram.js';
 import type { ProfileRecordRequest, ProfileRecordResult, SpeechBackend, SpeechRequest, SpeechState, SpeechStatus, VoiceProfile, VoiceProfileSummary } from './speech.js';
 import type { AppEntry, DesktopPlan, DesktopResult, DesktopState, DesktopStatus, DesktopWindow } from './desktop.js';
+import type { DictateTargetRequest, DictateTargetResult, HologramSplitRequest, HologramSplitResult } from './desktop.js';
 import type { DictateStatus } from './dictate.js';
 // fork H (2026-09-26): TRAIN ACTION recordings and saved actions.
 import type { ActionRecording, RecordStatus, SavedAction } from './actions.js';
@@ -244,6 +248,13 @@ export interface SkynetApi {
   /** Descend into a room: resolve a drive.room's `boardFile` and load what it points at. */
   'board:loadRoom': (boardFile: string) => BoardLoad;
   'board:list': () => string[];
+  /**
+   * The board window tells main what is on screen (2026-09-27): the room, its path, the selection,
+   * the nodes, the root board's rooms. Main holds the last one for the conversation's BOARD block
+   * (services/converse.ts). Read-only in both directions; nothing is written. User-only, and the
+   * board window alone may send it (registerIpc checks the sender).
+   */
+  'board:context': (ctx: BoardContext) => { ok: boolean };
   'display:info': () => DisplayInfo;
   'app:version': () => { app: string; electron: string; chrome: string; node: string };
   /**
@@ -489,6 +500,14 @@ export interface SkynetApi {
    * there is none. Board window only: not in AGENT_METHODS or REMOTE_METHODS. It carries balances.
    */
   'finance:status': () => FinanceStatus;
+  /**
+   * The merged calendar (schedule/calendar.json, written by services/schedule-feed.ts and by
+   * `npm run schedule:week`), or why there is none. Drives every `panel.calendar` face and its
+   * inspector block. BOARD WINDOW ONLY: `registerIpc` checks the sender, and it is in neither
+   * AGENT_METHODS nor REMOTE_METHODS (test/schedule-calendar-contract.test.ts). It carries
+   * William's week, and the file is gitignored for the same reason.
+   */
+  'schedule:calendar': () => CalendarStatus;
 
   // --- act ---
   'node:open': (boardId: string, nodeId: string) => OpenTargetResult;
@@ -739,8 +758,29 @@ export interface SkynetApi {
   'hologram:shutdown': () => { ok: boolean };
   /** DESK layout on monitor one, full height, or back to the square. User-only. */
   'hologram:setDesk': (on: boolean) => HologramStatus;
+  /**
+   * From the hologram window's size grip: resize it to `{ w, h }` DIPs (clamped 320–1600). Sizes
+   * the window only; main's `resize` handler is what saves `hologram.size`. Refused in DESK. User-only.
+   */
+  'hologram:setSize': (size: HologramSize) => HologramStatus;
   /** Microphone levels while LISTENING, thirty a second, for the globe. CAPTURE WINDOW ONLY. */
   'voice:levels': (levels: AudioLevels) => { ok: boolean };
+  /**
+   * The capture window's tracks: open, speech begun, closed (2026-09-27). The LISTENING light is
+   * driven by this alone, so it is on exactly while a track is. CAPTURE WINDOW ONLY.
+   */
+  'voice:mic': (state: VoiceMicState) => { ok: boolean };
+
+  /* ── One turn at a time (docs/11 § One turn at a time, 2026-09-27). All user-only. ── */
+  /** The turn as it stands: phase, step, transcript, question, a held sentence. Read-only. */
+  'turn:state': () => TurnState;
+  /**
+   * The board window ends a turn it owns (a sentence it acted on through actOnIntent). Main waits
+   * for the line to be spoken, then DONE. A report for any other turn is ignored. The board only.
+   */
+  'turn:report': (report: TurnReport) => { ok: boolean };
+  /** STOP (Esc): halt the desktop, stop speaking, drop a held sentence, READY. Opens nothing. */
+  'turn:stop': () => { ok: boolean };
   /**
    * The themed confirmation window pressed a button (src/main/services/confirm-window.ts). The
    * ONLY channel that window may call, and callable by nothing else; an index outside the
@@ -761,6 +801,13 @@ export interface SkynetApi {
   'speech:stop': () => { ok: boolean };
   /** User-only. Speak with Windows' voice, or with a recorded profile through the synthesis server. */
   'speech:setBackend': (req: { backend: SpeechBackend; profile?: string }) => SpeechStatus;
+  /** User-only. The Windows voice (`speech.voice`), one of the installed names in `SpeechStatus.voices`, or '' to choose. */
+  'speech:setVoice': (name: string) => SpeechStatus;
+  /**
+   * The session picker (2026-09-27): show only one Claude Code session on the globe, or all of them
+   * (null). The id must be one the activity feed has seen. User-only; the hologram window.
+   */
+  'hologram:setSessionFilter': (id: string | null) => { ok: boolean; filter: string | null; error?: string };
 
   /** Voice profiles: datasets William records of his own voice (docs/11 § Voice profiles). */
   'profile:list': () => VoiceProfileSummary[];
@@ -783,6 +830,15 @@ export interface SkynetApi {
   'desktop:run': (plan: DesktopPlan) => DesktopResult;
   /** Stop the running plan at once. */
   'desktop:halt': () => { ok: boolean };
+  /**
+   * M13.3, the planner (docs/11 § Slice 2). A desktop request the rule grammar did not match:
+   * main asks headless `claude -p` (no tools) for a plan, drops anything outside docs/07 with
+   * `normalisePlan`, speaks the line back, then runs it with `runPlan` under the same switch, cap
+   * and halt. `handled: false` means not the planner's (desktop control or the planner off, no
+   * desktop verb, not a desktop request), and conversation answers instead. User-only: the board
+   * and the hologram window; never AGENT_METHODS or REMOTE_METHODS.
+   */
+  'desktop:plan': (sentence: string) => { handled: boolean; ok: boolean; reply?: string; say?: string; ask?: string; steps?: number; dropped?: string[]; error?: string };
 
   /* ── fork H, 2026-09-26: TRAIN ACTION (docs/07 § JARVIS Voice). All user-only; the hologram window. ── */
   /** Light on: the helper records mouse and keyboard until `desktop:recordStop`. Refused while recording. */
@@ -816,6 +872,17 @@ export interface SkynetApi {
    */
   'dictate:toggle': () => DictateStatus;
   'dictate:status': () => DictateStatus;
+  /**
+   * 2026-09-27 (docs/11 § Reaching into windows): aim dictation at a named window ("transcribe
+   * into JARVIS-TQR"), press Enter there ("send it"), clear it ("stop transcribing"), or ask.
+   * Per app run; needs desktop.enabled; never a sign-in window or a bare shell. User-only.
+   */
+  'dictate:setTarget': (req: DictateTargetRequest) => DictateTargetResult;
+  /**
+   * 2026-09-27: a chip's terminal on monitor one's left 62%, JARVIS beside it on the right (the
+   * SPLIT layout, which writes nothing to settings), or back. Needs desktop.enabled. User-only.
+   */
+  'hologram:split': (req: HologramSplitRequest) => HologramSplitResult;
 }
 
 export type Channel = keyof SkynetApi;
@@ -824,6 +891,8 @@ export const CHANNELS = [
   'board:load',
   'board:loadRoom',
   'board:list',
+  // 2026-09-27: what the conversation can see of the board. The board window only.
+  'board:context',
   'display:info',
   'app:version',
   'update:status',
@@ -880,6 +949,7 @@ export const CHANNELS = [
   'task:status',
   'task:runNow',
   'finance:status',
+  'schedule:calendar',
   'node:open',
   'node:visits',
   'session:start',
@@ -929,7 +999,12 @@ export const CHANNELS = [
   'voice:setEnabled',
   'voice:captured',
   'voice:levels',
+  'voice:mic',
   'voice:typed',
+  // 2026-09-27: one turn at a time
+  'turn:state',
+  'turn:report',
+  'turn:stop',
   'hologram:status',
   'hologram:setEnabled',
   'hologram:minimize',
@@ -937,6 +1012,8 @@ export const CHANNELS = [
   'hologram:close',
   'hologram:shutdown',
   'hologram:setDesk',
+  'hologram:setSize',
+  'hologram:setSessionFilter',
   'confirm:answer',
   'converse:ask',
   'speech:status',
@@ -944,6 +1021,7 @@ export const CHANNELS = [
   'speech:say',
   'speech:stop',
   'speech:setBackend',
+  'speech:setVoice',
   'profile:list',
   'profile:read',
   'profile:create',
@@ -956,6 +1034,8 @@ export const CHANNELS = [
   'desktop:apps',
   'desktop:run',
   'desktop:halt',
+  // M13.3, 2026-09-27: the planner
+  'desktop:plan',
   // fork H, 2026-09-26: TRAIN ACTION
   'desktop:recordStart',
   'desktop:recordStop',
@@ -967,7 +1047,10 @@ export const CHANNELS = [
   'hologram:control',
   'hologram:runAction',
   'dictate:toggle',
-  'dictate:status'
+  'dictate:status',
+  // 2026-09-27: a dictation target window, and the split beside a terminal (user-only).
+  'dictate:setTarget',
+  'hologram:split'
 ] as const satisfies readonly Channel[];
 
 /**
@@ -1199,7 +1282,7 @@ export function isVisionMethod(value: string): value is VisionMethod {
  * be able to edit the board, and nothing else may slip a sentence into the speech engine as though it had
  * been spoken.
  */
-export const VOICE_METHODS = ['voice:captured', 'voice:levels'] as const satisfies readonly Channel[];
+export const VOICE_METHODS = ['voice:captured', 'voice:levels', 'voice:mic'] as const satisfies readonly Channel[];
 
 const VOICE_METHOD_SET: ReadonlySet<string> = new Set(VOICE_METHODS);
 
@@ -1249,15 +1332,23 @@ export const HOLOGRAM_ALLOWED = [
   'hologram:close',
   'hologram:shutdown',
   'hologram:setDesk',
+  // 2026-09-27: the size grip. Sizes this window and nothing else.
+  'hologram:setSize',
+  // 2026-09-27: the session picker under the caption.
+  'hologram:setSessionFilter',
   'converse:ask',
   'voice:status',
   'voice:setEnabled',
   'voice:typed',
+  // 2026-09-27: the status strip reads the turn; its STOP (Esc) ends it. Not turn:report (the board's).
+  'turn:state',
+  'turn:stop',
   'speech:status',
   'speech:setEnabled',
   'speech:say',
   'speech:stop',
   'speech:setBackend',
+  'speech:setVoice',
   'profile:list',
   'profile:read',
   'profile:create',
@@ -1269,6 +1360,8 @@ export const HOLOGRAM_ALLOWED = [
   'desktop:windows',
   'desktop:apps',
   'desktop:halt',
+  // M13.3, 2026-09-27: the text box's sentence, planned, read back, then run under runPlan's rules.
+  'desktop:plan',
   // fork H, 2026-09-26: the TRAIN ACTION light, its save screen, the action list and RUN.
   'desktop:recordStart',
   'desktop:recordStop',
@@ -1280,7 +1373,10 @@ export const HOLOGRAM_ALLOWED = [
   'hologram:control',
   'hologram:runAction',
   'dictate:toggle',
-  'dictate:status'
+  'dictate:status',
+  // 2026-09-27: "transcribe into JARVIS-TQR", "send it", "split screen with JARVIS-TQR".
+  'dictate:setTarget',
+  'hologram:split'
 ] as const satisfies readonly Channel[];
 
 const HOLOGRAM_ALLOWED_SET: ReadonlySet<string> = new Set(HOLOGRAM_ALLOWED);
@@ -1346,6 +1442,12 @@ export interface SkynetEvents {
    * src/main/ipc.ts, for the user only.
    */
   'monitor:open': { boardId: string; nodeId: string; name: string };
+  /**
+   * The merged calendar changed: an input file was edited, an iCal feed was fetched, or
+   * `npm run schedule:week` rewrote it. Sent to the BOARD window alone (never broadcast to a
+   * remote device), so every `panel.calendar` face repaints without a restart.
+   */
+  'schedule:calendar': CalendarStatus;
   /** Away mode changed phase or settings, or its run ended. The whole status. */
   'away:state': AwayStatus;
   /** The updater moved on: checking, downloading, ready. For the ABOUT box and one toast. */
@@ -1385,6 +1487,8 @@ export interface SkynetEvents {
   'hologram:scene': HoloScene;
   /** A spoken command that presses a control in the hologram window. Hologram only. */
   'hologram:control': HologramControl;
+  /** One turn at a time: the phase, the step, what was heard, a question, a held sentence. Board and hologram. */
+  'turn:state': TurnState;
   /** fork G: dictation phase changed; the board and the hologram show it. */
   'dictate:state': DictateStatus;
   /** fork H: the TRAIN ACTION light: recording, how many steps, paused over a sign-in. Hologram only. */
@@ -1395,7 +1499,7 @@ export interface SkynetEvents {
 
 export type EventName = keyof SkynetEvents;
 
-export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched', 'monitor:open', 'away:state', 'away:log', 'avatar:changed', 'avatar:mood', 'avatar:nodeMood', 'gesture:event', 'gesture:state', 'voice:state', 'voice:wake', 'voice:heard', 'voice:listen', 'voice:record', 'speech:state', 'desktop:state', 'update:state', 'speech:levels', 'voice:levels', 'hologram:scene', 'hologram:control', 'dictate:state', 'desktop:recordState', 'window:changed'] as const satisfies readonly EventName[];
+export const EVENTS = ['sessions:changed', 'services:changed', 'files:changed', 'mail:dispatched', 'monitor:open', 'schedule:calendar', 'away:state', 'away:log', 'avatar:changed', 'avatar:mood', 'avatar:nodeMood', 'gesture:event', 'gesture:state', 'voice:state', 'voice:wake', 'voice:heard', 'voice:listen', 'voice:record', 'speech:state', 'desktop:state', 'update:state', 'speech:levels', 'voice:levels', 'hologram:scene', 'hologram:control', 'dictate:state', 'desktop:recordState', 'window:changed', 'turn:state'] as const satisfies readonly EventName[];
 
 /** The shape contextBridge exposes on window.skynet. */
 export type SkynetBridge = {

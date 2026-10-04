@@ -12,6 +12,8 @@
  * be done by hand, and deletion still stops at the dialog docs/07 requires.
  */
 
+import { mayFollowUp, type TurnState } from './turn.js';
+
 export interface VoiceSettings {
   /** OFF by default. Only William's own switch turns it on; see docs/07. */
   enabled: boolean;
@@ -94,18 +96,25 @@ export function clampFollowUpNoSpeech(ms: unknown): number {
 
 /**
  * May the microphone reopen without the wake phrase? Only when voice is on and idle (`waiting`:
- * not off, not unavailable, not starting, not already listening), the setting allows it, the line
- * just spoken answered something heard within the window, and the previous capture did not end in
- * silence: silence ends the exchange, and the next sentence needs the wake phrase again.
+ * not off, not unavailable, not starting, not already listening), the setting allows it, the turn
+ * has ENDED (`mayFollowUp`, packages/shared/turn.ts: `done`, or `waiting` on a question, or `idle`;
+ * never while thinking, speaking or acting, never after a failure, never with a sentence held), a
+ * sentence was heard within the window, and the previous capture did not end in silence: silence
+ * ends the exchange, and the next sentence needs the wake phrase again.
+ *
+ * Until 2026-09-27 the trigger was the END OF A SPOKEN LINE, which is how the follow-up opened after
+ * the planner's read-back and before the plan had moved anything. Now it is the end of the turn.
  */
 export function mayListenAgain(
   status: Pick<VoiceStatus, 'phase' | 'enabled'>,
   settings: Pick<VoiceSettings, 'followUp'>,
   sinceHeardMs: number,
-  lastCaptureWasSilence: boolean
+  lastCaptureWasSilence: boolean,
+  turn: Pick<TurnState, 'phase' | 'pending' | 'mic'>
 ): boolean {
   if (!settings.followUp) return false;
   if (!status.enabled || status.phase !== 'waiting') return false;
+  if (!mayFollowUp(turn)) return false;
   if (!Number.isFinite(sinceHeardMs) || sinceHeardMs < 0 || sinceHeardMs > FOLLOW_UP_HEARD_WINDOW_MS) return false;
   return !lastCaptureWasSilence;
 }
@@ -150,6 +159,11 @@ export interface VoiceHeard {
   ms: number;
   /** Why there is no text, when something went wrong rather than nobody speaking. */
   error?: string;
+  /**
+   * The turn this sentence starts (packages/shared/turn.ts). The board reports the turn's end with
+   * it (`turn:report`); a report for any other turn is ignored. Absent from an older main.
+   */
+  turnId?: number;
 }
 
 /**
@@ -189,6 +203,21 @@ export interface VoiceListen {
   followUp?: boolean;
   /** How long to wait for speech before closing on silence; the default endpointer's when absent. */
   noSpeechMs?: number;
+  /**
+   * The rest of a sentence whose words so far ended in a connective (docs/11 § One turn at a time):
+   * `noSpeechMs` is the one-time extension (1.8 s) and `maxMs` what is left of the 20 s cap.
+   */
+  continuation?: boolean;
+  maxMs?: number;
+}
+
+/**
+ * The capture window's tracks, as they are (docs/11 § One turn at a time): `open` when the tracks
+ * start, `speech` when the endpointer hears the sentence begin, `closed` the moment they stop. The
+ * LISTENING light is driven by this and nothing else. CAPTURE WINDOW ONLY (`voice:mic`).
+ */
+export interface VoiceMicState {
+  phase: 'open' | 'speech' | 'closed';
 }
 
 /** Main to the board: the wake phrase fired. */

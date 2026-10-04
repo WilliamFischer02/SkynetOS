@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FinanceStatus, Meter } from '@shared/finance.js';
 import { formatMoney } from '@shared/finance.js';
 import { relativeTime } from './TargetField.js';
+import { useVisibleInterval } from './useVisibleInterval.js';
 
 /**
  * The LEDGER node in the inspector: every account as a meter, the totals, the rates, the alerts.
@@ -10,8 +11,8 @@ import { relativeTime } from './TargetField.js';
  * ledger, or a stale one is said in words, never drawn as a bar at zero: an empty bar reads as
  * "nothing owed", which is the one thing this block must never say by accident.
  *
- * Polled every 30 s while open: the report changes when William runs the tool, not on an event
- * main sees. Whole cells only in the bar (docs/02 anti-mush), as the usage meter does it.
+ * Polled every 30 s while open and visible: the report changes when William runs the tool, not on
+ * an event main sees. Whole cells only in the bar (docs/02 anti-mush), as the usage meter does it.
  */
 
 const CELLS = 20;
@@ -30,17 +31,14 @@ export function FinanceBlock(): React.JSX.Element {
   const [status, setStatus] = useState<FinanceStatus | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const pull = useCallback((): void => {
     if (!available) return;
-    const pull = (): void => {
-      window.skynet['finance:status']()
-        .then((next) => { setStatus(next); setReadError(null); })
-        .catch((err: unknown) => { setStatus(null); setReadError((err as Error).message || 'NO ANSWER'); });
-    };
-    pull();
-    const timer = setInterval(pull, 30_000);
-    return () => clearInterval(timer);
+    window.skynet['finance:status']()
+      .then((next) => { setStatus(next); setReadError(null); })
+      .catch((err: unknown) => { setStatus(null); setReadError((err as Error).message || 'NO ANSWER'); });
   }, [available]);
+  useEffect(() => { pull(); }, [pull]);
+  useVisibleInterval(pull, 30_000);
 
   if (!available) {
     return (

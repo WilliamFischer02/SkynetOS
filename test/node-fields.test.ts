@@ -163,7 +163,7 @@ describe('target controls', () => {
   });
 
   it('gives the kinds that point at nothing no primary target', () => {
-    for (const kind of ['note.silk', 'monitor.system', 'group.zone', 'task.scheduled'] as NodeKind[]) {
+    for (const kind of ['note.silk', 'monitor.system', 'panel.calendar', 'group.zone', 'task.scheduled'] as NodeKind[]) {
       expect(primaryTargetField(kind)).toBeUndefined();
     }
   });
@@ -189,6 +189,21 @@ describe('target controls', () => {
   it('offers a file dialog filter wherever a specific file type is expected', () => {
     expect(fieldsFor('file.exe').find((f) => f.key === 'path')?.filters?.[0]?.extensions).toContain('exe');
     expect(fieldsFor('file.document').find((f) => f.key === 'path')?.filters?.[0]?.extensions).toContain('docx');
+  });
+});
+
+describe('the calendar pane\'s form', () => {
+  it('offers its four fields, each saying what to do, and requires none of them', () => {
+    const fields = fieldsFor('panel.calendar');
+    const own = fields.filter((f) => ['days', 'start', 'showHours', 'compact'].includes(String(f.key)));
+    expect(own.map((f) => [f.key, f.control])).toEqual([
+      ['days', 'number'], ['start', 'select'], ['showHours', 'hours'], ['compact', 'boolean']
+    ]);
+    for (const f of own) {
+      expect(f.required).toBeFalsy();
+      expect((f.help ?? '').length, String(f.key)).toBeGreaterThan(40);
+    }
+    expect(own.find((f) => f.key === 'start')?.options).toEqual(['today', 'monday']);
   });
 });
 

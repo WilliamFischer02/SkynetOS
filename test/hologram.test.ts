@@ -120,13 +120,14 @@ describe('applyScanlines', () => {
 });
 
 describe('the window (2026-09-26): size, DESK layout, brightness, warming', () => {
-  it('defaults to a 480 square and clamps what the file says', async () => {
+  it('defaults to a 480 square and clamps what the file says, as { w, h } since 2026-09-27', async () => {
     const m = await import('../packages/shared/hologram.js');
-    expect(m.DEFAULT_HOLOGRAM.size).toBe(480);
-    expect(m.clampHologramSize(undefined)).toBe(480);
-    expect(m.clampHologramSize(12)).toBe(m.HOLOGRAM_MIN_SIZE);
-    expect(m.clampHologramSize(5000)).toBe(m.HOLOGRAM_MAX_SIZE);
-    expect(m.clampHologramSize(300.4)).toBe(300);
+    expect(m.DEFAULT_HOLOGRAM.size).toEqual({ w: 480, h: 480 });
+    expect(m.clampHologramSize(undefined)).toEqual({ w: 480, h: 480 });
+    expect(m.clampHologramSize(12)).toEqual({ w: m.HOLOGRAM_WINDOW_MIN, h: m.HOLOGRAM_WINDOW_MIN });
+    expect(m.clampHologramSize(5000)).toEqual({ w: m.HOLOGRAM_WINDOW_MAX, h: m.HOLOGRAM_WINDOW_MAX });
+    expect(m.clampHologramSize(500.4)).toEqual({ w: 500, h: 500 });
+    expect(m.clampHologramSize({ w: 640.6, h: 400 })).toEqual({ w: 641, h: 400 });
   });
 
   it('DESK bounds: right edge of the work area, full height, width 0.6 per tall in eights', async () => {

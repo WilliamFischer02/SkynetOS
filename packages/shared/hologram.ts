@@ -1,6 +1,7 @@
 import type { VoicePhase } from './voice.js';
 import type { SpeechState } from './speech.js';
 import type { DesktopState } from './desktop.js';
+import { streamLabel, type TurnState } from './turn.js';
 
 /**
  * JARVIS Voice: the small square window with the hologram in it (docs/11-JARVIS-VOICE.md).
@@ -18,30 +19,135 @@ export interface HologramSettings {
   enabled: boolean;
   /** Float above other windows. A view preference, file-only. */
   alwaysOnTop: boolean;
-  /** The square's side in DIPs. Rendered at a whole-number scale of a small canvas. */
-  size: number;
+  /**
+   * The window's size in DIPs, `{ w, h }` since 2026-09-27 (the window is resizable). A bare number
+   * is the older square setting and is read as both sides (`readHologramSize`). Written only by
+   * main's `resize` handler (services/hologram-window.ts), 300 ms after the last change.
+   */
+  size: HologramSize | number;
+  /**
+   * DESK layout (monitor one, full height) was on when the window was last laid out, so it comes
+   * back that way at the next start (2026-09-27). Written only by the user-only `hologram:setDesk`.
+   */
+  desk?: boolean;
 }
+
+/** The window's size in DIPs. */
+export interface HologramSize { w: number; h: number }
+
+/** The window's side when the setting is absent. 2026-09-26: doubled from 240. */
+export const HOLOGRAM_DEFAULT_SIZE = 480;
 
 export const DEFAULT_HOLOGRAM: HologramSettings = {
   enabled: false,
   alwaysOnTop: true,
-  size: 480
+  size: { w: HOLOGRAM_DEFAULT_SIZE, h: HOLOGRAM_DEFAULT_SIZE }
 };
 
-/** The square's side when the setting is absent or out of range. 2026-09-26: doubled from 240. */
-export const HOLOGRAM_DEFAULT_SIZE = 480;
+/** DESK layout's floor on a tiny work area. The resizable window's own bounds are below. */
 export const HOLOGRAM_MIN_SIZE = 160;
 export const HOLOGRAM_MAX_SIZE = 960;
+/** The resizable window's bounds in DIPs, each side (2026-09-27). */
+export const HOLOGRAM_WINDOW_MIN = 320;
+export const HOLOGRAM_WINDOW_MAX = 1600;
+/**
+ * A saved bare number under this is the old 240 square from before the 480 default. It is bumped to
+ * the default once: the bump is written back as `{ w, h }`, which is never bumped again.
+ */
+export const HOLOGRAM_LEGACY_BELOW = 400;
+/** Ctrl+= and Ctrl+- step both sides by this; Ctrl+0 returns to the default. */
+export const HOLOGRAM_SIZE_STEP = 80;
 
 /** DESK layout: the window stands at a monitor's right edge, full work-area height, this wide per tall. */
 export const HOLOGRAM_DESK_RATIO = 0.6;
 
 export interface HologramRect { x: number; y: number; width: number; height: number }
 
-/** A saved or configured size made safe: whole pixels inside the bounds, the default when absent. */
-export function clampHologramSize(value: unknown): number {
+function clampSide(value: unknown): number {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : HOLOGRAM_DEFAULT_SIZE;
-  return Math.max(HOLOGRAM_MIN_SIZE, Math.min(HOLOGRAM_MAX_SIZE, n));
+  return Math.max(HOLOGRAM_WINDOW_MIN, Math.min(HOLOGRAM_WINDOW_MAX, n));
+}
+
+/**
+ * A saved, requested or configured size made safe: whole DIPs inside 320–1600 on each side, the
+ * default for a side that is absent or not a number. A bare number is a square.
+ */
+export function clampHologramSize(value: unknown): HologramSize {
+  if (typeof value === 'number') return { w: clampSide(value), h: clampSide(value) };
+  const o = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  return { w: clampSide(o['w']), h: clampSide(o['h']) };
+}
+
+export interface HologramSizeRead {
+  size: HologramSize;
+  /** The file held the old bare number: write the `{ w, h }` back so this happens once. */
+  legacy: boolean;
+  /** The old number was under 400 (the 240 square) and was bumped to the 480 default. */
+  bumped: boolean;
+}
+
+/** What `hologram.size` in settings.json means, and whether it needs migrating (docs/11 § The window). */
+export function readHologramSize(raw: unknown): HologramSizeRead {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw < HOLOGRAM_LEGACY_BELOW) return { size: { w: HOLOGRAM_DEFAULT_SIZE, h: HOLOGRAM_DEFAULT_SIZE }, legacy: true, bumped: true };
+    return { size: clampHologramSize(raw), legacy: true, bumped: false };
+  }
+  return { size: clampHologramSize(raw), legacy: false, bumped: false };
+}
+
+/** Ctrl+= (1), Ctrl+- (-1), Ctrl+0 (0): both sides by 80 DIPs, clamped; 0 is the 480 square. */
+export function stepHologramSize(current: HologramSize, direction: 1 | -1 | 0): HologramSize {
+  if (direction === 0) return { w: HOLOGRAM_DEFAULT_SIZE, h: HOLOGRAM_DEFAULT_SIZE };
+  const d = direction * HOLOGRAM_SIZE_STEP;
+  return clampHologramSize({ w: current.w + d, h: current.h + d });
+}
+
+/** The key for a size step, or null: Ctrl (not Alt) with = or +, - or _, or 0. */
+export function sizeStepForKey(input: { control?: boolean; alt?: boolean; key?: string }): 1 | -1 | 0 | null {
+  if (!input.control || input.alt) return null;
+  switch (input.key) {
+    case '=': case '+': return 1;
+    case '-': case '_': return -1;
+    case '0': return 0;
+    default: return null;
+  }
+}
+
+/**
+ * The chrome's integer scale inside the window, from its shorter side in CSS pixels (which are
+ * device pixels: the window cancels the OS scale). 1 below 640, 2 below 1280, 3 above.
+ */
+export function holoScaleFor(width: number, height: number): 1 | 2 | 3 {
+  const side = Math.min(width, height);
+  if (!Number.isFinite(side) || side < 640) return 1;
+  return side < 1280 ? 2 : 3;
+}
+
+export interface HoloNavLayout {
+  /** The eight buttons in one row, or two rows of four. */
+  rows: 1 | 2;
+  /** Icons with tooltips instead of words. */
+  icons: boolean;
+}
+
+/**
+ * How the nav fits: judged on the width in chrome pixels (CSS width / scale), so a window at
+ * scale 2 lays out as one half its width at scale 1. Below 480 two rows of four; below 400, icons.
+ */
+export function holoNavLayout(width: number, scale: number): HoloNavLayout {
+  const logical = width / Math.max(1, Math.floor(scale) || 1);
+  return { rows: logical < 480 ? 2 : 1, icons: logical < 400 };
+}
+
+/**
+ * The globe's square in the stage: the largest whole-pixel square that fits, centred on whole
+ * pixels. The canvas sits here; its backing store follows devicePixelRatio (renderer.ts).
+ */
+export function stageSquare(width: number, height: number): { side: number; left: number; top: number } {
+  const w = Math.max(0, Math.floor(width));
+  const h = Math.max(0, Math.floor(height));
+  const side = Math.min(w, h);
+  return { side, left: Math.floor((w - side) / 2), top: Math.floor((h - side) / 2) };
 }
 
 /**
@@ -83,6 +189,9 @@ export interface HologramStatus {
   alwaysOnTop: boolean;
   /** DESK layout: on monitor one, full height (docs/11). Absent from an older main. */
   desk?: boolean;
+  /** The window's size now, in DIPs, and its display's scale factor: the size grip's arithmetic. */
+  size?: HologramSize;
+  scaleFactor?: number;
 }
 
 /**
@@ -112,6 +221,77 @@ export function moodFrom(voice: VoicePhase, speech: SpeechState | null, desktop:
   if (voice === 'thinking' || voice === 'starting') return 'thinking';
   if (voice === 'waiting') return 'idle';
   return 'off';
+}
+
+/**
+ * The mood from the TURN (packages/shared/turn.ts, 2026-09-27), which is what the window now uses.
+ * `moodFrom` above ranked a running desktop step and a line being spoken ABOVE voice's
+ * `listening`, so when the follow-up window opened at the end of the planner's read-back and the
+ * plan then started 1.5 s later, the mood went to `acting` while the microphone was still open: the
+ * LISTENING brightening dropped with a track live. Now the light is the turn's `mic` field (the
+ * capture window's real tracks, `listeningLight`), independent of the mood, and the mood is the
+ * turn's phase: one source, so the two can no longer disagree.
+ */
+export function moodFromTurn(turn: Pick<TurnState, 'phase' | 'mic' | 'resume'> | null, voice: VoicePhase, speech: SpeechState | null, desktop: DesktopState | null): HologramMood {
+  if (!turn) return moodFrom(voice, speech, desktop);
+  if (voice === 'unavailable') return 'fault';
+  switch (turn.phase) {
+    case 'failed': return 'fault';
+    case 'acting': return 'acting';
+    case 'speaking': return 'speaking';
+    case 'listening': return 'listening';
+    case 'heard':
+    case 'thinking': return 'thinking';
+    case 'waiting':
+    case 'done':
+      return 'idle';
+    case 'idle':
+      // Nothing heard is being worked on: a line said, or a saved action replaying, still shows.
+      if (desktop?.busy) return 'acting';
+      if (speech?.speaking) return 'speaking';
+      if (turn.mic !== 'closed') return 'listening';
+      if (voice === 'starting') return 'thinking';
+      if (voice === 'waiting' || voice === 'listening' || voice === 'thinking') return 'idle';
+      return 'off';
+  }
+}
+
+/** The LISTENING light: on exactly while a capture track is open, whatever the mood says. */
+export function listeningLight(turn: Pick<TurnState, 'mic'> | null, voice: VoicePhase): boolean {
+  if (!turn) return voice === 'listening';
+  return turn.mic !== 'closed';
+}
+
+/**
+ * The caption, from the turn: the transcript in quotes from HEARD through THINKING (so he sees what
+ * was understood), the step while ACTING, the question while WAITING, the error when FAILED. Idle,
+ * it is `captionFor` as before.
+ */
+export function captionForTurn(turn: TurnState | null, input: CaptionInput): string {
+  if (!turn || (turn.phase === 'idle' && turn.mic === 'closed')) return captionFor(input);
+  const hide = input.streamMode === true;
+  const quoted = !hide && turn.transcript ? `“${turn.transcript.toUpperCase()}”` : null;
+  switch (turn.phase) {
+    case 'idle':
+    case 'listening':
+      return !hide && turn.partial ? `LISTENING — “${turn.partial.toUpperCase()} …”` : 'LISTENING';
+    case 'heard':
+      return quoted ?? 'HEARD — TRANSCRIBING';
+    case 'thinking':
+      return quoted ?? (turn.detail ? `THINKING — ${turn.detail}` : 'THINKING');
+    case 'speaking':
+      return hide ? 'SPEAKING' : (turn.saying || input.speech?.text || 'SPEAKING').toUpperCase();
+    case 'acting': {
+      const s = turn.step;
+      return s ? `STEP ${Math.min(s.of, s.index + 1)} OF ${s.of} — ${streamLabel(s.label, hide)}` : 'WORKING';
+    }
+    case 'waiting':
+      return hide ? 'WAITING FOR YOU' : (turn.question || 'WAITING FOR YOU').toUpperCase();
+    case 'done':
+      return hide ? 'DONE' : (turn.summary || quoted || 'DONE').toUpperCase();
+    case 'failed':
+      return (turn.error || 'THAT FAILED').toUpperCase();
+  }
 }
 
 /* ────────────────────────── level ────────────────────────── */

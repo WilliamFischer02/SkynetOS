@@ -1,7 +1,10 @@
 /*
- * JARVIS Voice: the hologram window. A frameless square (480 px since 2026-09-26) or, in DESK
- * layout, a tall panel at monitor one's right edge. The stage drags the window, the controls do
- * not. Sizes are multiples of --p, like the board window's, so 11px Departure Mono stays exact.
+ * JARVIS Voice: the hologram window. A frameless window, resizable since 2026-09-27 (480 px square
+ * by default, 320-1600 a side), or, in DESK layout, a tall panel at monitor one's right edge. The
+ * head strip (the nav) and the stage drag the window, the controls do not; the grip in the corner
+ * resizes it. Sizes are multiples of --p, and --p here is `--holo-scale` device pixels: 1 below a
+ * 640 px shorter side, 2 below 1280, 3 above (set by the page, `holoScaleFor`). So 11px Departure
+ * Mono stays exact at every size.
  * No filter, no blur, no CSS transition on anything that draws pixels (docs/02 anti-mush); the
  * only animation in CSS is the recording light's border, which is a step, not a fade.
  */
@@ -17,6 +20,14 @@ body.hologram-mode #root { height: 100vh; }
   --holo-ink: #48c8f0;
   --holo-dim: #12466e;
   --holo-bright: #b8f4ff;
+  /* The window's own chrome scale, from its shorter side: every --p below follows it. */
+  --ui-scale: var(--holo-scale, 1);
+  --p: calc(1px * var(--holo-scale, 1));
+  --gap: calc(4 * var(--p));
+  --pad: calc(6 * var(--p));
+  --f: calc(11px * var(--holo-scale, 1));
+  --f2: calc(22px * var(--holo-scale, 1));
+  position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -27,7 +38,7 @@ body.hologram-mode #root { height: 100vh; }
   border: var(--p) solid var(--holo-dim);
   color: var(--holo-ink);
   font-family: "Departure Mono", ui-monospace, monospace;
-  font-size: calc(11px * var(--ui-scale));
+  font-size: calc(11px * var(--holo-scale, 1));
   line-height: calc(13 * var(--p));
 }
 .holo-root.mood-fault { --holo-ink: #f0be46; --holo-dim: #6e4412; --holo-bright: #ffe9b8; }
@@ -40,25 +51,35 @@ body.hologram-mode #root { height: 100vh; }
   gap: calc(3 * var(--p));
   width: 100%;
   min-width: 0;
-  -webkit-app-region: no-drag;
+  /* The head strip drags the window (its gaps); every control in it is no-drag. */
+  -webkit-app-region: drag;
 }
 /*
  * Eight buttons across the width: six share it equally and clip rather than push past the edge
- * (William, 2026-09-24: TRAIN ran off the right); minimise and close are fixed and small. Labels
- * are kept to five characters so nothing clips at 480.
+ * (William, 2026-09-24: TRAIN ran off the right); minimise and close are fixed and small. Every
+ * one at least 24 x 24 chrome px with 4 px padding (2026-09-27). The page decides the layout from
+ * the width in chrome px (`holoNavLayout`): one row at 480 and up, two rows of four below 480, and
+ * icons with tooltips below 400.
  */
 .holo-nav .holo-btn {
   flex: 1 1 0;
-  min-width: 0;
-  padding: calc(2 * var(--p)) calc(2 * var(--p));
+  min-width: calc(24 * var(--p));
+  min-height: calc(24 * var(--p));
+  padding: calc(4 * var(--p));
   overflow: hidden;
   text-overflow: clip;
   text-align: center;
+  -webkit-app-region: no-drag;
 }
-.holo-nav .holo-btn.holo-small { flex: 0 0 auto; min-width: calc(18 * var(--p)); padding-left: calc(3 * var(--p)); padding-right: calc(3 * var(--p)); }
+.holo-nav .holo-btn.holo-small { flex: 0 0 auto; }
+.holo-nav.rows-2 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.holo-nav.icons .holo-btn { display: inline-flex; align-items: center; justify-content: center; }
+.holo-nav.icons .holo-btn .ui-icon { margin-right: 0; }
+/* A word kept for the accessible name when only the icon shows. Hidden, never blurred. */
+.holo-sr { position: absolute; width: var(--p); height: var(--p); overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .holo-btn {
   padding: calc(2 * var(--p)) calc(4 * var(--p));
-  min-height: calc(18 * var(--p));
+  min-height: calc(24 * var(--p));
   border-color: var(--holo-dim);
   color: var(--holo-ink);
   background: #04090f;
@@ -81,10 +102,10 @@ body.hologram-mode #root { height: 100vh; }
   min-height: 0;
   -webkit-app-region: drag;
 }
+/* The largest whole-pixel square in the stage, centred; the page sets its box (`stageSquare`). */
 .holo-canvas {
+  position: absolute;
   display: block;
-  width: 100%;
-  height: 100%;
 }
 .holo-canvas.legacy { image-rendering: pixelated; }
 
@@ -99,18 +120,64 @@ body.hologram-mode #root { height: 100vh; }
 }
 .holo-root.mood-listening .holo-caption { color: var(--holo-bright); }
 
+/*
+ * The status strip (TurnStrip, 2026-09-27): what JARVIS is doing this moment. One row: glyph, the
+ * phase word, the detail (the step, the question, the error), the timer, PENDING, STOP; under it,
+ * one cell per plan step. Every size a multiple of --p; no transitions, so it changes in whole
+ * frames like the rest of the chrome.
+ */
+.holo-turn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(2 * var(--p));
+  padding: calc(2 * var(--p)) calc(4 * var(--p));
+  border: var(--p) solid var(--holo-dim);
+  background: #04090f;
+  -webkit-app-region: no-drag;
+}
+.holo-turn-row {
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--p));
+  min-height: calc(20 * var(--p));
+  min-width: 0;
+}
+.holo-turn-glyph { flex: 0 0 auto; width: calc(10 * var(--p)); text-align: center; color: var(--holo-bright); }
+.holo-turn-word { flex: 0 0 auto; color: var(--holo-bright); }
+.holo-turn-detail { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--holo-ink); }
+.holo-turn-time { flex: 0 0 auto; color: var(--holo-ink); font-variant-numeric: tabular-nums; }
+.holo-turn-chip {
+  flex: 0 0 auto;
+  padding: 0 calc(3 * var(--p));
+  border: var(--p) solid var(--holo-ink);
+  color: var(--holo-bright);
+}
+.holo-turn-chip.pending { border-style: dashed; }
+.holo-turn-stop { flex: 0 0 auto; min-height: calc(20 * var(--p)); border-color: var(--holo-bright); color: var(--holo-bright); }
+.holo-turn-bar { display: flex; gap: var(--p); height: calc(3 * var(--p)); }
+.holo-turn-bar > span { flex: 1 1 0; background: var(--holo-dim); }
+.holo-turn-bar > span.on { background: var(--holo-bright); }
+.holo-turn.phase-listening,
+.holo-turn.phase-acting { border-color: var(--holo-ink); }
+.holo-turn.phase-waiting { border-color: var(--holo-bright); }
+.holo-turn.phase-failed { --holo-ink: #f0be46; --holo-dim: #6e4412; --holo-bright: #ffe9b8; border-color: var(--holo-ink); }
+.holo-turn.phase-done .holo-turn-glyph { color: var(--holo-bright); }
+
 .holo-input-row {
   flex: 0 0 auto;
   display: flex;
   gap: calc(4 * var(--p));
   -webkit-app-region: no-drag;
 }
+/* SEND keeps its size and the text box takes the rest, so both fit on one row at every width. */
+.holo-input-row .holo-btn { flex: 0 0 auto; min-width: calc(24 * var(--p)); }
 .holo-input,
 .holo-select {
   flex: 1 1 auto;
   min-width: 0;
   box-sizing: border-box;
-  min-height: calc(18 * var(--p));
+  min-height: calc(24 * var(--p));
   padding: 0 calc(4 * var(--p));
   border: var(--p) solid var(--holo-dim);
   background: #04090f;
@@ -129,11 +196,14 @@ body.hologram-mode #root { height: 100vh; }
   flex-direction: column;
   gap: calc(4 * var(--p));
   padding: calc(4 * var(--p));
-  overflow: hidden;
+  /* A panel scrolls inside the stage; it never grows the window or pushes the nav off. */
+  overflow-x: hidden;
+  overflow-y: auto;
   background: #04090f;
   border: var(--p) solid var(--holo-dim);
   -webkit-app-region: no-drag;
 }
+.holo-root .holo-panel > * { flex-shrink: 0; }
 .holo-train-row { display: flex; gap: calc(3 * var(--p)); align-items: center; min-width: 0; }
 /* Nothing in a row may push past the panel: buttons shrink, text clips with an ellipsis. */
 .holo-train-row > * { min-width: 0; }
@@ -146,7 +216,7 @@ body.hologram-mode #root { height: 100vh; }
   overflow: hidden;
   padding: calc(2 * var(--p)) 0;
   color: var(--holo-bright);
-  font-size: calc(11px * var(--ui-scale));
+  font-size: calc(11px * var(--holo-scale, 1));
   line-height: calc(13 * var(--p));
 }
 .holo-train-error { color: var(--warn); }
@@ -172,3 +242,65 @@ body.hologram-mode #root { height: 100vh; }
 .holo-action { display: flex; gap: calc(3 * var(--p)); align-items: center; min-width: 0; }
 .holo-action-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--holo-bright); }
 .holo-action-meta { flex: 0 0 auto; color: var(--holo-dim); }
+
+/*
+ * Under the caption (2026-09-27): which voice is saying the line, the session label or picker, and
+ * the perf readout. Case is kept: `PROFILE jarvis · FINE-TUNED model_1500_pruned` names real files.
+ */
+.holo-voice-line,
+.holo-session-label {
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--holo-dim);
+}
+.holo-voice-line { color: var(--holo-ink); }
+.holo-session-picker { flex: 0 0 auto; -webkit-app-region: no-drag; }
+/* The TRAIN panel's "what speaks" line: the truth about the next line, in the bright ink. */
+.holo-voice-now {
+  flex: 0 0 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--holo-bright);
+}
+.holo-voice-now[data-backend="sapi"] { color: var(--holo-ink); }
+/* Ctrl+Shift+P: fps and frame ms, a tiny monospace corner readout. Above everything, clicks pass through. */
+.holo-perf {
+  position: fixed;
+  top: calc(2 * var(--p));
+  left: calc(2 * var(--p));
+  z-index: 10;
+  padding: 0 calc(2 * var(--p));
+  background: #04090f;
+  color: var(--holo-bright);
+  font-family: "Departure Mono", ui-monospace, monospace;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/*
+ * The size grip (2026-09-27): 8 x 8 pixels in copper in the bottom-right corner, inside a 12 px
+ * hit box that ends where the content begins. Windows' own borders resize the window too
+ * (thickFrame); the grip drags through `hologram:setSize`. Hidden in DESK, which owns the bounds.
+ */
+.holo-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: calc(12 * var(--p));
+  height: calc(12 * var(--p));
+  padding: calc(2 * var(--p));
+  color: var(--copper);
+  cursor: nwse-resize;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+.holo-grip svg { display: block; width: calc(8 * var(--p)); height: calc(8 * var(--p)); }

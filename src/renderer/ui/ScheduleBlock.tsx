@@ -3,11 +3,12 @@ import type { BoardNode } from '@shared/types.js';
 import type { TaskStatusView } from '@shared/schedule.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { relativeTime } from './TargetField.js';
+import { useVisibleInterval } from './useVisibleInterval.js';
 
 /**
  * A scheduled task in the inspector: when it runs next, how the last run went, and Run now.
  *
- * Polled every 30 s while open, because "next run" and "last run" change with the clock rather
+ * Polled every 30 s while open and visible, because "next run" and "last run" change with the clock rather
  * than with any event. Guards the bridge: a SkynetOS started before the scheduler existed has no
  * `task:*` channels, and says so instead of a button that does nothing.
  */
@@ -33,11 +34,8 @@ export function ScheduleBlock({ node }: { node: BoardNode }): React.JSX.Element 
     // node.schedule and node.enabled are here so an edit refreshes the readout at once.
   }, [available, boardId, node.id, node.schedule, node.enabled]);
 
-  useEffect(() => {
-    pull();
-    const timer = setInterval(pull, 30_000);
-    return () => clearInterval(timer);
-  }, [pull]);
+  useEffect(() => { pull(); }, [pull]);
+  useVisibleInterval(pull, 30_000);
 
   if (!available) {
     return (

@@ -43,6 +43,7 @@ describe('redactScene', () => {
   const scene: HoloScene = {
     orbit: [],
     queue: 2,
+    sessions: [],
     focus: {
       item: { id: 'a', path: 'C:/dev/a.md', name: 'a.md', kind: 'doc', lat: 1, lon: 2, priority: 32, lastSeen: 1 },
       content: { type: 'paper', title: 'a.md', scrollFrom: 0, lines: ['a secret line'] },
@@ -60,7 +61,7 @@ describe('redactScene', () => {
   });
 
   it('returns the same scene when there is nothing to hide', () => {
-    const idle: HoloScene = { orbit: [], focus: null, queue: 0 };
+    const idle: HoloScene = { orbit: [], focus: null, queue: 0, sessions: [] };
     expect(redactScene(idle)).toBe(idle);
     const bare = redactScene({ ...scene, focus: { ...scene.focus!, content: { type: 'none', title: 'a.md' } } });
     expect(bare.focus?.content.type).toBe('none');

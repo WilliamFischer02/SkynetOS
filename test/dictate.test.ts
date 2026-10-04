@@ -35,6 +35,14 @@ describe('dictation state machine', () => {
     expect(nextPhase('typing', 'toggle')).toBe('idle');
   });
 
+  it('a take that transcribed to nothing still ends or goes on (bug sweep 2026-09-27: DICT stuck lit)', () => {
+    // [BLANK_AUDIO] cleans to '', so the take never reaches `typing`.
+    expect(nextPhase('transcribing', 'toggle')).toBe('idle');
+    expect(nextPhase('transcribing', 'nothing')).toBe('idle');
+    expect(nextPhase('transcribing', 'timeout')).toBe('idle');
+    expect(nextPhase('transcribing', 'captured')).toBe('listening');
+  });
+
   it('a second press while listening does not change the phase: the take finishes first', () => {
     expect(nextPhase('listening', 'toggle')).toBe('listening');
   });

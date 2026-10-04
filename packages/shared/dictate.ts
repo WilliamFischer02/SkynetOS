@@ -56,7 +56,11 @@ export function nextPhase(phase: DictatePhase, event: DictateEvent): DictatePhas
       return 'listening';
     case 'transcribing':
       if (event === 'typed') return 'typing';
-      if (event === 'failed' || event === 'timeout') return 'idle';
+      // A take that transcribed to nothing ([BLANK_AUDIO]) never reaches `typing`: from here too,
+      // the next take goes back to listening and a stop ends it (bug sweep 2026-09-27: it stuck
+      // in `transcribing`, DICT lit, until SkynetOS restarted).
+      if (event === 'captured') return 'listening';
+      if (event === 'failed' || event === 'timeout' || event === 'toggle' || event === 'nothing') return 'idle';
       return 'transcribing';
     case 'typing':
       // After typing, main decides: another take (back to listening) or done (idle).

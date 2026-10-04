@@ -32,6 +32,7 @@ import { Icon } from './ui/Icon.js';
 import { useChromeLayout } from './ui/useChromeLayout.js';
 import { useGesture } from './ui/useGesture.js';
 import { useVoice } from './ui/useVoice.js';
+import { useBoardContext } from './ui/useBoardContext.js';
 import { MatrixView } from './matrix/MatrixView.js';
 import { useBoardStore } from './store/useBoardStore.js';
 import { isBroken } from '@shared/targets.js';
@@ -178,6 +179,8 @@ export function App(): React.JSX.Element {
   // them. Nothing here re-renders per frame — see ui/useGesture.ts.
   useGesture();
   useVoice();
+  // What the conversation can see of the board: the room, the selection, the nodes (read-only).
+  useBoardContext();
   const voiceStatus = useBoardStore((s) => s.voiceStatus);
   const setVoiceEnabled = useBoardStore((s) => s.setVoiceEnabled);
   const matrixOpen = useBoardStore((s) => s.matrixOpen);

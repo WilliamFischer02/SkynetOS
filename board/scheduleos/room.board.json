@@ -92,7 +92,8 @@
         "j_week",
         "f_today",
         "j_gcal",
-        "j_gcal_shifts"
+        "j_gcal_shifts",
+        "k_calendar"
       ]
     },
     {
@@ -231,6 +232,28 @@
       "priority": 2,
       "showDesignator": false,
       "notes": "The Work – Shifts calendar's settings page. Provisional until the URL is seen to resolve while logged in; otherwise point it at the calendar's share page."
+    },
+    {
+      "id": "k_calendar",
+      "designator": "K1",
+      "kind": "panel.calendar",
+      "name": "CALENDAR",
+      "pos": {
+        "x": 58,
+        "y": 30
+      },
+      "footprint": {
+        "w": 14,
+        "h": 8
+      },
+      "tags": [
+        "schedule",
+        "panel"
+      ],
+      "days": 7,
+      "showDesignator": false,
+      "showName": false,
+      "notes": "The week drawn on the board: seven columns from today, blocks as copper pads, NOW in the signal colour, off days hatched. Reads schedule/calendar.json, kept current by the app (the PBS shifts, the secretary's export, and any private iCal feeds in settings.json) and rewritten by npm run schedule:week. Sized to the free corner of THIS WEEK; widen it and the zone together for a roomier pane. Double-click opens the week view."
     },
     {
       "id": "j_reclaim",
@@ -646,6 +669,13 @@
       "from": "t_sched_week",
       "to": "u_cc_secretary",
       "kind": "supervises"
+    },
+    {
+      "id": "e11",
+      "from": "t_sched_build",
+      "to": "k_calendar",
+      "kind": "produces",
+      "width": 3
     }
   ]
 }

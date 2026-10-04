@@ -151,8 +151,9 @@ describe('the disk half refuses to leave the root', () => {
     expect(up.error).toMatch(/OUTSIDE THE EXPLORER ROOT/);
   });
 
-  it('refuses a junction whose real path leaves the root', () => {
-    if (!junctioned) return;
+  it('refuses a junction whose real path leaves the root', (ctx) => {
+    // No junction could be made here: report the test as SKIPPED, never as passed on nothing.
+    if (!junctioned) ctx.skip();
     const listing = listExplorer(node(), 'escape');
     expect(listing.ok).toBe(false);
     expect(listing.error).toMatch(/LEADS OUTSIDE/);

@@ -271,6 +271,7 @@
             "service.process",
             "task.scheduled",
             "monitor.system",
+            "panel.calendar",
             "note.silk",
             "group.zone",
             "decor.image",
@@ -605,6 +606,24 @@
         "showSystemGraphics": {
           "type": "boolean", "default": true,
           "description": "monitor.system: draw the live system-performance widget on the node's face. Off shows the node's own wallpaper and logo."
+        },
+        "days": {
+          "type": "integer", "minimum": 1, "maximum": 14, "default": 7,
+          "description": "panel.calendar: how many day columns the pane draws from schedule/calendar.json. Ignored when compact (always 3)."
+        },
+        "start": {
+          "enum": ["today", "monday"], "default": "today",
+          "description": "panel.calendar: the first column, today or this week's Monday."
+        },
+        "showHours": {
+          "type": "array", "minItems": 2, "maxItems": 2,
+          "items": { "type": "integer", "minimum": 0, "maximum": 24 },
+          "default": [7, 23],
+          "description": "panel.calendar: the hours drawn, [from, to), local America/Denver. A block outside them is clipped to them."
+        },
+        "compact": {
+          "type": "boolean", "default": false,
+          "description": "panel.calendar: three days and no hour labels, for a small copy (the root board's)."
         },
         "pulseSpeed": {
           "type": "integer", "minimum": 25, "maximum": 400,

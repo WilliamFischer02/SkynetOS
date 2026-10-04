@@ -26,8 +26,13 @@
  * speech "quiet". The 20th percentile of those frames is the floor, capped so that even a sentence
  * spoken from the first instant cannot lift it into speech levels. Speech starts when frames stay
  * above three times that floor for 120 ms — long enough that a keyboard click is not a sentence —
- * and ends after 700 ms below 60% of the threshold. The gap between the two is hysteresis, so the
- * quiet between two words does not end the sentence.
+ * and ends after 1,100 ms below 60% of the threshold (700 ms, 35 frames, until 2026-09-27: William,
+ * "commands keep getting cut off … wait until the command has been fully said"). The gap between the
+ * two is hysteresis, so the quiet between two words does not end the sentence.
+ *
+ * A sentence may run 20 s (8 s until 2026-09-27; a profile line keeps its own 15 s). And a sentence
+ * whose words so far end in a connective ("open firefox and", "move it to") is not over: the
+ * capture is continued once (`endsInConnective`, services/voice.ts) and the two halves joined.
  *
  * All time is counted in frames rather than read from a clock, so every test is exact and a slow
  * machine cannot change what was decided.
@@ -63,6 +68,11 @@ export interface EndpointConfig {
   postRollMs: number;
 }
 
+/** The longest sentence a wake or follow-up capture hears (docs/11 § One turn at a time). Was 8 s. */
+export const SENTENCE_MAX_MS = 20_000;
+/** Quiet after speech that ends the sentence. Was 700 ms (35 frames of 20 ms); now 55 frames. */
+export const END_SILENCE_MS = 1100;
+
 export const DEFAULT_ENDPOINT: EndpointConfig = {
   frameMs: 20,
   calibrateMs: 200,
@@ -70,13 +80,74 @@ export const DEFAULT_ENDPOINT: EndpointConfig = {
   minLevel: 0.004,
   maxFloor: 0.02,
   minSpeechMs: 120,
-  endSilenceMs: 700,
+  endSilenceMs: END_SILENCE_MS,
   endRatio: 0.6,
   noSpeechMs: 4000,
-  maxMs: 8000,
+  maxMs: SENTENCE_MAX_MS,
   preRollMs: 250,
   postRollMs: 150
 };
+
+/* ────────────────────────── a sentence cut mid-clause ────────────────────────── */
+
+/**
+ * The one-time extension: when the words so far end in one of these, the sentence is not over.
+ * whisper-server (whisper.cpp's `server`) answers a whole file at `/inference` and has no streaming
+ * partials, so the words so far are the closed capture's own transcript, and the extension is a
+ * CONTINUATION: the microphone reopens once, within CONTINUATION_REOPEN_MS of closing, for up to
+ * CONNECTIVE_EXTENSION_MS of silence before giving up, and the two transcripts are joined.
+ */
+export const CONNECTIVES = ['and', 'then', 'to', 'the', 'with', 'in', 'on', 'of', 'a', 'an', 'for', 'into', 'my', 'that'] as const;
+export const CONNECTIVE_EXTENSION_MS = 1800;
+export const CONTINUATION_REOPEN_MS = 400;
+
+const CONNECTIVE_SET: ReadonlySet<string> = new Set(CONNECTIVES);
+
+/** Lower-case words, with whisper's punctuation ("and." "then,") ignored. */
+function plainWords(text: string): string {
+  return (typeof text === 'string' ? text : '').toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Whole commands that happen to end on one of those words: a particle after its verb ("zoom in",
+ * "turn it on", "hold on") or "that" as the object ("undo that", "cancel that"). These are not
+ * continued, so "Jarvis, zoom in" is not kept waiting 1.8 s.
+ */
+const COMPLETE_ENDING = new RegExp(
+  '(?:^| )(?:(?:zoom|log|sign|check|plug|come|go|hold|carry|move|turn|switch|put|try|keep|tune|dial|opt|jump|hang|log|clock|lock)(?: (?:it|that|this|them|me|everything|something|one))? (?:in|on)' +
+  '|(?:do|undo|redo|stop|cancel|repeat|close|open|move|say|try|play|save|copy|paste|send|fix|check|see|read|type|forget|ignore|keep|change|like|want|need|hear|scrap|drop|delete|remove) that)$'
+);
+
+/** Does the sentence so far stop on a connective, so that more is coming? */
+export function endsInConnective(text: string): boolean {
+  const plain = plainWords(text);
+  const last = plain.slice(plain.lastIndexOf(' ') + 1);
+  return CONNECTIVE_SET.has(last) && !COMPLETE_ENDING.test(plain);
+}
+
+/**
+ * The first half and its continuation as one sentence: whisper's full stop after the connective
+ * is dropped, and the second half's capital is lowered when it is only a sentence start (a capital
+ * then a small letter; "VS Code" and "I" keep theirs). Grammar downstream is case-blind.
+ */
+export function joinContinuation(first: string, rest: string): string {
+  const a = (typeof first === 'string' ? first : '').replace(/\s+/g, ' ').trim().replace(/[.,;:!?…]+$/, '');
+  let b = (typeof rest === 'string' ? rest : '').replace(/\s+/g, ' ').trim();
+  if (!b) return a;
+  if (!a) return b;
+  if (/^[A-Z][a-z]/.test(b)) b = b[0]!.toLowerCase() + b.slice(1);
+  return `${a} ${b}`;
+}
+
+/**
+ * How long main waits for the capture window before it gives up on a capture: the silence it may
+ * wait for speech, the longest sentence, the end silence, the connective extension, and 3 s spare.
+ * A wake capture: 4 + 20 + 1.1 + 1.8 + 3 = 29.9 s (was 15 s: 4 + 8 + 3).
+ */
+export function listenTimeoutMs(noSpeechMs: number = DEFAULT_ENDPOINT.noSpeechMs): number {
+  const wait = Number.isFinite(noSpeechMs) && noSpeechMs > 0 ? noSpeechMs : DEFAULT_ENDPOINT.noSpeechMs;
+  return wait + SENTENCE_MAX_MS + END_SILENCE_MS + CONNECTIVE_EXTENSION_MS + 3000;
+}
 
 export type EndpointState = 'calibrating' | 'waiting' | 'speaking' | 'done' | 'nothing';
 

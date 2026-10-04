@@ -13,6 +13,7 @@ import {
   type SectionId
 } from '@shared/node-fields.js';
 import { PRIME_STEPS, isPrimeStepId } from '@shared/prime-steps.js';
+import { CALENDAR_DEFAULTS, formatShowHours, parseShowHours } from '@shared/calendar-face.js';
 import { TargetField } from './TargetField.js';
 import { DirListField } from './DirListField.js';
 import { Icon, type IconName } from './Icon.js';
@@ -65,6 +66,8 @@ function toDraft(node: BoardNode): Draft {
     } else if (field.control === 'footprint') {
       const fp = footprintOf(node);
       draft[field.key] = `${fp.w}x${fp.h}`;
+    } else if (field.control === 'hours') {
+      draft[field.key] = formatShowHours(value);
     } else if (field.key === 'name' && node.kind === 'drive.room') {
       /*
        * A room's name field edits the STEM only. The board appends `OS` at draw time, so a title
@@ -175,6 +178,11 @@ function toPatch(node: BoardNode, draft: Draft): { patch: Partial<BoardNode>; er
       // never been resized keeps inheriting the default if that default ever changes.
       const fallback = DEFAULT_FOOTPRINT[node.kind];
       next = fallback && clamped.w === fallback.w && clamped.h === fallback.h ? undefined : clamped;
+    } else if (field.control === 'hours') {
+      // `7-23`. The default is stored as absent, like a footprint equal to the kind's default.
+      const hours = parseShowHours(String(raw ?? ''));
+      if (hours === 'invalid') { errors.push(`${field.label} must be two whole hours, from-to, 0 to 24, like 7-23`); continue; }
+      next = hours && !(hours[0] === CALENDAR_DEFAULTS.showHours[0] && hours[1] === CALENDAR_DEFAULTS.showHours[1]) ? hours : undefined;
     } else if (field.key === 'size') {
       const text = String(raw ?? '').trim();
       next = text ? Number(text) : undefined;

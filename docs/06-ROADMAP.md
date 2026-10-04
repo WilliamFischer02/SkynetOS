@@ -4,6 +4,148 @@ Each milestone ends with something you can actually open and use. No milestone i
 
 ---
 
+### 2026-10-03 1035 note (third away-mode pass the same day, PLAN level; confirms the 0835 note below, zero drift)
+
+No mail on `to-hands`. Bash denied this pass too. Every phantom slate matched both earlier passes
+today exactly: `root` 4/4, `financeos` 3/4, `scheduleos` 0/4, `minecraftos` 3/4, `gameos`/`storyos`/
+`deductionos` 4/4. Nothing proposed, nothing edited beyond this note and the journal
+(`codex/journal/away-2026-10-03-1035.md`). **Repeating the standing suggestion a third time:**
+three same-day PLAN passes with an unchanged picture is spent usage — the next one should wait for
+mail on `to-hands`, a phantom ticked/dismissed, or a changed handoff file, not a fixed interval.
+
+### 2026-10-03 0835 note (second away-mode pass the same day, PLAN level; confirms the 08:37 note below)
+
+Bash denied this pass (no `git log`/`git status`); repo state came from `Read`/`Glob` only. No mail
+on `to-hands`. Every phantom slate matches the 08:37 pass exactly, including `ph_goobtropolis_configs`
+that pass proposed (`minecraftos` now 3/4): `root` 4/4, `financeos` 3/4, `scheduleos` 0/4,
+`minecraftos` 3/4, `gameos`/`storyos`/`deductionos` 4/4 — zero drift in the twenty minutes between
+passes.
+
+A `Glob` sweep for `*/README.md`, `*/CLAUDE.md` and `*/package.json` directly under `C:/dev` turned
+up nothing not already in `codex/projects/`: the coverage-gap pattern that found real gaps on
+2026-09-11, 2026-09-15, 2026-09-19, 2026-10-01 and this morning's 08:37 pass has, for the first time,
+come up empty. Also checked: `scheduleos.md`'s "Next" item 1 (rewrite `habits.json` from William's
+real 16-habit set) already has board presence — `f_habits`/F3 on the `scheduleos` room already points
+at `private/schedule/reclaim/habits.json` — so there is nothing left for a phantom to add there; the
+rewrite itself is agent data-entry work for a Hands-level session, not a board recommendation.
+
+**Suggestion:** two away-mode PLAN passes landing twenty minutes apart with an identical picture is
+the same spent-usage pattern the 2026-09-19/26/27 notes warned about for the Minecraft/GoobOS/GameOS
+cluster, now showing up program-wide in one day. Nothing here needs another PLAN sweep until mail
+lands on `to-hands`, a phantom is ticked or dismissed, or a handoff file changes.
+
+### 2026-10-03 note (away-mode pass, PLAN level; adds to the 2026-10-01 note below)
+
+No mail on `to-hands`. Every phantom slate matched the 2026-10-01 picture exactly — `root` 4/4
+(`ph_bitrunners`, `ph_stackassembler`, `ph_story_universe_map`, `ph_jarvis_voice`, unticked since
+2026-09-16/25), `financeos` 3/4, `scheduleos` 0/4, `minecraftos` 2/4 (before this pass), `gameos`/
+`storyos`/`deductionos` 4/4 — no board edit by William since the last pass, so no re-sweep of those
+repos was warranted per the standing skip advice.
+
+**Real find this pass:** `codex/index.md` has cited `projects/goobtropolis.md` since before
+2026-09-12 (the MinecraftOS projects list, line pointing at the Bloom.host SMP every mod in that
+room targets), but the file itself never existed — the same "promised but unwritten" pattern the
+index's own header warns about. Wrote `codex/projects/goobtropolis.md`: there is no local repo for
+the server itself, only an exported config folder (`C:/dev/goobtropolis-configs`, four mod configs —
+afkplus, chunky, doubledoors, ledger, styled-chat, universal-graves — mtime 2026-09-21) with zero
+prior board or codex presence. `minecraftos` had 2/4 phantom slots open (`ph_latest_log`,
+`ph_crash_reports`, both unticked since 2026-09-11) — used one: proposed `ph_goobtropolis_configs`
+(store.folder), wired `reads` to the existing `p1_goobtropolis` node. That existing node is a
+separate, older gap worth flagging again: it's a `service.process` pointing at
+`C:/dev/GoobtropolisTest`, a local test-server checkout that still does not exist on this machine
+(first noted in the 2026-09-11 handshake mail to the Face) — unrelated to the new phantom, not
+touched this pass.
+
+Not re-catalogued: `MagicTrainer`'s entry (written 2026-10-01) still names the same blocker —
+v1.0.0 ready to ship, root board still 4/4 with no capacity for `ph_magictrainer`. No change there
+to report.
+
+### 2026-10-01 note (away-mode pass, PLAN level; adds to the 2026-09-30 note below)
+
+Bash worked this pass (unlike most priors). No mail on `to-hands`. Re-checked `scheduleos` (still
+0/4, no drift from 2026-09-30 — same facts, all already have nodes) and `financeos`/`root` (3/4 and
+4/4, unticked, nothing new deserving the open slot) per the standing skip advice below; the
+Minecraft/GoobOS/GameOS cluster was not re-swept.
+
+**Real find this pass:** a plain `ls` of `C:/dev` (the Bash tool finally answering) turned up two
+repos with zero codex presence — the coverage-gap pattern the 2026-09-11 pass first found and
+later passes periodically re-run for:
+
+- **`MagicTrainer`** (`C:/dev/MagicTrainer`) — a real, fully-built MTG deck visualizer/trainer
+  (Tauri 2 + React 19), started 2026-09-24, **v1.0.0 tagged 2026-09-25** with a built MSI/NSIS
+  installer sitting unshipped since then. All 14 of William's design questions were already
+  "accept all"-resolved the same day. Written up: `codex/projects/magictrainer.md`. **No phantom
+  proposed** — `root` is 4/4 (same four phantoms unticked since 2026-09-16/25) and this one
+  deserves a slot more than at least one of the three bare-repo-coverage ones already there
+  (`ph_bitrunners`, `ph_stackassembler`, `ph_story_universe_map`), since it is a *finished,
+  shippable build*, not just a coverage gap. Flagged for William's decision rather than withdrawing
+  one of his standing recommendations myself.
+- **`goobtab`** — a four-file Minecraft datapack (`pack.mcmeta` description: "Goobtropolis playtime
+  days/hours"), a small tab-list playtime tracker for the Goobtropolis SMP. Too small to warrant
+  its own codex project file; noted here only (inferred: a utility for `projects/goobtropolis.md`,
+  not independently tracked).
+
+### 2026-09-30 note (away-mode pass, PLAN level; corrects the 2026-09-27 "skip ScheduleOS" standing note below)
+
+No mail on `to-hands`. `board_list` now returns **seven** boards, not five: `scheduleos` exists as a
+real room — it did not on 2026-09-27, when the prior pass's standing advice was "skip re-checking
+ScheduleOS until a handoff changes." One has now changed substantially, which is exactly the signal
+that note said should end the skip:
+
+- **ScheduleOS Phase 6 is done, with William present, 2026-09-30**: every calendar retimezoned to
+  Denver, Reclaim authenticated (32 tools), seven real October PBS shifts loaded with six-step prep
+  chains (42 events) live on `Work – Prep Blocks`, streams turned into recurring calendar events with
+  a shift-takes-priority rule applied automatically, his 16 real habits rebuilt in Reclaim, and a new
+  `panel.calendar` built (K1 CALENDAR in the room, K1 THIS WEEK on root) — not yet seen on screen.
+  `codex/projects/scheduleos.md` and `skynetos.md`'s "Next" section updated to match; see
+  `scheduleos.md` "Next" for the three items still open (two William's, one a small agent data-entry
+  task: rewriting `habits.json` from his real set).
+- `scheduleos` phantom slate: 0/4, and correctly so — every real fact already has a built node on the
+  new room (see above), nothing here deserves a phantom recommendation yet.
+- Re-checked `financeos` (3/4, unticked since 2026-09-26 — `ph_rent_run`, `ph_rent_run_research`,
+  `ph_aggregator_options`) and `root` (`ph_bitrunners`, `ph_stackassembler`, `ph_story_universe_map`,
+  `ph_jarvis_voice`, unticked since 2026-09-16/25): no change, no new capacity, nothing new deserving
+  a slot.
+- The Minecraft/GoobOS/GameOS cluster (`minecraftos` 2/4, `gameos`/`storyos`/`deductionos` 4/4) was
+  **not** re-swept this pass, per the standing skip note below — nothing suggested it had moved.
+- **Revised suggestion:** the earlier blanket advice to skip re-checking FinanceOS/ScheduleOS no
+  longer holds for ScheduleOS now that its room exists and is actively being built with William —
+  future passes should check it each time until it stabilizes. FinanceOS is still genuinely
+  blocked on William's own numbers (`ledger.json`) and the DataAnnotation/Prolific review emails, so
+  the skip still applies there.
+
+### 2026-09-27 note (away-mode pass, PLAN level; adds to the 2026-09-26 notes below)
+
+No mail on `to-hands`. Checked every board's phantom slate (`board_list`: root, deductionos,
+financeos, gameos, minecraftos, scheduleos, storyos) and found **no new capacity, no drift, and
+nothing new deserving a proposal** — so this pass added zero phantoms:
+
+- `root` 4/4 (`ph_bitrunners`, `ph_stackassembler`, `ph_story_universe_map`, `ph_jarvis_voice`, all
+  unticked since 2026-09-16/25).
+- `financeos` 3/4 (`ph_rent_run`, `ph_rent_run_research`, `ph_aggregator_options`, unticked since
+  2026-09-26); one slot open but nothing on disk since the 09-26 pass deserves it — `selections.json`
+  still shows Prolific and DataAnnotation both `applied`, waiting on emails that have not arrived.
+- `scheduleos` 0/4, re-confirmed: `mcp-tools.md` still says "no session has authenticated to Reclaim
+  yet", `pbs-shifts.json` is still `[]`, the timezone fix is still William's hands. Same picture as
+  the 2026-09-26 16:13 check — third confirmation in a row of no change.
+- `minecraftos` 2/4, `gameos`/`storyos`/`deductionos` 4/4 — unticked since 2026-09-11, per the
+  standing "skip" note below; not re-swept this pass.
+
+Also re-checked `BitRunners` and `StackAssembler` `.claude/handoff.md` directly (their tails looked
+unfamiliar at first read, but both are append-only logs with newest-first ordering — the tail is
+old 2026-07-01/07-02 history, not new work). Confirmed: still the same 2026-07-12 / 2026-08-12
+top entries the codex already cites. No drift.
+
+**Extending the standing suggestion below:** the Minecraft/GoobOS/GameOS cluster has now gone
+unchanged across at least six away-mode passes (since 2026-09-11). FinanceOS and ScheduleOS have
+now each shown zero change across three consecutive passes (2026-09-26 16:13, 2026-09-26 23:42,
+2026-09-27) because both are genuinely blocked on William's own actions (Google Calendar timezone,
+Reclaim browser login, Prolific/DataAnnotation review emails) rather than on agent work. Suggest
+away-mode PLAN passes skip re-checking any of these boards until a phantom is ticked/dismissed, a
+handoff file changes, or new mail lands on `to-hands` — a pass that finds the same picture a fourth
+time is pure spent usage. The one place still worth checking each pass: mail on `to-hands`, since
+that's the only channel that can hand this session new work.
+
 ## Board coverage gap found, not closed (away-mode pass, 2026-09-11 evening)
 
 `board_list` returns only five boards: `root`, `deductionos`, `gameos`, `minecraftos`, `storyos`.
@@ -489,6 +631,12 @@ Found by morning maintenance, not fixed (2026-09-23). All renderer, so none has 
     asserting nothing; `expect(zone).toBeDefined()` would hold them.
     - [x] **The two layout tests now fail when their node is gone** (2026-09-26): each `return`
       became a `throw` that names the node. The twelve exports are still William's call.
+    - [x] **`clearWhichCache` has the test its comment promised** (2026-10-03, morning
+      maintenance's roadmap step): `test/which.test.ts`, 6 cases against real directories on a PATH
+      the test sets and puts back. It is also the first test `which()` itself has had: any case,
+      first PATH directory wins, an unreadable or empty entry is skipped, a quoted entry is read, a
+      miss is null, and a remembered miss stands until `clearWhichCache()`. `npm run verify` green,
+      154 files, 2,387 tests. Eleven exports left, still William's call.
 
 Found by morning maintenance, not fixed (2026-09-26):
 
@@ -497,6 +645,38 @@ Found by morning maintenance, not fixed (2026-09-26):
     in 3.1 s). The handoff's landmine says it fails only when three verifies run at once; it does not.
     The wait is real filesystem time on a watcher, so the fix is either a longer deadline for that one
     step or a wait on the re-plan event rather than a poll. Not loosened here.
+    - 2026-10-03: no trip in six lone runs of `npm run verify` that day. Still open; six clean
+      runs do not settle a one-in-six fault.
+
+Found by morning maintenance (2026-10-03):
+
+20. **FIXED 2026-10-03.** `src/renderer/ui/useVisibleInterval.ts` was written in the 2026-09-26
+    audit to stop the panels polling in a minimised or hidden window, and nothing imported it: every
+    poll its header listed still ran unseen. Now used by `UsageMeter.tsx` (20 s, a scan of every
+    conversation file), `FinanceBlock.tsx` and `ScheduleBlock.tsx` (30 s) and `RemotePanel.tsx`
+    (4 s); each still reads once on mount, and once at the moment the window is shown again. The
+    hook's behaviour is now `startVisibleInterval`, a plain function, held by
+    `test/visible-interval.test.ts` (6 cases, fake timers). Not seen on screen.
+21. **FIXED 2026-10-03.** `src/renderer/ui/UsageMeter.tsx`: a `usage:summary` call that REJECTED
+    (main threw, or a phone's socket dropped) left no meter and no word, with an unhandled
+    rejection. Before the first good read it now shows USAGE with the reason and IT TRIES AGAIN
+    EVERY 20 S. After a good read a failed poll keeps the last figures. No test (renderer, item 10);
+    `npm run verify` green. Not seen on screen.
+22. **Four more timers run while the window is hidden.** `src/renderer/App.tsx:206`
+    (`refreshUsageRoutes` every 30 s: a second scan of every conversation file, feeding couriers
+    nobody can see), `src/renderer/ui/FableCores.tsx:64` (15 s), `src/renderer/ui/CalendarBlock.tsx:43`
+    (60 s) and `src/renderer/ui/JarvisDock.tsx:93` (the quote, every 24 s). Each is a one-line move
+    to `useVisibleInterval`. App.tsx first: it is the costly one.
+23. **Reads with no failure path.** `src/renderer/ui/CalendarBlock.tsx:55` says COULD NOT READ THE
+    CALENDAR and the reason, but reads only once, so it stays wrong until main pushes or the
+    inspector is reopened, and does not say so. `src/renderer/ui/AwayScreen.tsx:205`, `:239` and
+    `:323` and `src/renderer/ui/FableCores.tsx:59` call `.then` with no `.catch`: a rejection is
+    unhandled and the panel shows nothing.
+24. **FIXED 2026-10-03.** `test/explorer.test.ts` "refuses a junction whose real path leaves the
+    root" returned silently when no junction could be made, so it could pass on nothing. It now
+    calls `ctx.skip()`, and such a machine reports 1 skipped rather than 1 passed. On this PC the
+    junction is made and the test runs (16 passed, 0 skipped); the skip path itself was read in the
+    installed vitest 2.1.9 runner, not run.
 
 ---
 
@@ -605,8 +785,19 @@ Rules: docs/07 § JARVIS Voice.
   the Face's own conversation is gone — only "ask the face …" reaches it now. The VOICE button now
   opens the hologram window directly, and its five buttons fit the 240 px square without clipping.
   **Not heard live**, per `handoff.md` and the 2026-09-24T23:31 mail to the Face.
-- [ ] **M13.3 The planner** (docs/11 slice 2): `desktop:plan` through headless `claude -p` with a
-  screenshot, speaking the plan before running it. "Open my most recent project in After Effects."
+- [x] **M13.3 The planner** (2026-09-27; docs/11 § Slice 2). A desktop request the rules do not
+  match ("open my most recent project in After Effects", "do the notepad test but in Word") goes,
+  with DESK on and `desktop.planner` not off, through the user-only `desktop:plan` to headless
+  `claude -p` (converse.ts's shape: no tools, no MCP servers, 30 s, `desktop.plannerModel`), with
+  the windows, monitors, catalogue, the planner's own log and up to three saved actions as worked
+  examples (summary lines only, coordinates scrubbed), under 6,000 characters. `normalisePlan`
+  passes six step kinds (`launch`, `focus`, `place`, the new `uiaClick` by UI Automation name,
+  `keys`, `wait` ≤ 3 s) and runs nothing if it dropped anything; the line is spoken from main, then
+  `runPlan` runs it; `%APPDATA%/SkynetOS/desktop/planner.log.jsonl`. `packages/shared/planner.ts`,
+  `src/main/services/planner.ts`, `test/planner.test.ts` (18); `npm run typecheck` clean. No
+  screenshot (the design's `--allowedTools Read` was dropped: the planner has no tools). **Not run:
+  no `claude -p` plan has been asked for and no plan has run against the desktop**; the first is
+  with William watching.
 - [x] **M13.4 Action recording** (2026-09-26, TRAIN ACTION in the DESK panel). The helper's watch
   mode records clicks with their UI Automation target, wheel and keys while the light is on, pauses
   itself on sign-in windows, saves to `userData/desktop/recordings/`, and replays through three

@@ -4806,3 +4806,223 @@ lines: it would reach into the usage meter's row, which is why docs/02 keeps it 
 **Not fitted.** 3× chrome on a 1080p screen is a 640 x 360 layout, below the window's own 960 x 640
 minimum; it is offered but not audited, and panels will overlap there.
 
+
+## 2026-09-27 — The planner (M13.3): a plan with anything dropped does not run; no screenshot; no shells
+
+**Decided.** `normalisePlan` drops every step outside docs/07 with its reason, and if it dropped
+ANY step, or the plan is over 12 steps, nothing runs and JARVIS says the first reason. The planner
+may not launch, focus, place or click into a shell (Terminal, PowerShell, Command Prompt, WSL,
+Registry Editor, Task Manager), may not press a chord that closes a tab or program (ctrl+w, ctrl+q,
+ctrl+f4, alt+space) or anything with the Windows key, and may not click a control that answers a
+dialog. At run time every `keys` step (rule plans too) refuses when a sign-in window or a shell is
+in front. The model gets no screenshot and no tools; UI Automation names (`uiaClick`) stand in.
+The planner setting defaults true but acts only with `desktop.enabled`, so a new install never
+plans. "Do the notepad test but in Word" no longer replays the notepad test: "but", "instead",
+"except", "without" or "rather than" in an action's name sends the sentence to the planner.
+
+**Rejected.** Running the steps that survived normalisation (a plan missing its launch would type
+into whatever window is in front). Cutting a long plan at 12 (it would do part of what the read-back
+promised). `--allowedTools Read` for a screenshot, as the slice 2 design had: a planner that can read
+files is a planner that can read any file. Letting the model launch a terminal "because it is in
+the Start Menu": installing a program is consent to launching it by voice, not to a model typing
+into it.
+
+## 2026-09-27 — The JARVIS Voice window is resizable, and its chrome scales with it
+
+William: "I'm still having trouble scaling the jarvis voice window, and its buttons/ui is quite
+squashed at its current size." Cause: `resizable: false`, and settings.json held `hologram.size:
+240` from before the 480 default, so the default never applied and eight buttons shared ~240 px.
+
+- **Resizable, frameless, `thickFrame`.** Windows' own borders resize it (probed: `WM_NCHITTEST`
+  gives HTRIGHT / HTBOTTOMRIGHT just outside the edge). A copper 8×8 grip also resizes it by drag
+  through a user-only `hologram:setSize`, so it works if the borders are ever missing. Ctrl+= / - / 0
+  are taken in main's `before-input-event`, not the page, so a menu accelerator can never zoom the
+  page off its whole-pixel scale. Rejected: a renderer-side size writer (two writers race).
+- **One writer.** Main's `resize` handler saves `hologram.size: { w, h }` 300 ms after the last
+  change, never in DESK. A bare number is migrated once; one under 400 is bumped to 480 and logged.
+  "Once" is the shape change: `{ w, h }` is never bumped, so a window resized to 320 stays 320.
+- **The chrome scale is the window's.** `--holo-scale` from the shorter side in CSS px (device px,
+  since the OS scale is cancelled): 1 / 2 / 3 at 640 and 1280. It overrides `--ui-scale` and `--p`
+  inside `.holo-root`. The nav's wrap (480) and icon (400) thresholds are judged in chrome px
+  (width / scale), so a 640 px window at scale 2 lays out like a 320 one at scale 1: bigger, same
+  arrangement. Rejected: raw-px thresholds, which would put eight 22 px labels in one 640 px row.
+- **The grip is copper** as asked, the one copper thing in a blue window; it is chrome, not canvas.
+
+## 2026-09-27 — One turn at a time: one reducer owns the moment; the follow-up waits for the turn to end
+
+William, after the first live session: the follow-up opened before the first action, long
+commands were cut off, the LISTENING light went out while the microphone was open, and once JARVIS
+said it was acting while nothing happened. docs/11 § One turn at a time.
+
+- **One state, one reducer.** `packages/shared/turn.ts` (pure) and `services/turn.ts` (the one
+  owner, `turn:state` pushed to both windows). Rejected: patching the three views that each guessed
+  the moment from `voice:state`, `speech:state` and `desktop:state`; they would disagree again.
+- **The follow-up hangs off the END OF THE TURN, not the end of a line.** The owner of a turn ends
+  it after its line is spoken (`whenSpeechIdle`, which now counts a line still synthesising).
+  Owners: the board for a sentence it acted on (`turn:report`, board only), the planner, the
+  conversation, and `runPlan` only for a plan nobody's sentence started. Rejected: `runPlan`
+  ending every turn it touches (the board speaks its reply AFTER `desktop:run` returns, so the
+  follow-up would open over it). The 20 s heard window is kept literally: a plan that runs longer
+  than 20 s from the sentence ends with no follow-up. Stricter, and said so in docs/11.
+- **Held, not stacked; dropped on failure.** One held sentence, a second replaces it, "One moment."
+  once per turn; it runs when the turn ends DONE or WAITING, and a FAILED turn drops it (it may have
+  depended on the one that failed) and says so. "Stop" is never held.
+- **The light is the tracks.** `voice:mic` (capture window only) sets the turn's `mic`, and the
+  renderer's brightening follows `mic`, not the mood. Cause of the dropped animation: `moodFrom`
+  ranked a desktop step above `listening`, and the follow-up was open when the plan began.
+- **Endpointing.** End silence 700 → 1,100 ms, sentence cap 8 → 20 s, backstop 15 → 29.9 s
+  (4 + 20 + 1.1 + 1.8 + 3; the brief's "cap + silence + 3 s" would fire before a sentence begun at
+  3.9 s reached its cap). whisper-server has no streaming partials, so the connective rule works on
+  the closed capture's transcript and CONTINUES the sentence once (reopen within 400 ms, 1.8 s of
+  silence). Whole commands that end on a particle or "that" ("zoom in", "undo that") are excepted
+  so they are not kept waiting 1.8 s.
+- **Acting has no colour of its own.** The globe's palette is six blues and an amber fault ramp;
+  acting is shown by a quicker brightness pulse and the strip, not a new palette. Failed is amber.
+
+## 2026-09-27 — Reaching into windows, the board by voice, a dictation target, action memory
+
+- **"press / scroll / click / type … in <app>" is rule grammar, two steps, window matched at run
+  time.** `focus {focusByPointer}` then the action. Rejected: sending these to the planner (a
+  model for "hit play" is slow and unnecessary) and resolving the window in the renderer (it does
+  not know what is open). The pointer clicks the title bar only when SetForegroundWindow is
+  refused, because a click on a maximised browser's caption row can land on a tab; the point is
+  200 DIPs left of the right edge to clear the window buttons and the tab-list button.
+- **Scrolling is a new `scroll` step (the helper's existing `wheel` op), not PageDown.** A wheel
+  at the pointer scrolls a terminal or a video page where PageDown would be refused (a shell) or
+  swallowed (a player). The planner may not use it (not in PLANNER_STEP_KINDS).
+- **UI Automation name lookup is case-insensitive** (`PropertyConditionFlags.IgnoreCase`): a
+  spoken "subscribe" must find "Subscribe". It also loosens the replay's `element` tier, which is
+  a better match for a recorded name, not a riskier one.
+- **A dictation target and the split need `desktop.enabled`.** Both bring or move another
+  program's window. A bare shell is refused as a target (a dictated line and Enter would run);
+  a SkynetOS session window is accepted, because its prompt is Claude Code's.
+- **SPLIT is its own layout, not DESK.** It writes no setting; leaving it restores DESK or the
+  saved size. Rejected: reusing `hologram:setDesk` with a width, which would overwrite
+  `hologram.desk`.
+- **The board by voice adds no channel and no main-side service.** The renderer already reads
+  every board (the command palette does) and already has the one write path (`runCommand`). The
+  brief's `src/main/services/board-voice.ts` was not created: it would have needed a channel the
+  brief did not ask for. The pending read-back lives in `src/renderer/ui/boardVoice.ts`.
+- **Read-back applies to the new voice writes (rename, notes); nudges and wires by voice stay
+  immediate.** They were immediate before, are undoable, and a gesture reaches the same grammar.
+  A typed or gestured rename keeps its old upper-casing; a spoken one keeps his words.
+- **A deletion by voice is refused outright ("I don't delete by voice.")**, where before it was a
+  `confirm` intent that told him to confirm on screen with no dialog there. Typed and gestured
+  deletions still produce the `confirm` intent.
+- **Moving a node between rooms is refused in words**: the command bus has no cross-board move,
+  and faking one as delete + create would be a deletion by voice.
+- **Action memory hands the plan to the planner rather than running it itself**, so the turn
+  engine, the read-back pause and the halt apply unchanged. The key drops courtesy in front and
+  at the end, never "jarvis" at the end ("type hello from jarvis").
+
+## 2026-09-27 — the voice delay, measured and cut (docs/11 § Where the time goes)
+
+- **Thinking off in every headless `claude -p` (planner, conversation).** Haiku 4.5 under Claude
+  Code thought for ~1,000 tokens before a JSON plan: 12.0 s → 3.8 s from that alone. Rejected:
+  `--effort low` (no change with thinking on: 29.6 s in one run).
+- **`--system-prompt` + `--safe-mode` + `--tools ""` + `--no-session-persistence`**, not
+  `--append-system-prompt` on Claude Code's own prompt: 20.6 K → 1.7 K input tokens, ~0.7 s, and
+  ~10x cheaper. `--bare` rejected: it refuses OAuth, which is how this machine signs in. A CLI that
+  does not know the new flags falls back to the old list once and keeps it for the run.
+- **An acknowledgement bank, exact-match only, in the profile folder.** Rejected: templates or
+  fuzzy matching (a line that is not word for word what was banked must be synthesised, or the
+  words heard would not be the words shown). Rejected: lowering F5's nfe to 16 (1,362 → 780 ms for
+  20 words) — a voice-quality trade for William to make, not a latency fix.
+- **The read-back pause is 400 ms before a single step, 1.5 s before several.**
+- **A plan stops after a failed step when anything left types, clicks, scrolls or moves the
+  pointer**; launches and moves still run on. Rule plans keep their partial successes.
+- **The sidecar plays a WAV asynchronously and waits out its length on a thread**, so "stop" ends a
+  line in the profile's voice at once. A synchronous PlaySound cannot be stopped from another thread
+  (measured: the stop took the whole line).
+
+## 2026-09-30 — `panel.calendar`: the calendar pane, and one merged calendar file
+
+William: "I also want a live pane in the SkynetOS program that shows the calendar, both within the
+room and on the main board." The spec's "Future" note (scheduleos-room.md) asked for exactly this
+and for a decision file; this is it.
+
+- **One file, `schedule/calendar.json`, written by one pure merge** (`packages/shared/schedule-calendar.ts`),
+  called by both the app (`services/schedule-feed.ts`) and `npm run schedule:week`. The HTML week
+  view is now drawn FROM that file, so the page and the board cannot disagree. Rejected: the pane
+  reading the two input files itself (a second merge in the renderer, and the iCal blocks would
+  exist only in main).
+- **The window is this week's Monday to today + 13**, not strictly "the next 14 days", so a pane set
+  to `start: "monday"` shows the days already gone as they were rather than as empty.
+- **Duplicates are the same start and the same title (case and spacing aside); the first source
+  wins in the order pbs → events → ics.** The secretary's export carries the chain the shifts file
+  also produces; the shifts file is what William said, so its block (with `estimated`) is kept.
+- **Blocks carry `kind` (shift, chain, event, allDay) and `estimated` beside the fields the brief
+  named**, because the week view draws a prep step as a stripe and marks an estimated end.
+- **iCal: RRULE and EXDATE are not expanded**; a recurring event is its own first instance, and a
+  moved instance (RECURRENCE-ID) is read as its own event. A TZID `Intl` does not know falls back to
+  America/Denver. Rejected: a recurrence engine in the board. The expanded week is the secretary's
+  export.
+- **An iCal URL is a credential: settings.json only, never logged.** Failures are reported by feed
+  number. Before a run's first fetch the last file's `ics` blocks are carried forward, and a feed
+  that fails keeps its last good copy for the run, so a restart or a dropped connection does not
+  blank the pane. `npm run schedule:week` never fetches; it carries the app's `ics` blocks.
+- **The chain's glyphs are not drawn.** An emoji through the binary silkscreen is a blob. Each
+  category prints a one-character mark (`$` income, `P` PBS, `S` stream, `H` hobbies, `U` upkeep).
+- **Colours: the room's six.** Income copper, PBS signal, stream silk, hobbies outlined in copper,
+  upkeep copper-dark, the rest outlined in copper-dark; NOW is signal. Rejected: the Google
+  colours, which would be a seventh, eighth and ninth colour.
+- **A pad is labelled when it is at least 12 px tall** (one 11 px line and a pixel), read as the
+  brief's "where it fits". Rejected: a two-tile (32 px) minimum, which at ~10 px an hour would
+  label only blocks of three hours or more and leave the pane mostly unlabelled.
+- **Click opens `schedule/week.html` through `openTarget` as a `file.document`**, so the same
+  resolution and confirm policy apply; the pane has no target field of its own (none was asked for,
+  and the file it reads is fixed).
+- **The room's pane is 14×8, not 24×12.** THIS WEEK's free corner is 15×8 beside the WEEK.HTML note;
+  24×12 fits nowhere inside the zone without moving or resizing other nodes, which this change was
+  told not to do. Its nameplate is off so it can sit under the zone's top rule. The root copy is
+  12×8, compact, at (147, 93) beside D6. Designator `K` (no other kind uses it).
+- **`schedule:calendar` is a read channel AND an event of the same name**, board window only
+  (sender checked in `registerIpc`), in neither allowlist, held by `test/schedule-calendar-contract.test.ts`.
+
+## 2026-10-03 — Morning maintenance: a hook with no callers, a meter with no failure state, a test that could pass on nothing
+
+An unattended run of the MORNING MAINTENANCE task (`codex/briefs/morning-maintenance.md`) for the
+08:00 slot; the machine's clock read 19:20 MDT at the session's first verify. Three small changes
+and one roadmap step, each green on `npm run verify` (154 files, 2,387 tests; was 152 and 2,375).
+Nothing committed, nothing deleted, no board file touched, no dependency added.
+
+**`useVisibleInterval` gets its callers, and its behaviour moves into a plain function.** The hook
+was written in the 2026-09-26 audit and its header listed the polls it served (usage 20 s, schedule
+and finance 30 s, remote 4 s). Nothing imported it, so every one of them still ran in a minimised
+or hidden window; the usage one scans every conversation file on disk. `UsageMeter.tsx`,
+`FinanceBlock.tsx`, `ScheduleBlock.tsx` and `RemotePanel.tsx` now use it. Each still reads once on
+mount, in its own effect, so nothing waits an interval for its first answer. The body of the hook
+is now `startVisibleInterval(doc, fn, ms, runOnVisible)`, taking the three members of `document` it
+needs, which is what lets `test/visible-interval.test.ts` hold it with fake timers and no DOM
+library (roadmap 10's rule: logic out of the component, then test it). **Rejected:** a test that
+greps the four files for the import; it would pin spelling, not behaviour. **Left:** four more
+timers that run hidden (roadmap 22), `App.tsx:206` first, since it is a second full usage scan.
+The header's "countdowns every second" was dropped from the comment: those tick only while a
+countdown is on screen and were not moved.
+
+**The usage meter says why it is missing.** A `usage:summary` call that rejected left `summary`
+null: no meter, no word, an unhandled rejection. `readUsage` failing inside main already arrives
+as `summary.error`; this is the other case, the call itself failing, which a phone's dropped socket
+does. Before the first good read the meter now shows the reason and IT TRIES AGAIN EVERY 20 S
+(`failureLine`). **After a good read a failed poll keeps the last figures on screen** and shows no
+fault. Rejected: replacing good figures with the fault on one dropped poll, which would flash an
+error over a number that is still roughly true and is corrected 20 s later. The cost is known: a
+meter whose every poll fails stays frozen with no mark. If that is ever seen, the fix is a STALE
+mark beside the figures, not the fault block.
+
+**A test that cannot make its fixture says SKIPPED.** `test/explorer.test.ts` "refuses a junction
+whose real path leaves the root" began `if (!junctioned) return;`, so on a machine where the
+junction could not be made it passed having asserted nothing, on the one test that holds the
+explorer inside its root. It now calls `ctx.skip()`. **Rejected:** throwing, as the two layout
+tests do since 2026-09-26. Those miss a node in a board file this repo owns, which is a regression;
+this misses a filesystem ability of the machine, which is not, and a skip shows in the count
+without turning verify red on a machine that cannot help it. On this PC the junction is made and
+the test runs. The skip path was not run; it was read in the installed runner
+(`node_modules/@vitest/runner/dist/index.js`, `context.skip` and `failTask`).
+
+**Roadmap step, "Known issues" 18: the test `clearWhichCache` promised.** Its comment said "for
+tests" and no test used it; removing it is William's call, writing the test is not. `which()` had
+no test either, though it is the fix for "clicking the chip does nothing". `test/which.test.ts`
+sets PATH to real temp directories and puts it back: case, order, an unreadable entry, a quoted
+entry, a miss, and a remembered miss that stands until the cache is cleared. Eleven of the twelve
+exports in item 18 remain.

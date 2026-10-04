@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  captionFor,
+  captionForTurn,
   flickerAt,
   isWarming,
-  moodFrom,
+  listeningLight,
+  moodFromTurn,
   paletteFor,
   renderSphere,
   smoothLevel,
@@ -11,13 +12,18 @@ import {
 } from '@shared/hologram.js';
 import { describeControl, type HologramControl, type HologramDropdown, type HologramPanel } from '@shared/hologram-control.js';
 import type { DesktopState, DesktopStatus } from '@shared/desktop.js';
-import type { ProfileLine, SpeechState, SpeechStatus, VoiceProfile, VoiceProfileSummary } from '@shared/speech.js';
+import { useVoiceAction, voiceLabel, windowsVoiceName, type ProfileLine, type SpeechState, type SpeechStatus, type VoiceProfile, type VoiceProfileSummary } from '@shared/speech.js';
 import { VOICE_OFF, type VoiceStatus } from '@shared/voice.js';
 import { summariseSteps, type ActionRecording, type RecordStatus, type SavedAction } from '@shared/actions.js';
 import type { DictateStatus } from '@shared/dictate.js';
-import { redactScene, type HoloScene } from '@shared/holo-scene.js';
+import { redactScene, type HoloScene, type HoloSession } from '@shared/holo-scene.js';
+import { sessionOptions, showSessionPicker } from '@shared/holo-sessions.js';
+import { frameReadout } from '@shared/frame-stats.js';
 import { CONTROL_CAPTION_MS, controlEffect, panelForButton } from '../hologram/controls.js';
 import { createHologramRenderer, type HologramRenderer } from '../hologram/renderer.js';
+import { NavLabel, SizeGrip, useHoloFrame } from '../hologram/frame.js';
+import { TurnStrip } from '../hologram/TurnStrip.js';
+import type { TurnState } from '@shared/turn.js';
 import fontUrl from '../../../assets/fonts/DepartureMono-1.500/DepartureMono-Regular.woff2?url';
 import './hologram.css';
 
@@ -42,6 +48,9 @@ const LOGICAL = 80;
 const RECORD_MAX_MS = 12_000;
 const NOTE_MS = 4000;
 const RECORD_POLL_MS = 500;
+/** How often the TRAIN panel re-reads which voice will speak (WARMING → READY), and the perf readout refreshes. */
+const VOICE_POLL_MS = 3000;
+const PERF_POLL_MS = 250;
 
 function reducedMotion(): boolean {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
@@ -65,14 +74,26 @@ interface Live {
   lastT: number;
   /** A line that replaces the caption for a moment: what a switch could not do, or what a voice command pressed. */
   note: { text: string; until: number } | null;
+  /** The last speech status, for the "what speaks" line under the caption while a line is said. */
+  speechStatus: SpeechStatus | null;
+  /**
+   * The turn (services/turn.ts, `turn:state`), 2026-09-27: the ONE source of the mood, the
+   * LISTENING light and the caption. Null only until main has answered, or from an older main.
+   */
+  turn: TurnState | null;
 }
 
 export function HologramApp(): React.JSX.Element {
   const params = hashParams();
   const streamMode = params.get('stream') === '1';
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Resizable since 2026-09-27: the chrome scale, the nav's layout and the globe's square.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const frame = useHoloFrame(stageRef);
   const rendererRef = useRef<HologramRenderer | null>(null);
-  const liveRef = useRef<Live>({ voice: VOICE_OFF, speech: null, desktop: null, heard: null, said: null, level: 0, lastT: 0, note: null });
+  const liveRef = useRef<Live>({ voice: VOICE_OFF, speech: null, desktop: null, heard: null, said: null, level: 0, lastT: 0, note: null, speechStatus: null, turn: null });
+  // The status strip under the caption: re-rendered on every `turn:state`, not on the 10 Hz tick.
+  const [turn, setTurn] = useState<TurnState | null>(null);
   const [caption, setCaption] = useState('READY');
   const [mood, setMood] = useState<HologramMood>('off');
   const [voice, setVoice] = useState<VoiceStatus>(VOICE_OFF);
@@ -87,6 +108,12 @@ export function HologramApp(): React.JSX.Element {
   const [pending, setPending] = useState<ActionRecording | null>(null);
   const [actions, setActions] = useState<SavedAction[] | null>(null);
   const [dictate, setDictate] = useState<DictateStatus | null>(null);
+  // Under the caption (2026-09-27): which voice is saying the line, the session picker, the perf readout.
+  const [voiceLine, setVoiceLine] = useState<string | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<{ session?: string; sessions: HoloSession[]; filter: string | null }>({ sessions: [], filter: null });
+  const [perf, setPerf] = useState(() => params.get('perf') === '1');
+  const [perfLine, setPerfLine] = useState('');
+  const sessionsRef = useRef<HTMLSelectElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const profilesRef = useRef<HTMLSelectElement>(null);
   const voicesRef = useRef<HTMLSelectElement>(null);
@@ -109,12 +136,15 @@ export function HologramApp(): React.JSX.Element {
 
   const readStatuses = useCallback((): void => {
     if (has('voice:status')) void api['voice:status']().then((s) => { liveRef.current.voice = s; setVoice(s); }).catch(() => undefined);
+    if (has('turn:state')) void api['turn:state']().then((t) => { liveRef.current.turn = t; setTurn(t); }).catch(() => undefined);
     if (has('speech:status')) void api['speech:status']().then(setSpeechStatus).catch(() => setSpeechStatus(null));
     if (has('desktop:status')) void api['desktop:status']().then(setDesktopStatus).catch(() => setDesktopStatus(null));
     if (has('hologram:status')) void api['hologram:status']().then((s) => setDesk(s.desk === true)).catch(() => undefined);
     if (has('dictate:status')) void api['dictate:status']().then(setDictate).catch(() => setDictate(null));
     if (has('desktop:recordStatus')) void api['desktop:recordStatus']().then(setRecStatus).catch(() => setRecStatus(null));
   }, [api, has]);
+
+  useEffect(() => { liveRef.current.speechStatus = speechStatus; }, [speechStatus]);
 
   /* ────────────────────────── the renderer ────────────────────────── */
 
@@ -140,16 +170,23 @@ export function HologramApp(): React.JSX.Element {
     const motionless = reducedMotion();
     let lastCaption = '';
     let lastMood: HologramMood = 'off';
+    let lastVoiceLine: string | null = null;
     const tick = (): void => {
+      // Minimised or hidden: nothing to caption (the render loop is stopped too, renderer.ts).
+      if (document.hidden) return;
       const t = performance.now();
       const live = liveRef.current;
-      const current = moodFrom(live.voice.phase, live.speech, live.desktop);
+      // One source: the turn. The light is the microphone's own tracks, set every tick so nothing
+      // else (a desktop step, a line being spoken, a voice phase) can put it out while one is open.
+      const current = moodFromTurn(live.turn, live.voice.phase, live.speech, live.desktop);
       if (current !== lastMood) { lastMood = current; setMood(current); rendererRef.current?.setMood(current); }
+      rendererRef.current?.setListening(listeningLight(live.turn, live.voice.phase));
+      rendererRef.current?.setWaiting(live.turn?.phase === 'waiting');
       rendererRef.current?.setWarming(isWarming(live.speech));
       const warmingLine = isWarming(live.speech) ? 'WARMING THE VOICE' : null;
       const line = live.note && live.note.until > t
         ? live.note.text
-        : warmingLine ?? captionFor({
+        : warmingLine ?? captionForTurn(live.turn, {
           mood: current,
           voice: live.voice.phase,
           voiceError: live.voice.error,
@@ -161,6 +198,10 @@ export function HologramApp(): React.JSX.Element {
           streamMode
         });
       if (line !== lastCaption) { lastCaption = line; setCaption(line); }
+      // What speaks, while a line is said or held for the server: the truth for THIS line (`via`).
+      const saying = live.speech?.speaking === true || isWarming(live.speech);
+      const voiceNow = saying ? voiceLabel(live.speechStatus, live.speech?.speaking ? live.speech.via : undefined) : null;
+      if (voiceNow !== lastVoiceLine) { lastVoiceLine = voiceNow; setVoiceLine(voiceNow); }
       if (!motionless) return;
     };
     tick();
@@ -196,7 +237,7 @@ export function HologramApp(): React.JSX.Element {
       const target = live.speech?.speaking ? live.level : 0;
       live.level = smoothLevel(live.level, target, dt);
       if (live.speech?.speaking) live.level = Math.max(0, live.level - dt / 900);
-      const current = moodFrom(live.voice.phase, live.speech, live.desktop);
+      const current = moodFromTurn(live.turn, live.voice.phase, live.speech, live.desktop);
       const grid = renderSphere({ size: LOGICAL, t, mood: current, level: live.level, reducedMotion: motionless, flicker: flickerAt(t, motionless) });
       const palette = paletteFor(current);
       const data = image.data;
@@ -206,10 +247,13 @@ export function HologramApp(): React.JSX.Element {
         data[o] = r; data[o + 1] = g; data[o + 2] = b; data[o + 3] = 255;
       }
       bctx.putImageData(image, 0, 0);
-      const box = Math.min(canvas.clientWidth, canvas.clientHeight);
-      const scale = Math.max(1, Math.floor(box / LOGICAL));
+      // In device pixels, so the whole-number scale is whole device pixels at any devicePixelRatio.
+      const dpr = window.devicePixelRatio || 1;
+      const cw = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      const ch = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      const scale = Math.max(1, Math.floor(Math.min(cw, ch) / LOGICAL));
       const side = LOGICAL * scale;
-      if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = palette[0]!;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -255,9 +299,11 @@ export function HologramApp(): React.JSX.Element {
   }, [api, note, text]);
 
   const halt = useCallback((): void => {
+    // STOP (Esc): the turn engine halts the desktop, stops speech and drops a held sentence.
+    if (has('turn:stop')) { void api['turn:stop']().catch(() => undefined); return; }
     void api['desktop:halt']().catch(() => undefined);
     void api['speech:stop']().catch(() => undefined);
-  }, [api]);
+  }, [api, has]);
 
   const refreshActions = useCallback(async (): Promise<void> => {
     if (!has('desktop:actionList')) { setActions([]); return; }
@@ -300,13 +346,13 @@ export function HologramApp(): React.JSX.Element {
   }, [dictate, toggleDictate]);
 
   const openDropdown = useCallback((name: HologramDropdown, open: boolean): void => {
-    const ref = name === 'profiles' ? profilesRef : name === 'voices' ? voicesRef : monitorsRef;
+    const ref = name === 'profiles' ? profilesRef : name === 'voices' ? voicesRef : name === 'sessions' ? sessionsRef : monitorsRef;
     if (name === 'profiles' || name === 'voices') setPanel('train');
     if (name === 'monitors') setPanel('desk');
-    // The select mounts with the panel; give React a frame.
+    // The select mounts with the panel; give React a frame. The sessions picker is under the caption, on every panel.
     window.setTimeout(() => {
       const el = ref.current;
-      if (!el) { note(`NO ${name.toUpperCase()} DROPDOWN ON THIS PANEL`); return; }
+      if (!el) { note(name === 'sessions' ? 'ONE CLAUDE SESSION — NOTHING TO PICK' : `NO ${name.toUpperCase()} DROPDOWN ON THIS PANEL`); return; }
       if (!open) { el.blur(); return; }
       el.focus();
       try { (el as HTMLSelectElement & { showPicker?: () => void }).showPicker?.(); } catch { /* focus is the fallback */ }
@@ -358,6 +404,7 @@ export function HologramApp(): React.JSX.Element {
     const on = api.on.bind(api) as (event: string, handler: (payload: never) => void) => () => void;
     const offs: (() => void)[] = [
       api.on('voice:state', (status) => { liveRef.current.voice = status; setVoice(status); }),
+      on('turn:state', (state: TurnState) => { liveRef.current.turn = state; setTurn(state); }),
       api.on('voice:wake', () => { liveRef.current.heard = null; liveRef.current.said = null; }),
       api.on('voice:heard', (sentence) => {
         if (sentence.text) liveRef.current.heard = sentence.text;
@@ -365,6 +412,9 @@ export function HologramApp(): React.JSX.Element {
       }),
       api.on('speech:state', (state) => {
         const live = liveRef.current;
+        // A line starts or is held: read the status again, so the voice line names the voice as it is now.
+        const starting = (state.speaking && !live.speech?.speaking) || (state.warming === true && live.speech?.warming !== true);
+        if (starting && has('speech:status')) void api['speech:status']().then(setSpeechStatus).catch(() => undefined);
         live.speech = state;
         if (state.text) live.said = state.text;
         if (typeof state.level === 'number') live.level = Math.max(live.level, Math.min(1, Math.max(0, state.level)));
@@ -379,7 +429,10 @@ export function HologramApp(): React.JSX.Element {
       on('speech:levels', (levels) => rendererRef.current?.setSpeechLevels(levels)),
       on('voice:levels', (levels) => rendererRef.current?.setMicLevels(levels)),
       // Stream mode: what was touched, never what it says (docs/07 § Streaming safety).
-      on('hologram:scene', (scene: HoloScene) => rendererRef.current?.setScene(streamMode ? redactScene(scene) : scene)),
+      on('hologram:scene', (scene: HoloScene) => {
+        rendererRef.current?.setScene(streamMode ? redactScene(scene) : scene);
+        setSessionInfo({ session: scene.session, sessions: scene.sessions ?? [], filter: scene.filter ?? null });
+      }),
       on('hologram:control', (control) => performRef.current(control)),
       on('dictate:state', (status) => setDictate(status)),
       // Main pushes the recorder's light on every change (fork H); the poll below is the backstop.
@@ -399,6 +452,45 @@ export function HologramApp(): React.JSX.Element {
 
   useEffect(() => { if (panel === 'actions' && actions === null) void refreshActions(); }, [actions, panel, refreshActions]);
 
+  // TRAIN open: which voice will speak, re-read every few seconds (WARMING becomes READY on its own).
+  useEffect(() => {
+    if (panel !== 'train' || !has('speech:status')) return;
+    const timer = window.setInterval(() => { void api['speech:status']().then(setSpeechStatus).catch(() => undefined); }, VOICE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [api, has, panel]);
+
+  // The perf readout: Ctrl+Shift+P toggles it; `?perf=1` (SKYNET_PERF) starts with it on.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey && event.shiftKey && (event.key === 'P' || event.key === 'p'))) return;
+      event.preventDefault();
+      setPerf((on) => !on);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
+    if (!perf) return;
+    const read = (): void => {
+      const r = rendererRef.current;
+      setPerfLine(r ? frameReadout(r.stats().window, r.stats().paused) : legacy ? '2D FALLBACK · no GL stats' : 'no renderer');
+    };
+    read();
+    const timer = window.setInterval(read, PERF_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [legacy, perf]);
+
+  const chooseSession = useCallback(async (id: string): Promise<void> => {
+    if (!has('hologram:setSessionFilter')) { note('THE SESSION PICKER IS NOT IN THIS BUILD — RESTART SKYNETOS'); return; }
+    try {
+      const r = await api['hologram:setSessionFilter'](id || null);
+      if (!r.ok) { note(r.error ?? 'COULD NOT CHOOSE THAT SESSION'); return; }
+      setSessionInfo((info) => ({ ...info, filter: r.filter }));
+      const label = sessionInfo.sessions.find((x) => x.id === r.filter)?.label ?? 'ONE SESSION';
+      note(r.filter ? `SHOWING ${label}` : 'SHOWING EVERY SESSION', 1500);
+    } catch (err) { note(`SESSIONS — ${message(err)}`); }
+  }, [api, has, note, sessionInfo.sessions]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
@@ -417,8 +509,8 @@ export function HologramApp(): React.JSX.Element {
   const togglePanel = (which: HologramPanel): void => setPanel((p) => (p === which ? 'main' : which));
 
   return (
-    <div className={`holo-root mood-${mood}${desk ? ' desk' : ''}`}>
-      <div className="holo-nav hologram-nav">
+    <div className={`holo-root mood-${mood}${desk ? ' desk' : ''}`} style={{ '--holo-scale': frame.scale } as React.CSSProperties}>
+      <div className={`holo-nav hologram-nav${frame.nav.rows === 2 ? ' rows-2' : ''}${frame.nav.icons ? ' icons' : ''}`}>
         <button
           type="button"
           data-control="btn-mic"
@@ -428,7 +520,7 @@ export function HologramApp(): React.JSX.Element {
           onClick={() => void flip('MIC', !micOn)}
           title={micOn ? `Microphone on: ${voice.phase}. Click to switch voice off (the hard mute).` : 'Switch voice on: listens for the wake phrase only.'}
         >
-          {micLabel}
+          <NavLabel icon="mic" text={micLabel} icons={frame.nav.icons} />
         </button>
         <button
           type="button"
@@ -439,7 +531,7 @@ export function HologramApp(): React.JSX.Element {
           onClick={() => void flip('SPEECH', !(speechStatus?.enabled === true))}
           title={speechStatus ? `Talk back: ${speechStatus.enabled ? 'on' : 'off'}${speechStatus.voice ? ` · ${speechStatus.voice}` : ''}${speechStatus.warm ? ' · profile warm' : ''}${speechStatus.error ? ` · ${speechStatus.error}` : ''}` : 'Talk back'}
         >
-          SAY
+          <NavLabel icon="face" text="SAY" icons={frame.nav.icons} />
         </button>
         <button
           type="button"
@@ -450,13 +542,13 @@ export function HologramApp(): React.JSX.Element {
           onClick={() => togglePanel('desk')}
           title={`Desktop control panel. ${deskOn ? 'ON: a spoken or typed command can launch programs, place windows and MOVE THE MOUSE.' : 'Off.'} ${desktopStatus?.error ?? ''}`.trim()}
         >
-          DESK
+          <NavLabel icon="hand" text="DESK" icons={frame.nav.icons} />
         </button>
         <button type="button" data-control="btn-train" className={panel === 'train' ? 'btn holo-btn on' : 'btn holo-btn'} aria-pressed={panel === 'train'} onClick={() => togglePanel('train')} title="Record your own voice profile, line by line, and choose which voice speaks">
-          TRAIN
+          <NavLabel icon="usage" text="TRAIN" icons={frame.nav.icons} />
         </button>
         <button type="button" data-control="btn-actions" className={panel === 'actions' ? 'btn holo-btn on' : 'btn holo-btn'} aria-pressed={panel === 'actions'} onClick={() => togglePanel('actions')} title="Saved actions: what TRAIN ACTION recorded, and PLAY">
-          ACTS
+          <NavLabel icon="list" text="ACTS" icons={frame.nav.icons} />
         </button>
         <button
           type="button"
@@ -466,10 +558,10 @@ export function HologramApp(): React.JSX.Element {
           onClick={() => void toggleDictate()}
           title={dictate ? `Dictate: one press to start, one to stop; typed into the window that has focus.${dictate.hotkeyOk ? ` Hotkey ${dictate.hotkey}.` : ` (hotkey ${dictate.hotkey} is held by another program)`}` : 'Dictate into the focused window'}
         >
-          {dictating ? 'DICT ●' : 'DICT'}
+          <NavLabel icon="text" text={dictating ? 'DICT ●' : 'DICT'} icons={frame.nav.icons} />
         </button>
         <button type="button" data-control="btn-minimise" className="btn holo-btn holo-small" onClick={() => void api['hologram:minimize']().catch(() => undefined)} aria-label="Minimise" title="Minimise to the taskbar">
-          _
+          <NavLabel icon="minus" text="_" icons={frame.nav.icons} />
         </button>
         <button
           type="button"
@@ -479,13 +571,18 @@ export function HologramApp(): React.JSX.Element {
           aria-label="Close"
           title="Close this window. Voice keeps running; the VOICE button on the board brings it back. Say 'Jarvis, shut yourself down' to stop voice too."
         >
-          ✕
+          <NavLabel icon="close" text="✕" icons={frame.nav.icons} />
         </button>
       </div>
 
-      <div className="holo-stage">
-        <canvas ref={canvasRef} className={legacy ? 'holo-canvas legacy' : 'holo-canvas'} aria-hidden="true" />
-        {panel === 'train' ? <TrainPanel onDone={() => setPanel('main')} note={note} profilesRef={profilesRef} voicesRef={voicesRef} voices={speechStatus?.voices ?? []} /> : null}
+      <div className="holo-stage" ref={stageRef}>
+        <canvas
+          ref={canvasRef}
+          className={legacy ? 'holo-canvas legacy' : 'holo-canvas'}
+          aria-hidden="true"
+          style={{ width: frame.square.side, height: frame.square.side, left: frame.square.left, top: frame.square.top }}
+        />
+        {panel === 'train' ? <TrainPanel onDone={() => setPanel('main')} note={note} profilesRef={profilesRef} voicesRef={voicesRef} status={speechStatus} onStatus={setSpeechStatus} /> : null}
         {panel === 'desk' ? (
           <DeskPanel
             status={desktopStatus}
@@ -526,6 +623,24 @@ export function HologramApp(): React.JSX.Element {
       </div>
 
       <div className="holo-caption" role="status" aria-live="polite">{caption}</div>
+      <TurnStrip turn={turn} streamMode={streamMode} onStop={halt} />
+      {voiceLine ? <div className="holo-voice-line" title="Which voice is saying this line">{voiceLine}</div> : null}
+      {showSessionPicker(sessionInfo.sessions) ? (
+        <select
+          ref={sessionsRef}
+          data-control="dropdown-sessions"
+          className="holo-select holo-session-picker"
+          value={sessionInfo.filter ?? ''}
+          onChange={(e) => void chooseSession(e.target.value)}
+          aria-label="Which Claude Code session the globe shows"
+          title="More than one Claude Code session has worked in the last ten minutes. ALL shows every one; a session shows only what it touches."
+        >
+          {sessionOptions(sessionInfo.sessions).map((o) => <option key={o.value || 'all'} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : sessionInfo.session ? (
+        <div className="holo-session-label" title="The Claude Code session the centre came from">{sessionInfo.session}</div>
+      ) : null}
+      {perf ? <div className="holo-perf" aria-hidden="true">{perfLine}</div> : null}
 
       <form className="holo-input-row" onSubmit={(e) => { e.preventDefault(); void send(); }}>
         <input
@@ -543,6 +658,8 @@ export function HologramApp(): React.JSX.Element {
           ↵
         </button>
       </form>
+
+      {desk ? null : <SizeGrip />}
     </div>
   );
 }
@@ -671,13 +788,16 @@ function nextLine(profile: VoiceProfile | null): ProfileLine | null {
   return profile?.lines.find((l) => l.source !== 'imported' && l.file === null) ?? null;
 }
 
-function TrainPanel({ onDone, note, profilesRef, voicesRef, voices }: {
+function TrainPanel({ onDone, note, profilesRef, voicesRef, status, onStatus }: {
   onDone: () => void;
   note: (line: string) => void;
   profilesRef: React.RefObject<HTMLSelectElement>;
   voicesRef: React.RefObject<HTMLSelectElement>;
-  voices: string[];
+  /** The speech status the whole window reads; the indicator, the toggle and the voices all come from it. */
+  status: SpeechStatus | null;
+  onStatus: (status: SpeechStatus) => void;
 }): React.JSX.Element {
+  const voices = status?.voices ?? [];
   const [profiles, setProfiles] = useState<VoiceProfileSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -686,25 +806,38 @@ function TrainPanel({ onDone, note, profilesRef, voicesRef, voices }: {
   const [recording, setRecording] = useState(false);
   const [last, setLast] = useState<ProfileLine | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  // Which voice speaks: Windows' own, or the chosen profile through the server (`speech:setBackend`).
-  const [speechBackend, setSpeechBackend] = useState<'sapi' | 'server'>('sapi');
-  const [speechProfile, setSpeechProfile] = useState<string>('');
+  // Which voice speaks (2026-09-27): the indicator says what WILL speak, from the status main reports
+  // (`voiceLabel`); the toggle reads as what a press does (`useVoiceAction`); a failed switch says why.
   const [voiceNote, setVoiceNote] = useState<string | null>(null);
+  const action = useVoiceAction(status, chosen);
+  const current = windowsVoiceName(status?.voice);
 
-  useEffect(() => {
-    if (typeof window.skynet['speech:status'] !== 'function') return;
-    void window.skynet['speech:status']().then((st) => { setSpeechBackend(st.backend); }).catch(() => undefined);
-  }, []);
-
-  const useVoice = async (backend: 'sapi' | 'server'): Promise<void> => {
+  const useVoice = async (): Promise<void> => {
     if (!chosen) return;
     try {
-      const st = await window.skynet['speech:setBackend']({ backend, profile: chosen });
-      setSpeechBackend(st.backend);
-      setSpeechProfile(chosen);
-      setVoiceNote(st.error ? st.error.toUpperCase() : backend === 'server' ? `SPEAKING AS ${chosen.toUpperCase()}` : 'WINDOWS VOICE');
+      const st = await window.skynet['speech:setBackend']({ backend: action.backend, profile: chosen });
+      onStatus(st);
+      setVoiceNote(st.error ? `${action.backend === 'server' ? 'THE PROFILE CANNOT SPEAK' : 'SWITCHED'} — ${st.error}`.toUpperCase() : null);
     } catch (err) {
       setVoiceNote(`COULD NOT SWITCH THE VOICE — ${message(err)}`.toUpperCase());
+    }
+  };
+
+  // The voices dropdown: sets `speech.voice` (the Windows voice, and the fallback for a profile) and says it.
+  const chooseWindowsVoice = async (name: string): Promise<void> => {
+    if (!name || typeof window.skynet['speech:setVoice'] !== 'function') return;
+    try {
+      const st = await window.skynet['speech:setVoice'](name);
+      onStatus(st);
+      const now = windowsVoiceName(st.voice) ?? name;
+      setVoiceNote(null);
+      note(st.backend === 'sapi' ? `WINDOWS VOICE · ${now}` : `WINDOWS VOICE · ${now} (WHEN THE PROFILE CANNOT SPEAK)`);
+      // Said in the new voice, when that is the voice that speaks.
+      if (st.enabled && st.backend === 'sapi' && typeof window.skynet['speech:say'] === 'function') {
+        void window.skynet['speech:say']({ text: `This is ${now}.`, interrupt: true }).catch(() => undefined);
+      }
+    } catch (err) {
+      setVoiceNote(`COULD NOT CHOOSE THAT VOICE — ${message(err)}`.toUpperCase());
     }
   };
 
@@ -804,26 +937,32 @@ function TrainPanel({ onDone, note, profilesRef, voicesRef, voices }: {
         <button
           type="button"
           data-control="btn-use-voice"
-          className={speechBackend === 'server' && speechProfile === chosen ? 'btn holo-btn on' : 'btn holo-btn'}
-          disabled={!chosen}
-          onClick={() => void useVoice(speechBackend === 'server' && speechProfile === chosen ? 'sapi' : 'server')}
-          title="Speak with this profile through the synthesis server (docs/11 § Installing a synthesis server). Press again to go back to Windows' voice. Falls back to Windows' voice whenever the server is down."
+          className={action.backend === 'sapi' ? 'btn holo-btn on' : 'btn holo-btn'}
+          disabled={!chosen && action.backend === 'server'}
+          onClick={() => void useVoice()}
+          title={action.backend === 'server'
+            ? "Speak with this profile through the synthesis server (docs/11 § Installing a synthesis server). Falls back to Windows' voice whenever the server is down, and the line below says so."
+            : "Go back to Windows' own voice (the one chosen in the voices list)."}
         >
-          {speechBackend === 'server' && speechProfile === chosen ? 'THIS VOICE ●' : 'USE VOICE'}
+          {action.label}
         </button>
-        <span className="holo-count">{voiceNote ?? (speechBackend === 'server' ? `SERVER · ${speechProfile || 'default'}` : 'WINDOWS VOICE')}</span>
       </div>
+      <div className="holo-voice-now" data-backend={status?.backend ?? 'unknown'} role="status" aria-live="polite" title="The voice the next line will be spoken in">
+        {voiceLabel(status)}
+      </div>
+      {voiceNote ? <div className="holo-train-error">{voiceNote}</div> : null}
       <div className="holo-train-row">
         <select
           ref={voicesRef}
           data-control="dropdown-voices"
           className="holo-select"
-          aria-label="Windows voices installed"
-          defaultValue=""
-          onChange={(e) => { if (e.target.value) note(`WINDOWS VOICE IS CHOSEN BY speech.voice IN settings.json — TYPE "${e.target.value}" THERE`); }}
-          title="The voices Windows has. The one used is chosen by speech.voice in settings.json; an en-GB voice is added in Windows Settings → Speech."
+          aria-label="Windows voice"
+          value={current && voices.includes(current) ? current : ''}
+          onChange={(e) => void chooseWindowsVoice(e.target.value)}
+          disabled={!voices.length}
+          title="Windows' voice: what speaks when the backend is Windows, and when a profile cannot. An en-GB voice is added in Windows Settings → Time & Language → Speech."
         >
-          <option value="">{voices.length ? `${voices.length} WINDOWS VOICE${voices.length === 1 ? '' : 'S'}` : 'WINDOWS VOICES UNKNOWN UNTIL SAY IS ON'}</option>
+          <option value="" disabled>{voices.length ? `${voices.length} WINDOWS VOICE${voices.length === 1 ? '' : 'S'}` : 'WINDOWS VOICES UNKNOWN UNTIL SAY IS ON'}</option>
           {voices.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
       </div>

@@ -4,6 +4,7 @@ import { nextQuote, type QuoteStats } from '@shared/quotes.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { Icon } from './Icon.js';
 import type { VoiceMoment } from '@shared/voice.js';
+import { turnOneLine, type TurnState } from '@shared/turn.js';
 
 /**
  * The corner prompt: always there, bottom left, sending to the JARVIS Face.
@@ -52,6 +53,17 @@ export function JarvisDock(): React.JSX.Element {
    * no visible response would be indistinguishable from one that was not heard.
    */
   const voiceMoment = useBoardStore((s) => s.voiceMoment);
+  /*
+   * One turn at a time (docs/11, 2026-09-27): the same phase word and step as the hologram's
+   * status strip, one line, from `turn:state`. Local to this component; nothing else needs it.
+   */
+  const [turn, setTurn] = useState<TurnState | null>(null);
+  useEffect(() => {
+    const api = window.skynet as unknown as Record<string, unknown>;
+    if (typeof api['turn:state'] === 'function') void window.skynet['turn:state']().then(setTurn).catch(() => undefined);
+    return window.skynet.on('turn:state', setTurn);
+  }, []);
+  const turnText = turnOneLine(turn);
 
   const stats: QuoteStats = useMemo(() => ({
     nodes: board?.nodes.length ?? 0,
@@ -170,7 +182,7 @@ export function JarvisDock(): React.JSX.Element {
     return (
       <div className="jarvis-dock folded">
         <button type="button" className="jarvis-fold" onClick={() => setChromePref('jarvisDockCollapsed', false)} title="Open the corner prompt (/)">
-          <Icon name="face" />Message JARVIS
+          <Icon name="face" />{turnText ?? 'Message JARVIS'}
         </button>
       </div>
     );
@@ -187,6 +199,7 @@ export function JarvisDock(): React.JSX.Element {
       >
         <Icon name="minus" />
       </button>
+      {turnText ? <div className={`jarvis-turn phase-${turn?.phase ?? 'idle'}`} role="status" aria-live="polite">{turnText}</div> : null}
       {voiceMoment ? (
         <div className={`jarvis-voice ${voiceMoment.stage}`} role="status" aria-live="polite">
           {voiceLine(voiceMoment)}

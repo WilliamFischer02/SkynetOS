@@ -98,6 +98,9 @@ import atlasUrl from '../../../assets/atlas/skynet.json?url';
 import atlasImageUrl from '../../../assets/atlas/skynet.png?url';
 import { ensureSilkFont } from './silkscreen.js';
 import { updateMonitorFace } from './monitor-widget.js';
+import { updateCalendarFace } from './calendar-widget.js';
+import type { CalendarFaceInput } from '@shared/calendar-face.js';
+import type { CalendarStatus } from '@shared/schedule-calendar.js';
 import type { BoardContextMenu } from '../store/useBoardStore.js';
 import { TouchGestures } from './touch.js';
 import { isLiveAvatarLogo, logoBoxPx, logoCacheSource } from '@shared/logo-source.js';
@@ -1370,7 +1373,10 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
        * refresh repaints the widget at the new size.
        */
       // `showSystemGraphics: false` hands the face back to the node's own wallpaper and logo.
-      const widget = node.kind === 'monitor.system' && node.showSystemGraphics !== false ? monitorFaces.get(node.id) : undefined;
+      // A calendar pane draws the week on its face the same way (calendar-widget.ts).
+      const widget = node.kind === 'monitor.system' && node.showSystemGraphics !== false
+        ? monitorFaces.get(node.id)
+        : node.kind === 'panel.calendar' ? calendarFaces.get(node.id) : undefined;
       const live = widget && widget.width === fp.w * TILE && widget.height === fp.h * TILE ? widget : null;
       return {
         w: fp.w,
@@ -1692,8 +1698,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       lastAvatarTick = -1;
       const wanted = board.nodes.filter((n) =>
         isLiveAvatarLogo(n) && displayOf(n).logo && !isPrinted(n.kind) &&
-        // A monitor's widget owns its face, logo included.
-        !(n.kind === 'monitor.system' && n.showSystemGraphics !== false));
+        // A monitor's widget owns its face, logo included, and so does a calendar pane.
+        !(n.kind === 'monitor.system' && n.showSystemGraphics !== false) && n.kind !== 'panel.calendar');
 
       // Ask main to watch who is talking, only when the set changes. An empty set stops it.
       const ids = wanted.map((n) => n.id);
@@ -2331,6 +2337,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       stage('focus', applyFocus);
       stage('couriers', buildCourierRoutes);
       stage('tile', applyTile);
+      // A pane resized or added by this edit is repainted at its new size now, not at the next tick.
+      if (board.nodes.some((n) => n.kind === 'panel.calendar')) stage('calendars', paintCalendars);
       if (perfEnabled()) {
         const total = stages.reduce((sum, [, ms]) => sum + ms, 0);
         console.log(`[ui] perf rebuild ${board.id} ${total.toFixed(1)} ms: ${stages.map(([n, ms]) => `${n} ${ms.toFixed(1)}`).join(' · ')}`);
@@ -2397,6 +2405,67 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
       if (document.hidden) return;
       void pollMonitors();
     }, 2000);
+
+    /* ---------------- panel.calendar: the week drawn on the node itself ---------------- */
+
+    /*
+     * William: "a live pane in the SkynetOS program that shows the calendar, both within the room
+     * and on the main board." Every panel.calendar node paints schedule/calendar.json onto its own
+     * face (calendar-widget.ts, laid out by packages/shared/calendar-face.ts). The file is asked for
+     * once when the board opens and then PUSHED by main (`schedule:calendar`) whenever it changes,
+     * so there is no poll of the disk here. A one-minute tick repaints for the NOW line and the
+     * turn of the day, and only while a pane is on screen; a face whose pixels come out the same is
+     * not repainted, and sprites.ts keeps one texture per pane (live-slots.ts), as for the monitor.
+     */
+    const calendarFaces = new Map<string, HTMLCanvasElement>();
+    let calendarInput: CalendarFaceInput = { state: 'loading' };
+    const calendarInputOf = (s: CalendarStatus): CalendarFaceInput =>
+      s.ready ? { state: 'ready', calendar: s.calendar } : { state: 'missing', reason: s.reason };
+
+    const paintCalendars = (): void => {
+      if (!sprites) return; // The font and the sprite store are not ready yet.
+      const panes = board.nodes.filter((n) => n.kind === 'panel.calendar');
+      for (const id of [...calendarFaces.keys()]) {
+        if (!panes.some((n) => n.id === id)) calendarFaces.delete(id);
+      }
+      if (!panes.length) return;
+      const now = Date.now();
+      for (const node of panes) {
+        const fp = footprintOf(node);
+        const { canvas, changed } = updateCalendarFace(
+          calendarFaces.get(node.id), node.id, calendarInput, node, fp.w * TILE, fp.h * TILE, board.theme, now
+        );
+        calendarFaces.set(node.id, canvas);
+        if (changed) { markDirty(); drawNode(node.id); }
+      }
+    };
+
+    const pullCalendar = async (): Promise<void> => {
+      // A running app older than this build has no such channel: the pane says so rather than crashing.
+      if (typeof window.skynet['schedule:calendar'] !== 'function') {
+        calendarInput = { state: 'missing', reason: 'RESTART SKYNETOS TO READ THE CALENDAR' };
+      } else {
+        try {
+          calendarInput = calendarInputOf(await window.skynet['schedule:calendar']());
+        } catch (err) {
+          console.warn('[ui] calendar pane: schedule:calendar failed', err);
+          calendarInput = { state: 'missing', reason: 'COULD NOT READ THE CALENDAR' };
+        }
+      }
+      if (!disposed) paintCalendars();
+    };
+    void pullCalendar();
+    const offCalendar = window.skynet.on('schedule:calendar', (status) => {
+      calendarInput = calendarInputOf(status);
+      if (!disposed) paintCalendars();
+    });
+    const calendarTimer = setInterval(() => {
+      if (disposed) { clearInterval(calendarTimer); return; }
+      if (document.hidden) return;
+      const view = viewport();
+      if (!rects.some((r) => r.kind === 'panel.calendar' && isVisible(r, cameraStore.current, view))) return;
+      paintCalendars();
+    }, 60_000);
 
     /* ---------------- build the scene ---------------- */
 
@@ -2893,6 +2962,8 @@ export function BoardCanvas(props: BoardCanvasProps): React.JSX.Element {
     return () => {
       disposed = true;
       offAvatar();
+      offCalendar();
+      clearInterval(calendarTimer);
       offNodeMood();
       stopLiveLogos();
       rebuildRef.current = null;

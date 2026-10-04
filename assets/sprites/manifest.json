@@ -1006,6 +1006,7 @@
       "component.vreg_service.fault",
       "component.xtal_task.tick",
       "component.psu_monitor.base",
+      "component.panel_calendar.idle",
       "component.buzzer.idle",
       "component.buzzer.alert"
     ],

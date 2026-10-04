@@ -47,6 +47,27 @@ describe('types.ts matches board.schema.json', () => {
   it('has a default footprint for every kind', () => {
     for (const kind of NODE_KINDS) expect(DEFAULT_FOOTPRINT[kind]).toBeDefined();
   });
+
+  it('declares the calendar pane with its four fields and a week-sized default', () => {
+    // 2026-09-30: William, "a live pane … that shows the calendar, both within the room and on the main board".
+    expect(NODE_KINDS).toContain('panel.calendar');
+    expect(DEFAULT_FOOTPRINT['panel.calendar']).toEqual({ w: 24, h: 12 });
+    const props = schema.$defs.node.properties as Record<string, { minimum?: number; maximum?: number; enum?: string[]; minItems?: number; maxItems?: number; default?: unknown }>;
+    expect(props['days']).toMatchObject({ minimum: 1, maximum: 14, default: 7 });
+    expect(props['start']).toMatchObject({ enum: ['today', 'monday'], default: 'today' });
+    expect(props['showHours']).toMatchObject({ minItems: 2, maxItems: 2, default: [7, 23] });
+    expect(props['compact']).toMatchObject({ default: false });
+    expect(spriteKeyOf({ kind: 'panel.calendar' })).toBe('component.panel_calendar.idle');
+  });
+
+  it('keeps the validator\'s own footprint table in step with DEFAULT_FOOTPRINT', () => {
+    // tools/validate-board.mjs is plain JS and keeps a copy; a kind missing there is sized 2x2 by it.
+    const validator = readFileSync(join(ROOT, 'tools', 'validate-board.mjs'), 'utf8');
+    for (const kind of NODE_KINDS) {
+      const fp = DEFAULT_FOOTPRINT[kind];
+      expect(validator, kind).toContain(`'${kind}': [${fp.w}, ${fp.h}]`);
+    }
+  });
 });
 
 describe('seeded board data', () => {

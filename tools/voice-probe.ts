@@ -117,7 +117,7 @@ async function main(): Promise<number> {
   await synthesise();
 
   const loadStarted = performance.now();
-  const server = spawn(SERVER, ['-m', MODEL, '--host', '127.0.0.1', '--port', String(PORT), '-t', '4', '-nt'], {
+  const server = spawn(SERVER, ['-m', MODEL, '--host', '127.0.0.1', '--port', String(PORT), '-t', '4', '-nt', '-l', 'en'], {
     cwd: dirname(SERVER),
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe']

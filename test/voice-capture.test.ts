@@ -4,7 +4,22 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ENDPOINT, TARGET_RATE, createEndpointer, downsample, encodeWav, rms } from '@shared/voice-capture.js';
+import {
+  CONNECTIVES,
+  CONNECTIVE_EXTENSION_MS,
+  CONTINUATION_REOPEN_MS,
+  DEFAULT_ENDPOINT,
+  END_SILENCE_MS,
+  SENTENCE_MAX_MS,
+  TARGET_RATE,
+  createEndpointer,
+  downsample,
+  encodeWav,
+  endsInConnective,
+  joinContinuation,
+  listenTimeoutMs,
+  rms
+} from '@shared/voice-capture.js';
 import { gaussian, mulberry32 } from '@shared/hand-synth.js';
 
 const FRAME = DEFAULT_ENDPOINT.frameMs;
@@ -31,7 +46,8 @@ const VOICE = 0.08; // speech at a desk microphone
 
 describe('a sentence after the wake phrase', () => {
   it('is found, with a little kept either side of it', () => {
-    const { state, span } = run(levels([[ROOM, 400], [VOICE, 1200], [ROOM, 1000]]));
+    // 1.5 s of room after: the end silence is 1.1 s since 2026-09-27.
+    const { state, span } = run(levels([[ROOM, 400], [VOICE, 1200], [ROOM, 1500]]));
     expect(state).toBe('done');
     // Speech began at 400 ms; 250 ms of pre-roll is kept.
     expect(span!.start * FRAME).toBeGreaterThanOrEqual(100);
@@ -42,22 +58,100 @@ describe('a sentence after the wake phrase', () => {
   });
 
   it('is not ended by the quiet between two words', () => {
-    const { state, span } = run(levels([[ROOM, 300], [VOICE, 500], [ROOM, 400], [VOICE, 600], [ROOM, 1000]]));
+    const { state, span } = run(levels([[ROOM, 300], [VOICE, 500], [ROOM, 400], [VOICE, 600], [ROOM, 1500]]));
     expect(state).toBe('done');
     expect(span!.end * FRAME).toBeGreaterThan(1700);
   });
 
   it('is found even when he starts talking the instant the microphone opens', () => {
     // No quiet first 200 ms to measure the room from: the floor must not rise to meet the voice.
-    const { state, floor } = run(levels([[VOICE, 1500], [ROOM, 1000]]));
+    const { state, floor } = run(levels([[VOICE, 1500], [ROOM, 1500]]));
     expect(state).toBe('done');
     expect(floor).toBeLessThanOrEqual(DEFAULT_ENDPOINT.maxFloor);
   });
 
   it('is cut off at the maximum length rather than listening for ever', () => {
-    const { state, span } = run(levels([[ROOM, 300], [VOICE, 20000]]));
+    const { state, span } = run(levels([[ROOM, 300], [VOICE, 30000]]));
     expect(state).toBe('done');
     expect((span!.end - span!.start) * FRAME).toBeLessThanOrEqual(DEFAULT_ENDPOINT.maxMs + DEFAULT_ENDPOINT.preRollMs);
+  });
+});
+
+describe('a long command is heard to its end (2026-09-27)', () => {
+  it('waits 1.1 s of quiet (was 700 ms) and hears up to 20 s (was 8 s)', () => {
+    expect(END_SILENCE_MS).toBe(1100);
+    expect(DEFAULT_ENDPOINT.endSilenceMs).toBe(1100);
+    expect(SENTENCE_MAX_MS).toBe(20_000);
+    expect(DEFAULT_ENDPOINT.maxMs).toBe(20_000);
+  });
+
+  it('is not ended by a 900 ms pause for thought, which the old 700 ms cut off', () => {
+    const script: [number, number][] = [[ROOM, 300], [VOICE, 1500], [ROOM, 900], [VOICE, 1500], [ROOM, 1500]];
+    const { state, span } = run(levels(script));
+    expect(state).toBe('done');
+    // It ends after the SECOND half: 300 + 1500 + 900 + 1500 = 4200 ms, plus post-roll.
+    expect(span!.end * FRAME).toBeGreaterThanOrEqual(4200);
+    const old = createEndpointer({ ...DEFAULT_ENDPOINT, endSilenceMs: 700 });
+    let oldState = old.state();
+    for (const level of levels(script)) oldState = old.push(level);
+    expect(oldState).toBe('done');
+    expect(old.span()!.end * FRAME).toBeLessThan(2200);
+  });
+
+  it('hears a fifteen-second command whole, which the 8 s cap cut short', () => {
+    const { state, span } = run(levels([[ROOM, 300], [VOICE, 15000], [ROOM, 1500]]));
+    expect(state).toBe('done');
+    expect(span!.end * FRAME).toBeGreaterThanOrEqual(15300);
+  });
+
+  it('gives main a backstop that covers the wait, the sentence, the end silence and the extension', () => {
+    // 4 + 20 + 1.1 + 1.8 + 3 = 29.9 s for a wake capture (was 15 s).
+    expect(listenTimeoutMs(DEFAULT_ENDPOINT.noSpeechMs)).toBe(29_900);
+    expect(listenTimeoutMs(5000)).toBe(30_900);
+    expect(listenTimeoutMs(Number.NaN)).toBe(29_900);
+  });
+});
+
+describe('a sentence cut mid-clause: the connective extension', () => {
+  it('knows the sentence is not over when it stops on a connective', () => {
+    for (const word of CONNECTIVES) expect(endsInConnective(`open firefox ${word}`)).toBe(true);
+    expect(endsInConnective('Open Firefox and.')).toBe(true);
+    expect(endsInConnective('Move it to,')).toBe(true);
+    expect(endsInConnective('then')).toBe(true);
+  });
+
+  it('lets a finished sentence end', () => {
+    for (const text of ['Open Firefox.', 'open firefox on two', 'stop', '', 'bandana', 'android']) {
+      expect(endsInConnective(text)).toBe(false);
+    }
+  });
+
+  it('does not keep a whole command waiting because it ends on a particle or on "that"', () => {
+    for (const text of ['Zoom in.', 'Jarvis, zoom in', 'turn it on', 'hold on', 'log in', 'undo that', 'cancel that', 'do that']) {
+      expect(endsInConnective(text)).toBe(false);
+    }
+    // …but the same words mid-clause still do.
+    for (const text of ['zoom in on the', 'open the file that', 'put it on', 'type hello in']) {
+      expect(endsInConnective(text)).toBe(text !== 'put it on');
+    }
+  });
+
+  it('joins the continuation to the first half as one sentence', () => {
+    expect(joinContinuation('Open Firefox and.', 'Go to YouTube.')).toBe('Open Firefox and go to YouTube.');
+    expect(joinContinuation('move it to', 'monitor two')).toBe('move it to monitor two');
+    expect(joinContinuation('Open the', 'VS Code window')).toBe('Open the VS Code window');
+    expect(joinContinuation('open notepad and', '')).toBe('open notepad and');
+    expect(joinContinuation('', 'hello')).toBe('hello');
+  });
+
+  it('is one extension of 1.8 s, reopened within 400 ms of the close', () => {
+    expect(CONNECTIVE_EXTENSION_MS).toBe(1800);
+    expect(CONTINUATION_REOPEN_MS).toBe(400);
+    // The continuation capture gives up on silence at the extension, like any capture.
+    const endpointer = createEndpointer({ ...DEFAULT_ENDPOINT, noSpeechMs: CONNECTIVE_EXTENSION_MS });
+    let state = endpointer.state();
+    for (const level of levels([[ROOM, 2000]])) state = endpointer.push(level);
+    expect(state).toBe('nothing');
   });
 });
 

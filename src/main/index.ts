@@ -19,6 +19,7 @@ import { onFileChanged, stopWatching } from './services/watchers.js';
 import { closeAllChatWindows } from './services/chat-window.js';
 import { setBoardWindow } from './services/main-window.js';
 import { startScheduler, stopScheduler } from './services/scheduler.js';
+import { startScheduleFeed, stopScheduleFeed } from './services/schedule-feed.js';
 import { onUpdateStatus, startUpdater, stopUpdater, updateStatus } from './services/updater.js';
 import { claimSingleInstance } from './services/instance.js';
 import { singleInstanceApplies } from '@shared/boot.js';
@@ -27,9 +28,11 @@ import { onAwayLog, onAwayState, startPresence, stopPresence } from './services/
 import { ensureAvatarFolder, stopAvatarWatchers } from './services/avatar-frames.js';
 import { closeAllFaces, initAvatarWindows } from './services/avatar-window.js';
 import { attachHologramScene, closeHologramWindow, hologramWindow, initHologramWindow, sendToHologram } from './services/hologram-window.js';
-import { setSpeechHandlers, startSpeechAtBoot } from './services/speech.js';
+import { say, setSpeechHandlers, startSpeechAtBoot, stopSpeaking, whenSpeechIdle } from './services/speech.js';
+import { setTurnEffects, setTurnHandlers } from './services/turn.js';
+import { setTurnTimingFile } from './services/turn-timing.js';
 import { onScene, startActivityFeed, stopActivityFeed } from './services/activity-feed.js';
-import { setDesktopHandlers } from './services/desktop.js';
+import { haltPlan, setDesktopHandlers } from './services/desktop.js';
 import { remoteBroadcast, setRemoteDispatch, startRemoteIfEnabled, stopRemote } from './services/remote.js';
 import { callAsRemote } from './ipc.js';
 import { stopNodeMoods } from './services/avatar-mood.js';
@@ -1855,6 +1858,24 @@ app.whenReady().then(async () => {
   // The globe's scene: what Claude is touching on this machine, from the transcripts it writes.
   if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'activity-feed', run: () => startActivityFeed() });
   setDesktopHandlers({ onState: (state) => toBoardAndHologram('desktop:state', state) });
+  /*
+   * One turn at a time (services/turn.ts, docs/11): the turn's state goes to both windows; a
+   * sentence that starts a turn goes to the board to be acted on (and to the hologram to be shown)
+   * as `voice:heard`, carrying its turn id. What the engine may do itself: say a line ("One moment.",
+   * "Done.", a time-out), wait for silence, halt the desktop, stop speaking. Never open a microphone.
+   */
+  setTurnHandlers({
+    onState: (state) => toBoardAndHologram('turn:state', state),
+    onSentence: (heard) => toBoardAndHologram('voice:heard', heard)
+  });
+  // Where each turn's time went, one JSON line per turn (services/turn-timing.ts; docs/11).
+  setTurnTimingFile(join(app.getPath('userData'), 'turn-timing.jsonl'));
+  setTurnEffects({
+    say: (text) => say({ text, interrupt: false }),
+    whenSpeechIdle: (timeoutMs) => whenSpeechIdle(timeoutMs),
+    halt: () => { haltPlan(); },
+    stopSpeaking: () => { stopSpeaking(); }
+  });
   // The scene (what Claude Code is touching) reaches the JARVIS window as `hologram:scene` (F1).
   attachHologramScene(onScene);
   // Voice, like manual control, comes back on only if it was on when the app closed.
@@ -1873,6 +1894,13 @@ app.whenReady().then(async () => {
    * capture: a screenshot run at 8 am must not start the morning's Prime session.
    */
   if (!process.env['SKYNET_SMOKE_DIR']) deferred.push({ name: 'scheduler', run: () => startScheduler() });
+
+  /*
+   * The calendar feed (services/schedule-feed.ts): keeps schedule/calendar.json current for every
+   * panel.calendar face. Runs during a smoke capture too, so the pane is drawn from the real file;
+   * it fetches no iCal feed then.
+   */
+  deferred.push({ name: 'schedule feed', run: () => startScheduleFeed() });
 
   /*
    * Program updates: an installed copy only, and never during a smoke run. Pushed to the board
@@ -1920,6 +1948,7 @@ app.whenReady().then(async () => {
     clearInterval(sweep);
     clearInterval(dispatch);
     stopScheduler();
+    stopScheduleFeed();
     // The pipe dies with us; the file naming it must not outlive it, or the next proxy waits on
     // a pipe that is not there rather than reporting that SkynetOS is closed.
     stopControlServer();

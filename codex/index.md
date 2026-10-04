@@ -43,7 +43,9 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/pacekeeper.md` — Speedrun coach: live strat guidance + splits, modern versions only. ACTIVE.
 - `projects/there-could-be-giants.md` — Kaiju-scale giants, ships to the Goobtropolis server. ACTIVE, Phase 8 (live-modlist gate) next.
 - `projects/time-served.md` — Server-side stats HUD (days/time/deaths), modid timeserved. ACTIVE, v1.1.0 (2026-09-13). WRITTEN 2026-09-19; no CLAUDE.md/handoff.md in the repo.
-- `projects/goobtropolis.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE.
+- `projects/goobtropolis.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE. WRITTEN
+  2026-10-03: this line pointed at it since before 2026-09-12, but the file never existed until now.
+  No local repo for the server itself, only an exported config folder (`C:/dev/goobtropolis-configs`).
 - `projects/locibook.md` — Placeable writable mind-palace books, Fabric 26.2. ACTIVE, build state unverified (no CLAUDE.md/handoff.md).
 - `projects/just1nudge.md` — Off-grid block/item nudging via display entities. ACTIVE, v0.2.0.
 - `projects/mccamop.md` — Client-side cinematic camera hotkey mod. ACTIVE, v1 shipped.
@@ -53,6 +55,9 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. ACTIVE, pre-alpha.
 - `projects/wfp-site-ops.md` — Webflow site ops for goobscott-productions.com. ACTIVE.
 - `projects/story-universe-map.md` — Obsidian plugin: fictional-universe relationship map. ACTIVE.
+- `projects/magictrainer.md` — MTG deck visualizer/trainer, Tauri 2 + React. v1.0.0 BUILT AND
+  TAGGED 2026-09-25, ready to ship to William. WRITTEN 2026-10-01: a real repo found with zero
+  prior codex/board presence.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -71,7 +76,10 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Projects — LifeOS (the Face's drop of 2026-09-25; figures live under private/)
 - `projects/rent-run.md` — Income recovery: 216-option research, the Rent Run artifact, the ledger. ACTIVE.
 - `projects/financeos.md` — FinanceOS room (built 2026-09-23): live balances (SimpleFIN), INCOME LAUNCHER, CC-FINANCE. ACTIVE — launcher and feed pending (Phases 3–4).
-- `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room not built; timezone fix first (Phase 5).
+- `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room built, timezone fixed, Reclaim authenticated, real PBS shifts and prep chains live on the calendar (2026-09-30); habits.json rewrite from his real set still open.
+
+## Projects — Streaming
+- `projects/streaming.md` — Streamer.bot, OBS, the stream-tools relay; Discord, Twitch bio, VOD pipeline queued. WRITTEN 2026-09-30.
 
 ## Projects — SkynetOS itself
 - `projects/skynetos.md` — This program. See the repo's docs/ for the spec; this file tracks state only.

@@ -36,6 +36,7 @@ import {
 import { extensionOf, isSecretPath, kindOf } from '@shared/globe-atlas.js';
 import { folderFrom, paperFrom, terminalFrom, wireFrom } from '@shared/holo-content.js';
 import { EMPTY_SCENE, accessPriority, type HoloContent, type HoloItem, type HoloScene } from '@shared/holo-scene.js';
+import { filterAccesses, filterOrbit, filterScheduler, recentSessions, validSessionFilter, type SeenSession } from '@shared/holo-sessions.js';
 import { normalisePath } from '@shared/usage.js';
 import { flushAtlas, pinFor } from './globe-atlas-store.js';
 import { trustedRoots } from './settings.js';
@@ -219,6 +220,27 @@ function sessionCaption(access: ActivityAccess, cwd: string | undefined): string
 
 const cwdBySession = new Map<string, string>();
 
+/*
+ * The session picker (2026-09-27, packages/shared/holo-sessions.ts). Every session that writes an
+ * assistant line is remembered with its cwd and when; every item that reaches the centre remembers
+ * which sessions put it there. A filter narrows what the scheduler is offered and what the orbit
+ * keeps; it never changes what is tailed.
+ */
+const seenSessions = new Map<string, SeenSession>();
+const touchedBy = new Map<string, Set<string>>();
+let sessionFilter: string | null = null;
+let sessionsKey = '';
+
+function sessionsNow(): HoloScene['sessions'] {
+  const list = recentSessions(seenSessions, Date.now(), sessionFilter);
+  sessionsKey = list.map((x) => x.id).join('|');
+  return list;
+}
+
+function orbitOf(items: HoloItem[]): HoloItem[] {
+  return filterOrbit(items, touchedBy, sessionFilter).slice(0, ORBIT_CAP);
+}
+
 /**
  * Rebuilds overlap: the icon lookup awaits, and a tick or a new access can start another rebuild
  * before the first has emitted. Only the newest may emit, or an older focus lands on screen after
@@ -229,27 +251,32 @@ let rebuildGeneration = 0;
 async function rebuildScene(): Promise<void> {
   const generation = ++rebuildGeneration;
   const focus = scheduler.focus;
-  const orbit = [...recent.values()].slice(0, ORBIT_CAP);
   if (!focus) {
-    emit({ orbit, focus: null, queue: scheduler.queue.length });
+    emit({ orbit: orbitOf([...recent.values()].reverse()), focus: null, queue: scheduler.queue.length, sessions: sessionsNow(), filter: sessionFilter });
     return;
   }
   const item = await itemFor(focus.access);
   if (generation !== rebuildGeneration) return;
   recent.delete(item.id);
   recent.set(item.id, item);
-  const orbitNow = [...recent.values()].reverse().slice(0, ORBIT_CAP);
+  const by = touchedBy.get(item.id) ?? new Set<string>();
+  if (focus.access.session) by.add(focus.access.session);
+  touchedBy.set(item.id, by);
+  const orbitNow = orbitOf([...recent.values()].reverse());
   while (recent.size > ORBIT_CAP * 2) {
     const oldest = recent.keys().next().value;
     if (oldest === undefined) break;
     recent.delete(oldest);
+    touchedBy.delete(oldest);
   }
   const content = contentFor(item, focus.access);
   const scene: HoloScene = {
     orbit: orbitNow,
     focus: { item, content, since: focusSince, action: focus.access.action },
     queue: scheduler.queue.length,
-    session: sessionCaption(focus.access, cwdBySession.get(focus.access.session))
+    session: sessionCaption(focus.access, cwdBySession.get(focus.access.session)),
+    sessions: sessionsNow(),
+    filter: sessionFilter
   };
   emit(scene);
 
@@ -283,15 +310,35 @@ function onTick(): void {
   const now = Date.now();
   const { state, changed } = tickScheduler(scheduler, now);
   scheduler = state;
-  if (changed) applyFocus(now);
+  if (changed) { applyFocus(now); return; }
+  // A session went quiet past the window, or a new one spoke: the picker's list changed.
+  const key = recentSessions(seenSessions, now, sessionFilter).map((x) => x.id).join('|');
+  if (key !== sessionsKey) void rebuildScene();
 }
 
 function offer(accesses: ActivityAccess[]): void {
-  if (!accesses.length) return;
+  const shown = filterAccesses(accesses, sessionFilter);
+  if (!shown.length) return;
   const now = Date.now();
-  const result = schedulePriority(scheduler, accesses, now);
+  const result = schedulePriority(scheduler, shown, now);
   scheduler = result.state;
   if (result.changed) applyFocus(now);
+}
+
+/**
+ * The session picker's choice (`hologram:setSessionFilter`, user-only): one session's accesses
+ * alone, or all of them (null). The focus and queue from other sessions go at once, the orbit keeps
+ * only what that session touched, and the scene is pushed again.
+ */
+export function setSessionFilter(id: unknown): { ok: boolean; filter: string | null; error?: string } {
+  const next = validSessionFilter(id, seenSessions);
+  if (next === undefined) return { ok: false, filter: sessionFilter, error: 'NO SUCH SESSION ON THIS MACHINE' };
+  sessionFilter = next;
+  const narrowed = filterScheduler(scheduler, sessionFilter);
+  scheduler = narrowed.state;
+  if (narrowed.changed) applyFocus(Date.now());
+  else void rebuildScene();
+  return { ok: true, filter: sessionFilter };
 }
 
 /* ────────────────────────── tailing the transcripts ────────────────────────── */
@@ -326,6 +373,9 @@ function consume(file: string): void {
     try { line = JSON.parse(raw) as TranscriptLine; } catch { continue; }
     if (line.type !== 'assistant') continue;
     if (typeof line.sessionId === 'string' && typeof line.cwd === 'string') cwdBySession.set(line.sessionId, line.cwd);
+    if (typeof line.sessionId === 'string' && line.sessionId) {
+      seenSessions.set(line.sessionId, { cwd: typeof line.cwd === 'string' ? line.cwd : seenSessions.get(line.sessionId)?.cwd, lastSeen: Date.now() });
+    }
     accesses.push(...eventsFromMessage(line));
   }
   offer(accesses);

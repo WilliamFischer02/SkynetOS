@@ -96,10 +96,11 @@ top of and which is itself still unseen on screen:
     to the globe's centre); DESK on, TRAIN ACTION a Notepad macro and replay it; listen to
     `finetune\jarvis\eval\*_base.wav` against `*_tuned.wav`; try wheel zoom/drag and the new panels
     on the board; drag a file onto a fresh terminal session for `/drop`.
-0. **ScheduleOS Phase 6**: Google Calendar → Settings → time zone → Mountain Time - Denver (MAIN,
-   Work – Shifts, Work – Prep Blocks, Reclaim), then the Reclaim browser login from a terminal in
-   this repo (`claude`, `/mcp`, Reclaim), then feed one real PBS shift so `npm run schedule:week`
-   shows a real chain. The room (D6, 31 nodes) is built; nothing here needs more agent work first.
+0. **DONE 2026-09-30 — ScheduleOS Phase 6.** Timezone fixed to Denver, Reclaim browser login
+   completed (32 tools), seven October PBS shifts fed in with prep chains live on the calendar, and
+   `panel.calendar` built (K1 CALENDAR in the room, K1 THIS WEEK on root). See
+   `codex/projects/scheduleos.md` "Next" for what's left: rewriting `habits.json` from William's real
+   set, confirming Reclaim's own timezone, and William opening the calendar panel for the first time.
 0a. **Fill FinanceOS with real numbers**: copy `private/finance/ledger.template.json` to
     `ledger.json`, replace every figure, `npm run finance:report`, open LEDGER. Card issuer/APR are
     already known (Bank of America, 24.49%); only the minimum is still a placeholder.

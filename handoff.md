@@ -2,12 +2,48 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
+**Latest (2026-10-03, MORNING MAINTENANCE, unattended):** the panel polls (usage, finance,
+schedule, remote) stop while the window is minimised or hidden, through a hook that had been written
+and never used; the usage meter says why when its read fails; the explorer's junction test reports
+SKIPPED instead of passing on nothing; and `which()` has its first test (roadmap 18). Verify green:
+154 files, 2,387 tests. Details under "Morning maintenance 2026-10-03" below. Nothing committed.
+
 **Last session (2026-09-24, U3 JARVIS-PRIME, JARVIS Voice slice 1):** the hologram window, speech
 through Windows' own voice, the voice-profile recorder, and rule-based desktop control ("open after
 effects on one and firefox on two"), all off or unseen until William restarts and switches them on.
 Design docs/11, rules docs/07 § JARVIS Voice, roadmap M13. Verify green: 109 files, 1,708 tests.
 
-**Last session (2026-09-27 afternoon, U3 JARVIS-PRIME, William present): the window and the
+**Last session (2026-09-27 night, U3 JARVIS-PRIME, William present): one turn at a time.**
+William's first live session: listening reopened before the first action, long commands were cut,
+the light went out while still listening, "doing it" was said with nothing visibly happening.
+Now: ONE turn engine (`packages/shared/turn.ts`, `services/turn.ts`) owns every phase; the
+follow-up mic opens only after a turn ENDS (measured from its end, so long plans still get one);
+a second sentence mid-turn is held as PENDING and answered "One moment."; the sentence cap is
+20 s with 1.1 s end silence and a one-time continuation on a connective; the light follows the
+capture window's real track state; a status strip shows phase, step `2 / 5 · FOCUS FIREFOX`, a
+live timer, the transcript heard, the question asked; multi-step plans end with "Done.". Plus:
+"hit play in my firefox browser" and friends without the model; "split screen with JARVIS-TQR"
+and dictation into that terminal; the board by voice (go to, select, open, inspect, rename, set
+notes; read-back before a write; no deletion); remembered plans; a BOARD snapshot in every
+conversational prompt (the "needs the board state" complaint). Then the latency pass: thinking
+was ON in every headless `claude -p` call (about 1,000 tokens before a five-line plan); off, with
+lean flags and trimmed prompts, the planner call went 12.0 s → 3.1 s; 24 acknowledgement lines
+are pre-synthesised in the profile voice so "One moment." and "Done." are instant; the first
+sentence of a reply plays while the second synthesises; stop now cuts a profile line in 14 ms;
+thirteen voice bugs fixed. Verify green: 148 files, 2,306 tests. Details under "One turn at a
+time — 2026-09-27 night".
+
+**Session before (2026-09-27 evening, U3 JARVIS-PRIME, William present): the JARVIS window made
+resizable, and the planner.** William: "still having trouble scaling the jarvis voice window … its
+buttons are squashed". Cause: `hologram.size: 240` saved in settings.json before the 480 default,
+and `resizable: false`. Now: edges, a corner grip, Ctrl+= / Ctrl+- / Ctrl+0, size kept in
+`hologram.size {w,h}`, the chrome scales with the window. Also found: `speech.backend` had gone
+back to `sapi`, which is why David spoke; set to `server` + jarvis in the file, and the TRAIN panel
+now SAYS which voice will speak. Plus the voices dropdown, DESK remembered, a session picker,
+Ctrl+Shift+P frame stats, and M13.3 the planner (built, never run). Verify green: 142 files,
+2,131 tests. Details under "The window and the planner — 2026-09-27 evening". **Restart first.**
+
+**Session before (2026-09-27 afternoon, U3 JARVIS-PRIME, William present): the window and the
 meter.** Four Opus workers, paced for credits: MAXIMIZE/RESTORE in the chrome (F11) and a UI SCALE
 setting (AUTO/1×/2×/3×) with the HUD and inspector reflowing so nothing is squashed (layout audit 8
 → 0 clipped, 64 → 0 undersized controls); the usage meter with the fixed Max 20x plan, both weekly
@@ -52,6 +88,166 @@ docs/DECISIONS.md. Nothing committed; William has not asked. Nothing has been se
 **Session before (2026-09-12, voice and THE MATRIX):** voice control end to end, two raised hands
 place the cursor, a Windows 3.1 arrow, THE MATRIX (`G`). Nothing tried with a microphone or on
 camera. Details under "Voice, two hands and THE MATRIX — 2026-09-12".
+
+## Morning maintenance 2026-10-03
+
+The MORNING MAINTENANCE task, fired for the 08:00 slot (the machine's clock read 19:20 MDT at the
+session's first verify). Unattended, per `codex/briefs/morning-maintenance.md`. Nothing committed,
+nothing deleted, no board file touched, no dependency added, no mail on `to-hands`, no
+`codex/face-brief.md` on disk. `npm run verify` was green before (152 files, 2,375 tests) and after
+every change (154 files, 2,387). Stopped at the brief's bound: three improvements and one roadmap
+step. Reasoning in docs/DECISIONS.md "2026-10-03 — Morning maintenance".
+
+The working tree already held 67 modified and 67 untracked files from earlier sessions. This
+run touched only: `src/renderer/ui/useVisibleInterval.ts`, `UsageMeter.tsx`, `FinanceBlock.tsx`,
+`ScheduleBlock.tsx`, `RemotePanel.tsx` (same folder), `test/explorer.test.ts`, the new
+`test/visible-interval.test.ts` and `test/which.test.ts`, `docs/06-ROADMAP.md`, `docs/DECISIONS.md`,
+this file, and one `to-face` note.
+
+**Changes, all uncommitted:**
+
+1. **The panel polls sleep while nobody can see them** (roadmap 20). `useVisibleInterval` was
+   written on 2026-09-26 and imported by nothing, so the polls it was written for still ran in a
+   minimised or hidden window. Now used by `src/renderer/ui/UsageMeter.tsx` (20 s, a scan of every
+   conversation file on disk), `FinanceBlock.tsx` and `ScheduleBlock.tsx` (30 s) and
+   `RemotePanel.tsx` (4 s). Each still reads once on mount and once when the window is shown again.
+   The hook's behaviour moved into `startVisibleInterval`, a plain function, so it has a test:
+   `test/visible-interval.test.ts` (6, fake timers). Verify: green, 153 files, 2,381 tests.
+   **Not seen on screen.**
+2. **The usage meter says why it is missing** (roadmap 21). `src/renderer/ui/UsageMeter.tsx`: a
+   `usage:summary` call that rejected left no meter and no word. Before the first good read it now
+   shows USAGE, the reason, and IT TRIES AGAIN EVERY 20 S. After a good read a failed poll keeps the
+   last figures (a meter whose every poll fails stays frozen with no mark: named in DECISIONS). No
+   test (renderer, roadmap 10). Verify: green, 153 files, 2,381 tests. **Not seen on screen.**
+3. **A test that could pass on nothing** (roadmap 24). `test/explorer.test.ts` "refuses a junction
+   whose real path leaves the root" returned silently when the junction could not be made; it now
+   calls `ctx.skip()`. On this PC the junction is made and the test runs (16 passed, 0 skipped).
+   The skip path was read in the installed vitest runner, not run. Verify: green.
+4. **Roadmap step, docs/06 "Known issues" 18** — `clearWhichCache` (`src/main/services/which.ts:73`)
+   said "for tests" and no test used it. New `test/which.test.ts` (6): case, PATH order, an
+   unreadable entry, a quoted entry, a miss, and a remembered miss that stands until the cache is
+   cleared. The first test `which()` has had. Verify: green, 154 files, 2,387 tests. Eleven of the
+   twelve exports in item 18 remain William's call.
+
+**Found, left alone**, now in docs/06 "Known issues":
+
+- **22.** Four more timers run while the window is hidden: `src/renderer/App.tsx:206`
+  (`refreshUsageRoutes`, 30 s, a second scan of every conversation file), `FableCores.tsx:64`
+  (15 s), `CalendarBlock.tsx:43` (60 s), `JarvisDock.tsx:93` (24 s). One line each. App.tsx first.
+- **23.** `CalendarBlock.tsx:55` reads once and never retries after a failed read, and does not say
+  so. `AwayScreen.tsx:205`, `:239`, `:323` and `FableCores.tsx:59` have `.then` with no `.catch`.
+- **19, still open.** `test/watch-plan.test.ts` did not trip in today's six lone verifies.
+- **The away passes.** Three PLAN passes ran on 2026-10-03 with an identical picture, and each one's
+  note asks for the next to wait on a change. That is a schedule setting, so it is William's.
+
+**For William:** 1 and 2 hot-reload in `npm run dev`; 3 and 4 are tests. To see 1: minimise
+SkynetOS for a minute, restore it, and the usage meter should refresh at once rather than up to
+20 s later. 2 needs a failed read to appear. Ctrl+Z has nothing to undo; this run made no board
+edits.
+
+## One turn at a time — 2026-09-27 night (U3 JARVIS-PRIME, William present, three Opus workers)
+
+All uncommitted; each worker appended its docs/DECISIONS.md entry (2026-09-27). Nothing seen on
+screen. Contract test channel count is now 46.
+
+**W1, the turn engine.** Phases idle · listening · heard · thinking · speaking · acting · waiting
+· done · failed (`packages/shared/turn.ts` reducer, 36 tests; `services/turn.ts` singleton,
+`turn:state` pushed to both windows, 60 s watchdog that fails a stuck turn and halts the desktop).
+Producers: voice.ts (mic tracks via the new capture-only `voice:mic`), speech.ts (sidecar's real
+start/done), desktop.ts `runPlan` (`onStep` labels), planner.ts, converse.ts, the typed box.
+Follow-up: only from DONE or WAITING, never while acting/thinking/speaking/failed/pending; the
+Hands changed `listenAgain` so the 20 s heard-window is measured from the turn's END. Endpointing:
+end silence 700 → 1,100 ms, cap 8 → 20 s, backstop 15 → 29.9 s, connective continuation ≤ 1.8 s
+(not for whole commands like "zoom in"); no partial transcripts (whisper-server has none). The
+strip: `src/renderer/hologram/TurnStrip.tsx`; the dock shows the same line. `Done.` after
+multi-step plans. `board:context` (board window → main) feeds a ≤ 3,000-char BOARD block into the
+conversation prompt; the system text says the model can see the board.
+**W2, reach.** `press|hit <key> in <app>` (play/pause → space, mute, fullscreen, next, back,
+forward, refresh, spoken chords), `click <control> in <app>` (uiaClick), `scroll up|down in
+<app>`, `type <text> in <app>`: two steps, a VISIBLE pointer focus then the action; `<app>` by
+process, title token, "my browser", "the terminal"; refused: sign-in windows, shells for typing,
+the refused chords, dialog controls. `hologram:split` + `dictate:setTarget`: the chip's terminal
+to monitor one's left 62%, JARVIS on the right, every take typed into it, "send it" presses
+Enter, "stop transcribing" clears. Board by voice (`packages/shared/board-voice.ts`,
+`src/renderer/ui/boardVoice.ts`): go to / go back / select / inspect / show me / zoom to / open
+(the launch confirm still on screen, voice never answers it) / rename / set notes, read back and
+awaiting "go" within 45 s; "move to room" refused (no such command); delete/remove/unapprove
+refused ("I don't delete by voice."), and that path can never reach `command:confirmDestructive`.
+Action memory (`userData/desktop/action-memory.json`, 200, normalised sentence → plan, evicted on
+failure), wired into `planAndRun`.
+
+**W3, the delay.** `userData/turn-timing.jsonl` logs every turn's marks and the console prints
+`[turn] heard→speak … (whisper, intent, model, synth)`. Cuts, measured on this PC: planner
+`claude -p` 12,011 → 3,061 ms and conversation 4,901 → ~2,700 ms (thinking off via
+`--settings {"alwaysThinkingEnabled":false}` + `MAX_THINKING_TOKENS=0`, `--system-prompt`,
+`--safe-mode`, `--tools ""`, `--no-session-persistence`, one shared runner
+`services/headless-claude.ts` that retries with the old flags if the CLI rejects the new); the
+acknowledgement bank (`packages/shared/ack.ts`, `services/ack-bank.ts`: 24 lines synthesised once
+after `/warm` into `voice-profiles/<profile>/ack/`, ~26 s of GPU on first warm, exact-match play,
+1,060 ms saved per line); first sentence first (−200 ms to first audio); sidecar plays on its own
+thread (start 95 → 15 ms, stop on a profile line 1,096 → 14 ms); read-back pause 1,500 → 400 ms
+for single-step plans; spoken WAVs rotate through 8 files (a queued line could be overwritten);
+watchdog heartbeats during synthesis and long steps; a plan stops after a failed step; a
+remembered plan is forgotten only on a real step failure; the chip window retitles when `claude`
+exits so dictation can never type into a bare shell. Estimated whole turns: a question 6.4 → ~4 s;
+a planned single step 13.3 → 4.3 s to speak, 16.5 → 6.4 s to the first step; a remembered plan
+1.2 → 0.1 s. `test/voice-latency.test.ts` (25). Left as findings in docs/DECISIONS.md: the
+1.6 s CLI start per call (a persistent session would remove it); a non-desktop sentence pays two
+model calls; "send it" said during a dictation take is typed, not obeyed; the split and target
+survive shutdown.
+
+**For William, in order:** `npm run boot`; then, with DESK on: (1) "Jarvis, hit play on the video
+in my firefox browser." (2) a long command with a pause on "and": the light should stay on. (3)
+a second command while a plan runs: PENDING, "One moment.", then it runs after "Done.". (4)
+"Jarvis, split screen with JARVIS-TQR", say a sentence, "send it". (5) "Jarvis, rename
+TIMESERVED JAR to TimeServed 1.3", then "go". (6) Ask it what is on the board.
+
+**Landmines:** the contract count moves with every channel (46); the follow-up window still
+needs `voice.followUp: true` and a sentence heard in the turn; the split and dictation target are
+per app run; SPLIT and DESK never save size or position.
+
+## The window and the planner — 2026-09-27 evening (U3 JARVIS-PRIME, William present, three Opus workers)
+
+All uncommitted; verify green, 142 files, 2,131 tests; each worker appended its own
+docs/DECISIONS.md entry (2026-09-27). Nothing seen on screen. Two settings.json edits by the
+Hands at William's ask (backups `settings.json.bak-2026-09-27-backend`): `speech.backend: server`,
+`speech.profile: jarvis` (it had reverted to `sapi`); `desktop.apps.notepad:
+C:/Windows/notepad.exe` so the planner's first test has something to launch (this PC's Start Menu
+has no Notepad shortcut). `speech.enabled` is still `false` in the file: that is the SAY switch.
+
+1. **Resizable window (T):** `resizable: true, thickFrame: true`, 320–1600; a copper 8×8 grip
+   bottom-right (`hologram:setSize`, user-only); Ctrl+= / Ctrl+- step 80 px, Ctrl+0 → 480; the
+   `resize` event is the one writer of `hologram.size {w,h}` (300 ms debounce, never in DESK); a
+   saved size under 400 is bumped to 480 once with a log line. `--holo-scale` 1/2/3 from the
+   shorter side (640, 1280); nav one row ≥ 480, two rows below, icons below 400; every control ≥
+   24 px; panels scroll; the canvas is the largest centred square at 1:1 device pixels.
+   `test/hologram-size.test.ts` (15).
+2. **What speaks (U):** `voiceLabel(status)`: WINDOWS VOICE · <name> / PROFILE jarvis · WARMING |
+   READY | FINE-TUNED model_1500_pruned | UNAVAILABLE; the toggle reads USE THE JARVIS PROFILE or
+   USE WINDOWS VOICE; `speech:setVoice` (user-only) drives the voices dropdown; `hologram.desk`
+   remembered; the session picker (`dropdown-sessions`, `hologram:setSessionFilter`) when more than
+   one Claude Code session is live; Ctrl+Shift+P frame-time readout; the render loop stops
+   requesting frames when hidden. `speech:status` now starts the Windows sidecar so it can name
+   the voice (one extra PowerShell process when the window opens).
+3. **The planner, M13.3 (V):** an unmatched desktop sentence with DESK and `desktop.planner` on goes
+   to headless `claude -p` (no tools, 30 s, `desktop.plannerModel` Haiku) with the rules, monitors,
+   windows, programs, up to 3 saved actions as summaries, and the last 20 plans; the answer
+   `{say, steps, ask}` is normalised (`normalisePlan`, new; six step kinds incl. `uiaClick` and
+   `wait ≤ 3 s`; anything dropped means NOTHING runs and the reason is spoken), spoken, then run
+   after speech is idle + 1.5 s under the same switch, cap and halt. `desktop:plan` user-only.
+   `keys` steps now refuse sign-in and shell windows in front. Log:
+   `%APPDATA%/SkynetOS/desktop/planner.log.jsonl`. `test/planner.test.ts` (18). **Never run.**
+
+**For William, in order:** (1) `npm run boot`; the log should say the 240 was bumped to 480 and
+`[speech]` should start the server. (2) Drag the JARVIS window's corner; press Ctrl+= twice. (3)
+TRAIN panel: the voice line should read PROFILE jarvis · WARMING, then FINE-TUNED
+model_1500_pruned; press SAY if it reads SPEECH OFF; say "Jarvis, hello". (4) DESK on, Notepad
+closed, then: **"open notepad and type hello from jarvis"**. Watch the first plan run. Esc stops it.
+
+**Landmines:** the contract test's channel count is 40 and moves with every new channel; the
+scratchpad is shared between parallel workers (unique file names); a settings edit through
+`node -e` in bash loses backslashes (use forward slashes); `handoff.md`'s 26th section still says
+`clampHologramSize 160–960`, which is now `{w,h}` 320–1600.
 
 ## The window and the meter — 2026-09-27 (U3 JARVIS-PRIME, William present, four Opus workers)
 

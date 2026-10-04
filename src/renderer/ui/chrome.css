@@ -197,6 +197,18 @@
 }
 .jarvis-voice.asking,
 .jarvis-voice.sending { color: var(--amber); }
+/* One turn at a time (2026-09-27): the hologram strip's phase word and step, one line. */
+.jarvis-turn {
+  padding: calc(var(--gap) / 2) var(--gap);
+  color: var(--signal);
+  letter-spacing: var(--p);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: var(--p) solid var(--copper-dark);
+}
+.jarvis-turn.phase-failed { color: var(--amber); }
 .jarvis-voice.listening::after {
   content: '';
   display: inline-block;

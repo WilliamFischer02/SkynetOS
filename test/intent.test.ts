@@ -328,6 +328,10 @@ describe('resolveIntent — the JARVIS Voice window by voice (fork G, 2026-09-26
     expect(control('close the profiles dropdown')).toEqual({ op: 'dropdown', name: 'profiles', open: false });
     expect(control('show the voices list')).toEqual({ op: 'dropdown', name: 'voices', open: true });
     expect(control('open the monitors')).toEqual({ op: 'dropdown', name: 'monitors', open: true });
+    // 2026-09-27: the session picker under the caption.
+    expect(control('open the sessions dropdown')).toEqual({ op: 'dropdown', name: 'sessions', open: true });
+    expect(control('show the session picker')).toEqual({ op: 'dropdown', name: 'sessions', open: true });
+    expect(control('close the sessions list')).toEqual({ op: 'dropdown', name: 'sessions', open: false });
     expect(resolveIntent('open read me', ctx()).kind).toBe('view');
   });
 
@@ -400,7 +404,8 @@ describe('resolveIntent — the JARVIS Voice window by voice (fork G, 2026-09-26
     const sentences = [
       'mic on', 'turn on talkback', 'desk on', 'go to the train panel', 'open the actions panel', 'minimise', 'close the window',
       'train action', 'dictate', 'use this voice', 'record', 'play', 'create a profile', 'save the action', 'discard the action',
-      'send', 'let me type', 'open the profiles dropdown', 'open the voices dropdown', 'open the monitors dropdown'
+      'send', 'let me type', 'open the profiles dropdown', 'open the voices dropdown', 'open the monitors dropdown',
+      'open the sessions dropdown'
     ];
     const reached = new Set<string>();
     for (const sentence of sentences) {

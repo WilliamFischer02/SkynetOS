@@ -24,7 +24,23 @@
 import type { BoardEdge, BoardNode, EdgeKind } from './types.js';
 import { EDGE_KINDS } from './types.js';
 import type { Actor, CommandRequest } from './commands.js';
-import { parseDesktopCommand, type AppEntry, type DesktopPlan } from './desktop.js';
+import { parseDesktopCommand, parseReachCommand, type AppEntry, type DesktopPlan, type DictateTargetRequest, type HologramSplitRequest } from './desktop.js';
+import {
+  VOICE_DELETION,
+  VOICE_DELETION_REFUSAL,
+  boardAnswer,
+  boardWrite,
+  matchAcrossBoards,
+  matchRoom,
+  moveBetweenRoomsRefusal,
+  parseMoveToRoom,
+  parseNotes,
+  rawValue,
+  whichOne,
+  type BoardHit,
+  type BoardOp,
+  type RoomTarget
+} from './board-voice.js';
 import type { HologramControl, HologramControlId, HologramDropdown, HologramPanel } from './hologram-control.js';
 
 /** What the resolver is allowed to know: one room, and what is selected in it. */
@@ -42,6 +58,15 @@ export interface IntentContext {
    */
   apps?: readonly AppEntry[];
   monitors?: number;
+  /**
+   * 2026-09-27, the board by voice (packages/shared/board-voice.ts): every node on every board,
+   * from the renderer's cached index. Absent means this room only, as before.
+   */
+  boards?: readonly BoardHit[];
+  /** Inside a room (the stack is deeper than the root): "go back" and "up" ascend. */
+  inRoom?: boolean;
+  /** A read-back board edit is waiting for "go" or "no" (src/renderer/ui/boardVoice.ts). */
+  pendingEdit?: boolean;
 }
 
 /** Things that change the view rather than the board. No undo entry, nothing written. */
@@ -101,6 +126,16 @@ export type Intent =
    * TRAIN ACTION recorded, says which one it will run, and runs it under the desktop switch.
    */
   | { kind: 'action'; name: string; say: string }
+  /**
+   * 2026-09-27: the board by voice, on any board (board-voice.ts): go to a room, select, open,
+   * inspect or zoom to a node, a rename or a note READ BACK before it lands, or the "go" / "no"
+   * that answers a read-back. Never destructive: `boardWrite` builds no DESTRUCTIVE command.
+   */
+  | { kind: 'board'; op: BoardOp; say: string }
+  /** 2026-09-27: aim dictation at a window, press Enter there, or stop (`dictate:setTarget`). */
+  | { kind: 'dictate'; request: DictateTargetRequest; say: string }
+  /** 2026-09-27: a chip's terminal left on monitor one, JARVIS beside it (`hologram:split`). */
+  | { kind: 'split'; request: HologramSplitRequest; say: string }
   /** Two or more nodes fit the words equally well. Ask, do not guess. */
   | { kind: 'ambiguous'; say: string; candidates: { id: string; name: string }[] }
   /**
@@ -108,7 +143,16 @@ export type Intent =
    * the Face as a question. `true` means a command was recognised but could not be carried out ("I do not
    * see anything here called…"), which is not a question and is not sent anywhere.
    */
-  | { kind: 'unknown'; say: string; heard: string; understood: boolean };
+  | {
+      kind: 'unknown'; say: string; heard: string; understood: boolean;
+      /**
+       * M13.3: "open <something that is neither a node nor a catalogue program>" was understood as
+       * an open and refused, but it may be a desktop request the rules cannot express ("open my
+       * most recent project in After Effects"). The voice path offers it to the planner
+       * (`desktop:plan`) before saying the refusal.
+       */
+      plannable?: boolean;
+    };
 
 const NUMBER_WORDS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, to: 2, too: 2, three: 3, four: 4, for: 4, five: 5, six: 6, seven: 7,
@@ -284,7 +328,9 @@ const PANEL_WORDS: Record<string, HologramPanel> = {
 const DROPDOWN_WORDS: Record<string, HologramDropdown> = {
   profile: 'profiles', profiles: 'profiles',
   voice: 'voices', voices: 'voices',
-  monitor: 'monitors', monitors: 'monitors', displays: 'monitors'
+  monitor: 'monitors', monitors: 'monitors', displays: 'monitors',
+  // 2026-09-27: the session picker under the caption ("open the sessions dropdown").
+  session: 'sessions', sessions: 'sessions'
 };
 
 const UI_FILLER = '(?:(?:the|my|your|that|this|a|an) )?';
@@ -479,9 +525,56 @@ function actionIntent(text: string, heard: string): Intent | null {
   const hit = byVerb ?? byNoun;
   if (!hit) return null;
   const name = hit[1]!.trim();
+  // M13.3: "do the notepad test but in word" is not the notepad test. A saved action changed on the
+  // way is the planner's (docs/11 § Slice 2), with the action as its worked example.
+  if (/\b(?:but|instead|except|without|rather than)\b/.test(name)) return null;
   if (!name || /^(?:it|that|this|nothing|something|anything|again|the same)$/.test(name)) return unknown(heard, 'Do which action, sir?', true);
   return { kind: 'action', name, say: `Looking for an action called ${name}.` };
 }
+
+/*
+ * ── A dictation target and the split (2026-09-27; docs/11 § Reaching into windows) ──────────
+ * "transcribe into JARVIS-TQR", "dictate to JARVIS-TQR", "type this into JARVIS-TQR", "split
+ * screen with JARVIS-TQR", "put JARVIS-TQR on monitor one and sit beside it", "send it", "stop
+ * transcribing". Main finds the window by title (window-split.ts, dictate-target.ts).
+ */
+function dictationIntent(text: string): Intent | null {
+  const aim = /^(?:transcribe|dictate|start transcribing|start dictating|type this|type that|type what i say|write this|write what i say)(?: it| this)? (?:into|in|to|onto|for) (.+)$/.exec(text);
+  if (aim) {
+    const window = aim[1]!.trim();
+    return { kind: 'dictate', request: { op: 'set', window, start: true }, say: `Dictating into ${window}.` };
+  }
+  if (/^(?:stop|end|finish|quit) (?:transcribing|transcription|transcribing into .+)$|^(?:clear|forget|drop) the (?:dictation )?target$/.test(text)) {
+    return { kind: 'dictate', request: { op: 'clear' }, say: 'Stopped transcribing.' };
+  }
+  if (/^(?:send it|enter|press enter|hit enter|press return|hit return|submit it)$/.test(text)) {
+    return { kind: 'dictate', request: { op: 'enter' }, say: 'Sent.' };
+  }
+  const split = /^(?:split(?: the)? screen with|split with|sit (?:beside|next to)|go (?:beside|next to)) (.+)$/.exec(text)
+    ?? /^put (.+?) on (?:monitor |screen |display )?(?:one|1|won) and (?:sit|go|stay|be|put yourself) (?:beside|next to|by) (?:it|him|them|that)$/.exec(text);
+  if (split) {
+    const window = split[1]!.trim();
+    return { kind: 'split', request: { op: 'on', window }, say: `Beside ${window}.` };
+  }
+  if (/^(?:leave|exit|end|stop|close|undo|cancel) (?:the )?split(?: screen)?$|^unsplit$|^(?:go )?back to your corner$/.test(text)) {
+    return { kind: 'split', request: { op: 'off' }, say: 'Back to my corner.' };
+  }
+  return null;
+}
+
+/** The node a phrase names on another board, when this room has none (board-voice.ts). */
+function elsewhere(phrase: string, ctx: IntentContext, accept?: (node: BoardNode) => boolean): { hit?: BoardHit; candidates: BoardHit[] } {
+  if (!ctx.boards?.length) return { candidates: [] };
+  return matchAcrossBoards(phrase, ctx.boardId, ctx.boards.filter((h) => h.boardId !== ctx.boardId), scoreNode, accept);
+}
+
+/** This room's node as a BoardHit, so a write reads the same whichever board it is on. */
+function hereHit(node: BoardNode, ctx: IntentContext): BoardHit {
+  const known = ctx.boards?.find((h) => h.boardId === ctx.boardId);
+  return { boardId: ctx.boardId, path: known?.path ?? [], room: known?.room ?? ctx.boardId.toUpperCase(), node };
+}
+
+const hitName = (hit: BoardHit): string => nameOf(hit.node);
 
 const ambiguous = (candidates: BoardNode[]): Intent => ({
   kind: 'ambiguous',
@@ -498,6 +591,36 @@ export function edgeIdFor(from: string, to: string, edges: BoardEdge[]): string 
     if (!edges.some((e) => e.id === tried)) return tried;
   }
   return `${base}_${edges.length + 1}`;
+}
+
+/** A room on any board, as an intent. */
+function goTo(room: RoomTarget): Intent {
+  return { kind: 'board', op: { type: 'goto', target: room }, say: room.path.length ? `Into ${room.room}.` : 'Up to the mainboard.' };
+}
+
+/** The node a phrase names, this room first, then every board: a hit, or the intent that says why not. */
+function findHit(phrase: string, ctx: IntentContext, heard: string = phrase): { hit: BoardHit } | { intent: Intent } {
+  const here = matchNode(phrase, ctx);
+  if (here.candidates.length) return { intent: ambiguous(here.candidates) };
+  if (here.node) return { hit: hereHit(here.node, ctx) };
+  const far = elsewhere(phrase, ctx);
+  if (far.candidates.length) return { intent: { kind: 'ambiguous', say: whichOne(far.candidates), candidates: far.candidates.map((c) => ({ id: c.node.id, name: c.node.name })) } };
+  if (far.hit) return { hit: far.hit };
+  return { intent: unknown(heard, `I do not see anything called "${phrase}".`) };
+}
+
+const OP_SAY: Record<'select' | 'open' | 'inspect' | 'zoomTo', (hit: BoardHit, far: boolean) => string> = {
+  select: (h, far) => `${hitName(h)}${far ? `, in ${h.room}` : ''}.`,
+  open: (h, far) => `Opening ${hitName(h)}${far ? ` in ${h.room}` : ''}.`,
+  inspect: (h, far) => `${hitName(h)}${far ? `, in ${h.room}` : ''}. The inspector has it.`,
+  zoomTo: (h, far) => `Zooming to ${hitName(h)}${far ? ` in ${h.room}` : ''}.`
+};
+
+/** select / open / inspect / zoom to, on this board or any other (board-voice.ts). */
+function nodeOp(type: 'select' | 'open' | 'inspect' | 'zoomTo', phrase: string, ctx: IntentContext, heard: string): Intent {
+  const found = findHit(phrase, ctx, heard);
+  if ('intent' in found) return found.intent;
+  return { kind: 'board', op: { type, hit: found.hit }, say: OP_SAY[type](found.hit, found.hit.boardId !== ctx.boardId) };
 }
 
 /**
@@ -538,6 +661,23 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
     return { kind: 'view', action: { type: 'voiceControl', on: false }, say: 'Voice off. The microphone is closed.' };
   }
 
+  // ── 2026-09-27: a read-back board edit waiting for "go" or "no" (board-voice.ts) ──────────
+  // Its own path: it applies a rename or a note that was read back, and can never reach the
+  // deletion dialog (`boardWrite` builds no DESTRUCTIVE command; actOnIntent checks again).
+  if (ctx.pendingEdit) {
+    const answer = boardAnswer(text);
+    if (answer !== null) return { kind: 'board', op: { type: 'answer', yes: answer }, say: answer ? 'Going.' : 'Cancelled.' };
+  }
+
+  // ── 2026-09-27: dictation into a named window, "send it", and the split beside it ─────────
+  const aimed = dictationIntent(text);
+  if (aimed) return aimed;
+
+  // ── 2026-09-27: inside a room, "go back" and "up" climb out (before the window's "go back") ─
+  if (ctx.inRoom && /^(?:go back|back|go up|up|back up|up a level)$/.test(text)) {
+    return { kind: 'view', action: { type: 'ascend' }, say: 'Going up.' };
+  }
+
   // ── the JARVIS Voice window: panels, dropdowns, switches, buttons, stop, shut down ────────
   const voiceWindow = hologramIntent(text, heard);
   if (voiceWindow) return voiceWindow;
@@ -562,7 +702,7 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
   }
 
   // ── the view: up, down, zoom ───────────────────────────────────────────────────────────────
-  if (/^(go up|come back|back out|ascend|up a level|leave the room|out)$/.test(text)) {
+  if (/^(go up|come back|back out|ascend|up a level|leave the room|out|up)$/.test(text)) {
     return { kind: 'view', action: { type: 'ascend' }, say: 'Going up.' };
   }
   // "Zoom in on the board" is how whisper wrote it back on 2026-09-12: the object is allowed and ignored.
@@ -573,9 +713,21 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
     const level = countOf(zoomTo[1]);
     if (level) return { kind: 'view', action: { type: 'zoom', to: level }, say: `Zoom ${level}x.` };
   }
+  // 2026-09-27: "zoom to the stalker", on this board or another (board-voice.ts).
+  const zoomNode = /^zoom (?:in )?(?:to|on|onto|into|in on) (.+)$/.exec(text);
+  if (zoomNode) return nodeOp('zoomTo', zoomNode[1]!, ctx, heard);
 
   if (/^(deselect|clear (the )?selection|select nothing|nothing selected)$/.test(text)) {
     return { kind: 'view', action: { type: 'clearSelection' }, say: 'Cleared.' };
+  }
+
+  // ── 2026-09-27: reaching into a window: press, scroll, click, type "in <app>" ─────────────
+  // Two steps each: find the window and bring it forward by pointer, then the action. The window
+  // is matched at run time against what is open, so no catalogue is needed (desktop.ts).
+  const reach = parseReachCommand(text, heard, { apps: ctx.apps ?? [] });
+  if (reach) {
+    if ('refuse' in reach) return unknown(heard, reach.refuse, true);
+    return { kind: 'desktop', plan: { ...reach.plan, source: ctx.actor === 'user' ? 'typed' : 'voice' }, say: 'On it.' };
   }
 
   // ── the desktop: a program, a site, a monitor (docs/11) ──────────────────────────────────
@@ -610,8 +762,39 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
     };
   }
 
+  // ── 2026-09-27: moving a node into another room: the bus has no such command, so say so ────
+  const between = ctx.boards?.length ? parseMoveToRoom(text) : null;
+  if (between) {
+    const room = matchRoom(between.room, ctx.boards!, scoreNode);
+    if (room && !('candidates' in room)) {
+      const found = findHit(between.target, ctx, heard);
+      if ('intent' in found) return found.intent;
+      return unknown(heard, moveBetweenRoomsRefusal(hitName(found.hit), room.room), true);
+    }
+  }
+
+  // ── 2026-09-27: notes, read back before they land (board-voice.ts) ───────────────────────
+  const notes = parseNotes(text);
+  if (notes) {
+    const found = findHit(notes.target, ctx, heard);
+    if ('intent' in found) return found.intent;
+    const value = rawValue(heard, 'notes?', 'to|as|say|read', true) ?? notes.value;
+    const op = boardWrite(found.hit, 'notes', value, hitName(found.hit));
+    if (!op) return unknown(heard, 'Set the notes to what, sir?', true);
+    return { kind: 'board', op, say: op.type === 'write' ? op.readBack : 'Very well.' };
+  }
+
   // ── rename ────────────────────────────────────────────────────────────────────────────────
   const rename = /^(?:rename|retitle) (.+?) (?:to|as) (.+)$/.exec(text);
+  if (rename && ctx.actor === 'voice') {
+    // 2026-09-27: by voice, on any board, in the words he said, and read back before it lands.
+    const found = findHit(rename[1]!, ctx, heard);
+    if ('intent' in found) return found.intent;
+    const value = rawValue(heard, 'rename|retitle', 'to|as') ?? rename[2]!;
+    const op = boardWrite(found.hit, 'name', value, hitName(found.hit));
+    if (!op) return unknown(heard, 'Rename it to what, sir?', true);
+    return { kind: 'board', op, say: op.type === 'write' ? op.readBack : 'Very well.' };
+  }
   if (rename) {
     const target = matchNode(rename[1]!, ctx);
     if (target.candidates.length) return ambiguous(target.candidates);
@@ -656,6 +839,8 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
   }
 
   // ── delete: never done, always asked ──────────────────────────────────────────────────────
+  // 2026-09-27: by voice, not even asked. "I don't delete by voice." (docs/07 § JARVIS Voice.)
+  if (ctx.actor === 'voice' && VOICE_DELETION.test(text)) return unknown(heard, VOICE_DELETION_REFUSAL, true);
   const remove = /^(?:delete|remove|destroy|get rid of|kill) (.+)$/.exec(text);
   if (remove) {
     const target = matchNode(remove[1]!, ctx);
@@ -674,6 +859,13 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
   if (go) {
     const target = matchNode(go[1]!, ctx);
     if (target.candidates.length) return ambiguous(target.candidates);
+    if (!target.node && ctx.boards?.length) {
+      // 2026-09-27: a room on another board ("go to the deduction room" from inside STORYOS).
+      const room = matchRoom(go[1]!, ctx.boards, scoreNode);
+      if (room && 'candidates' in room) return unknown(heard, `Which room: ${room.candidates.map((r) => r.room).join(', or ')}?`, true);
+      if (room) return goTo(room);
+      return nodeOp('select', go[1]!, ctx, heard);
+    }
     if (!target.node) return unknown(heard, `I do not see anything here called "${go[1]}".`);
     if (target.node.kind === 'drive.room') {
       return { kind: 'view', action: { type: 'descend', nodeId: target.node.id }, say: `Into ${target.node.name}.` };
@@ -681,10 +873,15 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
     return { kind: 'view', action: { type: 'select', nodeId: target.node.id }, say: `${nameOf(target.node)} is not a room. Selected it.` };
   }
 
+  // 2026-09-27: "inspect X" / "show me X": select it and bring it into view, on any board.
+  const inspect = /^(?:inspect|show me|examine) (.+)$/.exec(text);
+  if (inspect) return nodeOp('inspect', inspect[1]!, ctx, heard);
+
   const select = /^(?:select|pick|highlight|focus|find|show me) (.+)$/.exec(text);
   if (select) {
     const target = matchNode(select[1]!, ctx);
     if (target.candidates.length) return ambiguous(target.candidates);
+    if (!target.node && ctx.boards?.length) return nodeOp('select', select[1]!, ctx, heard);
     if (!target.node) return unknown(heard, `I do not see anything here called "${select[1]}".`);
     return { kind: 'view', action: { type: 'select', nodeId: target.node.id }, say: `${nameOf(target.node)}.` };
   }
@@ -698,7 +895,15 @@ export function resolveIntent(heard: string, ctx: IntentContext): Intent {
   if (open) {
     const target = matchNode(open[1]!, ctx);
     if (target.candidates.length) return ambiguous(target.candidates);
-    if (!target.node) return unknown(heard, `I do not see anything here called "${open[1]}".`);
+    if (!target.node && ctx.boards?.length) {
+      // 2026-09-27: a node on another board, or a room by name; still the planner's if neither.
+      const room = /\broom\b/.test(open[1]!) ? matchRoom(open[1]!, ctx.boards, scoreNode) : null;
+      if (room && !('candidates' in room)) return goTo(room);
+      const far = elsewhere(open[1]!, ctx);
+      if (far.candidates.length) return { kind: 'ambiguous', say: whichOne(far.candidates), candidates: far.candidates.map((c) => ({ id: c.node.id, name: c.node.name })) };
+      if (far.hit) return { kind: 'board', op: { type: 'open', hit: far.hit }, say: `Opening ${hitName(far.hit)} in ${far.hit.room}.` };
+    }
+    if (!target.node) return { kind: 'unknown', say: `I do not see anything here called "${open[1]}".`, heard, understood: true, plannable: true };
     return { kind: 'view', action: { type: 'open', nodeId: target.node.id }, say: `Opening ${nameOf(target.node)}.` };
   }
 

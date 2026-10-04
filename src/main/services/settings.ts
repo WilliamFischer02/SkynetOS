@@ -7,7 +7,7 @@ import { DEFAULT_AWAY_MINUTES, clampAwayMinutes, isAwayMode, type AwayMode } fro
 import { AWAY_DEFAULT_MODEL } from '@shared/away.js';
 import { DEFAULT_VOICE, type VoiceSettings } from '@shared/voice.js';
 import { DEFAULT_VISION, type VisionSettings } from '@shared/vision.js';
-import { DEFAULT_HOLOGRAM, type HologramSettings } from '@shared/hologram.js';
+import { DEFAULT_HOLOGRAM, clampHologramSize, type HologramSettings, type HologramSize } from '@shared/hologram.js';
 import { DEFAULT_SPEECH, type SpeechSettings } from '@shared/speech.js';
 import { DEFAULT_CONVERSE, type ConverseSettings } from '@shared/converse.js';
 import { DEFAULT_DESKTOP, type DesktopSettings } from '@shared/desktop.js';
@@ -22,6 +22,7 @@ import {
   type WeeklyUsageSettings
 } from '@shared/usage-week.js';
 import { clampUiScale, type UiScaleSetting } from '@shared/ui-scale.js';
+import { DEFAULT_SCHEDULE, normaliseScheduleSettings, type ScheduleSettings } from '@shared/ics.js';
 import { homeRoot } from './home.js';
 
 /**
@@ -192,6 +193,14 @@ export interface Settings {
    * "UI scale", through the user-only `settings:setUiScale`. The board's pixel zoom is separate.
    */
   uiScale: UiScaleSetting;
+
+  /**
+   * ScheduleOS's calendar pane (services/schedule-feed.ts). `icsUrls`: private iCal feeds merged
+   * into schedule/calendar.json, fetched every 10 minutes. FILE ONLY, set by hand: a private iCal
+   * URL is a credential, so no channel writes it, it is never logged, and it never reaches board
+   * JSON or the repo (docs/07 § ScheduleOS). Default none.
+   */
+  schedule: ScheduleSettings;
 }
 
 /**
@@ -229,6 +238,7 @@ const DEFAULTS: Settings = {
   remoteAllowedHosts: [],
   home: null,
   uiScale: 'auto',
+  schedule: { icsUrls: [...DEFAULT_SCHEDULE.icsUrls] },
   // The install locations tools/ downloads into. Empty if LOCALAPPDATA is somehow unset, which the
   // readiness checks in @shared/voice.ts and @shared/vision.ts then report as "not installed".
   voice: {
@@ -300,7 +310,9 @@ export function getSettings(): Settings {
       // dropped, and an unusable anchor field falls back to Monday 20:00 Denver's.
       usage: sanitizeWeeklyUsage(parsed.usage),
       // "auto", 1, 2 or 3; a hand-typed 4, "big" or 1.5 is `auto` rather than a broken chrome.
-      uiScale: clampUiScale(parsed.uiScale)
+      uiScale: clampUiScale(parsed.uiScale),
+      // Only https (or webcal, read as https) survives; anything else is dropped, never fetched.
+      schedule: normaliseScheduleSettings(parsed.schedule)
     };
     // A hand-edited plan is free text until it is checked. An unrecognised one becomes null,
     // which means "no budget" — better than silently metering against the wrong ceiling.
@@ -524,9 +536,30 @@ export function setHologramEnabled(on: boolean): { ok: boolean; error?: string }
   return writeSwitch({ ...s, hologram: { ...s.hologram, enabled: on === true } });
 }
 
+/**
+ * The JARVIS Voice window's size, `{ w, h }` in DIPs (2026-09-27). One writer: main's `resize`
+ * handler in services/hologram-window.ts, debounced 300 ms. A view preference; grants nothing.
+ */
+export function setHologramSize(size: HologramSize): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, hologram: { ...s.hologram, size: clampHologramSize(size) } });
+}
+
 export function setSpeechEnabled(on: boolean): { ok: boolean; error?: string } {
   const s = getSettings();
   return writeSwitch({ ...s, speech: { ...s.speech, enabled: on === true } });
+}
+
+/** The DESK layout, remembered across starts (2026-09-27). Written only by `hologram:setDesk`. */
+export function setHologramDesk(on: boolean): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, hologram: { ...s.hologram, desk: on === true } });
+}
+
+/** Which Windows voice speaks (`speech.voice`). Written only by `speech:setVoice`, from the installed list. */
+export function setSpeechVoice(voice: string): { ok: boolean; error?: string } {
+  const s = getSettings();
+  return writeSwitch({ ...s, speech: { ...s.speech, voice } });
 }
 
 /** Which voice JARVIS speaks with: Windows' own, or a profile through the synthesis server. */

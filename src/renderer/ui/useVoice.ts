@@ -43,7 +43,7 @@ export function useVoice(): void {
     };
 
     /** A question: JARVIS answers it out loud from main. Nothing goes to claude.ai. */
-    const answer = async (text: string): Promise<void> => {
+    const answer = async (text: string, onFail: (why: string) => void = () => undefined): Promise<void> => {
       const state = store.getState();
       if (typeof window.skynet['converse:ask'] !== 'function') {
         state.setVoiceMoment({ stage: 'did', text, say: 'Restart SkynetOS to talk: the running copy predates it.' });
@@ -60,11 +60,46 @@ export function useVoice(): void {
         store.getState().setVoiceMoment({ stage: 'did', text, say: why });
         store.getState().toast('fault', `NO ANSWER — ${why}`);
         clearLater(SHOW_MS);
+        onFail(`NO ANSWER — ${why}`);
+      }
+    };
+
+    /**
+     * M13.3: a desktop request the rules did not match goes to the planner first. Main decides
+     * whether it applies (desktop control on, the planner on, a desktop verb first); when it does,
+     * main plans, speaks the line back, runs it under runPlan's rules and says any failure itself,
+     * so this only shows the line. False: not the planner's, and conversation answers.
+     */
+    const plan = async (text: string): Promise<boolean> => {
+      if (typeof window.skynet['desktop:plan'] !== 'function') return false;
+      store.getState().setVoiceMoment({ stage: 'thinking', text });
+      try {
+        const result = await window.skynet['desktop:plan'](text);
+        if (!result.handled) return false;
+        const line = result.reply ?? result.error ?? '';
+        store.getState().setVoiceMoment({ stage: 'did', text, say: line });
+        if (!result.ok && line) store.getState().toast('warn', line);
+        clearLater(Math.max(SHOW_MS, Math.min(9000, line.length * 60)));
+        return true;
+      } catch (err) {
+        console.warn('[voice] the planner did not answer', err);
+        return false;
       }
     };
 
     const heard = async (sentence: VoiceHeard): Promise<void> => {
       const state = store.getState();
+      /*
+       * One turn at a time (docs/11): this sentence is turn `turnId`. The planner and conversation
+       * end their own turns in main; a sentence acted on HERE is ended here, once its line has been
+       * handed to speech (main waits for it to be spoken before DONE, and only then may the
+       * follow-up open). A report for a turn that has since been stopped is ignored by main.
+       */
+      const turnId = sentence.turnId;
+      const report = (outcome: 'done' | 'failed', text?: string): void => {
+        if (turnId === undefined || typeof window.skynet['turn:report'] !== 'function') return;
+        void window.skynet['turn:report']({ turnId, outcome, ...(text ? { text } : {}) }).catch(() => undefined);
+      };
       if (sentence.error) state.toast('warn', sentence.error);
       if (!sentence.text) {
         state.setVoiceMoment({ stage: 'nothing' });
@@ -75,12 +110,16 @@ export function useVoice(): void {
       if (!context) {
         state.setVoiceMoment({ stage: 'did', text: sentence.text, say: 'The board is not loaded yet.' });
         clearLater(SHOW_MS);
+        report('failed', 'THE BOARD IS NOT LOADED YET');
         return;
       }
       const intent = resolveIntent(sentence.text, context);
-      if (intent.kind === 'unknown' && !intent.understood) {
-        await answer(sentence.text);
-        return;
+      if (intent.kind === 'unknown' && (!intent.understood || intent.plannable)) {
+        if (await plan(sentence.text)) return;
+        if (!intent.understood) {
+          await answer(sentence.text, (why) => report('failed', why));
+          return;
+        }
       }
       const said = await actOnIntent(intent);
       store.getState().setVoiceMoment({ stage: 'did', text: sentence.text, say: said });
@@ -88,11 +127,13 @@ export function useVoice(): void {
       // JARVIS says the answer as well as showing it (docs/11). Never for a deletion: a refusal is
       // shown, not performed, and a microphone is not an approval. A `faceSend` speaks its own
       // one-line confirmation like any other view action.
-      if (intent.kind !== 'confirm' && said && typeof window.skynet['speech:say'] === 'function') {
-        void window.skynet['speech:status']()
+      const spoken = intent.kind !== 'confirm' && said && typeof window.skynet['speech:say'] === 'function'
+        ? window.skynet['speech:status']()
           .then((status) => (status.enabled ? window.skynet['speech:say']({ text: said }) : undefined))
-          .catch(() => undefined);
-      }
+          .catch(() => undefined)
+        : Promise.resolve(undefined);
+      // The line is queued (or there is none): the turn is this window's to end.
+      void spoken.then(() => report('done', said));
     };
 
     const offState = window.skynet.on('voice:state', (status) => {

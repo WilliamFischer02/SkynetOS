@@ -97,9 +97,26 @@ export interface HoloScene {
   queue: number;
   /** The Claude Code session the focus came from, for the caption. */
   session?: string;
+  /**
+   * Every Claude Code session seen in the last ten minutes, most recent first (the filtered one is
+   * kept even when older). More than one turns the caption's session label into a picker
+   * (packages/shared/holo-sessions.ts).
+   */
+  sessions: HoloSession[];
+  /** The session the globe is showing alone (`hologram:setSessionFilter`); absent or null is all of them. */
+  filter?: string | null;
 }
 
-export const EMPTY_SCENE: HoloScene = { orbit: [], focus: null, queue: 0 };
+/** One Claude Code session, for the picker: `SkynetOS · 4a2cf476`. */
+export interface HoloSession {
+  id: string;
+  /** The cwd's last folder and the id's first eight characters. */
+  label: string;
+  /** ms since epoch of its last transcript line. */
+  lastSeen: number;
+}
+
+export const EMPTY_SCENE: HoloScene = { orbit: [], focus: null, queue: 0, sessions: [] };
 
 /**
  * Stream mode (docs/07 § Streaming safety): the globe still shows WHAT was touched, never what

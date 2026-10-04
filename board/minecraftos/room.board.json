@@ -1593,6 +1593,28 @@
           "kind": "reads"
         }
       ]
+    },
+    {
+      "id": "ph_goobtropolis_configs",
+      "kind": "store.folder",
+      "name": "Goobtropolis configs",
+      "description": "Real, on-disk export of the live Goobtropolis server's mod configs (AFK, Chunky, Ledger, grave markers...), found this pass with zero board presence. Separate from P1, which points at a local test cwd that doesn't exist on this machine.",
+      "pos": {
+        "x": 165,
+        "y": 132
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-10-03T08:37:35.758Z",
+      "fields": {
+        "path": "C:/dev/goobtropolis-configs",
+        "openWith": "explorer"
+      },
+      "connect": [
+        {
+          "to": "p1_goobtropolis",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

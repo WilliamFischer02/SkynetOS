@@ -16,6 +16,11 @@ import {
   numberMonitors,
   parseDesktopLine,
   placeIn,
+  pickWindow,
+  stopsAfterFailure,
+  titleBarPoint,
+  type PickOptions,
+  SHELL_PROCESSES,
   type AppEntry,
   type DesktopHelperPhase,
   type DesktopPlan,
@@ -29,7 +34,11 @@ import {
   type Rect,
   type WindowLayout
 } from '@shared/desktop.js';
+import { isSensitiveTitle } from '@shared/actions.js';
+import { stepLabel, turnBusy } from '@shared/turn.js';
+import { currentTurnId, dispatch as turnDispatch, dispatchFor as turnDispatchFor, failTurn, finishTurn, turnState } from './turn.js';
 import { getSettings, setDesktopEnabled as writeDesktopEnabled } from './settings.js';
+import { markTurn } from './turn-timing.js';
 
 /**
  * Desktop control (docs/11-JARVIS-VOICE.md § Desktop control; docs/07 § Desktop control).
@@ -247,7 +256,7 @@ function toPhysical(rect: Rect): Rect {
   return { x: Math.round(rect.x * f), y: Math.round(rect.y * f), width: Math.round(rect.width * f), height: Math.round(rect.height * f) };
 }
 
-interface RawWindow { h: number; title: string; pid: number; process: string; x: number; y: number; w: number; h2: number; min: boolean; fg: boolean }
+export interface RawWindow { h: number; title: string; pid: number; process: string; x: number; y: number; w: number; h2: number; min: boolean; fg: boolean }
 
 async function rawWindows(): Promise<RawWindow[]> {
   const answer = await request('windows');
@@ -326,7 +335,15 @@ export function setDesktopEnabled(on: boolean): DesktopStatus {
   return desktopStatus();
 }
 
+/**
+ * When the last halt was asked for, busy or not. The planner (services/planner.ts) reads the plan
+ * back BEFORE the desktop is busy; a "stop" or Esc in that window must still cancel the run.
+ */
+let lastHaltAt = 0;
+export function lastHaltRequest(): number { return lastHaltAt; }
+
 export function haltPlan(): { ok: boolean } {
+  lastHaltAt = Date.now();
   if (!busy) return { ok: false };
   halted = true;
   return { ok: true };
@@ -451,6 +468,8 @@ async function runStep(step: DesktopStep, mons: MonitorInfo[]): Promise<{ ok: bo
       return placeWindow(win.handle, step.monitor, step.layout, mons);
     }
     case 'focus': {
+      // 2026-09-27: "use my mouse to select the firefox window" (window-split.ts' neighbour, below).
+      if (step.focusByPointer) return focusByPointer(step.window, mons);
       const win = await findWindow(step.window, mons);
       if (!win) return fail(`I do not see a window for ${step.window}.`);
       const answer = await request('focus', { h: win.handle });
@@ -470,6 +489,12 @@ async function runStep(step: DesktopStep, mons: MonitorInfo[]): Promise<{ ok: bo
       return { ok: true, message: step.click ? `${step.click} click` : 'moved' };
     }
     case 'keys': {
+      // M13.3: never into a sign-in window, never into a shell (docs/07: no step runs a shell string).
+      const fg = await request('fgtitle', {}, 5000);
+      const fgTitle = typeof fg['title'] === 'string' ? fg['title'] : '';
+      const fgProcess = typeof fg['process'] === 'string' ? fg['process'] : '';
+      if (isSensitiveTitle(fgTitle)) return fail('A sign-in window is in front; I do not type into those.');
+      if (SHELL_PROCESSES.test(fgProcess)) return fail(`${fgProcess} is a shell; I do not type into one.`);
       if (step.combo) {
         if (isRefusedCombo(step.combo)) return fail(`${step.combo} closes or locks the machine, which is yours to do.`);
         const answer = await request('combo', { keys: step.combo.toLowerCase().split('+').map((k) => k.trim()).filter(Boolean) });
@@ -486,47 +511,199 @@ async function runStep(step: DesktopStep, mons: MonitorInfo[]): Promise<{ ok: bo
       return { ok: true, message: `waited ${step.ms} ms` };
     case 'say':
       return { ok: true, message: step.text };
+    case 'scroll': {
+      // The wheel where the pointer is: after a focusByPointer, the window's centre.
+      const fg = await request('fgtitle', {}, 5000);
+      if (isSensitiveTitle(typeof fg['title'] === 'string' ? fg['title'] : '')) return fail('A sign-in window is in front; I do not scroll in those.');
+      const notches = Math.max(1, Math.min(20, Math.round(step.notches || 1)));
+      for (let n = 0; n < notches && !halted; n++) {
+        const answer = await request('wheel', { delta: step.direction === 'up' ? 120 : -120 });
+        if (answer['ok'] !== true) return fail('The wheel did not turn.');
+        await sleep(40);
+      }
+      return { ok: true, message: `scrolled ${step.direction}` };
+    }
+    case 'uiaClick': {
+      // The replay's `element` tier (services/action-recorder.ts), by name only: find the window by
+      // title, bring it forward, ask UI Automation for the control, click its centre. No coordinate
+      // fallback: a control that is not there is a failed step, said as one.
+      const win = await findWindow(step.window, mons);
+      if (!win) return fail(`I do not see a window for ${step.window}.`);
+      if (isSensitiveTitle(win.title)) return fail(`${win.title} looks like a sign-in window; I do not click in those.`);
+      if (SHELL_PROCESSES.test(win.process)) return fail(`${win.process} is a shell; I do not click in one.`);
+      await request('focus', { h: win.handle });
+      await sleep(150);
+      const found = await request('uiafind', { h: win.handle, name: step.control, type: step.type ?? '', budgetMs: UIA_BUDGET_MS }, UIA_BUDGET_MS + 3000);
+      const rect = found['found'] === true && Array.isArray(found['rect']) ? (found['rect'] as number[]) : null;
+      if (!rect || rect.length !== 4 || !(rect[2]! > 0) || !(rect[3]! > 0)) return fail(`I do not see "${step.control}" in ${step.window}.`);
+      // UI Automation answers in physical pixels, which is what the helper's `mouse` op takes.
+      const x = Math.round(rect[0]! + rect[2]! / 2);
+      const y = Math.round(rect[1]! + rect[3]! / 2);
+      const moved = await request('mouse', { x, y, travelMs: settings.mouseTravelMs ?? 450 }, 10_000);
+      if (moved['ok'] !== true) return fail('The mouse would not move.');
+      const clicked = await request('click', { button: 'left' });
+      return clicked['ok'] === true ? { ok: true, message: 'element' } : fail('The click did not go through.');
+    }
   }
+}
+
+/** How long one UI Automation lookup may take (the replay's LOOKUP_BUDGET_MS). */
+const UIA_BUDGET_MS = 2000;
+
+/* ────────────────────────── reaching a window by pointer (2026-09-27) ────────────────────────── */
+
+/** The default browser's process name: the catalogue's first browser, through its shortcut. */
+async function preferredBrowserProcess(): Promise<string | undefined> {
+  const browser = defaultBrowser(listApps());
+  if (!browser) return undefined;
+  const target = await lnkTarget(browser.path);
+  return target ? processKey(target) : processKey(browser.path);
+}
+
+/**
+ * The open window a spoken target means (`pickWindow` over the helper's read-only list): a process
+ * ("firefox"), a title token (a chip's "JARVIS-TQR"), `browser` or `terminal`. Null when none is.
+ * Used by `focusByPointer`, window-split.ts and dictate-target.ts.
+ */
+export async function findTargetWindow(target: string, prefer?: PickOptions['prefer']): Promise<RawWindow | null> {
+  if (!(await startHelper())) return null;
+  const all = await rawWindows();
+  const preferredBrowser = target.trim().toLowerCase() === 'browser' ? await preferredBrowserProcess() : undefined;
+  return pickWindow(target, all, { ...(preferredBrowser ? { preferredBrowser } : {}), ...(prefer ? { prefer } : {}) });
+}
+
+async function isForeground(handle: number): Promise<boolean> {
+  return (await rawWindows()).some((w) => w.h === handle && w.fg);
+}
+
+/**
+ * Bring one window forward as a hand would. Restored if minimised; with `visible`, the pointer
+ * first travels to its centre so William sees which window was meant. SetForegroundWindow is
+ * tried; when Windows refuses it (the foreground lock), the pointer clicks the title bar at
+ * `titleBarPoint` and, with `visible`, returns to the centre, where a wheel step then scrolls.
+ * Only the existing `mouse`, `click` and `focus` ops; nothing new in the helper.
+ */
+export async function bringForward(win: RawWindow, mons: MonitorInfo[], opts: { visible: boolean }): Promise<{ ok: boolean; message: string }> {
+  const travelMs = getSettings().desktop.mouseTravelMs ?? 450;
+  if (win.min) { await request('focus', { h: win.h }); await sleep(250); }
+  const now = (await rawWindows()).find((w) => w.h === win.h) ?? win;
+  const centre = { x: Math.round(now.x + now.w / 2), y: Math.round(now.y + now.h2 / 2) };
+  if (opts.visible) {
+    const moved = await request('mouse', { ...centre, travelMs }, 10_000);
+    if (moved['ok'] !== true) return fail('The mouse would not move.');
+  }
+  await request('focus', { h: now.h });
+  await sleep(120);
+  if (await isForeground(now.h)) return { ok: true, message: 'in front' };
+  if (halted) return fail('Stopped before the click.');
+  const dip = toDip({ x: now.x, y: now.y, width: now.w, height: now.h2 });
+  const scale = mons.find((m) => m.index === monitorOf(dip, mons))?.scale ?? 1;
+  const bar = titleBarPoint({ x: now.x, y: now.y, width: now.w, height: now.h2 }, scale);
+  const toBar = await request('mouse', { ...bar, travelMs }, 10_000);
+  if (toBar['ok'] !== true) return fail('The mouse would not move.');
+  const clicked = await request('click', { button: 'left' });
+  if (clicked['ok'] !== true) return fail('The click did not go through.');
+  await sleep(150);
+  if (opts.visible) await request('mouse', { ...centre, travelMs: Math.round(travelMs / 2) }, 10_000);
+  return (await isForeground(now.h)) ? { ok: true, message: 'in front (title bar)' } : fail(`Windows would not bring ${now.title} forward.`);
+}
+
+async function focusByPointer(target: string, mons: MonitorInfo[]): Promise<{ ok: boolean; message: string }> {
+  const win = await findTargetWindow(target);
+  if (!win) return fail(`I do not see a window for ${target}; is it open?`);
+  if (isSensitiveTitle(win.title)) return fail(`${win.title} looks like a sign-in window; I do not reach into those.`);
+  return bringForward(win, mons, { visible: true });
+}
+
+/** Place a window by handle on a DIP rectangle (window-split.ts). Physical for the helper. */
+export async function placeHandle(handle: number, dip: Rect): Promise<{ ok: boolean; message: string }> {
+  if (!(await startHelper())) return fail(helperError ?? 'THE DESKTOP HELPER COULD NOT START');
+  const rect = toPhysical(dip);
+  const answer = await request('place', { h: handle, x: rect.x, y: rect.y, w: rect.width, height: rect.height });
+  return answer['ok'] === true ? { ok: true, message: 'placed' } : fail(`Windows would not move that window${typeof answer['error'] === 'string' ? ` — ${answer['error']}` : ''}.`);
 }
 
 /* ────────────────────────── the plan ────────────────────────── */
 
-export async function runPlan(plan: DesktopPlan): Promise<DesktopResult> {
-  const refuse = (message: string): DesktopResult => ({ ok: false, message, steps: [], halted: false });
+/**
+ * Run a plan, step by step, under the switch, the cap and the halt. Every step is reported to the
+ * turn engine (services/turn.ts) with a label William can read ("FOCUS FIREFOX", "PRESS SPACE",
+ * `stepLabel`), and to `onStep` when given, so the status strip shows `2 / 5 · FOCUS FIREFOX` while
+ * it happens and nothing is ever "said but not happening". A failure is FAILED at once. A plan that
+ * nobody's sentence started (a gesture, a panel) is its own turn and is ended here, with "Done." after
+ * more than one step; a plan inside a heard turn is ended by whoever owns that turn (the board, the
+ * planner), after its line is spoken.
+ */
+export async function runPlan(plan: DesktopPlan, opts: { onStep?: (index: number, of: number, label: string) => void } = {}): Promise<DesktopResult> {
+  const refuse = (message: string, fails = true): DesktopResult => {
+    // Nothing moved: said as a failure, so no follow-up opens after it.
+    if (fails) failTurn(currentTurnId(), message);
+    return { ok: false, message, steps: [], halted: false };
+  };
   const settings = getSettings().desktop;
   if (settings.enabled !== true) return refuse('DESKTOP CONTROL IS OFF — THE DESKTOP SWITCH IN THE HOLOGRAM WINDOW, OR settings.json desktop.enabled');
   if (!plan || !Array.isArray(plan.steps) || !plan.steps.length) return refuse('THERE IS NOTHING TO DO IN THAT PLAN');
   if (plan.steps.length > MAX_PLAN_STEPS) return refuse(`THAT IS ${plan.steps.length} STEPS; A SPOKEN PLAN STOPS AT ${MAX_PLAN_STEPS}`);
-  if (busy) return refuse('THE DESKTOP IS STILL BUSY WITH THE LAST REQUEST — SAY STOP, OR WAIT');
+  // Busy: the running plan's turn is not this one's to fail.
+  if (busy) return refuse('THE DESKTOP IS STILL BUSY WITH THE LAST REQUEST — SAY STOP, OR WAIT', false);
 
   busy = true;
   halted = false;
   const results: DesktopStepResult[] = [];
+  const of = plan.steps.length;
+  // Nothing heard is being worked on: this plan is a turn of its own, and ends itself.
+  const owns = !turnBusy(turnState());
+  turnDispatch({ type: 'planStarted', of, detail: 'STARTING THE DESKTOP HELPER' });
+  const turnId = currentTurnId();
+  markTurn('intent', { path: 'plan' });
+  let finished = false;
   try {
     push({ busy: true, index: 0, total: plan.steps.length, message: 'starting the desktop helper' });
     if (!(await startHelper())) {
-      return { ok: false, message: helperError ?? 'THE DESKTOP HELPER COULD NOT START', steps: [], halted: false };
+      const message = helperError ?? 'THE DESKTOP HELPER COULD NOT START';
+      failTurn(turnId, message);
+      finished = true;
+      return { ok: false, message, steps: [], halted: false };
     }
     const mons = monitors();
     for (let i = 0; i < plan.steps.length; i++) {
       if (halted) break;
       const step = plan.steps[i]!;
+      const label = stepLabel(step);
+      turnDispatchFor(turnId, { type: 'step', index: i, of, label });
+      try { opts.onStep?.(i, of, label); } catch (err) { console.warn('[desktop] onStep threw', err); }
       push({ busy: true, index: i, total: plan.steps.length, step, message: describe(step) });
       const started = Date.now();
       let outcome: { ok: boolean; message: string };
+      // A step still running is progress: a launch may wait 30 s for the program and 20 s for its
+      // window, and typing a long text takes as long as it takes. Every helper request has its own
+      // time limit, so this cannot keep a hung step alive past it (the watchdog's 60 s, docs/11).
+      const beat = setInterval(() => turnDispatchFor(turnId, { type: 'progress' }), 5000);
       try {
         outcome = await runStep(step, mons);
       } catch (err) {
         outcome = fail((err as Error).message || 'that step failed');
+      } finally {
+        clearInterval(beat);
       }
       results.push({ step, ...outcome, ms: Date.now() - started });
       console.log(`[desktop] ${describe(step)} → ${outcome.ok ? 'ok' : 'FAILED'}: ${outcome.message}`);
+      if (!outcome.ok && stopsAfterFailure(plan.steps.slice(i + 1))) {
+        console.log(`[desktop] stopping: ${plan.steps.length - i - 1} step(s) left would act on the wrong window`);
+        break;
+      }
       if (i < plan.steps.length - 1 && !halted) await sleep(Math.max(0, settings.stepDelayMs ?? 250));
     }
     const ok = results.length === plan.steps.length && results.every((r) => r.ok);
     const message = ok ? 'done' : halted ? 'stopped' : results.find((r) => !r.ok)?.message ?? 'not finished';
+    if (halted) turnDispatchFor(turnId, { type: 'stop' });
+    else if (!ok) failTurn(turnId, message.replace(/[.\s]+$/, '').toUpperCase());
+    else if (owns) void finishTurn(turnId, undefined, { word: of > 1 });
+    finished = true;
     return { ok, message, steps: results, halted };
   } finally {
+    // An exception past the steps: the turn must not be left ACTING.
+    if (!finished) failTurn(turnId, 'THE PLAN STOPPED WITH AN ERROR');
     busy = false;
     push({ busy: false, message: halted ? 'stopped' : 'done' });
     halted = false;
@@ -538,10 +715,12 @@ function describe(step: DesktopStep): string {
     case 'launch': return `opening ${step.app}${step.monitor ? ` on ${monitorWord(step.monitor)}` : ''}`;
     case 'url': return `opening ${step.site ?? step.url}${step.browser ? ` in ${step.browser}` : ''}`;
     case 'place': return `moving ${step.window === FOREGROUND ? 'that' : step.window} to ${monitorWord(step.monitor)}`;
-    case 'focus': return `bringing ${step.window} forward`;
+    case 'focus': return step.focusByPointer ? `reaching for ${step.window}` : `bringing ${step.window} forward`;
+    case 'scroll': return `scrolling ${step.direction}`;
     case 'mouse': return step.click ? `${step.click} click at ${step.x},${step.y}` : `mouse to ${step.x},${step.y}`;
     case 'keys': return step.combo ? `pressing ${step.combo}` : 'typing';
     case 'wait': return `waiting ${step.ms} ms`;
     case 'say': return step.text;
+    case 'uiaClick': return `pressing "${step.control}" in ${step.window}`;
   }
 }

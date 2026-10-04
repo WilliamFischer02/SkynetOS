@@ -51,6 +51,8 @@ voice-profiles/
 codex/drops/
 # Schedule data: calendars, shifts, the week preview. Personal; scripts in schedule/ are tracked.
 schedule/week.html
+schedule/calendar.json
+schedule/calendar.json.tmp
 schedule/today.md
 schedule/cache/
 schedule/pbs-shifts.json

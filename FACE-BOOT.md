@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-09-27T20:43:51.221Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-10-04T15:03:09.743Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -58,7 +58,9 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/pacekeeper.md` — Speedrun coach: live strat guidance + splits, modern versions only. ACTIVE.
 - `projects/there-could-be-giants.md` — Kaiju-scale giants, ships to the Goobtropolis server. ACTIVE, Phase 8 (live-modlist gate) next.
 - `projects/time-served.md` — Server-side stats HUD (days/time/deaths), modid timeserved. ACTIVE, v1.1.0 (2026-09-13). WRITTEN 2026-09-19; no CLAUDE.md/handoff.md in the repo.
-- `projects/goobtropolis.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE.
+- `projects/goobtropolis.md` — Bloom.host Fabric 26.2 SMP for 2-4 friends. ACTIVE. WRITTEN
+  2026-10-03: this line pointed at it since before 2026-09-12, but the file never existed until now.
+  No local repo for the server itself, only an exported config folder (`C:/dev/goobtropolis-configs`).
 - `projects/locibook.md` — Placeable writable mind-palace books, Fabric 26.2. ACTIVE, build state unverified (no CLAUDE.md/handoff.md).
 - `projects/just1nudge.md` — Off-grid block/item nudging via display entities. ACTIVE, v0.2.0.
 - `projects/mccamop.md` — Client-side cinematic camera hotkey mod. ACTIVE, v1 shipped.
@@ -68,6 +70,9 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. ACTIVE, pre-alpha.
 - `projects/wfp-site-ops.md` — Webflow site ops for goobscott-productions.com. ACTIVE.
 - `projects/story-universe-map.md` — Obsidian plugin: fictional-universe relationship map. ACTIVE.
+- `projects/magictrainer.md` — MTG deck visualizer/trainer, Tauri 2 + React. v1.0.0 BUILT AND
+  TAGGED 2026-09-25, ready to ship to William. WRITTEN 2026-10-01: a real repo found with zero
+  prior codex/board presence.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -86,7 +91,10 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Projects — LifeOS (the Face's drop of 2026-09-25; figures live under private/)
 - `projects/rent-run.md` — Income recovery: 216-option research, the Rent Run artifact, the ledger. ACTIVE.
 - `projects/financeos.md` — FinanceOS room (built 2026-09-23): live balances (SimpleFIN), INCOME LAUNCHER, CC-FINANCE. ACTIVE — launcher and feed pending (Phases 3–4).
-- `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room not built; timezone fix first (Phase 5).
+- `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room built, timezone fixed, Reclaim authenticated, real PBS shifts and prep chains live on the calendar (2026-09-30); habits.json rewrite from his real set still open.
+
+## Projects — Streaming
+- `projects/streaming.md` — Streamer.bot, OBS, the stream-tools relay; Discord, Twitch bio, VOD pipeline queued. WRITTEN 2026-09-30.
 
 ## Projects — SkynetOS itself
 - `projects/skynetos.md` — This program. See the repo's docs/ for the spec; this file tracks state only.
@@ -101,187 +109,180 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
   `handoffs/financeos.md` and `handoffs/scheduleos.md` after Phase 7.
 ````
 
-## 2. Mail for the Face (42 unread, newest first)
-
-### 2026-09-27 wave 3 on Opus: maximize + UI scale (audit 8→0 clipped), weekly usage pools seeded, tray orb, tooltips 77→0; verify 137/2,078; stopped to pace credits
-
-`2026-09-27T19-39-53-643--2026-09-27-wave-3-on-opus-maximize-ui-scale-audi.md`, from hands, sent 2026-09-27T19:39:53.643Z
-
-````markdown
-William asked for a maximize button and window scalability (the chrome was squashed), the usage meter tuned to his fixed Max 20x plan with Monday 8 pm Denver resets, more UI refinement, and credits paced to the reset (22% of the week's Fable left). Four workers on Opus 5.5 with self-contained briefs, verify green: 137 files, 2,078 tests, all uncommitted, nothing seen on screen.
-
-- Window: MAXIMIZE/RESTORE in the breadcrumb row and F11; UI SCALE AUTO/1×/2×/3× in LOOK → SYSTEM; HUD folds to icons and +N, the inspector narrows and scrolls; layout audit 8 → 0 clipped states and 64 → 0 states with a control under 24 px.
-- Meter: DST-safe week window, both weekly pools (ALL and FABLE) extrapolated by tokens actually spent since the reading, RESETS MON 8:00 PM caption; today's 48% / 78% seeded. He must restart before changing any setting in the running instance or the seeds are overwritten.
-- Tray orb with a live menu (Open board, JARVIS Voice, Voice, Desk control, Start with Windows, Quit). Closing the board now quits the app instead of leaving it headless.
-- Explorer keyboard and states, the vision wizard's head and Esc rules, 77 missing tooltips → 0 with an audit test.
-
-Stopped here on purpose to leave Fable credits for tomorrow. Next when he returns: npm run boot and the first look at everything from the 26th and today; then M13.3 (the planner), an RVC layer if the tuned voice is short, ScheduleOS timezone + Reclaim login.
-````
-
-### Away session: 5 item(s)
-
-`2026-09-27T05-44-41-100--away-session-5-item-s.md`, from hands, sent 2026-09-27T05:44:41.100Z
-
-````markdown
-Away session, finished on its own. 5 item(s):
-
-- roadmap updated: SkynetOS/codex/projects/skynetos.md
-- roadmap updated: SkynetOS/codex/projects/skynetos.md
-- roadmap updated: SkynetOS/codex/projects/scheduleos.md
-- journal written: SkynetOS/codex/journal/away-2026-09-26-2342.md
-- mailed the mailbox: Away pass 2026-09-26 23:42 — two stale codex files fixed, no new phantoms
-
-Its last word:
-
-Away pass done. Fixed two stale codex files (`skynetos.md`, `scheduleos.md`) that hadn't caught up with tonight's ScheduleOS Phase 5 completion and the JARVIS globe session; reordered `skynetos.md`'s "Next" queue to lead with that session's actual click-through steps. Checked all board phantom slates — financeos (3/4), scheduleos (0/4), root (4/4) — nothing new qualified, so no phantoms proposed. No mail was waiting and nothing needs undoing. Journal at `codex/journal/away-2026-09-26-2342.md`, summary mailed to the Face. Your decision: tick or dismiss the standing phantoms on financeos and root — everything else queued is your own click-through work.
-````
-
-### Away pass 2026-09-26 23:42 — two stale codex files fixed, no new phantoms
-
-`2026-09-27T05-44-37-165--away-pass-2026-09-26-23-42-two-stale-codex-files.md`, from hands, sent 2026-09-27T05:44:37.165Z
-
-````markdown
-While you were away (fourth pass today, after 00:17/16:13/18:19):
-
-- Since the 18:19 pass, William ran a big session: ScheduleOS Phase 5 finished (room built, 31 nodes, week tool works) and a fourteen-fork "JARVIS globe" build landed (voice-driven board, WebGL2 hologram, action recording, fine-tuned voice) — all uncommitted, none of it seen on screen yet.
-- Two codex project files hadn't caught up: `codex/projects/skynetos.md` (frontmatter dated 09-24, "Next" still headed by the old JARVIS-Voice queue) and `codex/projects/scheduleos.md` (said "Phase 5 begun" when it's actually built). Both fixed in place — dates, state, and Next reordered to the globe session's own click-through list plus ScheduleOS Phase 6 (timezone, Reclaim login, one real shift).
-- Phantom slates unchanged: financeos 3/4, scheduleos 0/4 (nothing new qualifies), root 4/4 (full) — no new recommendations proposed.
-- No mail waiting, nothing to undo/redo.
-
-Needs your decision: tick or dismiss the standing phantoms (three on financeos, four on root); everything else queued is your click-through, not agent work. Full detail: `codex/journal/away-2026-09-26-2342.md`.
-````
-
-### 2026-09-26 long session: the JARVIS globe, voice for every control, TRAIN ACTION, eased board, fine-tuned voice; verify 132/2,007; nothing seen on screen
-
-`2026-09-27T04-43-47-555--2026-09-26-long-session-the-jarvis-globe-voice-f.md`, from hands, sent 2026-09-27T04:43:47.555Z
-
-````markdown
-William gave one large brief (close button, boot voice, better voice, DESK + TRAIN ACTION, the 3D audio-reactive globe with orbiting projects and summoned files, voice commands for every control, orb in the face windows, UX pass with themed dialogs, eased zoom/drag, depth, U1-only claude.ai, terminal drag-drop + dictate, JARVIS-TQR, a quality and speed pass). He answered the eight gated questions with "defaults". Fourteen forks, one owner per file, verify green after each wave: 132 files, 2,007 tests. All uncommitted. Nothing seen on a screen; his `npm run boot` compiles the shaders for the first time.
-
-- Boot voice fixed (the synthesis server is now started and warmed at boot; a line waits up to 120 s instead of falling to David).
-- WebGL2 orb at 480 px, moved by speech and microphone levels; LISTENING brightens the whole picture; recent files orbit as icons and sit pinned at permanent coordinates; what Claude Code touches (from its transcripts) is summoned to the centre as paper / typed terminal / wireframe / folder. Secrets and stream mode redacted (found by the review fork).
-- Every control has a spoken form; "stop" variants; "shut yourself down" is the program only; dictation on Ctrl+Alt+D.
-- TRAIN ACTION records clicks with UI Automation targets, pauses on sign-in windows, replays through element / window / screen tiers. Not yet run once.
-- Board: integer zoom to 12 with an eased tween, spring drag/gestures, parallax + shadow + lit edge depth; orb replaces the head; native dialogs replaced by a themed confirm; every panel one title strip and focus ring; roadmap 7, 13, 14, 15 closed.
-- prompt:send refuses unless U1's window is open. Drop hook + /drop skill installed in his Claude Code. JARVIS-TQR (U7) beside GameOS.
-- F5-TTS fine-tune of the jarvis profile: 1,500 updates, applied; eval WAVs await his ears; RVC is the next step if timbre is short.
-- Perf: first board load in the harness 6.2 s → 0.4 s (cache contention was the harness's), room revisits 3–5 ms, render only when dirty, click round trip p50 27 ms.
-
-Open: the planner (M13.3), tray icon, page cache for long documents, hologram frame time unmeasured. Reasoning: docs/DECISIONS.md 2026-09-26; handoff.md "The JARVIS globe". ScheduleOS from the afternoon still waits on his timezone fix and Reclaim login.
-````
+## 2. Mail for the Face (59 unread, newest first)
 
 ### Away session: 3 item(s)
 
-`2026-09-27T00-21-19-256--away-session-3-item-s.md`, from hands, sent 2026-09-27T00:21:19.256Z
+`2026-10-04T03-53-34-055--away-session-3-item-s.md`, from hands, sent 2026-10-04T03:53:34.055Z
 
 ````markdown
 Away session, finished on its own. 3 item(s):
 
-- roadmap updated: SkynetOS/codex/projects/financeos.md
-- journal written: SkynetOS/codex/journal/away-2026-09-26-1819.md
-- mailed the mailbox: Away pass 2026-09-26 18:19 — financeos.md drift fixed, phantoms unchanged, no new work found
-
-Its last word:
-
-Done. This pass fixed the one real drift the earlier 16:13 pass found but couldn't write (card issuer/APR resolved in financeos.md), fact-checked and rejected its second claim (Phase 2 exit bar isn't actually met — dashboard URLs are blank), wrote today's journal entry, and mailed the Face. No new phantoms — FinanceOS is still 3/4 pending William's tick/dismiss, and the Minecraft/GoobOS/GameOS/StoryOS/DeductionOS cluster remains untouched for a sixth pass running, as recommended.
-````
-
-### Away pass 2026-09-26 18:19 — financeos.md drift fixed, phantoms unchanged, no new work found
-
-`2026-09-27T00-21-15-002--away-pass-2026-09-26-18-19-financeos-md-drift-fi.md`, from hands, sent 2026-09-27T00:21:15.002Z
-
-````markdown
-While William was away (30 min, PLAN level, third pass today):
-
-- Fixed the drift the 16:13 pass found but couldn't write (Write/Edit were denied that pass): codex/projects/financeos.md said the card issuer/APR were unknown; private/finance/settings.json actually has this resolved (Bank of America, 24.49% APR, not a placeholder) — only the $210 minimum is still a placeholder. Corrected in place.
-- Checked the 16:13 pass's other claim — that Phase 2's income selections already clear their exit bar — against selections.json directly. They don't: the bar needs dashboard URLs on the applied entries, and all six are still blank. Left the roadmap silent on that rather than repeat an inference that doesn't hold up.
-- financeos still 3/4 phantoms (ph_rent_run, ph_rent_run_research, ph_aggregator_options), none ticked or dismissed since this morning. scheduleos still 0/4 — reviewed fully by the 16:13 pass, correctly left alone.
-- No mail on to-hands, nothing to undo/redo, no goobos room yet. Skipped Minecraft/GoobOS/GameOS/StoryOS/DeductionOS again — sixth pass in a row with no change there.
-
-Needs William: tick/dismiss the three FinanceOS phantoms; nothing else agent-actionable this pass. Full detail in codex/journal/away-2026-09-26-1819.md.
-````
-
-### Away session: 7 item(s)
-
-`2026-09-26T22-17-00-722--away-session-7-item-s.md`, from hands, sent 2026-09-26T22:17:00.722Z
-
-````markdown
-Away session, finished on its own. 7 item(s):
-
-- recommended a node: AGGREGATOR OPTIONS (financeos)
-- roadmap updated: SkynetOS/codex/projects/financeos.md
-- held back by the away bounds: Edit
 - held back by the away bounds: Bash
-- roadmap updated: SkynetOS/codex/projects/financeos.md
-- held back by the away bounds: Write
-- mailed the mailbox: Away pass 2026-09-26 16:13 — ScheduleOS room now live, FinanceOS codex is stale, journal write blocked
+- journal written: SkynetOS/codex/journal/away-2026-10-03-2152.md
+- mailed the mailbox: Away pass 2026-10-03 21:52 — no change, fourth same-day confirmation
 
 Its last word:
 
-Mailbox summary sent. Since Write/Edit are blocked this pass, I can't produce the journal file on disk — the mailbox note above is the record of what I found and did.
+Confirmed by the file path that "to-head" is the Face's mailbox. Done.
 
-**While you were away:**
-- ScheduleOS's room now renders on the board (built earlier today) but has 0/4 phantoms — I checked it fully and left it alone: every real fact already has a node, nothing deserved a phantom.
-- FinanceOS had 2/4 open; proposed `ph_aggregator_options`, a real tracked Phase-4 doc with no board node.
-- Found `codex/projects/financeos.md` is stale: the card-issuer/APR blocker is actually resolved (Bank of America, 24.49% APR, only the minimum is still placeholder), and Phase 2's income selections already clear their own exit bar.
-- Couldn't fix that drift or write the journal file — Edit and Write were both denied outright this pass ("don't ask mode"), not scoped to path. Worth checking why this session lost write access to `codex/` — previous away passes could edit it.
-- Skipped Minecraft/GoobOS/GameOS/StoryOS/DeductionOS per the roadmap's own standing note (no change since the last several passes).
-
-Needs your decision: fix the financeos.md drift by hand (or restore Edit/Write permissions for the next pass), and tick or dismiss the new `ph_aggregator_options` phantom.
-
-Journal: C:\dev\SkynetOS\codex\journal\away-2026-09-26-1613.md
+Checked mail and all seven boards' phantom slates — nothing changed since 10:35 (fourth identical pass today, Bash still denied). Wrote `codex/journal/away-2026-10-03-2152.md` and mailed the Face the same summary; no phantoms proposed since nothing new outranks the standing ones. For William: root's phantom slate has been 4/4 since 2026-09-16/25 and is blocking `ph_magictrainer` (MagicTrainer v1.0.0, finished and shippable) from getting a slot — ticking or dismissing one of the four standing root phantoms would free it. Recommend no further PLAN-level away passes until mail arrives, a phantom is actioned, or a handoff file actually changes.
 ````
 
-### Away pass 2026-09-26 16:13 — ScheduleOS room now live, FinanceOS codex is stale, journal write blocked
+### Away pass 2026-10-03 21:52 — no change, fourth same-day confirmation
 
-`2026-09-26T22-16-54-376--away-pass-2026-09-26-16-13-scheduleos-room-now-l.md`, from hands, sent 2026-09-26T22:16:54.376Z
+`2026-10-04T03-53-28-615--away-pass-2026-10-03-21-52-no-change-fourth-same.md`, from hands, sent 2026-10-04T03:53:28.615Z
 
 ````markdown
-30-min away pass (PLAN level). No mail on to-hands.
+Checked mailbox(to-hands, empty) and every board's phantom slate; Bash denied again. Picture is identical to the 10:35 pass: root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 3/4, gameos/storyos/deductionos 4/4. No phantom proposed, no codex edit beyond the journal entry (codex/journal/away-2026-10-03-2152.md).
 
-Board state: `scheduleos` room now exists and renders (board_list confirms it) — built earlier today per scheduleos.md's own "Phase 5 begun (U3, William present)" note — but carries 0/4 phantoms. Read the room JSON in full: every real fact already has a node (provisional where the first `sched:week` run hasn't landed yet), so I did not force a phantom there — nothing real is missing board presence. Left for William/a build session: the timezone fix (every Google calendar still reads America/Los_Angeles, needs America/Denver) and Phase 6 (first week build, interactive).
+For William's decision: tick/dismiss a standing phantom to free capacity — root has been 4/4 since 2026-09-16/25 and ph_magictrainer (a finished, shippable v1.0.0) is waiting on a slot. FinanceOS Phase 2 and ScheduleOS's remaining Next items are his hands, not agent work.
 
-FinanceOS (2/4 phantoms, capacity open): proposed `ph_aggregator_options` (file.document, `finance/aggregator-options.md`, reads → s1_ledger) — a real, tracked Phase-4 decision doc with no board node.
-
-Bigger find: `codex/projects/financeos.md` is stale against `private/finance/settings.json` and `selections.json`, both read directly and both real/current. The "card issuer, APR, minimum: unknown" blocker is actually resolved — Bank of America, APR 24.49%, both non-placeholder; only `card_minimum` ($210) is still flagged placeholder. And Phase 2 (income selections) is effectively done: five yeses stand, Prolific's confirmation email is verified, DataAnnotation's Starter Assessment is complete and awaiting review. Phase 2's own exit bar (≥5 entries, ≥2 applied/active) is cleared.
-
-**Could not write the correction.** Both Edit and Write were denied this pass with "Claude Code is running in don't ask mode" — not a path-based refusal, a blanket one. I could not update financeos.md, could not touch docs/06-ROADMAP.md, and could not write this pass's journal file either. Only the MCP board/mailbox tools worked. If away passes are meant to fix codex drift as previous ones did, this session's tool permissions need an allowlist entry for Edit/Write under `SkynetOS/codex/**` and `SkynetOS/docs/06-ROADMAP.md` — worth checking `%APPDATA%` settings for what changed.
-
-Skipped, per the roadmap's own standing note: the Minecraft/GoobOS/GameOS/StoryOS/DeductionOS cluster (4/4 or unresolved elsewhere, no phantom ticked, no handoff changed — a fifth no-op pass over the same ground was explicitly not worth it).
+Repeating the standing suggestion a fourth time today: this is the fourth PLAN pass with zero drift. Hold off the next one until mail lands on to-hands, a phantom is ticked/dismissed, or a handoff file changes — otherwise it's spent usage for nothing new.
 ````
 
-### ScheduleOS Phase 5 built 2026-09-26: Reclaim declared, room on the board, week tool; timezone and login are William's
+### Morning maintenance 2026-10-03: panel polls sleep when hidden, the usage meter reports a failed read, which() tested
 
-`2026-09-26T21-36-29-924--scheduleos-phase-5-built-2026-09-26-reclaim-decl.md`, from hands, sent 2026-09-26T21:36:29.924Z
+`2026-10-04T01-28-18-903--morning-maintenance-2026-10-03-panel-polls-sleep.md`, from hands, sent 2026-10-04T01:28:18.903Z
 
 ````markdown
-William asked for Reclaim hooked to a ScheduleOS so he can feed it his PBS schedule. Built this afternoon, uncommitted, verify green (114 files, 1,773 tests):
+Morning maintenance ran unattended for the 08:00 slot (the machine's clock read 19:20 MDT at the first verify). Verify green before and after every change: 152 files / 2,375 tests to 154 / 2,387. Nothing committed, nothing deleted, no board file touched.
 
-- `.mcp.json` at the repo root declares Reclaim (http, mcp.reclaim.ai; answers 401 unauthenticated). Your snippet's `mcpServers: ["Reclaim"]` on the chip would have been dropped silently: the app resolves only `skynet` by name, so the chip keeps skynet and Reclaim arrives through the project file. Tool names recorded only after his first login (private/schedule/reclaim/mcp-tools.md).
-- board/scheduleos/room.board.json: 31 nodes at the FinanceOS scale, D6 on root, palette #9CF0FF. The three scheduled tasks are agent.run on briefs (jarvis.headless is inert), all disabled.
-- `npm run schedule:week`: pbs-shifts.json → prep chains → schedule/week.html + today.md. No calendar access from the script; live events arrive as an export the secretary writes.
-- Also today: DataAnnotation assessment done (both parts), awaiting their email; Prolific verified, awaiting theirs.
+- `useVisibleInterval` was written on 2026-09-26 and used by nothing. The usage (20 s), finance and schedule (30 s) and remote (4 s) polls now stop while the window is minimised or hidden and catch up when it is shown. Its behaviour is a plain function with a test (roadmap 20). Unseen on screen.
+- The usage meter now says why when its read rejects, instead of showing no meter and no word (roadmap 21). No test: renderer. Unseen on screen.
+- The explorer's junction-escape test reports SKIPPED when the junction cannot be made, instead of passing on nothing (roadmap 24). It runs for real on this PC.
+- Roadmap step, "Known issues" 18: `clearWhichCache` has the test its comment promised, and `which()` has its first test. Eleven of the twelve exports remain William's call.
+- Found, left alone: four more timers that run hidden, App.tsx:206 first (roadmap 22); reads with no failure path in CalendarBlock, AwayScreen and FableCores (roadmap 23).
+- Three away PLAN passes ran today with an identical picture, each asking for the next to wait on a change. That schedule is William's to set.
 
-His three actions, in order: fix the timezone (every calendar still reads Los Angeles as of today), log in to Reclaim via /mcp, then feed the first shift. Reasoning in docs/DECISIONS.md 2026-09-26.
+Details: handoff.md "Morning maintenance 2026-10-03", docs/DECISIONS.md same date. No mail was waiting on to-hands and no face-brief.md exists.
 ````
 
-### Morning maintenance 2026-09-26: one slug, two honest panels, two tests that now bite, roadmap 16 done
+### Away session: 4 item(s)
 
-`2026-09-26T15-53-39-674--morning-maintenance-2026-09-26-one-slug-two-hone.md`, from hands, sent 2026-09-26T15:53:39.674Z
+`2026-10-03T16-36-54-705--away-session-4-item-s.md`, from hands, sent 2026-10-03T16:36:54.705Z
 
 ````markdown
-Morning maintenance ran unattended for the 08:00 slot. Verify green before and after every change: 112 files / 1,747 tests to 113 / 1,751. Nothing committed, nothing deleted, no board file touched.
+Away session, finished on its own. 4 item(s):
 
-- Roadmap "Known issues" 16 done: the five comments naming things that do not exist, one word each.
-- One `idSlug` (packages/shared/id-slug.ts) replaces three identical copies in phantoms, ingest and the node factory; `normaliseRoot` is now `normalisePath` under its old name. Test added (roadmap 17 ticked).
-- The mailbox panel and the gesture catalogue no longer say NOTHING WAITING / No gestures yet before they have read, and say what failed when a read fails; "Copy for the Face" now reports a refused clipboard (roadmap 11 and 12 ticked, unseen on screen).
-- Two layout tests that returned silently on a missing MinecraftOS node now fail by name (roadmap 18, test half).
-- Found, left alone: test/watch-plan.test.ts "survives gradlew clean" tripped its 8 s deadline once in six lone runs; roadmap 19.
+- held back by the away bounds: Bash
+- journal written: SkynetOS/codex/journal/away-2026-10-03-1035.md
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- mailed the mailbox: Away pass 10:35 — third identical no-op today, standing recs unchanged
 
-Details: handoff.md "Morning maintenance 2026-09-26", docs/DECISIONS.md same date. No mail was waiting on to-hands and no face-brief.md exists.
+Its last word:
+
+Third same-day PLAN pass, zero drift from the 08:35/08:37 checks: no mail on `to-hands`, every phantom slate identical (root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 3/4, gameos/storyos/deductionos 4/4). No new phantoms, no codex gaps found. Wrote the journal and roadmap note, and sent the summary to the Face.
+
+Proposing again (third time today): throttle away-mode PLAN passes to wait for new mail, a ticked/dismissed phantom, or a changed handoff rather than firing on a fixed interval — three identical passes in one day is spent usage with no new signal. Open decisions for William: the standing root/financeos phantoms, and whether MagicTrainer's finished-but-unshipped build should bump one of them off root's full slate.
 ````
 
-32 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
+### Away pass 10:35 — third identical no-op today, standing recs unchanged
+
+`2026-10-03T16-36-49-162--away-pass-10-35-third-identical-no-op-today-stan.md`, from hands, sent 2026-10-03T16:36:49.162Z
+
+````markdown
+No mail on to-hands. Bash denied again. Every phantom slate matches both earlier passes today exactly: root 4/4 (ph_bitrunners, ph_stackassembler, ph_story_universe_map, ph_jarvis_voice), financeos 3/4 (ph_rent_run, ph_rent_run_research, ph_aggregator_options), scheduleos 0/4, minecraftos 3/4 (ph_latest_log, ph_crash_reports, ph_goobtropolis_configs), gameos/storyos/deductionos 4/4. No new phantoms proposed, no codex edits beyond this note and the roadmap entry.
+
+Proposing (third time today): throttle away-mode PLAN passes — the next one should wait for mail on to-hands, a phantom ticked/dismissed, or a changed handoff, not a fixed interval. Three same-day passes with zero drift is spent usage.
+
+Needs William's decision: the standing root/financeos phantoms (unticked since 09-16/25/26), and whether to bump a root phantom for MagicTrainer v1.0.0 (built, tagged, unshipped, still no board slot).
+
+Full detail: codex/journal/away-2026-10-03-1035.md
+````
+
+### Away session: 4 item(s)
+
+`2026-10-03T14-38-07-765--away-session-4-item-s.md`, from hands, sent 2026-10-03T14:38:07.765Z
+
+````markdown
+Away session, finished on its own. 4 item(s):
+
+- held back by the away bounds: Bash
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- journal written: SkynetOS/codex/journal/away-2026-10-03-0835.md
+- mailed the mailbox: Away pass 0835 — no drift, second identical pass today
+
+Its last word:
+
+Done. Found no drift since this morning's 08:37 pass — same phantom slates across all seven boards, and a full re-sweep of `C:/dev` turned up zero uncatalogued repos for the first time ever (every prior pass found at least one). Logged the confirmation in `docs/06-ROADMAP.md` and `codex/journal/away-2026-10-03-0835.md`, and mailed a summary to the Face.
+
+Nothing new needs William's decision beyond the standing queue: MagicTrainer v1.0.0 ready to ship but no root phantom slot for it, ScheduleOS's habits.json/timezone/first-look items, FinanceOS still waiting on his real numbers, and the stale root/financeos phantoms. Suggested skipping the next away sweep until mail, a phantom, or a handoff actually moves — this one mostly confirmed the last.
+````
+
+### Away pass 0835 — no drift, second identical pass today
+
+`2026-10-03T14-38-02-221--away-pass-0835-no-drift-second-identical-pass-to.md`, from hands, sent 2026-10-03T14:38:02.221Z
+
+````markdown
+81-minute away pass, PLAN level. No mail on to-hands. All seven boards' phantom slates matched the 08:37 pass from earlier this morning exactly (root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 3/4, gameos/storyos/deductionos 4/4) — zero drift in twenty minutes. Re-ran the coverage-gap sweep over C:/dev (README.md/CLAUDE.md/package.json) that has found a real miss on every prior pass; this time nothing new. Checked scheduleos's open habits.json task against the room board directly: it already has a node (F3), so nothing there needs a phantom — it's data-entry work for a Hands session. No phantom proposed. Wrote the confirmation into docs/06-ROADMAP.md and codex/journal/away-2026-10-03-0835.md.
+
+Standing items still needing your decision, unchanged: MagicTrainer v1.0.0 ready to ship but root is 4/4 phantoms with no slot for it; ScheduleOS habits.json rewrite + Reclaim timezone confirm + your first look at panel.calendar; FinanceOS blocked on your ledger numbers and the Prolific/DataAnnotation emails; the four root and three financeos phantoms sitting unticked since 2026-09-16–26.
+
+Suggest skipping the next PLAN-level away pass until mail lands, a phantom moves, or a handoff changes — two no-drift passes in half an hour is spent usage.
+````
+
+### Away session: 6 item(s)
+
+`2026-10-03T08-38-28-450--away-session-6-item-s.md`, from hands, sent 2026-10-03T08:38:28.450Z
+
+````markdown
+Away session, finished on its own. 6 item(s):
+
+- roadmap updated: SkynetOS/codex/projects/goobtropolis.md
+- edited SkynetOS/codex/index.md
+- recommended a node: Goobtropolis configs (minecraftos)
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- journal written: SkynetOS/codex/journal/away-2026-10-03-0235.md
+- mailed the mailbox: Away pass 2026-10-03 02:35 — Goobtropolis gap closed, one phantom proposed
+
+Its last word:
+
+Done. Away-pass summary:
+
+- No mail, no phantom capacity changed anywhere since the 2026-10-01 pass — skipped re-sweeping the blocked boards per standing advice.
+- Found a real gap: `codex/index.md` had cited `projects/goobtropolis.md` since before 2026-09-12, but it never existed. Wrote it — Goobtropolis is a Bloom.host SMP with no local repo, just an exported config folder (`C:/dev/goobtropolis-configs`) that had zero board or codex presence.
+- Proposed one phantom (`ph_goobtropolis_configs`) on the `minecraftos` board (2/4 slots were open), wired to the existing `p1_goobtropolis` node.
+- Flagged for you, not touched: `p1_goobtropolis` still points at a `GoobtropolisTest` checkout that doesn't exist on this machine (known since 2026-09-11); MagicTrainer (v1.0.0, unshipped) still has no root-board slot.
+- Journal and mail sent: `codex/journal/away-2026-10-03-0235.md`.
+````
+
+### Away pass 2026-10-03 02:35 — Goobtropolis gap closed, one phantom proposed
+
+`2026-10-03T08-38-22-803--away-pass-2026-10-03-02-35-goobtropolis-gap-clos.md`, from hands, sent 2026-10-03T08:38:22.803Z
+
+````markdown
+No mail on to-hands; every phantom slate matched 2026-10-01 exactly (root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 2/4, gameos/storyos/deductionos 4/4) — no re-sweep of the blocked boards, per standing advice.
+
+Real find: codex/index.md has cited codex/projects/goobtropolis.md since before 2026-09-12; it never existed. Wrote it — Goobtropolis is a Bloom.host-hosted SMP with no local repo, only an exported config folder (C:/dev/goobtropolis-configs, found via a plain ls, zero prior board/codex presence). Updated index.md's line to match.
+
+Proposed one phantom: ph_goobtropolis_configs on minecraftos (2/4 slots were open), wired reads to the existing p1_goobtropolis node.
+
+Flagged, not touched: p1_goobtropolis still points at C:/dev/GoobtropolisTest, which doesn't exist on this machine (known since 2026-09-11). MagicTrainer (v1.0.0, unshipped) still has no root-board capacity — root is still 4/4.
+
+Full detail: codex/journal/away-2026-10-03-0235.md and the new dated note in docs/06-ROADMAP.md.
+````
+
+### Away session: 6 item(s)
+
+`2026-10-01T19-35-54-980--away-session-6-item-s.md`, from hands, sent 2026-10-01T19:35:54.980Z
+
+````markdown
+Away session, finished on its own. 6 item(s):
+
+- held back by the away bounds: Bash
+- roadmap updated: SkynetOS/codex/projects/magictrainer.md
+- edited SkynetOS/codex/index.md
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- journal written: SkynetOS/codex/journal/away-2026-10-01-1333.md
+- mailed the mailbox: Away pass 2026-10-01 13:33: MagicTrainer v1.0.0 found, ready to ship
+
+Its last word:
+
+Found MagicTrainer: a complete, tagged v1.0.0 MTG deck trainer app built 2026-09-25 with zero codex or board presence — installer's been sitting unshipped for six days. Wrote it up in `codex/projects/magictrainer.md`, indexed it, logged a roadmap note, and mailed the Face. No phantom proposed (root's 4/4 cap) — flagged for William to decide whether it bumps one of the four standing ones. Everything else (ScheduleOS, FinanceOS, root) matched the 2026-09-30 picture, no drift. Journal's at `codex/journal/away-2026-10-01-1333.md`.
+````
+
+49 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
 
 ## 3. Board truth
 
@@ -289,12 +290,12 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
-| SkynetOS Mainboard (`root`) | `board/root.board.json` | 69 | 37 | 0 | 21 |
+| SkynetOS Mainboard (`root`) | `board/root.board.json` | 71 | 37 | 0 | 22 |
 | DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 28 | 8 | 8 | 1 |
 | FinanceOS (`financeos`) | `board/financeos/room.board.json` | 27 | 4 | 4 | 4 |
 | GameOS (`gameos`) | `board/gameos/room.board.json` | 32 | 10 | 8 | 1 |
 | MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 80 | 24 | 6 | 3 |
-| ScheduleOS (`scheduleos`) | `board/scheduleos/room.board.json` | 31 | 10 | 1 | 4 |
+| ScheduleOS (`scheduleos`) | `board/scheduleos/room.board.json` | 32 | 11 | 1 | 4 |
 | StoryOS (`storyos`) | `board/storyos/room.board.json` | 25 | 7 | 7 | 0 |
 
 ### Unresolved targets (34)
@@ -334,7 +335,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `storyos` / S2 Dirty Plush (shared) (`s2_plush_cloud`, store.cloud): **INVALID** `https://drive.google.com/drive/folders/REPLACE_ME`
 - `storyos` / F3 Series bible (`f3_bible`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md`
 
-### Provisional nodes (34)
+### Provisional nodes (35)
 
 Placed on the board but not yet confirmed as bound to anything real.
 
@@ -359,6 +360,7 @@ Placed on the board but not yet confirmed as bound to anything real.
 - `root` / BACKDROP (`bg_backdrop_5`, decor.image)
 - `root` / BACKDROP (`bg_backdrop_6`, decor.image)
 - `root` / U6 THE AUDITOR (`u_drive_audit`, agent.audit)
+- `root` / S5 FILE EXPLORER (`s_file_explorer`, store.explorer)
 - `deductionos` / D1 Mind Palace (`d1_palace`, drive.room)
 - `financeos` / J1 BANK (`j1_bank`, link.url)
 - `financeos` / J2 CREDIT CARD (`j2_credit`, link.url)
@@ -377,12 +379,48 @@ Placed on the board but not yet confirmed as bound to anything real.
 
 Compressed from `handoff.md`, which is linked from the repo root.
 
+**Latest (2026-10-03, MORNING MAINTENANCE, unattended):** the panel polls (usage, finance,
+schedule, remote) stop while the window is minimised or hidden, through a hook that had been written
+and never used; the usage meter says why when its read fails; the explorer's junction test reports
+SKIPPED instead of passing on nothing; and `which()` has its first test (roadmap 18). Verify green:
+154 files, 2,387 tests. Details under "Morning maintenance 2026-10-03" below. Nothing committed.
+
 **Last session (2026-09-24, U3 JARVIS-PRIME, JARVIS Voice slice 1):** the hologram window, speech
 through Windows' own voice, the voice-profile recorder, and rule-based desktop control ("open after
 effects on one and firefox on two"), all off or unseen until William restarts and switches them on.
 Design docs/11, rules docs/07 § JARVIS Voice, roadmap M13. Verify green: 109 files, 1,708 tests.
 
-**Last session (2026-09-27 afternoon, U3 JARVIS-PRIME, William present): the window and the
+**Last session (2026-09-27 night, U3 JARVIS-PRIME, William present): one turn at a time.**
+William's first live session: listening reopened before the first action, long commands were cut,
+the light went out while still listening, "doing it" was said with nothing visibly happening.
+Now: ONE turn engine (`packages/shared/turn.ts`, `services/turn.ts`) owns every phase; the
+follow-up mic opens only after a turn ENDS (measured from its end, so long plans still get one);
+a second sentence mid-turn is held as PENDING and answered "One moment."; the sentence cap is
+20 s with 1.1 s end silence and a one-time continuation on a connective; the light follows the
+capture window's real track state; a status strip shows phase, step `2 / 5 · FOCUS FIREFOX`, a
+live timer, the transcript heard, the question asked; multi-step plans end with "Done.". Plus:
+"hit play in my firefox browser" and friends without the model; "split screen with JARVIS-TQR"
+and dictation into that terminal; the board by voice (go to, select, open, inspect, rename, set
+notes; read-back before a write; no deletion); remembered plans; a BOARD snapshot in every
+conversational prompt (the "needs the board state" complaint). Then the latency pass: thinking
+was ON in every headless `claude -p` call (about 1,000 tokens before a five-line plan); off, with
+lean flags and trimmed prompts, the planner call went 12.0 s → 3.1 s; 24 acknowledgement lines
+are pre-synthesised in the profile voice so "One moment." and "Done." are instant; the first
+sentence of a reply plays while the second synthesises; stop now cuts a profile line in 14 ms;
+thirteen voice bugs fixed. Verify green: 148 files, 2,306 tests. Details under "One turn at a
+time — 2026-09-27 night".
+
+**Session before (2026-09-27 evening, U3 JARVIS-PRIME, William present): the JARVIS window made
+resizable, and the planner.** William: "still having trouble scaling the jarvis voice window … its
+buttons are squashed". Cause: `hologram.size: 240` saved in settings.json before the 480 default,
+and `resizable: false`. Now: edges, a corner grip, Ctrl+= / Ctrl+- / Ctrl+0, size kept in
+`hologram.size {w,h}`, the chrome scales with the window. Also found: `speech.backend` had gone
+back to `sapi`, which is why David spoke; set to `server` + jarvis in the file, and the TRAIN panel
+now SAYS which voice will speak. Plus the voices dropdown, DESK remembered, a session picker,
+Ctrl+Shift+P frame stats, and M13.3 the planner (built, never run). Verify green: 142 files,
+2,131 tests. Details under "The window and the planner — 2026-09-27 evening". **Restart first.**
+
+**Session before (2026-09-27 afternoon, U3 JARVIS-PRIME, William present): the window and the
 meter.** Four Opus workers, paced for credits: MAXIMIZE/RESTORE in the chrome (F11) and a UI SCALE
 setting (AUTO/1×/2×/3×) with the HUD and inspector reflowing so nothing is squashed (layout audit 8
 → 0 clipped, 64 → 0 undersized controls); the usage meter with the fixed Max 20x plan, both weekly

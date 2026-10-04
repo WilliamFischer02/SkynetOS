@@ -14,14 +14,26 @@ import {
   type VoiceCapture,
   type VoiceHeard,
   type VoiceListen,
+  type VoiceMicState,
   type VoiceStatus,
   type VoiceWake
 } from '@shared/voice.js';
 import { LEVEL_BANDS, type AudioLevels } from '@shared/speech-levels.js';
 import type { ProfileRecordRequest } from '@shared/speech.js';
-import { encodeWav } from '@shared/voice-capture.js';
+import {
+  CONNECTIVE_EXTENSION_MS,
+  CONTINUATION_REOPEN_MS,
+  DEFAULT_ENDPOINT,
+  SENTENCE_MAX_MS,
+  encodeWav,
+  endsInConnective,
+  joinContinuation,
+  listenTimeoutMs
+} from '@shared/voice-capture.js';
+import type { MicKind } from '@shared/turn.js';
 import { getSettings, setVoiceEnabled as saveVoiceEnabled } from './settings.js';
 import { allowMicrophoneOnly } from './permissions.js';
+import { dispatch as turnDispatch, onTurn, sentence as turnSentence, turnState } from './turn.js';
 
 /**
  * Voice control: the wake phrase, the microphone, and the speech engine — all on this machine.
@@ -63,9 +75,14 @@ import { allowMicrophoneOnly } from './permissions.js';
 const PARTITION = 'voice';
 /** Long enough for the first start after a reboot, when CUDA compiles for the card (~45 s measured). */
 const READY_TIMEOUT_MS = 120_000;
-/** The capture window's own limits are 4 s to start speaking and 8 s of sentence; this is the backstop. */
-const LISTEN_TIMEOUT_MS = 15_000;
-/** Eight seconds of 16 kHz mono is 256 kB. Anything far beyond that is not a sentence. */
+/**
+ * The backstop for one capture: the capture window's own limits are 4 s to start speaking and 20 s
+ * of sentence (8 s until 2026-09-27), then 1.1 s of end silence and the 1.8 s connective extension;
+ * 3 s spare. 29.9 s for a wake capture (`listenTimeoutMs`, packages/shared/voice-capture.ts); it was
+ * 15 s. A follow-up window adds its own longer silence budget.
+ */
+const LISTEN_TIMEOUT_MS = listenTimeoutMs(DEFAULT_ENDPOINT.noSpeechMs);
+/** Twenty seconds of 16 kHz mono is 640 kB. Anything far beyond that is not a sentence. */
 const MAX_WAV_BYTES = 1_000_000;
 /** The sentence the server is warmed on. Synthesised by Windows, never recorded. */
 const WARMUP_SENTENCE = 'Jarvis, zoom in on the board.';
@@ -94,6 +111,45 @@ let followUpCapture = false;
 let lastHeardAt = 0;
 let lastCaptureWasSilence = false;
 let followUpTimer: NodeJS.Timeout | null = null;
+/*
+ * The turn engine (services/turn.ts) is told what the capture window's TRACKS do (`voice:mic`), not
+ * what main asked for, so the LISTENING light is on exactly while a microphone is. Which door opened
+ * the capture in progress, and, for a sentence that stopped on a connective, its first half.
+ */
+let captureKind: MicKind | null = null;
+let captureDetail: string | undefined;
+let continuationCapture = false;
+let continued = false;
+let carried = '';
+
+function resetCarry(): void {
+  continuationCapture = false;
+  continued = false;
+  carried = '';
+}
+
+/** The turn's microphone is closed, whatever the capture window managed to say. */
+function closeMicInTurn(): void {
+  if (turnState().mic !== 'closed') turnDispatch({ type: 'micClosed' });
+}
+
+/**
+ * The follow-up window opens when the TURN ends (docs/07 § Voice, 2026-09-27): on DONE, or on
+ * WAITING once a question has been spoken. Not when a line stops being spoken, which is how it used
+ * to open after the planner's read-back, before anything had moved.
+ */
+onTurn((prev, next) => {
+  // A stop (a new turn id, straight to READY) inside the 350 ms before a follow-up window opens
+  // cancels it: STOP opens nothing (bug sweep 2026-09-27; `listenAgain` itself is unchanged).
+  if (next.turnId !== prev.turnId && next.phase === 'idle' && followUpTimer) {
+    clearTimeout(followUpTimer);
+    followUpTimer = null;
+  }
+  // Only a turn that began with a SPOKEN sentence: not a typed line, not a gesture's plan.
+  if (next.origin !== 'voice') return;
+  if (next.phase === 'done' && prev.phase !== 'done') listenAgain('done');
+  else if (next.phase === 'waiting' && prev.phase !== 'waiting') listenAgain('asked');
+});
 
 export function setVoiceHandlers(next: VoiceHandlers): void {
   handlers = next;
@@ -164,6 +220,10 @@ function stop(): void {
   busy = false;
   followUpCapture = false;
   lastCaptureWasSilence = false;
+  resetCarry();
+  captureKind = null;
+  // The capture window is destroyed below and can no longer say its tracks stopped.
+  if (turnState().mic !== 'closed') turnDispatch({ type: 'nothingHeard' });
   if (followUpTimer) {
     clearTimeout(followUpTimer);
     followUpTimer = null;
@@ -201,7 +261,9 @@ async function start(): Promise<void> {
   // ── 1. the speech engine, holding the model ─────────────────────────────────────────────────
   const child = spawn(
     voice.server,
-    ['-m', voice.serverModel, '--host', '127.0.0.1', '--port', String(voice.port), '-t', '4', '-nt'],
+    // Greedy decoding (whisper-server's default: no beam), no timestamps, English named rather than
+    // left to the build's default so a build that defaults to 'auto' does not add a detection pass.
+    ['-m', voice.serverModel, '--host', '127.0.0.1', '--port', String(voice.port), '-t', '4', '-nt', '-l', 'en'],
     { cwd: dirname(voice.server), windowsHide: true }
   );
   server = child;
@@ -372,17 +434,24 @@ function onWakeLine(raw: string, mine: number): void {
   if (busy) return;
   if (followUpTimer) { clearTimeout(followUpTimer); followUpTimer = null; }
   lastCaptureWasSilence = false;
-  openMicrophone(mine, line.confidence, line.phrase, { captureLabel: voice.captureLabel });
+  // During a busy turn the wake phrase still opens the microphone (the light says so), and what it
+  // hears is HELD by the turn engine, never started over the running one; "stop" is obeyed at once.
+  openMicrophone(mine, line.confidence, line.phrase, { captureLabel: voice.captureLabel }, 'wake');
 }
 
 /** One sentence into the capture window, on a wake or as a follow-up. `busy` until it answers. */
-function openMicrophone(mine: number, confidence: number, phrase: string, request: VoiceListen): void {
+function openMicrophone(mine: number, confidence: number, phrase: string, request: VoiceListen, kind: MicKind): void {
   busy = true;
-  followUpCapture = request.followUp === true;
-  wokeAt = Date.now();
-  wakeConfidence = confidence;
+  captureKind = kind;
+  captureDetail = undefined;
+  if (!request.continuation) {
+    followUpCapture = request.followUp === true;
+    wokeAt = Date.now();
+    wakeConfidence = confidence;
+    resetCarry();
+  }
   publish({ phase: 'listening' });
-  handlers?.onWake({ confidence, phrase });
+  if (!request.continuation) handlers?.onWake({ confidence, phrase });
 
   const target = ensureWindow();
   const send = (): void => {
@@ -390,7 +459,29 @@ function openMicrophone(mine: number, confidence: number, phrase: string, reques
   };
   if (target.webContents.isLoading()) target.webContents.once('did-finish-load', send);
   else send();
-  listenTimer = setTimeout(() => finish('', mine, 'THE MICROPHONE DID NOT ANSWER'), LISTEN_TIMEOUT_MS);
+  if (listenTimer) clearTimeout(listenTimer);
+  const timeout = request.continuation ? listenTimeoutMs(CONNECTIVE_EXTENSION_MS) : request.noSpeechMs ? listenTimeoutMs(request.noSpeechMs) : LISTEN_TIMEOUT_MS;
+  listenTimer = setTimeout(() => finish('', mine, 'THE MICROPHONE DID NOT ANSWER'), timeout);
+}
+
+/**
+ * The capture window's tracks (`voice:mic`, CAPTURE WINDOW ONLY): open, speech begun, closed.
+ * Accepted only while a capture is actually open, like the levels. This, not `voice:listen` being
+ * sent, is what turns the LISTENING light on and off (docs/11 § One turn at a time).
+ */
+export function voiceMic(state: VoiceMicState): { ok: boolean } {
+  if (!busy && !pendingRecord) return { ok: false };
+  const phase = state?.phase;
+  if (phase === 'open') {
+    turnDispatch({ type: 'micOpened', kind: captureKind ?? 'press', ...(continuationCapture ? { continuation: true } : {}), ...(captureDetail ? { detail: captureDetail } : {}) });
+  } else if (phase === 'speech') {
+    turnDispatch({ type: 'speechStarted' });
+  } else if (phase === 'closed') {
+    turnDispatch({ type: 'micClosed' });
+  } else {
+    return { ok: false };
+  }
+  return { ok: true };
 }
 
 /** Was a sentence heard within the last `ms`? services/speech.ts asks before a follow-up. */
@@ -400,23 +491,29 @@ export function heardRecently(ms: number): boolean {
 
 /**
  * The follow-up window (docs/07 § Voice): reopen the microphone for ONE more sentence without the
- * wake phrase, right after JARVIS has answered. The rules are `mayListenAgain` in @shared/voice.ts;
- * this is the clock and the window. It waits FOLLOW_UP_PAUSE_MS so the room's echo of JARVIS's
- * last word is not the first thing it hears. Silence closes it without a transcript
- * (`voiceCaptured`), and after silence the next sentence needs the wake phrase again.
+ * wake phrase, once the TURN has ended (DONE, or WAITING on a question it has spoken). The rules are
+ * `mayListenAgain` in @shared/voice.ts, which asks `mayFollowUp` (packages/shared/turn.ts) besides
+ * the 20 s heard window; this is the clock and the window. It waits FOLLOW_UP_PAUSE_MS so the room's
+ * echo of JARVIS's last word is not the first thing it hears, and checks everything again then.
+ * Silence closes it without a transcript (`voiceCaptured`), and after silence the next sentence
+ * needs the wake phrase again. A FAILED turn never opens it.
  */
-export function listenAgain(reason: 'spoken' | 'acted'): boolean {
+export function listenAgain(reason: 'done' | 'asked'): boolean {
   const voice = getSettings().voice;
-  if (busy || pendingRecord) return false;
-  if (!mayListenAgain(status, voice, lastHeardAt ? Date.now() - lastHeardAt : Number.POSITIVE_INFINITY, lastCaptureWasSilence)) return false;
+  // The 20 s window is measured from the turn's END (William, 2026-09-27: a plan longer than 20 s
+  // must still get its follow-up), so `lastHeardAt` only says that a sentence was heard at all.
+  const endedAt = Date.now();
+  const allowed = (): boolean =>
+    !busy && !pendingRecord && mayListenAgain(status, voice, lastHeardAt ? Date.now() - endedAt : Number.POSITIVE_INFINITY, lastCaptureWasSilence, turnState());
+  if (!allowed()) return false;
   if (!win || win.isDestroyed()) return false;
   const mine = run;
   if (followUpTimer) clearTimeout(followUpTimer);
   followUpTimer = setTimeout(() => {
     followUpTimer = null;
-    if (run !== mine || busy || pendingRecord || status.phase !== 'waiting') return;
-    console.log(`[voice] follow-up window after ${reason}`);
-    openMicrophone(mine, 1, 'follow-up', { captureLabel: voice.captureLabel, followUp: true, noSpeechMs: clampFollowUpNoSpeech(voice.followUpNoSpeechMs) });
+    if (run !== mine || !allowed()) return;
+    console.log(`[voice] follow-up window after the turn ended (${reason})`);
+    openMicrophone(mine, 1, 'follow-up', { captureLabel: voice.captureLabel, followUp: true, noSpeechMs: clampFollowUpNoSpeech(voice.followUpNoSpeechMs) }, 'followUp');
   }, FOLLOW_UP_PAUSE_MS);
   return true;
 }
@@ -437,12 +534,17 @@ export function recordOnce(req: ProfileRecordRequest): Promise<VoiceCapture> {
   const mine = run;
   const target = win;
   busy = true;
+  // A press, not a sentence: the light comes on with the tracks, and no turn is started.
+  captureKind = 'press';
+  captureDetail = req.profile === 'dictation' ? 'DICTATION' : 'RECORDING A PROFILE LINE';
   publish({ phase: 'listening' });
   return new Promise<VoiceCapture>((resolve) => {
     const finishRecord = (capture: VoiceCapture): void => {
       if (pendingRecord) clearTimeout(pendingRecord.timer);
       pendingRecord = null;
       busy = false;
+      captureKind = null;
+      closeMicInTurn();
       if (run === mine) publish({ phase: 'waiting' });
       resolve(capture);
     };
@@ -486,35 +588,73 @@ export async function voiceCaptured(capture: VoiceCapture): Promise<{ ok: boolea
     clearTimeout(listenTimer);
     listenTimer = null;
   }
+  const closedAt = Date.now();
+  // The tracks are stopped before a capture is delivered; should `voice:mic` not have said so, this does.
+  closeMicInTurn();
   if (capture?.device) publish({ device: String(capture.device).slice(0, 120) });
 
   const raw = capture?.wav;
   const wav = raw && ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : null;
   if (!wav) {
+    if (continuationCapture && capture?.reason !== 'error') {
+      // He did not go on within the extension: the first half is the sentence.
+      finish(carried, mine);
+      return { ok: true };
+    }
     if (followUpCapture && capture?.reason !== 'error') {
       // Silence in a follow-up window: nothing heard, nothing transcribed, nothing answered. The
       // exchange is over; the next sentence needs the wake phrase.
       followUpCapture = false;
       lastCaptureWasSilence = true;
       busy = false;
+      captureKind = null;
+      turnDispatch({ type: 'nothingHeard' });
       if (run === mine) publish({ phase: 'waiting' });
       return { ok: true };
     }
+    if (continuationCapture) { finish(carried, mine); return { ok: true }; }
     finish('', mine, capture?.reason === 'error' ? `THE MICROPHONE WOULD NOT OPEN — ${capture.error ?? 'no reason given'}` : undefined);
     return { ok: true };
   }
   if (wav.byteLength > MAX_WAV_BYTES || wav.byteLength < 44 || String.fromCharCode(wav[0]!, wav[1]!, wav[2]!, wav[3]!) !== 'RIFF') {
-    finish('', mine, 'THAT WAS NOT A SENTENCE');
+    finish(continuationCapture ? carried : '', mine, continuationCapture ? undefined : 'THAT WAS NOT A SENTENCE');
     return { ok: false };
   }
 
   publish({ phase: 'thinking' });
   try {
-    finish(await transcribe(wav, getSettings().voice.port), mine);
+    const text = await transcribe(wav, getSettings().voice.port);
+    if (run !== mine) return { ok: true };
+    if (continuationCapture) {
+      finish(joinContinuation(carried, text), mine);
+    } else if (!continued && text && endsInConnective(text) && Date.now() - closedAt <= CONTINUATION_REOPEN_MS) {
+      continueSentence(text, wav.byteLength, mine);
+    } else {
+      if (text && endsInConnective(text) && !continued) console.log(`[voice] "${text}" ends on a connective, but the transcript took ${Date.now() - closedAt} ms (over ${CONTINUATION_REOPEN_MS}); not continued`);
+      finish(text, mine);
+    }
   } catch (err) {
-    finish('', mine, `COULD NOT TRANSCRIBE — ${(err as Error).message}`);
+    finish(continuationCapture ? carried : '', mine, continuationCapture ? undefined : `COULD NOT TRANSCRIBE — ${(err as Error).message}`);
   }
   return { ok: true };
+}
+
+/**
+ * The sentence stopped on a connective ("open firefox and", "move it to"): it is not over. The
+ * microphone reopens ONCE, within 400 ms of closing, as part of the same sentence (the same door,
+ * the same turn, the light on again), for at most 1.8 s of silence and what is left of the 20 s
+ * cap. What it hears is joined to the first half; if he says nothing more, the first half stands.
+ * whisper-server has no streaming partials, so this is the whole of the "interim transcript" rule.
+ */
+function continueSentence(first: string, wavBytes: number, mine: number): void {
+  continued = true;
+  continuationCapture = true;
+  carried = first;
+  turnDispatch({ type: 'partialTranscript', text: first });
+  const heardMs = Math.round(((wavBytes - 44) / 2 / 16_000) * 1000);
+  const maxMs = Math.max(3000, SENTENCE_MAX_MS - heardMs);
+  console.log(`[voice] "${first}" ends on a connective; listening ${CONNECTIVE_EXTENSION_MS} ms more for the rest`);
+  openMicrophone(mine, wakeConfidence, 'continuation', { captureLabel: getSettings().voice.captureLabel, continuation: true, noSpeechMs: CONNECTIVE_EXTENSION_MS, maxMs }, captureKind ?? 'wake');
 }
 
 function finish(text: string, mine: number, error?: string): void {
@@ -523,11 +663,29 @@ function finish(text: string, mine: number, error?: string): void {
     listenTimer = null;
   }
   if (run !== mine) return;
+  // A continuation that timed out or failed still has its first half: that is the sentence.
+  if (!text && continuationCapture && carried) { text = carried; error = undefined; }
   busy = false;
   followUpCapture = false;
   lastCaptureWasSilence = false;
-  if (text) lastHeardAt = Date.now();
-  handlers?.onHeard({ text, confidence: wakeConfidence, ms: Date.now() - wokeAt, ...(error ? { error } : {}) });
+  captureKind = null;
+  resetCarry();
+  closeMicInTurn();
+  const ms = Date.now() - wokeAt;
+  if (text) {
+    lastHeardAt = Date.now();
+    // The turn engine decides: a new turn (and `voice:heard` to the board), or held while one runs.
+    publish({ phase: 'waiting' });
+    turnSentence(text, { confidence: wakeConfidence, ms, origin: 'voice' });
+    return;
+  }
+  // Nothing, or a fault. Shown on the board only when it was this turn's own sentence that came to
+  // nothing; a wake during a busy turn that heard nothing leaves that turn alone.
+  const t = turnState();
+  const own = t.phase === 'listening' || (t.phase === 'heard' && !t.transcript) || t.phase === 'idle';
+  if (error && own) turnDispatch({ type: 'failed', error });
+  else turnDispatch({ type: 'nothingHeard' });
+  if (own) handlers?.onHeard({ text: '', confidence: wakeConfidence, ms, ...(error ? { error } : {}) });
   publish({ phase: 'waiting' });
 }
 

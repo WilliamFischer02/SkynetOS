@@ -14,7 +14,8 @@
 export const HOLOGRAM_PANELS = ['main', 'train', 'desk', 'actions', 'say'] as const;
 export type HologramPanel = (typeof HOLOGRAM_PANELS)[number];
 
-export const HOLOGRAM_DROPDOWNS = ['profiles', 'voices', 'monitors'] as const;
+/** `sessions` (2026-09-27): the session picker under the caption, shown when more than one Claude Code session is live. */
+export const HOLOGRAM_DROPDOWNS = ['profiles', 'voices', 'monitors', 'sessions'] as const;
 export type HologramDropdown = (typeof HOLOGRAM_DROPDOWNS)[number];
 
 /** Buttons and inputs. The spoken names live in intent.ts; these are the ids the DOM carries. */
@@ -38,7 +39,8 @@ export const HOLOGRAM_CONTROLS = [
   'input-text',
   'dropdown-profiles',
   'dropdown-voices',
-  'dropdown-monitors'
+  'dropdown-monitors',
+  'dropdown-sessions'
 ] as const;
 export type HologramControlId = (typeof HOLOGRAM_CONTROLS)[number];
 

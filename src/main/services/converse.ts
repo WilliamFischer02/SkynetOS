@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, screen } from 'electron';
@@ -8,13 +7,18 @@ import {
   fallbackReply,
   pushTurn,
   trimReply,
+  type ConverseContext,
   type ConverseTurn
 } from '@shared/converse.js';
+import { boardBlock, type BoardContextSession } from '@shared/board-context.js';
+import { boardContext } from './board-context.js';
+import { listSessions } from './session-manager.js';
 import { getSettings } from './settings.js';
-import { which } from './which.js';
+import { askClaude } from './headless-claude.js';
+import { markTurn } from './turn-timing.js';
 import { say } from './speech.js';
 import { desktopStatus } from './desktop.js';
-import { skynetRoot } from './target-resolver.js';
+import { currentTurnId, dispatch as turnDispatch, finishTurn, turnState } from './turn.js';
 
 /**
  * JARVIS answers back (docs/11-JARVIS-VOICE.md § Conversation; rules in docs/07 § JARVIS Voice).
@@ -53,13 +57,19 @@ function localTime(now = new Date()): string {
   return now.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 }
 
-function context(): { desktopEnabled: boolean; monitors: number; apps: number; timeLocal: string } {
+function context(turnPhase: string): ConverseContext {
   const desktop = desktopStatus();
+  const board = boardContext();
+  let sessions: BoardContextSession[] = [];
+  try { sessions = listSessions().map((s) => ({ designator: s.designator, name: s.nodeName, state: s.state })); } catch { sessions = []; }
   return {
     desktopEnabled: desktop.enabled,
     monitors: desktop.monitors.length || screen.getAllDisplays().length,
     apps: desktop.apps,
-    timeLocal: localTime()
+    timeLocal: localTime(),
+    ...(board ? { boardName: board.roomName } : {}),
+    // What the board window last reported, read-only (services/board-context.ts, docs/11).
+    board: boardBlock(board, sessions, turnPhase)
   };
 }
 
@@ -73,52 +83,10 @@ function remember(who: ConverseTurn['who'], text: string): void {
   }
 }
 
-/** One `claude -p` run: the prompt on stdin, the text on stdout, nothing else granted. */
+/** One `claude -p` run: the prompt on stdin, the text on stdout, nothing else granted (headless-claude.ts). */
 function askModel(prompt: string): Promise<{ text: string | null; reason: 'missing' | 'timeout' | 'error' | null }> {
-  const exe = which('claude.exe') ?? which('claude');
-  if (!exe) return Promise.resolve({ text: null, reason: 'missing' });
   const s = getSettings().converse;
-  const args = [
-    '-p',
-    '--output-format', 'text',
-    '--model', s.model,
-    '--permission-mode', 'dontAsk',
-    '--strict-mcp-config',
-    '--mcp-config', emptyMcpConfig(),
-    '--disallowedTools', 'Bash', 'Edit', 'Write', 'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Agent', 'NotebookEdit',
-    '--append-system-prompt', converseSystemPrompt()
-  ];
-  return new Promise((resolve) => {
-    let out = '';
-    let err = '';
-    let done = false;
-    const finish = (result: { text: string | null; reason: 'missing' | 'timeout' | 'error' | null }): void => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(exe, args, { cwd: skynetRoot(), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    } catch (spawnErr) {
-      console.warn('[converse] could not start claude:', (spawnErr as Error).message);
-      finish({ text: null, reason: 'error' });
-      return;
-    }
-    const timer = setTimeout(() => {
-      try { child.kill(); } catch { /* going anyway */ }
-      finish({ text: null, reason: 'timeout' });
-    }, s.timeoutMs);
-    child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString('utf8'); });
-    child.stderr?.on('data', (chunk: Buffer) => { err += chunk.toString('utf8'); });
-    child.on('error', (spawnErr) => { console.warn('[converse] claude failed:', spawnErr.message); finish({ text: null, reason: 'error' }); });
-    child.on('close', (code) => {
-      if (code !== 0) console.warn(`[converse] claude exited ${code}: ${err.trim().slice(0, 300)}`);
-      finish({ text: code === 0 ? out : null, reason: code === 0 ? null : 'error' });
-    });
-    child.stdin?.end(prompt, 'utf8');
-  });
+  return askClaude(prompt, { model: s.model, system: converseSystemPrompt(), mcpConfig: emptyMcpConfig(), timeoutMs: s.timeoutMs, tag: 'converse' });
 }
 
 /**
@@ -129,6 +97,14 @@ export async function converse(text: string, source: 'voice' | 'typed'): Promise
   const clean = (typeof text === 'string' ? text : '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_CHARS);
   if (!clean) return { reply: 'I heard nothing I could answer.', source: 'fallback', ms: 0 };
   if (inFlight) await inFlight.catch(() => undefined);
+  // One turn at a time (services/turn.ts): THINKING · ASKING CLAUDE until the reply is composed;
+  // then SPEAKING; the turn is DONE only once the reply has been said, and only then may the
+  // follow-up window open.
+  // What JARVIS was doing when the sentence arrived, for the BOARD block (before THINKING replaces it).
+  const phaseBefore = turnState().phase;
+  markTurn('intent', { path: 'converse' });
+  turnDispatch({ type: 'thinking', detail: getSettings().converse.enabled ? 'ASKING CLAUDE' : 'COMPOSING A REPLY' });
+  const turnId = currentTurnId();
   inFlight = (async () => {
     const started = Date.now();
     const s = getSettings().converse;
@@ -137,8 +113,10 @@ export async function converse(text: string, source: 'voice' | 'typed'): Promise
     if (!s.enabled) {
       reply = fallbackReply(clean, 'off');
     } else {
-      const prompt = conversePrompt(history, context(), clean, s.maxTurns);
+      const prompt = conversePrompt(history, context(`answering William (the turn was ${phaseBefore})`), clean, s.maxTurns);
+      markTurn('modelAsked');
       const answer = await askModel(prompt);
+      markTurn('modelAnswered');
       const trimmed = trimReply(answer.text);
       if (trimmed) { reply = trimmed; from = 'model'; }
       else reply = fallbackReply(clean, answer.reason ?? 'error');
@@ -147,7 +125,10 @@ export async function converse(text: string, source: 'voice' | 'typed'): Promise
     remember('jarvis', reply);
     const ms = Date.now() - started;
     console.log(`[converse] ${from} in ${ms} ms: ${reply}`);
-    void say({ text: reply, interrupt: false }).catch((err: unknown) => console.warn('[converse] could not speak:', (err as Error).message));
+    void (async () => {
+      await say({ text: reply, interrupt: false }).catch((err: unknown) => console.warn('[converse] could not speak:', (err as Error).message));
+      await finishTurn(turnId, reply);
+    })();
     return { reply, source: from, ms };
   })().finally(() => { inFlight = null; });
   return inFlight;

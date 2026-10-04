@@ -306,6 +306,44 @@ Real machine stats. This is the only node showing real hardware numbers; everyth
 > `packages/shared/hardware.ts` (pure), `src/main/services/hardware.ts` (reading),
 > `src/renderer/ui/SystemMonitor.tsx` (panel).
 
+### `panel.calendar` — the calendar pane (added 2026-09-30)
+The week drawn on the board itself, in silkscreen: day columns, blocks as copper pads. William: "I
+also want a live pane in the SkynetOS program that shows the calendar, both within the room and on
+the main board." Designator `K`, default footprint 24×12. No target of its own: it reads the one
+merged calendar, `schedule/calendar.json` (gitignored).
+
+- **Fields (all optional):** `days` 1–14, default 7 · `start` `today` | `monday`, default today ·
+  `showHours` `[from, to)` whole hours 0–24, default `[7, 23]`, typed `7-23` in the editor ·
+  `compact` boolean, default false: three days, no hour labels (the root board's copy).
+- **Click / Enter / Space:** opens `schedule/week.html` (the HTML week view) through the same
+  `openTarget` path a `file.document` uses; if the page is not there yet the toast says to run
+  `npm run schedule:week`.
+- **Inspector:** the next three timed blocks as text, where the calendar came from (PBS / calendar
+  export / iCal counts), when it was merged, and any feed that failed (`CalendarBlock.tsx`).
+- **The face** (`packages/shared/calendar-face.ts`, painted by `src/renderer/board/calendar-widget.ts`,
+  refreshed on every `schedule:calendar` push and once a minute while on screen): a header of
+  weekday names (`WED 30`, else `W30`, else `W`, today in the signal colour); a 3 px all-day strip;
+  hour rules every `ceil(12 / pxPerHour)` hours with copper-dark 24-hour labels; today's column on
+  mask-light; an OFF DAY hatched, an empty day dotted, a day past the file's window bare; each timed
+  block a pad sized to its minutes (a PBS prep step 2 px narrower each side), labelled with its
+  category mark and first word (`P PBS`, `$ EARN`) when it is at least 12 px tall; a 1 px NOW line
+  in the signal colour on today. Six colours only (the room's two masks, copper, copper-dark, silk,
+  signal): income copper, PBS signal, stream silk, hobbies outlined in copper, upkeep copper-dark,
+  everything else outlined in copper-dark. Every number is an integer; the face is 1x and scaled
+  by whole numbers like every other face.
+- **Failure:** no file → the face reads `NO CALENDAR` / `RUN npm run schedule:week`. An app older
+  than the channel says `RESTART SKYNETOS TO READ THE CALENDAR`.
+- **Where the data comes from:** `src/main/services/schedule-feed.ts` rebuilds the file from
+  `schedule/pbs-shifts.json` (each shift expanded into its prep chain), `private/schedule/events.json`
+  (the secretary's export) and the private iCal feeds in settings.json `schedule.icsUrls` (fetched
+  every 10 minutes, parsed by `packages/shared/ics.ts`; RRULE and EXDATE are not expanded). It
+  watches the two files and `calendar.json` with chokidar and pushes `schedule:calendar` to the board
+  window. `npm run schedule:week` writes the same file through the same merge
+  (`packages/shared/schedule-calendar.ts`) and draws `week.html` from it, so the page and the board
+  agree.
+- **On the boards:** K1 CALENDAR in ScheduleOS's THIS WEEK zone (7 days), and K1 THIS WEEK on the
+  root board beside D6 (compact).
+
 ### `note.silk` — engraved text, no component
 `text`, `size` (11|22). For section labels and reminders on the board.
 

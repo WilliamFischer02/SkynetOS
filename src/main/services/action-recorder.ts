@@ -38,6 +38,8 @@ import {
   type SavedAction,
   type UiTarget
 } from '@shared/actions.js';
+import { turnBusy } from '@shared/turn.js';
+import { currentTurnId, dispatch as turnDispatch, dispatchFor as turnDispatchFor, failTurn, finishTurn, turnState } from './turn.js';
 import { monitorOf } from '@shared/desktop.js';
 import {
   acquireDesktop,
@@ -301,10 +303,16 @@ export async function runSavedAction(nameOrId: string): Promise<{ ok: boolean; e
   const started = Date.now();
   let failures = 0;
   let halted = false;
+  // One turn at a time (services/turn.ts): a replay is ACTING with its steps, like a plan, so the
+  // strip shows it, the watchdog sees progress, and no follow-up opens until it has finished.
+  const owns = !turnBusy(turnState());
+  let broken = '';
+  turnDispatch({ type: 'planStarted', of: plan.steps.length, detail: `REPLAYING ${action.name}`.toUpperCase().slice(0, 40) });
+  const turnId = currentTurnId();
 
   try {
     pushDesktopState({ busy: true, index: 0, total: plan.steps.length, message: `replaying ${action.name}` });
-    if (!(await ensureHelper())) return { ok: false, error: 'THE DESKTOP HELPER COULD NOT START' };
+    if (!(await ensureHelper())) { broken = 'THE DESKTOP HELPER COULD NOT START'; return { ok: false, error: broken }; }
     const travel = Math.max(80, Math.min(400, getSettings().desktop.mouseTravelMs ?? 250));
 
     for (let i = 0; i < plan.steps.length; i++) {
@@ -314,6 +322,7 @@ export async function runSavedAction(nameOrId: string): Promise<{ ok: boolean; e
       await sleep(plan.gaps[i]!);
       if (desktopHalted()) { halted = true; break; }
       const summary = summariseSteps([step])[0] ?? step.kind;
+      turnDispatchFor(turnId, { type: 'step', index: i, of: plan.steps.length, label: summary.toUpperCase().slice(0, 40) });
       pushDesktopState({ busy: true, index: i, total: plan.steps.length, message: summary.toLowerCase() });
 
       try {
@@ -381,6 +390,10 @@ export async function runSavedAction(nameOrId: string): Promise<{ ok: boolean; e
     log(`# end ${message} in ${elapsed} ms`);
     pushDesktopState({ busy: false, message });
     releaseDesktop();
+    if (halted) turnDispatchFor(turnId, { type: 'stop' });
+    else if (broken) failTurn(turnId, broken);
+    else if (failures) failTurn(turnId, `${failures} STEP${failures === 1 ? '' : 'S'} FAILED`);
+    else if (owns) void finishTurn(turnId, undefined, { word: plan.steps.length > 1 });
   }
   if (halted) return { ok: false, error: 'STOPPED' };
   if (failures) return { ok: false, error: `${failures} STEP${failures === 1 ? '' : 'S'} FAILED — SEE ${action.id}.replay.log` };

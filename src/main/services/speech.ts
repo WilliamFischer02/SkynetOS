@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { dirname, join } from 'node:path';
 import { app } from 'electron';
 import {
+  BASE_SPEECH_MODEL,
   chooseVoice,
   clampWarmWait,
   isLoopbackUrl,
@@ -21,12 +22,17 @@ import {
   type SpeechRequest,
   type SpeechState,
   type SpeechStatus,
+  type SpeechVia,
   type VoiceProfile,
   type VoiceProfileSummary
 } from '@shared/speech.js';
-import { getSettings, setSpeechBackend as writeSpeechBackend, setSpeechEnabled as writeSpeechEnabled } from './settings.js';
-import { heardRecently, listenAgain, recordOnce, voiceStatus } from './voice.js';
-import { FOLLOW_UP_HEARD_WINDOW_MS } from '@shared/voice.js';
+import { getSettings, setSpeechBackend as writeSpeechBackend, setSpeechEnabled as writeSpeechEnabled, setSpeechVoice as writeSpeechVoice } from './settings.js';
+import { recordOnce, voiceStatus } from './voice.js';
+import { dispatch as turnDispatch } from './turn.js';
+import { markTurn } from './turn-timing.js';
+import { bankedWav, buildAckBank, type AckBankDeps } from './ack-bank.js';
+import { splitFirstSentence } from '@shared/ack.js';
+import { ONE_MOMENT } from '@shared/turn.js';
 import { decodeWav, type DecodedAudio } from '@shared/aiff.js';
 import { LEVEL_FFT, LEVEL_HOP_MS, SILENT_BANDS, analyseTimeline, levelsAt, normaliseTimeline, syntheticLevels, type AudioLevels } from '@shared/speech-levels.js';
 
@@ -72,9 +78,44 @@ let fatal: string | null = null;
 let speaking = false;
 let speakingText = '';
 let speakingChars = 0;
-let queue: { text: string; wav?: string; followUp?: boolean; levels?: AudioLevels[] }[] = [];
-/** Whether the line now being spoken answers something William said (the follow-up window). */
-let speakingAnswers = false;
+let queue: { text: string; wav?: string; levels?: AudioLevels[]; via: SpeechVia; bank?: boolean }[] = [];
+/**
+ * Bumped by every stop (and every interrupting line). A `say` still synthesising when it changes
+ * drops what it made instead of queueing it: "stop" during a 1.4 s synthesis used to be followed
+ * by the line anyway (bug sweep, 2026-09-27).
+ */
+let speechEpoch = 0;
+/** Who is speaking the line in progress, for `speech:state` (the window's "what speaks" line). */
+let speakingVia: SpeechVia = 'sapi';
+/**
+ * The line in progress is JARVIS speaking (not a profile recording played back), so the turn engine
+ * hears `speakStart` when it starts and `speakEnd` exactly once when the sidecar says it ended
+ * (docs/11 § One turn at a time). The follow-up window no longer hangs off the end of a line: it
+ * waits for the TURN to end (services/turn.ts, voice.ts `listenAgain`).
+ */
+let turnLine = false;
+/** `say` calls still synthesising or waiting for the server: not yet queued, but not silence either. */
+let saysInFlight = 0;
+
+function lineStarted(text: string, via: SpeechVia = speakingVia, bank = false): void {
+  // Also when a line follows straight on from the last (a reply's second sentence): the turn stays
+  // SPEAKING and only its words change, instead of flickering back to THINKING between them.
+  turnLine = true;
+  turnDispatch({ type: 'speakStart', text });
+  // "One moment." belongs to the sentence being held, not to the turn it interrupts.
+  if (text !== ONE_MOMENT) markTurn('firstAudio', { via: bank ? 'bank' : via === 'server' ? 'server' : 'sapi' });
+}
+
+/** Another JARVIS line is queued and will start the moment this one ends. */
+function moreToSay(): boolean {
+  return ready && queue.length > 0 && queue[0]!.via !== 'recording';
+}
+
+function lineEnded(): void {
+  if (!turnLine) return;
+  turnLine = false;
+  turnDispatch({ type: 'speakEnd' });
+}
 let serverDown: string | null = null;
 /**
  * The server's two states that `serverDown` cannot tell apart: answering at all, and having its
@@ -164,19 +205,137 @@ const profilesDir = (): string => profilesRoot(process.env['LOCALAPPDATA'], join
 
 function push(state: SpeechState): void {
   speechHandlers?.onState(state);
+  // M13.3: the planner waits for its read-back to finish before the plan runs.
+  if (!state.speaking && !state.warming) releaseIdle();
+}
+
+function releaseIdle(): void {
+  if (speaking || queue.length > 0 || saysInFlight > 0 || !idleWaiters.length) return;
+  const waiters = idleWaiters;
+  idleWaiters = [];
+  for (const w of waiters) w();
+}
+
+let idleWaiters: (() => void)[] = [];
+
+/**
+ * Resolves true when nothing is being said, nothing is queued and no `say` is still synthesising
+ * (the `done`, `stopped`, `played` or exit of the last line), false after `timeoutMs`. The planner
+ * runs a plan only after its line is spoken, and the turn engine ends a turn only then
+ * (services/turn.ts `finishTurn`), so the follow-up never opens over JARVIS's own voice.
+ */
+export function whenSpeechIdle(timeoutMs = 30_000): Promise<boolean> {
+  if (!speaking && queue.length === 0 && saysInFlight === 0) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (): void => { clearTimeout(timer); resolve(true); };
+    const timer = setTimeout(() => { idleWaiters = idleWaiters.filter((w) => w !== done); resolve(false); }, Math.max(0, timeoutMs));
+    idleWaiters.push(done);
+  });
 }
 
 function chosenVoice(): string | null {
   return chooseVoice(voices, getSettings().speech.voice);
 }
 
+/**
+ * The checkpoint each profile speaks with, as the server's `GET /profile/<name>` last named it
+ * (2026-09-27, the "what speaks" line). Filled in the background; nothing waits for it.
+ */
+const modelByProfile = new Map<string, string>();
+
+/**
+ * Ask the server which checkpoint the current profile speaks with, and remember the answer. Called
+ * when the backend is switched, when the server warms, and after a synthesis (a fine-tune that
+ * failed to load is only known after the first line). Never awaited by a line; a failure keeps
+ * whatever was cached.
+ */
+function refreshModel(): void {
+  void fetchModel();
+}
+
+/** The checkpoint the current profile speaks with, asked of the server now; null when it cannot say. */
+async function fetchModel(): Promise<string | null> {
+  const s = getSettings().speech;
+  const profile = s.profile.trim();
+  if (s.backend !== 'server' || !profile || !isLoopbackUrl(s.server)) return null;
+  try {
+    const res = await fetch(`${s.server.replace(/\/$/, '')}/profile/${encodeURIComponent(profile)}`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) { modelByProfile.delete(profile); return null; }
+    const body = (await res.json().catch(() => ({}))) as { model?: unknown; finetune?: unknown; finetuneError?: unknown };
+    // A fine-tune that would not load speaks with the base model; say that, not the checkpoint.
+    const tuned = body.finetune && !body.finetuneError && typeof body.model === 'string' ? body.model : null;
+    const model = tuned ?? BASE_SPEECH_MODEL;
+    modelByProfile.set(profile, model);
+    return model;
+  } catch {
+    return modelByProfile.get(profile) ?? null; // the cached answer stands
+  }
+}
+
+/* ── the acknowledgement bank (services/ack-bank.ts; docs/11 § Where the time goes) ── */
+
+const bankDeps: AckBankDeps = {
+  profileDir: (profile) => join(profilesDir(), profile),
+  synthesise: (text, profile) => synthesiseBytes(text, profile),
+  busy: () => speaking || queue.length > 0 || saysInFlight > 0,
+  stillWanted: (profile) => {
+    const s = getSettings().speech;
+    return s.enabled && s.backend === 'server' && s.profile.trim() === profile && serverUp && warm;
+  }
+};
+
+/**
+ * Once the server is warm: the checkpoint named, and the bank built (or topped up, or rebuilt for a
+ * new checkpoint) in the background, a line at a time and only while nothing is being said.
+ */
+async function refreshBank(): Promise<void> {
+  const s = getSettings().speech;
+  const profile = s.profile.trim();
+  if (!s.enabled || s.backend !== 'server' || !profile) return;
+  const model = await fetchModel();
+  if (!model) return;
+  try { await buildAckBank(bankDeps, profile, model); } catch (err) { console.warn('[speech] the acknowledgement bank failed:', (err as Error).message); }
+}
+
+/** The banked WAV for exactly this line in the current profile's voice, or null. */
+function bankedLine(text: string): string | null {
+  const s = getSettings().speech;
+  const profile = s.profile.trim();
+  if (s.backend !== 'server' || !profile) return null;
+  try { return bankedWav(bankDeps, profile, modelByProfile.get(profile) ?? null, text); } catch { return null; }
+}
+
+const bankLevels = new Map<string, AudioLevels[] | null>();
+async function levelsFor(file: string, cacheIt: boolean): Promise<AudioLevels[] | undefined> {
+  if (cacheIt && bankLevels.has(file)) return bankLevels.get(file) ?? undefined;
+  const levels = await analyseWav(file);
+  if (cacheIt) bankLevels.set(file, levels);
+  return levels ?? undefined;
+}
+
+/** Why the server is down, in William's words when it cannot be started at all, rather than a fetch error. */
+function serverDownWhy(server: string): string {
+  if (serverDown && /^(NO SYNTHESIS|tools\/speech-server)/.test(serverDown)) return serverDown;
+  return `SERVER NOT RUNNING AT ${server}`;
+}
+
 export function speechStatus(): SpeechStatus {
   const s = getSettings().speech;
+  // The voice list and the voice in use are known only once the sidecar has answered; start it
+  // (no audio, no microphone) so the window can say which Windows voice would speak.
+  if (s.enabled && !child && !fatal) void ensureSidecar();
   const base: SpeechStatus = { enabled: s.enabled, backend: s.backend, available: ready, voice: current, voices: [...voices], speaking, warm: serverUp && warm };
+  if (s.backend === 'server') {
+    base.profile = s.profile;
+    const model = modelByProfile.get(s.profile.trim());
+    if (model) base.model = model;
+  }
   if (fatal) return { ...base, error: fatal };
   if (s.backend === 'server') {
     if (!isLoopbackUrl(s.server)) return { ...base, error: `THE SYNTHESIS SERVER MUST BE ON 127.0.0.1 — ${s.server} IS NOT` };
-    if (serverDown) return { ...base, error: `SERVER NOT RUNNING AT ${s.server} — SEE docs/11 § Installing a synthesis server (SPEAKING WITH WINDOWS' VOICE MEANWHILE)` };
+    // While the server is starting or loading its model it is WARMING, not down.
+    const starting = serverStarting !== null || warming !== null;
+    if (serverDown && !starting) return { ...base, error: `${serverDownWhy(s.server)} — SEE docs/11 § Installing a synthesis server (SPEAKING WITH WINDOWS' VOICE MEANWHILE)` };
   }
   if (ready && voices.length && !voices.some((v) => /george|ryan|hazel|susan|united kingdom|en-gb/i.test(v))) {
     return { ...base, voice: current ? `${current} (no British voice installed yet)` : current };
@@ -187,6 +346,21 @@ export function speechStatus(): SpeechStatus {
 export function setSpeechEnabled(on: boolean): SpeechStatus {
   writeSpeechEnabled(on);
   if (!on) stopSpeaking();
+  return speechStatus();
+}
+
+/**
+ * The Windows voice (`speech.voice`), from the list the sidecar reported, or '' for "choose"
+ * (`chooseVoice`). User-only (`speech:setVoice`, the TRAIN panel's voices dropdown). It is the
+ * voice of the `sapi` backend and of every line the server backend falls back on.
+ */
+export function setSpeechVoice(name: unknown): SpeechStatus {
+  const want = typeof name === 'string' ? name.trim() : '';
+  if (want && !voices.includes(want)) throw new Error(voices.length ? `NO WINDOWS VOICE CALLED ${want.toUpperCase()}` : 'THE WINDOWS VOICES ARE NOT KNOWN YET — SWITCH SAY ON');
+  const written = writeSpeechVoice(want);
+  if (!written.ok) throw new Error(written.error ?? 'COULD NOT SAVE THE VOICE');
+  // The sidecar selects the voice per line; `current` says which one the next line will use.
+  if (ready) current = chosenVoice() ?? current;
   return speechStatus();
 }
 
@@ -238,6 +412,7 @@ function ensureSidecar(): Promise<boolean> {
         child = null;
         ready = false;
         if (speaking) { speaking = false; push({ speaking: false }); }
+        lineEnded();
         if (run === mine && code !== 0 && !fatal) fatal = 'THE SPEECH SIDECAR STOPPED';
         settle(false);
       });
@@ -270,27 +445,27 @@ function onLine(raw: string, mine: number, settle: (ok: boolean, why?: string) =
       return;
     case 'start':
       speakingChars = line.chars || speakingText.length || 1;
-      push({ speaking: true, text: speakingText, progress: 0, level: 1 });
+      push({ speaking: true, text: speakingText, progress: 0, level: 1, via: speakingVia });
       startLevels(null);
+      if (speakingVia !== 'recording') lineStarted(speakingText, speakingVia);
       return;
     case 'word':
-      push({ speaking: true, text: speakingText, progress: Math.min(1, (line.position + line.length) / speakingChars), level: 1 });
+      push({ speaking: true, text: speakingText, progress: Math.min(1, (line.position + line.length) / speakingChars), level: 1, via: speakingVia });
       sapiLevel = 1;
       sapiWord++;
       return;
     case 'done':
     case 'stopped': {
-      const answered = speakingAnswers && line.type === 'done';
       speaking = false;
       speakingText = '';
-      speakingAnswers = false;
+      // The next line is already made (a reply's second sentence): straight on, no gap in the turn.
+      if (moreToSay()) { pump(); return; }
+      lineEnded();
       stopLevels();
       push({ speaking: false });
       pump();
-      // The follow-up window (docs/07 § Voice): once a reply has been spoken to the end and nothing
-      // else is queued, the microphone may reopen for William's next sentence. Never after a stop,
-      // never after a profile playback (that arrives as `played`, not here).
-      if (answered && !speaking && queue.length === 0) listenAgain('spoken');
+      // The follow-up window used to open here, at the end of any line that answered a sentence.
+      // It now waits for the TURN to end (services/turn.ts; voice.ts `listenAgain`).
       return;
     }
     case 'played': {
@@ -298,6 +473,8 @@ function onLine(raw: string, mine: number, settle: (ok: boolean, why?: string) =
       playWaiters = [];
       for (const w of waiters) w(true);
       speaking = false;
+      if (moreToSay()) { pump(); return; }
+      lineEnded();
       stopLevels();
       push({ speaking: false });
       pump();
@@ -310,6 +487,7 @@ function onLine(raw: string, mine: number, settle: (ok: boolean, why?: string) =
         playWaiters = [];
         for (const w of waiters) w(false);
         speaking = false;
+        lineEnded();
         stopLevels();
         push({ speaking: false });
         pump();
@@ -333,10 +511,12 @@ function pump(): void {
   const s = getSettings().speech;
   speaking = true;
   speakingText = next.text;
-  speakingAnswers = next.followUp === true;
+  speakingVia = next.via;
   if (next.wav) {
-    push({ speaking: true, text: next.text, progress: 0, level: 1 });
-    if (!sendToSidecar({ play: next.wav })) { speaking = false; push({ speaking: false }); return; }
+    push({ speaking: true, text: next.text, progress: 0, level: 1, via: next.via });
+    if (!sendToSidecar({ play: next.wav })) { speaking = false; lineEnded(); stopLevels(); push({ speaking: false }); return; }
+    // A server line reports nothing until PLAYED: it has started the moment the file is sent.
+    if (next.via !== 'recording') lineStarted(next.text, next.via, next.bank === true);
     // The sidecar's `play` blocks its loop for the WAV's length and reports nothing until PLAYED,
     // so the timeline is streamed by wall clock from the moment the command went out.
     startLevels(next.levels ?? null);
@@ -344,13 +524,19 @@ function pump(): void {
   }
   if (!sendToSidecar({ say: next.text, voice: chosenVoice() ?? '', rate: s.rate, volume: s.volume })) {
     speaking = false;
+    lineEnded();
+    stopLevels();
     push({ speaking: false });
   }
 }
 
 /* ────────────────────────── the server backend ────────────────────────── */
 
-async function synthesiseOnServer(text: string): Promise<string | null> {
+/**
+ * One line through the server, as WAV bytes (or null, with `serverDown` saying why). Used by `say`
+ * and by the acknowledgement bank's build.
+ */
+async function synthesiseBytes(text: string, profile?: string): Promise<Uint8Array | null> {
   const s = getSettings().speech;
   if (!isLoopbackUrl(s.server)) { serverDown = 'not loopback'; return null; }
   const controller = new AbortController();
@@ -359,25 +545,47 @@ async function synthesiseOnServer(text: string): Promise<string | null> {
     const res = await fetch(`${s.server.replace(/\/$/, '')}/synthesize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, profile: s.profile || undefined }),
+      body: JSON.stringify({ text, profile: (profile ?? s.profile) || undefined }),
       signal: controller.signal
     });
     if (!res.ok) { serverDown = `answered ${res.status}`; return null; }
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.byteLength < 44 || String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!) !== 'RIFF') { serverDown = 'did not answer with a WAV'; return null; }
-    const dir = join(voiceDir(), 'spoken');
-    mkdirSync(dir, { recursive: true });
-    const file = join(dir, 'latest.wav');
-    writeFileSync(file, bytes);
     serverDown = null;
     serverUp = true;
-    return file;
+    return bytes;
   } catch (err) {
     serverDown = (err as Error).message;
     serverUp = false;
     return null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * Spoken lines rotate through eight files. One `latest.wav` meant a line queued behind another was
+ * overwritten by the next synthesis before it played (it said the wrong words), and a reply split
+ * at its first sentence always has two in flight.
+ */
+const SPOKEN_FILES = 8;
+let spokenSlot = 0;
+
+async function synthesiseOnServer(text: string): Promise<string | null> {
+  const bytes = await synthesiseBytes(text);
+  if (!bytes) return null;
+  try {
+    const dir = join(voiceDir(), 'spoken');
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, `line-${spokenSlot}.wav`);
+    spokenSlot = (spokenSlot + 1) % SPOKEN_FILES;
+    writeFileSync(file, bytes);
+    refreshModel();
+    return file;
+  } catch (err) {
+    // The disk, not the server: the line falls back to Windows' voice, the server stays up.
+    console.log(`[speech] could not write the synthesised line: ${(err as Error).message}`);
+    return null;
   }
 }
 
@@ -455,6 +663,7 @@ function warmServer(): Promise<boolean> {
       console.log(`[speech] model ready on ${body.device ?? '?'} in ${body.seconds ?? '?'} s`);
       serverUp = true;
       warm = true;
+      void refreshBank();
       return true;
     } catch (err) {
       console.log(`[speech] model warm-up failed: ${(err as Error).message}`);
@@ -490,7 +699,7 @@ export async function setSpeechBackend(req: { backend: 'sapi' | 'server'; profil
   const written = writeSpeechBackend(backend, profile);
   if (!written.ok) throw new Error(written.error ?? 'COULD NOT SAVE THE SPEECH SETTING');
   if (backend === 'server') {
-    if (await checkServer()) void warmServer();
+    if (await checkServer()) { refreshModel(); void warmServer().then((ok) => { if (ok) void refreshBank(); }); }
     else await startSynthServer();
   }
   return speechStatus();
@@ -546,41 +755,104 @@ async function awaitServer(text: string): Promise<'server' | 'sapi'> {
 
 /* ────────────────────────── the public surface ────────────────────────── */
 
+/**
+ * While a `say` is synthesising, the turn engine is told every 5 s that work is still going on, so
+ * its 60 s watchdog does not call a slow synthesis (a cold server, a long line) "nothing happened".
+ */
+let heartbeat: ReturnType<typeof setInterval> | null = null;
+function syncHeartbeat(): void {
+  if (saysInFlight > 0 && !heartbeat) {
+    heartbeat = setInterval(() => turnDispatch({ type: 'progress' }), 5000);
+    heartbeat.unref?.();
+  } else if (saysInFlight === 0 && heartbeat) {
+    clearInterval(heartbeat);
+    heartbeat = null;
+  }
+}
+
 export async function say(req: SpeechRequest): Promise<{ ok: boolean; error?: string }> {
   const s = getSettings().speech;
   if (!s.enabled) return { ok: false, error: 'SPEECH IS OFF — SWITCH IT ON IN THE HOLOGRAM WINDOW' };
   const text = sanitiseSpeech(req?.text);
   if (!text) return { ok: false, error: 'NOTHING TO SAY' };
+  // The first line a sentence gets is also when main knew what to do with it (turn-timing.ts).
+  if (text !== ONE_MOMENT) markTurn('intent', { path: 'board' });
+  // Counted from here until the line is queued, so `whenSpeechIdle` does not call a line that is
+  // still being synthesised "silence" (a turn would end, and the follow-up open, over it).
+  saysInFlight++;
+  syncHeartbeat();
+  try {
+    return await sayCounted(req, text);
+  } finally {
+    saysInFlight--;
+    syncHeartbeat();
+    releaseIdle();
+  }
+}
+
+async function sayCounted(req: SpeechRequest, text: string): Promise<{ ok: boolean; error?: string }> {
+  const s = getSettings().speech;
   const up = await ensureSidecar();
   if (!up) return { ok: false, error: fatal ?? 'THE SPEECH SIDECAR IS NOT AVAILABLE' };
   if (req.interrupt) {
     queue = [];
+    speechEpoch++;
     if (speaking) sendToSidecar({ stop: true });
   }
-  let wav: string | undefined;
-  let levels: AudioLevels[] | undefined;
+  const epoch = speechEpoch;
+  const enqueue = (item: (typeof queue)[number]): boolean => {
+    // Stopped while this was being made: it is not said (bug sweep 2026-09-27).
+    if (epoch !== speechEpoch) return false;
+    queue.push(item);
+    pump();
+    return true;
+  };
   if (s.backend === 'server') {
+    // A banked acknowledgement plays at once, in the profile's voice, with no synthesis at all.
+    const banked = bankedLine(text);
+    if (banked) {
+      markTurn('synthStart');
+      const levels = await levelsFor(banked, true);
+      enqueue({ text, wav: banked, via: 'server', bank: true, ...(levels ? { levels } : {}) });
+      return { ok: true };
+    }
     // Not up and nobody starting it: start it, without waiting here; `awaitServer` holds the line.
     if (!serverUp && !server && !serverStarting) void startSynthServer();
     const route = await awaitServer(text);
+    if (epoch !== speechEpoch) return { ok: true };
     if (route === 'server') {
-      const file = await synthesiseOnServer(text);
-      if (file) { wav = file; levels = (await analyseWav(file)) ?? undefined; }
-      else console.log(`[speech] server ${s.server} failed the synthesis (${serverDown}) — speaking with Windows' voice`);
-    } else if (!serverUp && !server && !serverStarting) {
+      // The first sentence first: it starts playing while the rest is synthesised behind it.
+      const parts = splitFirstSentence(text) ?? [text];
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]!;
+        const bankedPart = bankedLine(part);
+        markTurn('synthStart');
+        const file = bankedPart ?? (await synthesiseOnServer(part));
+        if (epoch !== speechEpoch) return { ok: true };
+        if (!file) {
+          console.log(`[speech] server ${s.server} failed the synthesis (${serverDown}) — speaking with Windows' voice`);
+          enqueue({ text: parts.slice(i).join(' '), via: 'sapi' });
+          return { ok: true };
+        }
+        const levels = await levelsFor(file, Boolean(bankedPart));
+        if (!enqueue({ text: part, wav: file, via: 'server', ...(bankedPart ? { bank: true } : {}), ...(levels ? { levels } : {}) })) return { ok: true };
+      }
+      return { ok: true };
+    }
+    if (!serverUp && !server && !serverStarting) {
       console.log(`[speech] server ${s.server} unavailable (${serverDown}) — speaking with Windows' voice`);
     }
   }
-  // A line answers William when the caller says so, or when it comes within 20 s of a sentence heard.
-  const followUp = req.followUp === true || heardRecently(FOLLOW_UP_HEARD_WINDOW_MS);
-  queue.push(wav ? { text, wav, followUp, ...(levels ? { levels } : {}) } : { text, followUp });
-  pump();
+  enqueue({ text, via: 'sapi' });
   return { ok: true };
 }
 
 export function stopSpeaking(): { ok: boolean } {
   queue = [];
+  speechEpoch++;
   stopLevels();
+  // A line the sidecar can no longer report on still ends for the turn.
+  if (!child) lineEnded();
   if (!child) return { ok: false };
   sendToSidecar({ stop: true });
   return { ok: true };
@@ -730,9 +1002,9 @@ export async function playProfileLine(req: { profile: string; lineId: string }):
   if (!existsSync(path)) return { ok: false, error: 'THE RECORDING IS MISSING FROM DISK' };
   const up = await ensureSidecar();
   if (!up) return { ok: false, error: fatal ?? 'THE SPEECH SIDECAR IS NOT AVAILABLE' };
-  if (speaking) { queue = []; sendToSidecar({ stop: true }); }
+  if (speaking) { queue = []; speechEpoch++; sendToSidecar({ stop: true }); }
   const done = new Promise<boolean>((resolve) => playWaiters.push(resolve));
-  queue.push({ text: line.text, wav: path });
+  queue.push({ text: line.text, wav: path, via: 'recording' });
   pump();
   const ok = await done;
   return ok ? { ok: true } : { ok: false, error: 'WINDOWS COULD NOT PLAY THE FILE' };

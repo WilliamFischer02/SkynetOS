@@ -3,6 +3,8 @@ import { resolveIntent } from '@shared/intent.js';
 import type { Actor } from '@shared/commands.js';
 import { replyFor } from '@shared/desktop.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+// 2026-09-27: the board by voice on every board, and its read-back edits.
+import { boardHits, clearPendingEdit, hasPendingEdit, runBoardOp } from './boardVoice.js';
 
 /**
  * Words to action, for every producer that speaks them.
@@ -28,7 +30,11 @@ export function intentContext(actor: Actor): IntentContext | null {
     selectedId: state.selectedId,
     actor,
     apps: state.desktopApps,
-    monitors: state.desktopMonitors
+    monitors: state.desktopMonitors,
+    // 2026-09-27 (board-voice.ts): every board, the room depth, and a read-back waiting for "go".
+    boards: boardHits(),
+    inRoom: state.stack.length > 1,
+    pendingEdit: hasPendingEdit()
   };
 }
 
@@ -104,6 +110,8 @@ export async function actOnIntent(intent: Intent): Promise<string> {
           break;
         case 'stop': {
           // "Jarvis, stop": what Esc does in the hologram window. Speech, the desktop, the caption.
+          // 2026-09-27: and a read-back board edit that was waiting for "go" is dropped.
+          if (clearPendingEdit()) { store.setVoiceMoment(null); return 'Cancelled.'; }
           store.setVoiceMoment(null);
           if (typeof window.skynet['speech:stop'] === 'function') void window.skynet['speech:stop']().catch(() => undefined);
           if (typeof window.skynet['desktop:halt'] === 'function') void window.skynet['desktop:halt']().catch(() => undefined);
@@ -169,6 +177,52 @@ export async function actOnIntent(intent: Intent): Promise<string> {
         const reply = (err as Error).message || 'THE DESKTOP DID NOT ANSWER';
         store.toast('fault', reply);
         return reply;
+      }
+    }
+
+    case 'board': {
+      /*
+       * 2026-09-27, the board by voice on any board (board-voice.ts, boardVoice.ts). A write is
+       * only HELD here and read back; it lands on a spoken "go" through `runCommand` as the user,
+       * and it is never a DESTRUCTIVE command, so this path cannot reach the deletion dialog.
+       */
+      try {
+        const done = await runBoardOp(intent.op);
+        const line = done.say ?? intent.say;
+        if (!done.ok) store.toast('warn', line);
+        return line;
+      } catch (err) {
+        const why = (err as Error).message || 'THE BOARD DID NOT ANSWER';
+        store.toast('fault', why);
+        return why;
+      }
+    }
+
+    case 'dictate': {
+      // 2026-09-27: a dictation target window, "send it", "stop transcribing" (dictate-target.ts).
+      if (typeof window.skynet['dictate:setTarget'] !== 'function') return 'RESTART SKYNETOS TO DICTATE INTO A WINDOW — THE RUNNING COPY PREDATES IT';
+      try {
+        const result = await window.skynet['dictate:setTarget'](intent.request);
+        if (!result.ok) store.toast('warn', result.said);
+        return result.said || intent.say;
+      } catch (err) {
+        const why = (err as Error).message || 'DICTATION DID NOT ANSWER';
+        store.toast('fault', why);
+        return why;
+      }
+    }
+
+    case 'split': {
+      // 2026-09-27: a chip's terminal on monitor one's left, JARVIS beside it (window-split.ts).
+      if (typeof window.skynet['hologram:split'] !== 'function') return 'RESTART SKYNETOS TO SPLIT THE SCREEN — THE RUNNING COPY PREDATES IT';
+      try {
+        const result = await window.skynet['hologram:split'](intent.request);
+        if (!result.ok) store.toast('warn', result.said);
+        return result.said || intent.say;
+      } catch (err) {
+        const why = (err as Error).message || 'THE SPLIT DID NOT ANSWER';
+        store.toast('fault', why);
+        return why;
       }
     }
 

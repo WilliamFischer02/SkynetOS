@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { UsageSummary } from '@shared/usage.js';
 import { formatDuration, formatTokens, fraction, readout, weightedTokens } from '@shared/usage.js';
 import { PLAN_SPECS, planFromPeak, type PlanId } from '@shared/plans.js';
+import { failureLine } from '@shared/ui-copy.js';
 import type { PoolReadout, WeeklyReadout } from '@shared/usage-week.js';
 import { PlanDialog } from './PlanDialog.js';
 import { FableCores } from './FableCores.js';
 import { useBoardStore } from '../store/useBoardStore.js';
 import { Icon } from './Icon.js';
+import { useVisibleInterval } from './useVisibleInterval.js';
 
 /**
  * The usage meter, top-left, always on.
@@ -102,6 +104,8 @@ export function UsageMeter(): React.JSX.Element | null {
   // meter showing the old budget for up to twenty seconds.
   const refreshRef = useRef<() => void>(() => undefined);
   const [summary, setSummary] = useState<UsageSummary | null>(null);
+  /** Why the read itself failed (the call rejected); `summary.error` is main saying the scan failed. */
+  const [readError, setReadError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [asking, setAsking] = useState(false);
 
@@ -127,23 +131,29 @@ export function UsageMeter(): React.JSX.Element | null {
   useEffect(() => {
     let live = true;
     const pull = () => {
-      void window.skynet['usage:summary']().then((next) => { if (live) setSummary(next); });
+      window.skynet['usage:summary']()
+        .then((next) => { if (live) { setSummary(next); setReadError(null); } })
+        .catch((err: unknown) => { if (live) setReadError((err as Error).message || 'NO ANSWER'); });
     };
     refreshRef.current = pull;
     pull();
-    // Usage moves on the scale of minutes, and a scan touches every conversation file on disk.
-    // Polling this faster would cost more than the freshness is worth.
-    const timer = setInterval(pull, REFRESH_MS);
-    return () => { live = false; clearInterval(timer); };
+    return () => { live = false; };
   }, []);
+  // Usage moves on the scale of minutes, and a scan touches every conversation file on disk.
+  // Polling this faster would cost more than the freshness is worth, and polling it at all while
+  // the window is minimised or hidden is a scan nobody sees.
+  useVisibleInterval(() => refreshRef.current(), REFRESH_MS);
 
-  if (!summary) return null;
+  // Nothing read yet: say why if the read failed, rather than leaving a gap where the meter goes.
+  // After a good read, a failed poll keeps the last figures on screen and the next poll corrects them.
+  const failure = !summary ? readError && failureLine(readError, 'NO ANSWER', `IT TRIES AGAIN EVERY ${REFRESH_MS / 1000} S`) : summary.error;
+  if (!summary && !failure) return null;
 
-  if (summary.error) {
+  if (!summary || failure) {
     return (
       <div className="usage-meter fault">
         <div className="usage-head-row">USAGE</div>
-        <div className="usage-error">{summary.error}</div>
+        <div className="usage-error">{failure}</div>
       </div>
     );
   }

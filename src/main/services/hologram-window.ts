@@ -1,11 +1,21 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow, screen, type WebContents } from 'electron';
-import { HOLOGRAM_DEFAULT_SIZE, clampHologramSize, deskBounds, type HologramStatus } from '@shared/hologram.js';
+import {
+  HOLOGRAM_WINDOW_MAX,
+  HOLOGRAM_WINDOW_MIN,
+  clampHologramSize,
+  deskBounds,
+  readHologramSize,
+  sizeStepForKey,
+  stepHologramSize,
+  type HologramSize,
+  type HologramStatus
+} from '@shared/hologram.js';
 import type { HologramControl } from '@shared/hologram-control.js';
 import type { HoloScene } from '@shared/holo-scene.js';
 import { restoreWindowState } from '@shared/window-state.js';
-import { getSettings, setHologramEnabled as writeHologramEnabled } from './settings.js';
+import { getSettings, setHologramDesk as writeHologramDesk, setHologramEnabled as writeHologramEnabled, setHologramSize as writeHologramSize } from './settings.js';
 import { desktopStatus, haltPlan } from './desktop.js';
 import { stopSpeaking } from './speech.js';
 import { setVoiceEnabled } from './voice.js';
@@ -31,15 +41,33 @@ import { setVoiceEnabled } from './voice.js';
  * DESK layout (`hologram:setDesk`): the window moves to monitor one, full work-area height at the
  * right edge, 0.6 wide per tall; off, it goes back to the square bottom-right of the primary
  * display. Monitor numbering is `packages/shared/desktop.ts`'s, read through `desktopStatus()`.
+ *
+ * Resizable since 2026-09-27 (William: "trouble scaling the jarvis voice window ... its buttons
+ * are quite squashed"). Frameless with `thickFrame`, so Windows gives it its own resize borders;
+ * the page also draws a size grip that calls `hologram:setSize`, and Ctrl+= / Ctrl+- / Ctrl+0 step
+ * it here in `before-input-event`. 320-1600 DIPs a side. ONE writer saves `hologram.size`: the
+ * `resize` handler below, 300 ms after the last change, never in DESK. A bare number in the file
+ * is the old square and is migrated to `{ w, h }` once, with a 240 bumped to the 480 default.
  */
 
 const MARGIN = 16;
 const SAVE_DEBOUNCE_MS = 600;
+const SIZE_SAVE_DEBOUNCE_MS = 300;
 
 let win: BrowserWindow | null = null;
 let quitting = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let sizeTimer: ReturnType<typeof setTimeout> | null = null;
+let sizeMigrated = false;
 let desk = false;
+/**
+ * SPLIT layout (2026-09-27, window-split.ts): JARVIS on the right of monitor one beside a chip's
+ * terminal. Per app run: never written to settings, so `hologram.desk` and `hologram.size` keep
+ * what they held, and leaving it restores DESK or the saved size.
+ */
+let split: { x: number; y: number; width: number; height: number } | null = null;
+/** DESK or SPLIT own the bounds: nothing is saved and the grip does not resize. */
+const laidOut = (): boolean => desk || split !== null;
 let sceneOff: (() => void) | null = null;
 /** The last scene pushed, replayed to a window that was still loading when it arrived. */
 let lastScene: HoloScene | null = null;
@@ -48,23 +76,78 @@ function stateFile(): string {
   return join(app.getPath('userData'), 'hologram-window.json');
 }
 
-function squareSize(): number {
-  return clampHologramSize(getSettings().hologram.size ?? HOLOGRAM_DEFAULT_SIZE);
+/**
+ * The saved size, `{ w, h }` DIPs. The first read of a run migrates the old bare number: written
+ * back as `{ w, h }` so the bump of a pre-480 240 happens once, and said in the log.
+ */
+function savedSize(): HologramSize {
+  const raw = getSettings().hologram.size;
+  const read = readHologramSize(raw);
+  if (read.legacy && !sizeMigrated) {
+    sizeMigrated = true;
+    const written = writeHologramSize(read.size);
+    if (read.bumped) console.log(`[hologram] hologram.size ${String(raw)} is from before the 480 default: bumped once to ${read.size.w}x${read.size.h}${written.ok ? ', saved as { w, h }' : ` (not saved: ${written.error})`}`);
+    else console.log(`[hologram] hologram.size ${String(raw)} migrated to { w: ${read.size.w}, h: ${read.size.h} }`);
+  }
+  return read.size;
+}
+
+/**
+ * Bottom-right of a work area, the size cut to fit it: a size saved on a large monitor opened on a
+ * small one used to put the window's top (and its CLOSE) above the screen (bug sweep 2026-09-27).
+ */
+function cornerOf(work: { x: number; y: number; width: number; height: number }, size: HologramSize): { x: number; y: number; width: number; height: number } {
+  const width = Math.min(size.w, Math.max(1, work.width - 2 * MARGIN));
+  const height = Math.min(size.h, Math.max(1, work.height - 2 * MARGIN));
+  return { x: Math.max(work.x, work.x + work.width - width - MARGIN), y: Math.max(work.y, work.y + work.height - height - MARGIN), width, height };
 }
 
 /** Bottom-right of the primary display's work area, or where William last put it if still on screen. */
-function initialBounds(size: number): { x: number; y: number; width: number; height: number } {
+function initialBounds(size: HologramSize): { x: number; y: number; width: number; height: number } {
   const work = screen.getPrimaryDisplay().workArea;
-  const fallback = { x: work.x + work.width - size - MARGIN, y: work.y + work.height - size - MARGIN, width: size, height: size };
+  const fallback = cornerOf(work, size);
   let raw: unknown = null;
   try { raw = JSON.parse(readFileSync(stateFile(), 'utf8')); } catch { /* first run */ }
   const areas = screen.getAllDisplays().map((d) => d.workArea);
-  const saved = restoreWindowState(raw, areas, { width: size, height: size }, { width: size, height: size });
-  return saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y, width: size, height: size } : fallback;
+  const dims = { width: size.w, height: size.h };
+  const saved = restoreWindowState(raw, areas, dims, dims);
+  return saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y, width: size.w, height: size.h } : fallback;
+}
+
+/** The only writer of `hologram.size`: the window's size 300 ms after it last changed, never in DESK. */
+function saveSize(): void {
+  sizeTimer = null;
+  if (!win || win.isDestroyed() || win.isMinimized() || laidOut()) return;
+  const b = win.getBounds();
+  const next = clampHologramSize({ w: b.width, h: b.height });
+  const current = readHologramSize(getSettings().hologram.size).size;
+  if (current.w === next.w && current.h === next.h) return;
+  const written = writeHologramSize(next);
+  if (!written.ok) console.warn('[hologram] could not save the window size:', written.error);
+}
+
+/** Resize to `size`, keeping the top-left where it is. Not in DESK. */
+function resizeTo(size: HologramSize): void {
+  if (!win || win.isDestroyed() || laidOut()) return;
+  const b = win.getBounds();
+  const next = clampHologramSize(size);
+  if (b.width === next.w && b.height === next.h) return;
+  win.setBounds({ x: b.x, y: b.y, width: next.w, height: next.h }, false);
+}
+
+/** The square window's constraints, lifted in DESK so a tall monitor is not clipped at 1600. */
+function constrain(target: BrowserWindow, forDesk: { width: number; height: number } | null): void {
+  if (forDesk) {
+    target.setMinimumSize(Math.min(HOLOGRAM_WINDOW_MIN, forDesk.width), Math.min(HOLOGRAM_WINDOW_MIN, forDesk.height));
+    target.setMaximumSize(Math.max(HOLOGRAM_WINDOW_MAX, forDesk.width), Math.max(HOLOGRAM_WINDOW_MAX, forDesk.height));
+  } else {
+    target.setMinimumSize(HOLOGRAM_WINDOW_MIN, HOLOGRAM_WINDOW_MIN);
+    target.setMaximumSize(HOLOGRAM_WINDOW_MAX, HOLOGRAM_WINDOW_MAX);
+  }
 }
 
 function savePlace(): void {
-  if (!win || win.isDestroyed() || win.isMinimized() || desk) return;
+  if (!win || win.isDestroyed() || win.isMinimized() || laidOut()) return;
   const b = win.getBounds();
   try {
     mkdirSync(app.getPath('userData'), { recursive: true });
@@ -82,7 +165,7 @@ function neutralize(target: BrowserWindow): void {
 
 function create(): BrowserWindow {
   const settings = getSettings();
-  const size = squareSize();
+  const size = savedSize();
   const bounds = initialBounds(size);
   const display = screen.getDisplayMatching(bounds);
   const ui = Math.min(3, Math.max(1, Math.round(display.scaleFactor || 1)));
@@ -90,7 +173,13 @@ function create(): BrowserWindow {
     ...bounds,
     show: false,
     frame: false,
-    resizable: false,
+    // Resizable since 2026-09-27. thickFrame gives a frameless window Windows' own resize borders.
+    resizable: true,
+    thickFrame: true,
+    minWidth: HOLOGRAM_WINDOW_MIN,
+    minHeight: HOLOGRAM_WINDOW_MIN,
+    maxWidth: HOLOGRAM_WINDOW_MAX,
+    maxHeight: HOLOGRAM_WINDOW_MAX,
     maximizable: false,
     minimizable: true,
     fullscreenable: false,
@@ -133,9 +222,27 @@ function create(): BrowserWindow {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(savePlace, SAVE_DEBOUNCE_MS);
   });
+  // A border drag, the grip (`hologram:setSize`) or a Ctrl step all end here: the one writer.
+  created.on('resize', () => {
+    if (laidOut()) return;
+    if (sizeTimer) clearTimeout(sizeTimer);
+    sizeTimer = setTimeout(saveSize, SIZE_SAVE_DEBOUNCE_MS);
+  });
+  // Ctrl+= / Ctrl+- step the size by 80, Ctrl+0 returns to 480. Taken here, before the page and
+  // before any menu accelerator, so the keys never zoom the page off its whole-pixel scale.
+  created.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const step = sizeStepForKey(input);
+    if (step === null) return;
+    event.preventDefault();
+    if (laidOut() || created.isDestroyed()) return;
+    const b = created.getBounds();
+    resizeTo(stepHologramSize({ w: b.width, h: b.height }, step));
+  });
   created.on('closed', () => { if (win === created) win = null; });
 
-  const hash = `hologram?ui=${ui}&size=${size}${settings.streamMode ? '&stream=1' : ''}`;
+  // SKYNET_PERF=1 starts the window with its frame-time readout on (Ctrl+Shift+P toggles it there).
+  const hash = `hologram?ui=${ui}&w=${size.w}&h=${size.h}${settings.streamMode ? '&stream=1' : ''}${process.env['SKYNET_PERF'] ? '&perf=1' : ''}`;
   const dev = process.env['ELECTRON_RENDERER_URL'];
   if (!app.isPackaged && dev) void created.loadURL(`${dev}#${hash}`);
   else void created.loadFile(join(__dirname, '../renderer/index.html'), { hash });
@@ -149,7 +256,8 @@ function open(): void {
     return;
   }
   win = create();
-  if (desk) applyDesk(true);
+  if (split) applySplit(split);
+  else if (desk) applyDesk(true);
 }
 
 function close(): void {
@@ -173,12 +281,17 @@ function monitorOneWork(): { x: number; y: number; width: number; height: number
 
 function applyDesk(on: boolean): void {
   if (!win || win.isDestroyed()) return;
+  if (sizeTimer) { clearTimeout(sizeTimer); sizeTimer = null; }
   if (on) {
-    win.setBounds(deskBounds(monitorOneWork()), false);
+    const b = deskBounds(monitorOneWork());
+    constrain(win, b);
+    win.setBounds(b, false);
   } else {
-    const size = squareSize();
+    // Leaving DESK restores the saved size, bottom-right of the primary display as before.
+    const size = savedSize();
     const work = screen.getPrimaryDisplay().workArea;
-    win.setBounds({ x: work.x + work.width - size - MARGIN, y: work.y + work.height - size - MARGIN, width: size, height: size }, false);
+    constrain(win, null);
+    win.setBounds(cornerOf(work, size), false);
   }
   neutralize(win);
 }
@@ -220,12 +333,15 @@ export function pushHologramScene(scene: HoloScene): void {
 export function hologramStatus(): HologramStatus {
   const s = getSettings().hologram;
   const live = win !== null && !win.isDestroyed();
+  const b = live ? win!.getBounds() : null;
   return {
     enabled: s.enabled,
     open: live,
     minimized: live ? win!.isMinimized() : false,
     alwaysOnTop: live ? win!.isAlwaysOnTop() : s.alwaysOnTop !== false,
-    desk
+    desk,
+    size: b ? { w: b.width, h: b.height } : readHologramSize(s.size).size,
+    scaleFactor: b ? screen.getDisplayMatching(b).scaleFactor || 1 : 1
   };
 }
 
@@ -283,14 +399,33 @@ export function shutdownHologram(): { ok: boolean } {
   const written = writeHologramEnabled(false);
   if (!written.ok) console.warn('[hologram] shutdown: could not write hologram.enabled:', written.error);
   desk = false;
+  split = null;
   close();
   return { ok: true };
 }
 
-/** DESK layout on or off. The choice lives for the app run; the square is what comes back at start. */
+/**
+ * DESK layout on or off. Since 2026-09-27 the choice is written to `hologram.desk` and restored at
+ * the next start (`initHologramWindow`), so a window left on monitor one at full height comes back
+ * there. A failed write is logged; the layout still changes for this run.
+ */
 export function setHologramDesk(on: boolean): HologramStatus {
   desk = on;
+  split = null;
+  const written = writeHologramDesk(on);
+  if (!written.ok) console.warn('[hologram] could not remember the DESK layout:', written.error);
   applyDesk(on);
+  return hologramStatus();
+}
+
+/**
+ * The size grip (`hologram:setSize`, from the window itself): resize to `{ w, h }` DIPs, clamped.
+ * It only sizes the window; the `resize` handler saves it. Refused in DESK, which owns the bounds.
+ */
+export function setHologramSize(size: unknown): HologramStatus {
+  if (desk) throw new Error('THE WINDOW IS IN DESK LAYOUT — SWITCH DESK OFF TO RESIZE IT');
+  if (split) throw new Error('THE WINDOW IS BESIDE A TERMINAL — SAY "LEAVE SPLIT SCREEN" TO RESIZE IT');
+  resizeTo(clampHologramSize(size));
   return hologramStatus();
 }
 
@@ -303,6 +438,8 @@ export function attachHologramScene(subscribe: (cb: (scene: HoloScene) => void) 
 /** At app.whenReady: the window comes up with the app when William has switched it on. */
 export function initHologramWindow(): void {
   app.once('before-quit', () => { quitting = true; });
+  // DESK layout as it was left (hologram.desk); `open()` applies it to the new window.
+  desk = getSettings().hologram.desk === true;
   if (getSettings().hologram.enabled) open();
 }
 
@@ -310,6 +447,44 @@ export function initHologramWindow(): void {
 export function closeHologramWindow(): void {
   quitting = true;
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  if (sizeTimer) { clearTimeout(sizeTimer); saveSize(); }
   if (sceneOff) { sceneOff(); sceneOff = null; }
   close();
+}
+
+/* ────────────────────────── SPLIT layout (2026-09-27, window-split.ts) ────────────────────────── */
+
+function applySplit(bounds: { x: number; y: number; width: number; height: number }): void {
+  if (!win || win.isDestroyed()) return;
+  if (sizeTimer) { clearTimeout(sizeTimer); sizeTimer = null; }
+  constrain(win, bounds);
+  win.setBounds(bounds, false);
+  neutralize(win);
+}
+
+/**
+ * SPLIT on (`bounds`, DIPs, from `splitBounds` on monitor one) or off (null). A layout of its own:
+ * DESK is not written or cleared, and leaving SPLIT goes back to DESK if it was on, else to the
+ * saved size bottom-right, exactly as leaving DESK does. Opens the window if it is closed.
+ */
+export function setHologramSplit(bounds: { x: number; y: number; width: number; height: number } | null): { ok: boolean; split: boolean } {
+  if (bounds) {
+    // Never narrower than the window's minimum, and never past the right edge it was given: on a
+    // narrow monitor one it overlaps the terminal a little instead (bug sweep 2026-09-27).
+    const width = Math.max(HOLOGRAM_WINDOW_MIN, Math.round(bounds.width));
+    const height = Math.max(HOLOGRAM_WINDOW_MIN, Math.round(bounds.height));
+    split = { x: Math.round(bounds.x + bounds.width) - width, y: Math.round(bounds.y), width, height };
+    if (!win || win.isDestroyed()) open();
+    else applySplit(split);
+    if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.showInactive(); }
+    return { ok: true, split: true };
+  }
+  const was = split !== null;
+  split = null;
+  if (was) applyDesk(desk);
+  return { ok: true, split: false };
+}
+
+export function hologramSplitActive(): boolean {
+  return split !== null;
 }

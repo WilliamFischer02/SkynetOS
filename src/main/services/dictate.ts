@@ -32,6 +32,8 @@ import {
 } from '@shared/dictate.js';
 import { getSettings } from './settings.js';
 import { recordOnce, voiceStatus } from './voice.js';
+// 2026-09-27: a dictation TARGET window (dictate-target.ts), aimed before each take is typed.
+import { aimDictation, dictateTarget } from './dictate-target.js';
 
 let status: DictateStatus = idleStatus(false);
 let stopRequested = false;
@@ -54,7 +56,11 @@ export function toggleDictation(): DictateStatus {
     stopRequested = false;
     running = dictation().catch((err: unknown) => {
       publish({ phase: 'idle', error: `DICTATION FAILED — ${(err as Error).message}` });
-    }).finally(() => { running = null; });
+    }).finally(() => {
+      running = null;
+      // Whatever path ended it, DICT is not left lit (the backstop to the state machine).
+      if (status.phase !== 'idle') publish({ phase: 'idle' });
+    });
     return status;
   }
   stopRequested = true;
@@ -74,6 +80,9 @@ async function dictation(): Promise<void> {
   const port = getSettings().voice.port;
 
   for (;;) {
+    // Aimed at a window when this take began: if "stop transcribing" clears the aim during the
+    // take, what it heard is not typed into whatever has focus instead (bug sweep 2026-09-27).
+    const aimed = dictateTarget() !== null;
     const left = DICTATE_MAX_MS - (Date.now() - startedAt);
     const capture = await recordOnce({ profile: 'dictation', lineId: `take-${Date.now()}`, maxMs: Math.max(2000, Math.min(DICTATE_TAKE_MS, left)) });
     if (capture.reason === 'error') {
@@ -99,9 +108,15 @@ async function dictation(): Promise<void> {
       publish({ phase, error: `COULD NOT TRANSCRIBE — ${(err as Error).message}` });
       return;
     }
+    if (text && aimed && dictateTarget() === null) {
+      publish({ phase: 'idle', lastText: undefined });
+      return;
+    }
     if (text) {
       phase = nextPhase(phase, 'typed');
       publish({ phase, lastText: text });
+      const aim = await aimDictation();
+      if (!aim.ok) { phase = nextPhase(phase, 'failed'); publish({ phase, error: aim.error }); return; }
       await typeText(`${text} `);
       publish({ typed: status.typed + text.length + 1 });
     }
@@ -132,7 +147,7 @@ async function whisper(wav: Uint8Array, port: number): Promise<string> {
  * Type into the focused window with SendKeys, in chunks 20 ms apart. The text travels as base64
  * inside the command line, so no quoting rule of PowerShell's can change a character of it.
  */
-function typeText(text: string): Promise<void> {
+export function typeText(text: string): Promise<void> {
   const pieces = chunkText(text).map(escapeSendKeys);
   if (!pieces.length) return Promise.resolve();
   const payload = Buffer.from(JSON.stringify(pieces), 'utf8').toString('base64');

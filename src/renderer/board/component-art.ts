@@ -39,6 +39,7 @@ export interface ComponentStyle {
     | 'prompt'     // agent.prompt — a pixel-art Claude message box
     | 'promptToNode' // agent.prompt-to-node — the same box, signal-framed, under a PROMPT → NODE tab
     | 'explorer'   // store.explorer — a little desktop window full of folders
+    | 'calendar'   // panel.calendar — a display panel ruled into day columns with copper pads
     | 'plain';     // anything without a vocabulary entry yet
   /** Inset of the body from the footprint edge, in px. Leaves room for legs. */
   inset: number;
@@ -65,6 +66,8 @@ export const COMPONENT_STYLE: Record<NodeKind, ComponentStyle> = {
   'service.process': { silhouette: 'vreg', inset: 2 },
   'task.scheduled': { silhouette: 'crystal', inset: 1 },
   'monitor.system': { silhouette: 'psu', inset: 2 },
+  // Inset 0: the live face covers the whole footprint; this is only what shows before it paints.
+  'panel.calendar': { silhouette: 'calendar', inset: 0 },
   'note.silk': { silhouette: 'plain', inset: 0 },
   'group.zone': { silhouette: 'plain', inset: 0 },
   // Nothing to draw: a decor.image with no picture is an empty frame, which is exactly right.
@@ -280,6 +283,21 @@ export function drawComponent(d: DrawContext, style: ComponentStyle): void {
       }
       // Vent slots along the bottom.
       for (let pxx = bx + 4; pxx < bx + bw - 4; pxx += 3) px(d.ctx, COPPER_DARK, pxx, by + bh - 4, 1, 2);
+      break;
+    }
+    case 'calendar': {
+      // The pane before its first paint (and if the calendar never arrives): a display ruled into
+      // day columns under a header rule, a few copper pads. The live face replaces all of it.
+      body(d, bx, by, bw, bh);
+      const cols = Math.max(1, Math.min(7, Math.floor((bw - 6) / 6)));
+      const cw = Math.max(2, Math.floor((bw - 6) / cols));
+      px(d.ctx, COPPER_DARK, bx + 3, by + 5, cols * cw, 1);
+      for (let k = 0; k < cols; k++) {
+        const cx = bx + 3 + k * cw;
+        if (k > 0) px(d.ctx, COPPER_DARK, cx, by + 7, 1, bh - 10);
+        const padY = by + 8 + ((k * 5) % Math.max(1, bh - 16));
+        px(d.ctx, COPPER, cx + 1, padY, Math.max(1, cw - 2), Math.min(4, Math.max(1, by + bh - 3 - padY)));
+      }
       break;
     }
     case 'prompt':

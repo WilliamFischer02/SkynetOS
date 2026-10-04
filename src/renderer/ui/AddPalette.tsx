@@ -27,7 +27,7 @@ const ORDER: NodeKind[] = [
   'drive.room',
   'store.repo', 'store.folder', 'store.explorer', 'store.cloud',
   'file.document', 'file.artifact', 'file.exe',
-  'link.url', 'service.process', 'task.scheduled', 'monitor.system'
+  'link.url', 'service.process', 'task.scheduled', 'monitor.system', 'panel.calendar'
 ];
 
 const BLURB: Record<NodeKind, string> = {
@@ -52,7 +52,8 @@ const BLURB: Record<NodeKind, string> = {
   'link.url': 'A bookmark. Opens in your browser.',
   'service.process': 'A long-running local process. Starts and stops from the board.',
   'task.scheduled': 'A cron entry.',
-  'monitor.system': 'A PSU block showing machine telemetry.'
+  'monitor.system': 'A PSU block showing machine telemetry.',
+  'panel.calendar': 'A live calendar pane: the days of schedule/calendar.json drawn on the board, blocks as copper pads, a NOW line on today. Double-click opens the week view.'
 };
 
 const LABEL: Record<NodeKind, string> = {
@@ -77,7 +78,8 @@ const LABEL: Record<NodeKind, string> = {
   'link.url': 'LINK JACK',
   'service.process': 'SERVICE',
   'task.scheduled': 'SCHEDULED TASK',
-  'monitor.system': 'SYSTEM MONITOR'
+  'monitor.system': 'SYSTEM MONITOR',
+  'panel.calendar': 'CALENDAR PANE'
 };
 
 /** What each part is, in one line. Shown on hover. */

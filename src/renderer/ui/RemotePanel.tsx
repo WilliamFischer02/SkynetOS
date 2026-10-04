@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RemoteStatusView } from '@shared/remote.js';
 import { qrMatrix } from '@shared/qr.js';
 import { useBoardStore } from '../store/useBoardStore.js';
+import { useVisibleInterval } from './useVisibleInterval.js';
 
 /**
  * REMOTE: let a phone, tablet or laptop use this board. The desktop side of docs/08.
@@ -25,11 +26,8 @@ export function RemotePanel(): React.JSX.Element | null {
     try { setStatus(await window.skynet['remote:status']()); } catch { /* shown as unavailable */ }
   }, [available]);
 
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(() => void refresh(), 4000);
-    return () => clearInterval(timer);
-  }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useVisibleInterval(() => void refresh(), 4000);
 
   // The code's countdown, and forgetting it once it has expired or been used.
   useEffect(() => {

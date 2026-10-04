@@ -406,8 +406,8 @@
       "kind": "link.url",
       "name": "GitHub",
       "pos": {
-        "x": 131,
-        "y": 74
+        "x": 133,
+        "y": 75
       },
       "footprint": {
         "w": 3,
@@ -1361,13 +1361,34 @@
       "notes": "ScheduleOS: the week view, Reclaim, the schedule secretary. Added 2026-09-26. No logo yet; pick one in the editor."
     },
     {
+      "id": "k_calendar",
+      "designator": "K1",
+      "kind": "panel.calendar",
+      "name": "THIS WEEK",
+      "pos": {
+        "x": 147,
+        "y": 93
+      },
+      "footprint": {
+        "w": 12,
+        "h": 8
+      },
+      "tags": [
+        "schedule",
+        "panel"
+      ],
+      "compact": true,
+      "showDesignator": false,
+      "notes": "The next three days at a glance, beside D6 SCHEDULEOS: the same schedule/calendar.json the room's pane draws, compact (no hour labels). Double-click opens the week view; descend into D6 for the whole week."
+    },
+    {
       "id": "u_jarvis_tqr",
       "designator": "U7",
       "kind": "agent.code",
       "name": "JARVIS-TQR",
       "pos": {
-        "x": 106,
-        "y": 90
+        "x": 105,
+        "y": 92
       },
       "footprint": {
         "w": 8,
@@ -1401,6 +1422,18 @@
       "chaseColor": "signal",
       "chaseSpeed": 75,
       "notes": "JARVIS on TruthQuestRetro: the C++20 engine and the Forge editor. Added 2026-09-26 beside GameOS. Sessions in that repo follow its own CLAUDE.md ritual (roadmap milestone, effort tag, TODO-NEXT)."
+    },
+    {
+      "id": "s_file_explorer",
+      "kind": "store.explorer",
+      "name": "FILE EXPLORER",
+      "pos": {
+        "x": 40,
+        "y": 71
+      },
+      "designator": "S5",
+      "provisional": true,
+      "path": "C:/dev"
     }
   ],
   "edges": [

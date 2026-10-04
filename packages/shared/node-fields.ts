@@ -41,11 +41,12 @@ import type { BoardNode, NodeKind } from './types.js';
  *  url         http/https. Shape-validated. Reachability is NOT checked — see targets.ts.
  *  board-file  a path to another board JSON, relative to board/.
  *  json        a raw JSON object (task.scheduled action)
+ *  hours       two whole hours typed as `from-to` (panel.calendar `showHours`) -> [number, number]
  */
 export type FieldControl =
   | 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'tags' | 'multi'
   | 'path-file' | 'path-dir' | 'glob' | 'url' | 'board-file' | 'json'
-  | 'dir-list' | 'footprint' | 'priority' | 'rotation' | 'percent';
+  | 'dir-list' | 'footprint' | 'priority' | 'rotation' | 'percent' | 'hours';
 
 /** Controls that name something outside the board and therefore need verifying. */
 export const TARGET_CONTROLS = ['path-file', 'path-dir', 'glob', 'url', 'board-file'] as const;
@@ -509,6 +510,28 @@ const BY_KIND: Record<NodeKind, FieldSpec[]> = {
       help: "On: the node's face is a live widget of this machine's CPU, GPU and memory, refreshed every two seconds. Off: it shows its wallpaper and logo like any other component. Double-click opens the full monitor either way."
     }
   ],
+  'panel.calendar': [
+    {
+      key: 'days', label: 'Days shown', control: 'number', placeholder: '7',
+      help: 'How many day columns the pane draws, 1 to 14, from schedule/calendar.json. If the columns get too narrow to read, widen the node under Size. Ignored while Compact is on.'
+    },
+    {
+      key: 'start', label: 'First column', control: 'select', options: ['today', 'monday'],
+      optionHelp: {
+        today: 'The pane starts at today and always looks ahead.',
+        monday: 'The pane starts at the Monday of this week, like the week view, so the days already gone stay in sight.'
+      },
+      help: 'Which day the leftmost column shows. Empty means today.'
+    },
+    {
+      key: 'showHours', label: 'Hours shown', control: 'hours', placeholder: '7-23',
+      help: 'Type the first and last hour as from-to in 24-hour time, for example 7-23 or 0-24. A block outside those hours is clipped to them. Empty means 7-23.'
+    },
+    {
+      key: 'compact', label: 'Compact (3 days, no hour labels)', control: 'boolean',
+      help: 'Tick for a small copy of the pane, like the one on the root board: three days from the first column and no hour labels. Untick for the full week.'
+    }
+  ],
   'note.silk': [
     { key: 'text', label: 'Text', control: 'textarea', required: true, placeholder: 'PHASE 1 — FOUNDATIONS', help: 'Engraved on the board. Uppercase reads correctly here.' },
     { key: 'size', label: 'Size', control: 'select', options: ['11', '22'], help: 'Departure Mono is pixel-perfect at 11 and 22 only.' }
@@ -566,7 +589,7 @@ const NON_TARGET_KEYS: readonly (keyof BoardNode)[] = ['image', 'logo'];
 /**
  * The one field that IS this node's target — what a click acts on and what the inspector shows
  * as "resolved". Returns undefined for kinds that point at nothing (note.silk, group.zone,
- * monitor.system, task.scheduled).
+ * monitor.system, panel.calendar, task.scheduled).
  */
 /**
  * The field that says what this node points at.

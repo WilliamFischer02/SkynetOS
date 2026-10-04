@@ -15,17 +15,35 @@
  * and a loudness thirty times a second (`voice:levels`, packages/shared/speech-levels.ts) so the
  * hologram's globe can move to William's own voice. Numbers only; no audio leaves this page by that
  * path, and the analyser stops with the tracks.
+ *
+ * And it says what its TRACKS are doing (`voice:mic`, 2026-09-27): `open` once they are live,
+ * `speech` when the endpointer hears the sentence begin, `closed` the instant they are stopped. The
+ * LISTENING light in the hologram is driven by that alone (services/turn.ts), so it cannot go out
+ * while a track is open, nor stay on after the last one stops.
  */
 
-import { DEFAULT_ENDPOINT, createEndpointer, downsample, encodeWav, rms, type EndpointConfig } from '@shared/voice-capture.js';
-import type { VoiceCapture, VoiceListen } from '@shared/voice.js';
+import { CONNECTIVE_EXTENSION_MS, DEFAULT_ENDPOINT, SENTENCE_MAX_MS, createEndpointer, downsample, encodeWav, rms, type EndpointConfig } from '@shared/voice-capture.js';
+import type { VoiceCapture, VoiceListen, VoiceMicState } from '@shared/voice.js';
 import { BAND_EDGES_HZ, LEVEL_BANDS, LEVEL_HOP_MS } from '@shared/speech-levels.js';
 
 let busy = false;
 
+/** Tell main what the tracks are doing. A lost message is not a reason to fail the capture. */
+function micState(phase: VoiceMicState['phase']): void {
+  const post = (window.skynet as unknown as Record<string, ((state: VoiceMicState) => Promise<unknown>) | undefined>)['voice:mic'];
+  if (typeof post === 'function') void post({ phase }).catch(() => undefined);
+}
+
 window.skynet.on('voice:listen', (request) => {
   // A follow-up window (docs/07 § Voice) asks for its own silence budget; everything else about
-  // the capture is the same: the same endpointer, the same 8 s of sentence, the tracks stopped.
+  // the capture is the same: the same endpointer, the same 20 s of sentence, the tracks stopped.
+  if (request.continuation) {
+    // The rest of a sentence that stopped on a connective: 1.8 s to go on, and what is left of 20 s.
+    const noSpeechMs = Math.max(1000, Math.min(3000, Number(request.noSpeechMs) || CONNECTIVE_EXTENSION_MS));
+    const maxMs = Math.max(3000, Math.min(SENTENCE_MAX_MS, Number(request.maxMs) || SENTENCE_MAX_MS));
+    void listen(request, { ...DEFAULT_ENDPOINT, noSpeechMs, maxMs });
+    return;
+  }
   const noSpeechMs = request.noSpeechMs === undefined ? DEFAULT_ENDPOINT.noSpeechMs : Math.max(2000, Math.min(8000, Number(request.noSpeechMs) || DEFAULT_ENDPOINT.noSpeechMs));
   void listen(request, noSpeechMs === DEFAULT_ENDPOINT.noSpeechMs ? DEFAULT_ENDPOINT : { ...DEFAULT_ENDPOINT, noSpeechMs });
 });
@@ -109,11 +127,13 @@ async function listen(request: VoiceListen, config: EndpointConfig): Promise<voi
   let context: AudioContext | null = null;
   let stopLevels: (() => void) | null = null;
 
+  let opened = false;
   const close = async (): Promise<void> => {
     // The microphone first. Everything after this line works on audio already in memory.
     if (stopLevels) { stopLevels(); stopLevels = null; }
     stream?.getTracks().forEach((track) => track.stop());
     stream = null;
+    if (opened) { opened = false; micState('closed'); }
     if (context && context.state !== 'closed') await context.close().catch(() => undefined);
     context = null;
   };
@@ -146,9 +166,13 @@ async function listen(request: VoiceListen, config: EndpointConfig): Promise<voi
     const chunks: Float32Array[] = [];
     let pending = new Float32Array(0);
     stopLevels = startLevels(context, source);
+    // The tracks are live and the audio is flowing: the light may come on now, and not before.
+    opened = true;
+    micState('open');
+    let saidSpeech = false;
 
     const outcome = await new Promise<'done' | 'nothing'>((resolve) => {
-      const backstop = window.setTimeout(() => resolve('nothing'), config.noSpeechMs + config.maxMs + 1500);
+      const backstop = window.setTimeout(() => resolve('nothing'), config.noSpeechMs + config.maxMs + config.endSilenceMs + 1500);
       processor.onaudioprocess = (event) => {
         const fresh = new Float32Array(event.inputBuffer.getChannelData(0));
         chunks.push(fresh);
@@ -157,6 +181,7 @@ async function listen(request: VoiceListen, config: EndpointConfig): Promise<voi
         while (buffer.length - offset >= frameSize) {
           const state = endpointer.push(rms(buffer.subarray(offset, offset + frameSize)));
           offset += frameSize;
+          if (state === 'speaking' && !saidSpeech) { saidSpeech = true; micState('speech'); }
           if (state === 'done' || state === 'nothing') {
             window.clearTimeout(backstop);
             resolve(state);

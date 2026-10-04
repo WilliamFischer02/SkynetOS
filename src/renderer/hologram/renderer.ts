@@ -1,6 +1,7 @@
 import type { HoloScene } from '@shared/holo-scene.js';
 import { BRIGHTEN_DOWN_MS, BRIGHTEN_UP_MS, brightnessFor, flickerAt, paletteFor, smoothLevel, type HologramMood } from '@shared/hologram.js';
 import { LEVEL_BANDS, SILENT_BANDS, smoothBands, type AudioLevels } from '@shared/speech-levels.js';
+import { FRAME_WINDOW_MS, summariseFrames, type FrameSample, type FrameSummary } from '@shared/frame-stats.js';
 import { createTarget, globeScale, mul3, resizeTarget, rotationX, rotationY, rotationZ, type Target } from './gl.js';
 import { Globe } from './globe.js';
 import { Post } from './post.js';
@@ -17,19 +18,38 @@ import { Wisps } from './wisps.js';
  *   3. overlay: the scene's icons and the centre panel, crisp and in colour.
  *
  * Everything animated is smoothed here from the last event: band levels (attack 40 ms, release
- * 250 ms), brightness (180 ms up, 400 ms down), rotation speed by mood. The loop pauses when the
- * document is hidden. Budget: under 4 ms a frame at 480 px on an RTX-class GPU; when the previous
- * frame took over 8 ms the 2D repaints of the content panel are skipped for a frame.
+ * 250 ms), brightness (180 ms up, 400 ms down), rotation speed by mood. The loop STOPS when the
+ * document is hidden (the window minimised or hidden: Electron reports both as `document.hidden`)
+ * and no frame is requested until `visibilitychange` says it is visible again (2026-09-27; before,
+ * it kept re-arming requestAnimationFrame and returned early). Budget: under 4 ms a frame at 480 px
+ * on an RTX-class GPU; when the previous frame took over 8 ms the 2D repaints of the content panel
+ * are skipped for a frame, and counted (`stats().window.skipped`, the perf readout).
  */
 
 export interface RendererStats {
   frameMs: number;
   fps: number;
   frames: number;
+  /** fps, p50/p95 frame ms and skipped repaints over the last two seconds (packages/shared/frame-stats.ts). */
+  window: FrameSummary;
+  /** The loop is stopped because the window is hidden or minimised. */
+  paused: boolean;
 }
+
+/** Samples kept for the perf readout: two seconds at up to 240 Hz. */
+const FRAME_RING = 480;
 
 export interface HologramRenderer {
   setMood(mood: HologramMood): void;
+  /**
+   * The LISTENING light (2026-09-27): on exactly while a capture track is open (the turn's `mic`,
+   * from the capture window's own tracks), independent of the mood. Before, the halo was keyed to
+   * `mood === 'listening'`, and any mood that outranked it (a desktop step, a line being spoken)
+   * put the light out while the microphone was still open.
+   */
+  setListening(on: boolean): void;
+  /** WAITING on a question: a soft brightening, less than LISTENING. */
+  setWaiting(on: boolean): void;
   setSpeechLevels(levels: AudioLevels): void;
   setMicLevels(levels: AudioLevels): void;
   setWarming(on: boolean): void;
@@ -55,6 +75,8 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
   let target: Target = createTarget(gl, 8, 8);
 
   let mood: HologramMood = 'off';
+  let listeningOn = false;
+  let waitingOn = false;
   let warming = false;
   let reduced = false;
   let speech: AudioLevels | null = null;
@@ -76,11 +98,36 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
   let fpsWindowFrames = 0;
   let fps = 0;
   let spread = 1;
+  let paused = false;
+  const ring: FrameSample[] = [];
+  let ringAt = 0;
+
+  /*
+   * The backing store is the canvas's size in DEVICE pixels, as a ResizeObserver reports it
+   * (`device-pixel-content-box`, exact at any devicePixelRatio), so one canvas pixel is one device
+   * pixel and the post pass's dither stays 1:1 (2026-09-27, the resizable window). Before the
+   * first report, or where that box is not supported, CSS size x devicePixelRatio, rounded.
+   */
+  let deviceW = 0;
+  let deviceH = 0;
+  let observer: ResizeObserver | null = null;
+  try {
+    observer = new ResizeObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      const box = entry.devicePixelContentBoxSize?.[0];
+      if (box) { deviceW = Math.round(box.inlineSize); deviceH = Math.round(box.blockSize); return; }
+      const dpr = window.devicePixelRatio || 1;
+      deviceW = Math.round(entry.contentRect.width * dpr);
+      deviceH = Math.round(entry.contentRect.height * dpr);
+    });
+    try { observer.observe(canvas, { box: 'device-pixel-content-box' }); } catch { observer.observe(canvas); }
+  } catch { observer = null; }
 
   const resize = (): void => {
-    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    const w = Math.max(8, Math.floor(canvas.clientWidth * dpr));
-    const h = Math.max(8, Math.floor(canvas.clientHeight * dpr));
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(8, deviceW || Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(8, deviceH || Math.round(canvas.clientHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -92,8 +139,9 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
 
   const frame = (t: number): void => {
     if (!running) return;
+    // Hidden or minimised: stop asking for frames at all; `onVisibility` restarts the loop.
+    if (document.hidden) { paused = true; raf = 0; lastT = 0; return; }
     raf = requestAnimationFrame(frame);
-    if (document.hidden) { lastT = 0; return; }
     const started = performance.now();
     const dt = lastT ? Math.min(100, t - lastT) : 16;
     lastT = t;
@@ -105,7 +153,7 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
 
     // Sources: the line being spoken, else the microphone, else a resting breath.
     const speaking = mood === 'speaking' && speech && t - speechAt < 400;
-    const listening = mood === 'listening';
+    const listening = listeningOn || mood === 'listening';
     let targetBands: readonly number[] = SILENT_BANDS;
     let targetRms = 0;
     if (speaking && speech) { targetBands = speech.bands; targetRms = speech.rms; }
@@ -120,10 +168,14 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
     bands = smoothBands(bands, targetBands, dt);
     rms = smoothLevel(rms, targetRms, dt, { attackMs: 40, decayMs: 250 });
 
-    // Brightness: the LISTENING brightening is a ramp, not a switch.
-    const wantBright = brightnessFor(mood) * (warming ? 0.8 + 0.15 * Math.sin(t / 600) : 1) * (mood === 'thinking' ? 0.9 + 0.1 * Math.sin(t / 350) : 1);
+    // Brightness: the LISTENING brightening is a ramp, not a switch, and it holds for as long as a
+    // track is open whatever else is going on. THINKING is a slow pulse; ACTING a quicker one, so
+    // work in progress never looks like rest; WAITING (a question) a soft brightening.
+    const pulse = mood === 'thinking' ? 0.9 + 0.1 * Math.sin(t / 350) : mood === 'acting' && !reduced ? 1 + 0.12 * Math.sin(t / 160) : 1;
+    const base = brightnessFor(mood) * (warming ? 0.8 + 0.15 * Math.sin(t / 600) : 1) * pulse;
+    const wantBright = Math.max(base, listening ? brightnessFor('listening') : 0, waitingOn ? 1.1 : 0);
     bright = smoothLevel(bright / 1.5, wantBright / 1.5, dt, { attackMs: BRIGHTEN_UP_MS, decayMs: BRIGHTEN_DOWN_MS }) * 1.5;
-    halo = smoothLevel(halo, listening ? 1 : 0, dt, { attackMs: BRIGHTEN_UP_MS, decayMs: BRIGHTEN_DOWN_MS });
+    halo = smoothLevel(halo, listening ? 1 : waitingOn ? 0.35 : 0, dt, { attackMs: BRIGHTEN_UP_MS, decayMs: BRIGHTEN_DOWN_MS });
     spread = 1 + 0.18 * halo;
     const focus = scene.focusStrength(t);
     grid = smoothLevel(grid, 1 - 0.6 * focus, dt, { attackMs: 200, decayMs: 200 });
@@ -166,29 +218,40 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
     });
 
     // 3. Overlay.
-    scene.draw({ rot, scale, aspect, width: w, height: h, now: t }, lastFrameMs <= BUDGET_SKIP_MS, spread);
+    const repaint = lastFrameMs <= BUDGET_SKIP_MS;
+    scene.draw({ rot, scale, aspect, width: w, height: h, now: t }, repaint, spread);
 
     lastFrameMs = performance.now() - started;
+    const sample = { t, ms: lastFrameMs, skipped: !repaint };
+    if (ring.length < FRAME_RING) ring.push(sample);
+    else { ring[ringAt] = sample; ringAt = (ringAt + 1) % FRAME_RING; }
     frames++;
     fpsWindowFrames++;
     if (!fpsWindowStart) fpsWindowStart = t;
     if (t - fpsWindowStart >= 1000) { fps = Math.round((fpsWindowFrames * 1000) / (t - fpsWindowStart)); fpsWindowStart = t; fpsWindowFrames = 0; }
   };
 
-  const onVisibility = (): void => { if (!document.hidden) lastT = 0; };
+  const onVisibility = (): void => {
+    if (document.hidden) return;
+    lastT = 0;
+    if (running && paused) { paused = false; raf = requestAnimationFrame(frame); }
+  };
   document.addEventListener('visibilitychange', onVisibility);
 
   return {
     setMood(next) { mood = next; },
+    setListening(on) { listeningOn = on; },
+    setWaiting(on) { waitingOn = on; },
     setSpeechLevels(levels) { speech = levels; speechAt = performance.now(); },
     setMicLevels(levels) { mic = levels; micAt = performance.now(); },
     setWarming(on) { warming = on; },
     setScene(next) { scene.setScene(next, performance.now()); },
     setReducedMotion(on) { reduced = on; },
-    start() { if (running) return; running = true; lastT = 0; raf = requestAnimationFrame(frame); },
-    stop() { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; },
+    start() { if (running) return; running = true; paused = false; lastT = 0; raf = requestAnimationFrame(frame); },
+    stop() { running = false; paused = false; if (raf) cancelAnimationFrame(raf); raf = 0; },
     destroy() {
       this.stop();
+      observer?.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
       scene.destroy();
       post.destroy();
@@ -198,6 +261,6 @@ export function createHologramRenderer(canvas: HTMLCanvasElement): HologramRende
       gl.deleteTexture(target.texture);
       target = { framebuffer: target.framebuffer, texture: target.texture, width: 0, height: 0 };
     },
-    stats() { return { frameMs: lastFrameMs, fps, frames }; }
+    stats() { return { frameMs: lastFrameMs, fps, frames, window: summariseFrames(ring, performance.now(), FRAME_WINDOW_MS), paused }; }
   };
 }

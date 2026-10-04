@@ -6,6 +6,7 @@ import { useBoardStore } from '../store/useBoardStore.js';
 import { NodeEditor } from './NodeEditor.js';
 import { ScheduleBlock } from './ScheduleBlock.js';
 import { FinanceBlock } from './FinanceBlock.js';
+import { CalendarBlock } from './CalendarBlock.js';
 import { isFinanceFolder } from '@shared/finance.js';
 import { AvatarLogoNote } from './AvatarLogoNote.js';
 import { GifNote } from './GifNote.js';
@@ -262,6 +263,7 @@ export function Inspector(): React.JSX.Element | null {
 
           {node.kind === 'task.scheduled' ? <ScheduleBlock node={node} /> : null}
           {node.kind === 'store.folder' && isFinanceFolder(node.path) ? <FinanceBlock /> : null}
+          {node.kind === 'panel.calendar' ? <CalendarBlock /> : null}
           {node.logoSource === 'avatar' || node.logoSource === 'avatar-live' ? <AvatarLogoNote node={node} /> : null}
           <GifNote node={node} />
 
@@ -368,6 +370,7 @@ function openLabel(node: BoardNode): string {
     case 'agent.prompt': return 'Type a message';
     case 'agent.prompt-to-node': return 'Describe a node';
     case 'monitor.system': return 'Open system monitor';
+    case 'panel.calendar': return 'Open week view';
     case 'agent.chat':
     case 'agent.jarvis': return 'Open conversation in browser';
     case 'drive.room': return 'Descend into room';

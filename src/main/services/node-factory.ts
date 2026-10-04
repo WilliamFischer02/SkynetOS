@@ -31,6 +31,7 @@ function prefixFor(kind: NodeKind): string {
   if (kind === 'service.process') return 'v';
   if (kind === 'task.scheduled') return 't';
   if (kind === 'monitor.system') return 'm';
+  if (kind === 'panel.calendar') return 'k';
   if (kind === 'note.silk') return 'n';
   if (kind === 'group.zone') return 'g';
   if (kind === 'decor.image') return 'bg';
@@ -55,6 +56,8 @@ function designatorLetterFor(kind: NodeKind): string | null {
   if (kind === 'service.process') return 'V';
   if (kind === 'task.scheduled') return 'T';
   if (kind === 'monitor.system') return 'M';
+  // K for a keypad-and-display module: a panel mounted on the board. Unused by every other kind.
+  if (kind === 'panel.calendar') return 'K';
   return null;
 }
 
@@ -118,6 +121,7 @@ function defaultName(kind: NodeKind): string {
     case 'service.process': return 'NEW SERVICE';
     case 'task.scheduled': return 'NEW TASK';
     case 'monitor.system': return 'MONITOR';
+    case 'panel.calendar': return 'CALENDAR';
     case 'decor.image': return 'BACKDROP';
     case 'decor.part': return 'PART';
     default: return 'NEW NODE';
@@ -187,7 +191,8 @@ export function makeNode(board: Board, kind: NodeKind, pos: GridPos): BoardNode 
   // Anything that binds to a real target starts explicitly unpopulated rather than pretending.
   // A prompt box needs no binding to work: with no target it sends to the board's JARVIS head.
   const bindsToSomething = DEFAULT_FOOTPRINT[kind].w > 0;
-  if (bindsToSomething && kind !== 'monitor.system' && kind !== 'agent.prompt' && kind !== 'agent.prompt-to-node') node.provisional = true;
+  // A calendar pane reads the one calendar file there is, so like a monitor it is bound on arrival.
+  if (bindsToSomething && kind !== 'monitor.system' && kind !== 'panel.calendar' && kind !== 'agent.prompt' && kind !== 'agent.prompt-to-node') node.provisional = true;
 
   return node;
 }

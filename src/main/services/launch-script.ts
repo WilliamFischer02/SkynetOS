@@ -208,6 +208,10 @@ export function buildLaunchScript(spec: LaunchScriptSpec): string {
     // Removed when the agent exits, which is what makes the chip go idle at the right moment
     // rather than 30 seconds after a launcher stub that was never the session in the first place.
     L.push('  Remove-Item -LiteralPath $SkynetPidFile -ErrorAction SilentlyContinue');
+    // Claude Code is gone and a bare shell is left under the chip's "SkynetOS - …" title, which is
+    // what makes a window a dictation target: a dictated line and "send it" would RUN there. The
+    // title stops saying session (dictate-target.ts refuses a bare shell; bug sweep 2026-09-27).
+    L.push("  $Host.UI.RawUI.WindowTitle = 'PowerShell (Claude Code has exited)'");
   } else {
     /*
      * A plain terminal KEEPS its pid file. Its script ends within milliseconds of starting and the
