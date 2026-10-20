@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "id": "phantomos",
+  "name": "PhantomOS",
+  "engraving": "PHANTOMOS",
+  "parent": "root",
+  "theme": {
+    "maskDark": "#1A1626",
+    "maskLight": "#262038",
+    "signal": "#B49CFF",
+    "substrateSeed": 20261020
+  },
+  "grid": {
+    "tile": 16,
+    "width": 144,
+    "height": 96
+  },
+  "agentEditPolicy": "require-approval",
+  "nodes": [
+    {
+      "id": "n0",
+      "kind": "note.silk",
+      "name": "header",
+      "pos": {
+        "x": 32,
+        "y": 22
+      },
+      "text": "PHANTOMOS  //  AFTER EFFECTS PLUGINS · GOOB ENTERTAINMENT CO.",
+      "size": 22
+    },
+    {
+      "id": "n1",
+      "kind": "note.silk",
+      "name": "suite note",
+      "pos": {
+        "x": 32,
+        "y": 39
+      },
+      "text": "READ ops/BOARD.md FIRST. THE AE RUN LIST IS YOURS; AGENTS CANNOT OPEN AFTER EFFECTS.",
+      "size": 11
+    },
+    {
+      "id": "n2",
+      "kind": "note.silk",
+      "name": "director note",
+      "pos": {
+        "x": 32,
+        "y": 60
+      },
+      "text": "THE DIRECTOR CHIP IS ON THE MAINBOARD (U8). ENGINEERS RUN IN WORKTREES: claude -w <slug>",
+      "size": 11
+    },
+    {
+      "id": "z_suite",
+      "kind": "group.zone",
+      "name": "SUITE",
+      "pos": {
+        "x": 30,
+        "y": 29
+      },
+      "footprint": {
+        "w": 78,
+        "h": 13
+      }
+    },
+    {
+      "id": "z_ops",
+      "kind": "group.zone",
+      "name": "OPS & RESEARCH",
+      "pos": {
+        "x": 30,
+        "y": 44
+      },
+      "footprint": {
+        "w": 78,
+        "h": 13
+      }
+    },
+    {
+      "id": "s_repo",
+      "designator": "S1",
+      "kind": "store.repo",
+      "name": "AE-PHANTOM_SUITE",
+      "pos": {
+        "x": 32,
+        "y": 32
+      },
+      "footprint": {
+        "w": 6,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite",
+      "remote": "https://github.com/Goob-Entertainment-Co/AE-Phantom_Suite",
+      "openWith": "terminal",
+      "prelaunch": [
+        "claude",
+        "git-fetch",
+        "git-status"
+      ],
+      "frame": "tabs",
+      "priority": 1,
+      "tags": [
+        "after-effects",
+        "phantom",
+        "plugins"
+      ],
+      "notes": "The monorepo: eight CEP plugins (GRAINR, FLAYR, PulseWriter, CaptionFlow, AuraKit, RenderDeck, VelocityRamp, ProFiler) under plugins/, shared host + panel libraries, tools, installer. Private GitHub org Goob-Entertainment-Co."
+    },
+    {
+      "id": "s_plugins",
+      "designator": "S2",
+      "kind": "store.explorer",
+      "name": "PLUGINS",
+      "pos": {
+        "x": 40,
+        "y": 32
+      },
+      "footprint": {
+        "w": 6,
+        "h": 5
+      },
+      "path": "C:/dev/AE-Phantom_Suite",
+      "restPath": "plugins",
+      "notes": "One folder per plugin: <slug>.plugin.json, SPEC, ROADMAP, HANDOFF, DECISIONS, CHANGELOG, STORE, presets, src, tests."
+    },
+    {
+      "id": "j_github",
+      "designator": "J1",
+      "kind": "link.url",
+      "name": "GITHUB",
+      "pos": {
+        "x": 48,
+        "y": 32
+      },
+      "footprint": {
+        "w": 4,
+        "h": 4
+      },
+      "url": "https://github.com/Goob-Entertainment-Co/AE-Phantom_Suite",
+      "frame": "fingers"
+    },
+    {
+      "id": "f_owner_guide",
+      "designator": "F1",
+      "kind": "file.document",
+      "name": "WINDOWS OWNER GUIDE",
+      "pos": {
+        "x": 54,
+        "y": 32
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/docs/WINDOWS_OWNER_GUIDE.md"
+    },
+    {
+      "id": "f_walkthrough",
+      "designator": "F2",
+      "kind": "file.document",
+      "name": "OWNER WALKTHROUGH",
+      "pos": {
+        "x": 61,
+        "y": 32
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/OWNER_WALKTHROUGH.md"
+    },
+    {
+      "id": "f_board",
+      "designator": "F3",
+      "kind": "file.document",
+      "name": "BOARD",
+      "pos": {
+        "x": 32,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/BOARD.md",
+      "notes": "Portfolio status, the AE run list and every owner decision waiting. Maintained by the Suite Director; William reads this first."
+    },
+    {
+      "id": "f_launch",
+      "designator": "F4",
+      "kind": "file.document",
+      "name": "LAUNCH",
+      "pos": {
+        "x": 39,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/LAUNCH.md",
+      "notes": "The launch prompt for every role: Director, one engineer per plugin, infra, researcher."
+    },
+    {
+      "id": "f_director_handoff",
+      "designator": "F5",
+      "kind": "file.document",
+      "name": "DIRECTOR HANDOFF",
+      "pos": {
+        "x": 46,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/DIRECTOR_HANDOFF.md"
+    },
+    {
+      "id": "f_agent_org",
+      "designator": "F6",
+      "kind": "file.document",
+      "name": "AGENT ORG",
+      "pos": {
+        "x": 53,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/AGENT_ORG.md"
+    },
+    {
+      "id": "f_digest",
+      "designator": "F7",
+      "kind": "file.document",
+      "name": "RESEARCH DIGEST",
+      "pos": {
+        "x": 62,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/research/DIGEST.md",
+      "notes": "Written by the daily researcher routine; the Director and every engineer read it."
+    },
+    {
+      "id": "s_requests",
+      "designator": "S3",
+      "kind": "store.folder",
+      "name": "REQUESTS",
+      "pos": {
+        "x": 69,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/requests",
+      "openWith": "explorer",
+      "notes": "Engineer-to-Director requests and the AE verification asks."
+    },
+    {
+      "id": "s_directives",
+      "designator": "S4",
+      "kind": "store.folder",
+      "name": "DIRECTIVES",
+      "pos": {
+        "x": 76,
+        "y": 47
+      },
+      "footprint": {
+        "w": 5,
+        "h": 4
+      },
+      "path": "C:/dev/AE-Phantom_Suite/ops/directives",
+      "openWith": "explorer"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "s_repo",
+      "to": "j_github",
+      "kind": "syncs",
+      "width": 2
+    },
+    {
+      "id": "e2",
+      "from": "s_repo",
+      "to": "s_plugins",
+      "kind": "reads",
+      "width": 1,
+      "color": "copper-dark"
+    },
+    {
+      "id": "e3",
+      "from": "f_digest",
+      "to": "f_board",
+      "kind": "reads",
+      "width": 1,
+      "color": "copper-dark"
+    },
+    {
+      "id": "e4",
+      "from": "s_requests",
+      "to": "f_board",
+      "kind": "reads",
+      "width": 1,
+      "color": "copper-dark"
+    }
+  ]
+}

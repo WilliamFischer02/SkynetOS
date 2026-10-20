@@ -224,10 +224,12 @@
       "schedule": "0 20 * * 0",
       "enabled": true,
       "action": {
-        "type": "jarvis.headless",
+        "type": "agent.run",
         "prompt": "Report this week's word delta for each manuscript node in StoryOS and append it to codex/journal/."
       },
-      "showDesignator": false
+      "showDesignator": false,
+      "catchUpHours": 4,
+      "notes": "Sunday 20:00 while SkynetOS is open. No taskTarget on purpose: StoryOS has no agent.code node, so planDispatch falls back to the hands-tagged agent on the root board (JARVIS-PRIME). Was {\"type\":\"jarvis.headless\"}, which the runtime refuses outright - it had failed every week since 2026-09-28."
     },
     {
       "id": "z_sitw",

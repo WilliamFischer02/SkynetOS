@@ -9,8 +9,9 @@ purpose: What JARVIS needs to work on Dirty Plush, a map of its repo, HUD and re
 An 8-chapter literary mystery, planned as an 8-episode limited series. Narrator: Det. Ray Vega. A
 1994 case in "Escondida" (modelled on Escondido) and the Pala backcountry, framed by a 2024 prison
 interrogation. The theme: truth and justice are not the same thing. The manuscript is a Word
-document in William's OneDrive, bound to the board's DIRTY PLUSH document node. JARVIS does not
-edit the manuscript.
+document in William's OneDrive, bound to the board's DIRTY PLUSH document node. JARVIS never
+rewrites the manuscript. Since 2026-10-16 it may add tracked changes and comments to it through
+`C:/dev/jarvis-editor`, which William accepts or rejects; see docs/DECISIONS.md for that date.
 
 ## The repo and the HUD
 

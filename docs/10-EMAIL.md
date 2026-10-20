@@ -7,10 +7,16 @@ needs my attention which I may have missed. Even better would be for me to insta
 inbox I can link all accounts to and then you can manage that; I use outlook on my phone for
 example, to link all of my emails within."
 
-**Status, 2026-09-23: designed, surveyed once, nothing wired.** The Gmail account was read end to
-end through the claude.ai Gmail connector (survey in `private/email/`, never committed). The
-connector's scope is **read-only**, so the labels the triage brief needs could not be created.
-The triage rules are in `codex/briefs/email-triage.md`. No scheduled task exists yet.
+**Status, 2026-10-16: redesigned on William's instruction; plumbing written, nothing authenticated.**
+The hub idea below is **superseded** — see §Superseded. The agent is now two APIs over one
+taxonomy, and it may file mail rather than only label it. Code lives in `C:/dev/jarvis-mail`:
+the OAuth layers for both providers are written and parse, and nothing has run against a live
+account because the two app registrations are William's to make. **Blocked on the Microsoft
+side since 2026-10-16 late:** a personal Microsoft account has no directory to register an app in,
+and getting one costs either an unverified free-tier click or a credit card on an Azure account —
+see DECISIONS for that date. Gmail has no such blocker and goes first. Credentials and tokens go to
+`SkynetOS/private/mail/`, which `.gitignore` excludes. The 2026-09-23 Gmail survey stands
+(`private/email/`), and the urgency scale in `codex/briefs/email-triage.md` is unchanged.
 
 ---
 
@@ -36,6 +42,34 @@ covers everything, and the phone app keeps working exactly as it does now.
 that the Gmail account currently receives almost no human mail and **no bank or card mail at all**,
 so the forwarding step is not optional: without it JARVIS is triaging the wrong inbox.
 
+## Superseded, 2026-10-16: two APIs, one taxonomy
+
+William asked for the four-destination sort described in `C:/dev/jarvis-mail/README.md` and chose
+**two APIs over one shared taxonomy** rather than a hub. The reasoning that killed option A:
+
+- **Forwarding loses the identity.** Mail forwarded into a hub arrives as the hub's message. Replying
+  from the right address, and knowing which of his three addresses a sender actually used, both
+  break. He reads all three in one Outlook app already; the merge he wants is *in the sorting*,
+  not in the storage.
+- **Forwarding is not retroactive.** He explicitly wants past mail sorted. A forwarding rule only
+  ever moves what arrives after it is set, so the hub would have needed a bulk migration anyway —
+  at which point the hub has bought nothing.
+- **Two APIs is less work than it sounds.** Graph and Gmail differ in vocabulary (folders versus
+  labels) and almost nothing else that matters here. The taxonomy is the contract; each provider
+  gets a thin adapter under it.
+
+The table above is kept because the reasoning in it is still the right reasoning about hubs, and
+because option B's Graph work is now half of the real design.
+
+### What changed about what the agent may do
+
+The 2026-09-23 rules were written for a read-only connector and a brief that only labelled. William
+has now asked the agent to **file** mail: move it between the four destinations, and mark marketing
+read on arrival so the unread badge stays honest. That widens two rows in §Rules below. Everything
+else in that table — never send, never reply, never trash, never let a code or an account number
+out of the mailbox, never put a subject or a sender in the public repo — is unchanged and still
+binding.
+
 ## Rules
 
 docs/07 for mail. Enforced today only by the brief and by the connector's scope; when a `mail:*`
@@ -43,14 +77,14 @@ channel ever exists in SkynetOS, these rows become `AGENT_METHODS` decisions.
 
 | Rule | How it is kept |
 |---|---|
-| An agent reads, labels and reports. It never sends, replies, forwards, archives, trashes, marks spam, unsubscribes, stars, marks read, or touches drafts | The brief exposes none of these. If a connector scope ever allows them, the brief still forbids them; a `mail:*` channel would list only `list`, `get`, `label`, `unlabel` |
+| An agent reads, labels, reports, **moves mail between the four destinations, and marks ADs & MARKETING read** (William, 2026-10-16). It still never sends, replies, forwards, trashes, marks spam, unsubscribes, stars, or touches drafts | Moving and marking-read are reversible and bounded to the taxonomy. The rest stay forbidden, and no adapter in `jarvis-mail` implements them |
 | Every mutation is reversible by removing a label, and every label applied is recorded with its thread id in `private/email/labels-applied-<date>.json` | The brief, §3 |
 | At most 40 label applications a run, and only `JARVIS/*` labels | The brief, §7 |
 | A one-time code, a password, an account number or a payment card number **never leaves the mailbox**: not into a file, not into a toast, not into the Face's mail, not into a terminal transcript that the Face can read | The brief opens bodies only when a subject cannot decide, with `PLAIN_TEXT`, and forgets them |
 | Nothing from mail goes into the public repo except counts and categories. Subjects, senders, names and amounts tied to a person stay under `private/`, which `.gitignore` excludes | The brief, §7; `FACE-BOOT.md` and `codex/mailbox/` are world-readable (docs/07 §Secrets) |
 | The Face is told counts only | A `to-face` note carries "1 P0, 11 P1", never what they are |
 | William's other accounts are connected by William: forwarding rules, app passwords and connector consents are his to set, and JARVIS never asks a service for access on his behalf | Nothing in this design authenticates anything; the Microsoft connector was left unauthenticated on purpose |
-| The connector is read-only until William widens it, and this document says so, so nobody assumes labelling works | Status line at the top |
+| ~~The connector is read-only until William widens it~~ — **superseded 2026-10-16.** The agent now holds `Mail.ReadWrite` (Graph) and `gmail.modify` (Gmail), which are write scopes by design | Neither scope can permanently delete a message. Consent for both is William's, given once at a browser; nothing here authenticates on his behalf |
 | A scheduled triage run is subject to every rule for scheduled runs (docs/07): at most six a day, never elevated, a fresh session told to commit and delete nothing | `task.scheduled`, `agent.run`, `packages/shared/schedule.ts` |
 
 ## How the digest reaches William

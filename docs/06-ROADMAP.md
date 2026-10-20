@@ -4,6 +4,61 @@ Each milestone ends with something you can actually open and use. No milestone i
 
 ---
 
+### 2026-10-17 note (away-mode pass, PLAN level; breaks the zero-drift streak the 2026-10-16 note below describes)
+
+No mail on `to-hands`. This is the pass the 2026-10-16 note said should wait for: `SkynetOS/handoff.md`
+had changed (mail now sorts itself across all seven mailboxes, CI runs on William's own hardware — see
+that file's 2026-10-17 entry for the four real faults found and fixed along the way), which was exactly
+one of the three named triggers for a re-sweep.
+
+**Two real coverage gaps found, same pattern as MagicTrainer/goobtropolis-configs before them** — a
+sweep for files newer than the 2026-10-16 journal turned up two fully real, actively-worked repos under
+`C:/dev` with zero prior codex or board presence:
+
+- **`AE-Phantom_Suite`** (`C:/dev/AE-Phantom_Suite`) — a paid After Effects CEP plugin suite
+  (GRAINR/FLAYR/PulseWriter/CaptionFlow/AuraKit/RenderDeck/VelocityRamp/ProFiler) for Goob
+  Entertainment Co., run by its own multi-agent studio (a Suite Director, one engineer per plugin, a
+  daily researcher) with two scheduled Claude routines already reviewing and merging PRs unattended.
+  14 PRs merged the day this pass ran. It keeps its own `ops/BOARD.md` well enough that a codex entry
+  just points at it rather than mirroring it. Written up: `codex/projects/ae-phantom-suite.md`.
+- **`StatPopperLIVE`** (`C:/dev/StatPopperLIVE`) — "Stat Pop Board", a personal tool for William's
+  Montana PBS graphics-op job: reads the public StatBroadcast page for MSU volleyball and suggests
+  on-air stat pops. Live at stat-pop-board.vercel.app, v0.3.0 shipped the same day as this pass, with
+  a deliberate hard rule never to fetch StatBroadcast server-side (terms of use). Written up:
+  `codex/projects/statpopperlive.md`, filed under a new index category, BroadcastOS, since it fits
+  none of the existing ones.
+
+**No phantoms proposed for either.** `root` is still 4/4 (the same four phantoms unticked since
+2026-09-16/25) — no capacity this pass. Both new project files end with "propose on root the next pass
+that finds a slot open," same standing move as MagicTrainer's entry.
+
+**Re-checked, no drift:** `financeos` 3/4, `scheduleos` 0/4, `minecraftos` 3/4 — all match the
+2026-10-16 picture exactly; not re-swept beyond confirming their phantom counts, per the standing skip
+advice. `gameos`/`storyos`/`deductionos` not re-checked this pass (nothing suggested they'd moved and
+the coverage-gap sweep that found the two real gaps above was general, not room-specific).
+
+**Standing advice, reaffirmed and now demonstrated working as intended:** this pass is the proof that
+"wait for a handoff file to change" is a better trigger than a fixed interval — it fired on a real
+change and found two real, actionable gaps, instead of confirming the same unticked phantoms a sixth
+time. Keep the scheduling rule as the 2026-10-16/10-03 notes describe it.
+
+### 2026-10-16 note (away-mode pass, PLAN level; thirteen days after the 2026-10-03 notes below, zero drift)
+
+No mail on `to-hands`. Every phantom slate is byte-identical to the 2026-10-03 picture, including
+the exact `proposedAt` timestamps: `root` 4/4, `financeos` 3/4, `scheduleos` 0/4, `minecraftos` 3/4,
+`gameos`/`storyos`/`deductionos` 4/4. `financeos.md`/`scheduleos.md` still carry their
+2026-09-25/2026-09-30 dates — both genuinely blocked on William's own actions. `MagicTrainer`'s
+`docs/HANDOFF.md` is still the 2026-09-25 handoff: v1.0.0 built, tagged, and unshipped, still with
+nowhere to put `ph_magictrainer` since root is still 4/4 with the same four unticked phantoms.
+A sweep of `C:/dev` for uncatalogued repos (the pattern that found MagicTrainer and
+goobtropolis-configs) found nothing new.
+
+This is the second pass to land on the *exact same* picture as the pass before it, now with
+thirteen real days between them rather than minutes — the strongest case yet that this was spent
+usage. Full detail: `codex/journal/away-2026-10-16-1710.md`. **Repeating, again:** stop scheduling
+PLAN-level away passes on a timer for this program; the next one should fire on mail landing on
+`to-hands`, a phantom being ticked/dismissed, or a handoff file changing.
+
 ### 2026-10-03 1035 note (third away-mode pass the same day, PLAN level; confirms the 0835 note below, zero drift)
 
 No mail on `to-hands`. Bash denied this pass too. Every phantom slate matched both earlier passes

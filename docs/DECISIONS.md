@@ -5026,3 +5026,548 @@ no test either, though it is the fix for "clicking the chip does nothing". `test
 sets PATH to real temp directories and puts it back: case, order, an unreadable entry, a quoted
 entry, a miss, and a remembered miss that stands until the cache is cleared. Eleven of the twelve
 exports in item 18 remain.
+
+
+## 2026-10-16 - A line editor inside Word, and the manuscript rule it overturns
+
+William asked for an agent that line-edits his novel inside Word while he is not editing it:
+grammar and spelling as Word edits, continuity errors as comments, and a way to hide the lot
+while he writes. Built as `C:/dev/jarvis-editor`, outside this repo, with no dependencies.
+
+**`codex/projects/dirty-plush.md` said "JARVIS does not edit the manuscript". That rule is
+superseded by William's instruction of 2026-10-16**, narrowed rather than dropped: JARVIS still
+never rewrites the manuscript. It may only add tracked changes and comments, every one of which
+William accepts or rejects, over a timestamped backup, inside one undo record.
+
+Decisions, and what was rejected:
+
+- **Drive the running Word over COM from outside, not a `.dotm` add-in.** Rejected the add-in:
+  it needs a template installed into Word's STARTUP folder and leans on macro trust. The external
+  process installs nothing and uninstalls by deleting a folder. Rejected an Office JS task pane
+  outright - its `Comment.authorName` is read-only, so it cannot attribute anything.
+- **Suggestions are authored "William Fischer", and identified by a `[JARVIS - kind]` text tag.**
+  This is a defeat, recorded honestly. Modern Word stamps the signed-in Office identity on every
+  comment and revision; `Application.UserName = 'JARVIS'` is accepted, reads back as JARVIS, and
+  is then ignored. The only switch that changes it is the Office policy value `useLocalUserInfo`,
+  which lives in a Group Policy registry path this session is not permitted to write. The cost is
+  nil today: the manuscript contains zero comments and zero tracked changes, so Word's native
+  markup toggles hide exactly JARVIS's suggestions and nothing of William's. If he ever starts
+  leaving his own comments, revisit by setting that policy value, which restores per-author
+  filtering under Review - Show Markup - Specific People.
+- **Find the right Word through the Running Object Table, not `GetActiveObject`.** The latter
+  returns whichever Word registered first, which during this build was repeatedly a stale
+  automation shell or one parked on the Document Recovery pane. Word registers each open document
+  under its full path, so the document is looked up directly and its Application taken from it.
+- **Continuity runs against a fact ledger, not a re-read.** `state/<doc>.ledger.json` records every
+  fact the manuscript establishes with the paragraph that set it. Rejected re-sending the whole
+  book each pass: it fits today at 8,988 words and would not at 90,000.
+- **Any edit whose target text is not found exactly once is dropped, never placed approximately.**
+  Validated twice, in Node before the call and in PowerShell before the write.
+- **The disk reader is a first-class path, not a fallback.** `src/docx.mjs` reads paragraphs
+  straight out of the OOXML with a hand-rolled zip reader, so a full pass can run with Word shut
+  and so the pass still works when Word is refusing COM calls.
+
+Verified: reader, locator, analysis, validator, ledger, reports - a full pass on Dirty Plush
+produced 25 edits and 8 notes with none dropped, including a Marisol/Merisol split across five
+paragraphs and two age contradictions. **Not verified: `apply.ps1` writing into live Word**, which
+never got a clean run because Word sat on a Document Recovery pane refusing COM calls throughout.
+
+## 2026-10-16 (evening) - apply.ps1 proven, and the three bugs that proving it found
+
+William cleared the Document Recovery pane and saved, so Word could be driven at last. `apply.ps1`
+ran against a live document on a throwaway copy of the manuscript: 2 edits in as 4 tracked
+revisions, 1 comment anchored to its exact phrase, 0 skipped, a timestamped backup written before
+anything, `TrackRevisions` restored afterwards, and `markup.ps1` hiding and showing the lot. That
+closes the last unverified link in `C:/dev/jarvis-editor`.
+
+The first run of it failed, and was worth more than the one that passed. Both tracked edits were
+skipped as `find-matched-0-times`, because the suggestions had been seeded with paragraph numbers
+from the disk reader and applied against Word's numbering. Three defects behind that:
+
+1. **`src/docx.mjs` undercounted by 35 paragraphs.** Its regex tried `<w:p ...>...</w:p>` before
+   `<w:p ... />`, and `[^>]*` ate the slash of a self-closing empty paragraph, swallowing
+   everything to the next close tag. 374 where Word counts 409. Self-closing is matched first now.
+2. **`ps/export.ps1` refused every real document.** Word leaves the final paragraph mark out of
+   `Content`, so splitting on CR already yields exactly `Paragraphs.Count` parts; trimming a
+   trailing empty on top of that lost one and tripped the count guard every time. Which means the
+   live-Word read path had **never once been used** - every pass had silently fallen back to disk,
+   which is how the numbering drift stayed invisible. It now trims only when there is one too many.
+3. **`apply.ps1` could staple a comment to the wrong paragraph.** A note whose anchor was not found
+   fell back to the whole-paragraph range and commented anyway. It is skipped as
+   `anchor-not-found` now: a missing anchor means the numbering is wrong, and no note beats a
+   misplaced one.
+
+**The rule that held:** "find must match exactly once inside that paragraph" turned a wrong index
+into a skipped edit instead of corrupted prose. The safety net was the only reason a numbering bug
+this large was harmless. Keep that check ahead of any future attempt to make apply cleverer.
+
+Alternative rejected: making `apply.ps1` locate edits by searching the whole document instead of
+trusting the paragraph index. It would make index provenance irrelevant, but it also removes the
+check that caught this, and a `find` string unique in its paragraph is not always unique in a
+novel. The indexes agree now and are asserted on every read.
+
+## 2026-10-16 (evening) - A Sock in my Drawer joins the root board
+
+`f_sock_in_my_drawer` (F8), a `file.document` at 64,87 inside WRITING & PUBLICATION, with a `reads`
+edge to `d3_storyos`, mirroring how PANIC and DIRTY PLUSH sit there. Bound to
+`Z:/DOWNLOADS/A Sock in my Drawer by William Fischer.docx`, which is genuinely where the file is -
+`paths:check` lists it as non-portable, correctly and harmlessly, beside the `Z:/` the drive audit
+already names. Not marked `provisional`: that flag means an unpopulated footprint, and this one
+resolves. Its two siblings still carry it, wrongly, and were left alone.
+
+SkynetOS was closed, so this was written to `board/root.board.json` directly rather than through
+the command bus - no undo entry, no snapshot. The file round-trips byte-identically through
+`JSON.stringify(_, null, 2)`, which is what made a programmatic edit safe to do at all; that was
+checked before writing, and `validate:board`, `board:overlap` and `verify` after.
+
+## 2026-10-16 (evening) - Six scheduled tasks that could never have run
+
+William asked why scheduled work was hanging. `scheduler-state.json` said it plainly: five tasks
+had never run once because they were `enabled: false` (financeos `t1_review`/`t2_bills`, scheduleos
+`t_sched_build`/`t_sched_nudge`/`t_sched_week`), and `storyos.t1_wordcount` was enabled but carried
+`{"type":"jarvis.headless"}`, which `resolveTaskAction` refuses outright - it had failed every
+Sunday since 2026-09-28. He asked for all six.
+
+The wordcount task deliberately gets **no `taskTarget`**. `planDispatch` requires an `agent.code`
+node and StoryOS has only `agent.chat` ones, so naming a local target would have swapped one
+refusal for another; with none, it falls back to the hands-tagged agent on root. Verified by
+running `planDispatch` over all nine tasks on all seven boards: nine dispatch, zero refuse.
+
+Two things this does not fix, both worth saying. The scheduler only ticks while SkynetOS is open,
+and the app is closed as this is written - `runs` shows two ticks in two days, and
+`t_morning_maintenance` last recorded `CANCELLED` on 2026-10-15. And the StoryOS manuscript nodes
+still point at `C:/Users/REPLACE_ME/...`, so the first wordcount run will report over broken nodes
+until the `ph_panic_rough_draft` / `ph_dirty_plush_novel` phantoms are ticked.
+
+## 2026-10-16 (evening) - The email agent: two APIs, one taxonomy, and it may now file mail
+
+Recorded in full in `docs/10-EMAIL.md` §Superseded. The 2026-09-23 design recommended a Gmail hub
+fed by forwarding; William chose two APIs over one taxonomy instead. Forwarding loses which of his
+three addresses a sender used and cannot sort the past mail he explicitly asked for, so the hub
+bought nothing a bulk migration would not have had to do anyway.
+
+The sharper change is to the rules table. Those rows were written for a read-only connector and an
+agent that only labelled. He has now asked it to **file**: move mail between PROGRAMS, WORK,
+NEWSLETTERS and ADs & MARKETING, and mark marketing read on arrival so the unread badge stays
+honest. Two rows widened; the rest - never send, never reply, never trash, never let a one-time
+code or an account number out of the mailbox, never put a subject or a sender in the public repo -
+are unchanged and still binding. The scopes are `Mail.ReadWrite` and `gmail.modify`; neither can
+permanently delete a message.
+
+`C:/dev/jarvis-mail` holds the OAuth layers for both providers (device-code for Microsoft,
+loopback + PKCE for Google), a token store, and a read-only `whoami`. **None of it has run against
+a live account** - the two app registrations are William's to make, and nothing here authenticates
+on his behalf. Secrets go to `SkynetOS/private/mail/`, gitignored, because this repo is public.
+
+Still unknown, and `whoami` probes it: whether a consumer Outlook.com account accepts
+`messageRules` creation through Graph. Documented for work and school accounts, silent on personal
+ones. Yes means server-side rules file mail on arrival; no means the agent polls and moves it
+itself, and only sorts when it runs.
+
+## 2026-10-16 (late) - A personal Microsoft account cannot register an app, and what that costs
+
+William hit this signing in to entra.microsoft.com:
+
+> Selected user account does not exist in tenant 'Microsoft Services' and cannot access the
+> application '74658136-14ec-4630-ad9b-26e160ff0fc6' in that tenant.
+
+That app id is the Entra admin center itself. Confirmed against Microsoft Learn: a personal
+Microsoft account signs in to a default tenant named **"Microsoft Services"** which has **no
+directory attached**, and Microsoft has **deprecated creating app registrations outside a
+directory**. The account is fine; it has nowhere to put an app. The instruction in the first
+version of `jarvis-mail/README.md` was simply wrong, and has been rewritten.
+
+So the Microsoft half now has a prerequisite nobody costed: **get a directory first.** Ranked by
+what it costs him:
+
+1. The Entra pricing page's **Try for free**, reported to mint a tenant with no Azure subscription
+   attached. Free, unverified, worth one click.
+2. **An Azure free account.** Definitely works, gives a Default Directory with him as Global
+   Admin - and asks for a phone number **and a credit card**. App registrations are free forever
+   and nothing in this design consumes credit; the card is Microsoft's identity check. It is still
+   a credit card on file for a mail sorter, which is his call to make and not a detail to bury.
+3. A work or school account already has a directory, and is the wrong place for a personal mail
+   tool an employer could revoke or audit.
+
+The Microsoft 365 Developer Program is no longer an option: since 2024 it needs a qualifying
+Visual Studio or partner subscription.
+
+Rejected outright: borrowing a well-known public client id from another open-source mail client.
+It works, and it is impersonating someone else's registration - fragile and not ours to use.
+
+Also rejected, for now: dropping Graph and reaching Outlook over IMAP. Microsoft retired basic
+auth for personal Outlook.com mailboxes, so IMAP needs OAuth too, which needs the same app
+registration. It buys nothing.
+
+**Consequence for the build order.** Google has no equivalent blocker - a Cloud project and a
+Desktop OAuth client cost nothing and need no card. The two halves were always independent, so
+Gmail goes first and the Microsoft half waits on William's decision about the directory. This is
+the first real argument the superseded hub design has going for it: if he would rather not create
+an Azure directory at all, forwarding Outlook and Hotmail into Gmail becomes the cheaper shape,
+at the known cost of which-address-did-they-write-to. Not reopened yet; noted so it is not
+rediscovered later.
+
+## 2026-10-16 (late) - Gmail's 7-day cliff, and why the agent will end up on IMAP
+
+William got `Error 403: access_denied` on the Gmail consent screen. Immediate cause: while an
+OAuth app's publishing status is **Testing**, only addresses on the **Test users** list may
+consent, and `gmail.modify` is a *restricted* scope, so there is no "unverified app, continue
+anyway" bypass of the kind sensitive scopes get. Adding his own address fixes it. Also noted: the
+console was reorganised and "OAuth consent screen" is now "Google Auth Platform" with Branding /
+Audience / Clients / Data Access, so the instructions written earlier today pointed at menus that
+no longer exist. README corrected.
+
+The finding that actually matters came out of chasing it. **An OAuth app left in Testing is issued
+refresh tokens that expire after seven days.** For a mail agent meant to run unattended, that is
+not a wart, it is a stoppage every Monday until William re-consents - exactly the kind of thing
+that gets a tool abandoned in a fortnight. Both exits are closed:
+
+- **Publish to production:** `gmail.modify` is restricted, so this triggers Google verification
+  plus a third-party CASA security assessment. Real money and real paperwork for one man's own
+  mailbox.
+- **User type Internal:** Google Workspace only. A personal gmail.com account cannot select it.
+
+**Decision: two transports, staged.** OAuth now, because a week is plenty to prove the taxonomy
+against real mail and tune the rules, and the Gmail API's query language is much better than IMAP
+SEARCH for the retroactive sweep he asked for. Then **IMAP with an App Password** before anything
+runs unattended: app passwords are still issued for personal accounts with 2-Step Verification,
+IMAP has been always-on since January 2025, and they do not expire - they are revoked when the
+account password changes. Gmail's IMAP folders *are* labels, so "move to PROGRAMS" is a label
+apply and "mark read" is the `\Seen` flag. The taxonomy needs nothing else.
+
+The cost, stated rather than buried: an app password is a full-mailbox credential on disk, where
+the OAuth token is scoped to `gmail.modify`. It goes under `private/`, gitignored, like everything
+else here. A tighter credential that he has stopped re-granting protects nothing, which is why
+this is the recommendation and not the fallback. The adapter boundary in `jarvis-mail` already
+isolates the transport, so this is one file, not a rewrite.
+
+Verified against Google's own help and current vendor guidance; no shutdown date is announced for
+app passwords, and that is worth re-checking before the switch rather than assuming.
+
+Note the asymmetry this leaves: IMAP rescues Gmail and does nothing for Outlook, where Microsoft
+retired basic auth for personal mailboxes. The Microsoft half still needs the directory and the
+app registration from the entry above.
+
+## 2026-10-17 — Both Microsoft mailboxes connected; the "no ms.clientId" error was a comma
+
+`npm run connect:ms` failed with "credentials.json has no ms.clientId" while a valid client ID
+was sitting in the file. The file was missing the comma between its two top-level blocks, so it
+did not parse at all, and `credentials()` was routing the parse failure through a
+swallow-and-default helper that returned `{}`. A syntax error was being reported as a missing
+key, which sent William to re-check an app registration that was correct.
+
+`store.mjs` no longer defaults a credentials file that exists but does not parse. It names the
+file and the position, and says to look for a missing or trailing comma. The original was backed
+up before the repair; nothing from inside it has been printed or committed.
+
+The registration itself was then verified without spending an attempt: a device-code request was
+made and accepted, which proves in one call that the app exists, that "Allow public client flows"
+is on, and that the four scopes are accepted. The code was not polled and expired unused.
+
+Both mailboxes are connected. Seven in total, five Gmail and two Microsoft. `messageRules` is
+readable on both Microsoft accounts, so server-side rules are available there later.
+
+## 2026-10-17 — The bulk gate cannot rest on List-Id, and Gmail was hiding that
+
+Extending the dry run to Graph put the classifier in front of Microsoft mail for the first time,
+and it judged 182 of 400 Hotmail messages "person writing directly" and scored 113 at a flat zero.
+
+The cause was not Graph. Headers arrive complete, 56 to 77 per message. The cause was that the
+bulk gate — the test deciding whether a message is safe to file at all — rested on List-Id and
+List-Unsubscribe, both voluntary. On Gmail that was invisible, because where the headers were
+absent Gmail's own trained categories carried the verdict. Microsoft has no categoriser, so the
+gap was load-bearing there and nowhere else. The first probe of a message the classifier had just
+called personal turned up `X-SG-EID`: SendGrid's own marker.
+
+Three changes, all of them widening evidence rather than lowering standards:
+
+- `BULK_HEADERS` — header NAMES whose presence proves a machine sent this at scale. Values are
+  never read. An ESP fingerprint cannot be opted out of without leaving the platform, which makes
+  it better evidence than an unsubscribe header the worst senders simply omit.
+- A `noreply`-style From address now counts as bulk. It was already detected and was going unused.
+- Proof of bulk is worth one point against the threshold. The threshold exists to stop a single
+  weak word filing a human's mail; once a header proves no human typed it, that risk is gone. It
+  is applied to the comparison and not to the scores, so it can never change WHICH destination
+  wins — only whether we are willing to act on the winner.
+
+Result across seven mailboxes: unsorted fell from 32% to 10% on Hotmail and 18% to 1% on Outlook,
+and the false "person writing directly" count on Hotmail fell from 182 to 50.
+
+## 2026-10-17 — The regressions are written down now, and a shadowing check added
+
+Three regressions in one session were introduced by me and caught by reading output: LinkedIn at
+DECISIVE swallowing job alerts, a confidence curve that called correct files thin, and Substack
+added to a DECISIVE social list while it already sat in a newsletter rule. Catching them by eye is
+luck, and the third was found only because the check below was written.
+
+`npm run selftest` holds every one of those as a case, plus the behaviour each fix must not break.
+It needs no network. Eighteen cases pass.
+
+It also runs a static check: no domain may be listed for two destinations. A rule carrying
+`requires` is exempt, because it is gated on a content flag and can share a domain on purpose —
+linkedin.com is WORK when the subject is about a job and SOCIAL otherwise, and that pair is the
+design. The check immediately found a real conflict beyond Substack: `epicgames.com` was in
+`prog.tools` and had been added to `ads.retail` at a heavier weight, which would have filed
+Unreal Engine mail as advertising. It had never appeared in the unsorted pile; it was added on a
+guess, and has been removed.
+
+The rule this leaves: tuning happens in `signals.mjs`, which is data. Of everything the Microsoft
+run exposed, exactly one fault needed a code change. The rest were words.
+
+## 2026-10-17 — Mail: destinations created, 3,535 messages filed, journal made durable
+
+The five destinations now exist in all seven mailboxes — 35 created, none failed. On Microsoft
+they are real Graph folders, so they appear in Outlook for iPhone with nothing further to do.
+
+Three faults surfaced during the first apply and are fixed:
+
+- Gmail answered 403 "Quota exceeded" partway through. Both transports now share
+  `backoff.mjs`: exponential backoff with full jitter, honouring Retry-After, retrying a 403
+  only when its body says quota or rate. A 403 about scopes still fails immediately, because
+  retrying a refusal six times helps nobody.
+- Every Microsoft move 404'd. `graph()` prefixes only the service root, so each path must carry
+  `/me`; `readInbox` had it and `applyGraph` did not.
+- Those 598 failures were invisible, because `pool()` drops a throw and returns fewer rows. The
+  run printed a five-line plan above the words "0 moved" and read like a formatting quirk.
+  Failures are now surfaced and counted, and the per-destination figures are taken from what
+  came back rather than from what was planned.
+
+**The journal is the reason any of this is allowed to touch real mail.** Every move is recorded
+with enough detail to invert it, including whether each message was unread before advertising
+was marked read. Nothing is ever deleted; filing is a move, and the inbox is somewhere a message
+can be moved back to.
+
+It was written once, after every account had finished. The sweep that was killed when a session
+ended left no record at all — it had died while still reading, so nothing was lost, but a record
+that only exists once every other move has also succeeded is not a record. It is now flushed
+after each account.
+
+A second, duller lesson: this file was corrupted twice by a literal backslash-n passing through
+a layer that halved the backslash. `apply.mjs` now appends `NL`, a named constant, instead.
+
+## 2026-10-17 — The sweep's window bug: converging is not finishing
+
+The first sweep took 17 passes at Hotmail and stopped on "0 moved" while roughly 18,000 older
+messages had never been read. Each pass re-read the newest 400; once that window was entirely
+mail we decline to file, every later pass re-examined the same 400 and found nothing. The log of
+a finished job and the log of a stuck one were identical.
+
+A sweep now pages the whole inbox. It costs more requests, which backoff absorbs, and it is the
+only reading under which "retroactive" means anything.
+
+Thin-evidence counts were also being summed across passes, so one undecided message was counted
+once per pass — 2,227 of them, from a real figure nearer 40. Only the last pass counts now.
+
+## 2026-10-17 — Mail sorts itself at 03:00 and 15:00
+
+Task `JARVIS mail sort`, running `scheduled-sort.ps1`, which calls `apply.mjs --limit=500`.
+Deliberately apply and not sweep: paging an entire inbox is right once and wasteful twice a day.
+
+It runs as William, "only when logged on". No stored password, and registering it needs no
+elevation. `StartWhenAvailable` covers a 03:00 missed because the machine was off — it runs at
+the next opportunity instead of skipping the day silently. `WakeToRun` is deliberately NOT set;
+waking his desktop at three in the morning is a decision he should make, not a default.
+
+The script resolves node by absolute path. A scheduled task inherits no interactive PATH, and
+resolving an interpreter by name is the usual reason a job that works by hand does nothing
+overnight.
+
+**The open risk, which is not in our hands:** if the Google OAuth client is still in Testing
+publishing status, its refresh tokens expire after seven days and every Gmail account drops out
+of the schedule weekly, with the first symptom being a quiet `invalid_grant`. Publishing the
+app to Production removes the expiry. Microsoft has no equivalent cliff.
+
+## 2026-10-17 — CI moved to self-hosted runners; WSL cannot run as SYSTEM
+
+Organization `Goob-Entertainment-Co` (free). The five private repos that actually consumed paid
+minutes were transferred into it: TruthQuestRetro, FormatPhantom, AE-Phantom_Suite,
+StackAssembler, TimeServed. The other 26 repos stay where they are — Actions is free and
+unlimited on public repositories, and the remaining 11 private ones have run nothing in 30 days.
+
+GitHub has no runners at personal-account level, only per-repo or per-organization. Per-repo
+would have meant a separate runner install per repo per machine.
+
+Two runners are online on the desktop:
+
+| Runner | Labels | How it survives a reboot |
+|---|---|---|
+| `WILLIAM-DESKTOP-win` | `self-hosted, X64, Windows, windows-host, desktop` | Windows service, Automatic |
+| `william-desktop-wsl` | `self-hosted, Linux, X64, wsl, desktop` | systemd unit, enabled, plus a logon task |
+
+**Proven, not assumed:** a FormatPhantom run was re-triggered and completed green on
+`william-desktop-wsl` in about sixty seconds, billing nothing.
+
+### The SYSTEM mistake, recorded because I made it and documented it as advice
+
+The first version of `autostart-wsl-runner.ps1` — and the README — said to register the boot
+task at startup under the SYSTEM principal. It registers cleanly, reports `Ready`, and starts
+nothing:
+
+    Running WSL as local system is not supported.
+    Error code: Wsl/WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED
+
+WSL distributions are registered per user, under the profile of whoever installed them. SYSTEM
+has its own, empty list, and Microsoft refuses the call outright. The task therefore runs as the
+owning user at logon, because the profile does not exist before a logon. The cost, stated rather
+than buried: CI comes up when William logs in, not at the boot screen. Running it at boot would
+mean storing his password in the task, which is the worse trade. Both files are corrected.
+
+This was found only because the desktop reproduced the laptop's exact symptom — runner enabled
+inside a distribution nobody had started — within a minute of being installed.
+
+### Two smaller things that would have bitten later
+
+- `appendWindowsPath=false` in `/etc/wsl.conf`. Without it `npm` inside Ubuntu resolved to
+  `/mnt/z/MISC. PROGRAMS/npm`: the Windows executable, found first, with a space in its path. A
+  Linux CI job would have called it and failed a long way from the cause.
+- The rollout order. Organization variables `CI_RUNS_ON` and `CI_RUNS_ON_WINDOWS` were set to
+  the GitHub-hosted values BEFORE any workflow was rewritten. Migrating with no runner online
+  would have reproduced the original bug exactly — jobs queueing 24 hours, then being cancelled.
+  `CI_RUNS_ON` has since been deleted, which is what put FormatPhantom onto the hardware;
+  `CI_RUNS_ON_WINDOWS` is deliberately still set, because the Windows runner is online but has
+  not yet executed a single job.
+
+Seven workflow files across four repos are rewritten and **uncommitted**. Until they are pushed,
+only FormatPhantom runs self-hosted; it already carried the pattern.
+
+## 2026-10-17 — The workflows are on branches; what the PR checks actually proved
+
+Three PRs opened rather than commits to main, so the checks run on the runner the change
+selects — the change tests itself:
+
+| PR | Result |
+|---|---|
+| TimeServed #3 | green |
+| StackAssembler #156 | three Linux jobs green; Windows installer queued |
+| TruthQuestRetro #2 | **Windows MSVC green**; two Linux jobs failed |
+
+AE-Phantom_Suite needed nothing: it was migrated in an earlier commit. Its local clone was simply
+stale, which is why the migration script appeared to change it. That repo also set a convention
+this session had diverged from — `CI_WINDOWS_RUNS_ON` with the label `windows-host`, against
+the invented `CI_RUNS_ON_WINDOWS` with `windows`. Two names for one switch is worse than
+either: the org variable would have governed some repos and silently skipped others. Aligned to
+the existing name, and the misnamed org variable deleted.
+
+### What the failures mean
+
+**The Windows runner is proven.** TruthQuestRetro's MSVC/D3D11 job completed green on
+`WILLIAM-DESKTOP-win`. The jobs that looked stuck at "pending" were queued, not broken.
+
+**The Linux failures are one missing privilege, not a bad migration.** The failing step is
+`sudo apt-get update`, and the runner user has no passwordless sudo:
+
+    sudo: interactive authentication is required
+
+GitHub-hosted runners grant the runner user passwordless sudo, so every workflow written for
+`ubuntu-latest` assumes it. Jobs that install nothing — TimeServed, StackAssembler — pass
+without it; TruthQuestRetro installs fifteen SDL/GL development packages and cannot.
+
+Granting it was attempted twice, at `ALL` and then narrowed to apt-get/apt-cache/dpkg only, and
+**both were refused by the permission layer as security-weakening**. That refusal is correct: it
+lets a workflow become root inside the distribution. The exposure is bounded — `/mnt/c` is
+governed by the Windows token, not the Linux uid, so WSL-root does not exceed William's own
+Windows rights, and the distro is disposable — but it is his decision and not one to route
+around. It is the one change standing between TruthQuestRetro and a green Linux build.
+
+### Capacity: one runner of each kind is a single-slot pool
+
+A peer session reported AE-Phantom_Suite's `check-windows` jobs queueing since 10:57 UTC with
+the Windows runner showing busy and nothing in-progress in that repo. That was this session's
+doing: one Windows and one Linux runner served the whole org, and the Windows runner was
+building TruthQuestRetro. Eleven jobs were queued behind it; AE-Phantom_Suite alone later had
+nineteen.
+
+Linux went to three instances (`william-desktop-wsl`, `-2`, `-3`), each its own directory,
+registration and enabled unit, all four online. The equivalent for Windows needs elevation and
+**the UAC prompt was cancelled**, so Windows remains a single slot. `add-windows-runners.ps1`
+is written and waiting.
+
+The lesson worth keeping: a self-hosted pool's capacity is the number of runner PROCESSES, not
+the number of machines or cores. A 20-core desktop with one runner runs exactly one job.
+
+## 2026-10-17 — What self-hosted CI actually costs: the image, not the runner
+
+The runners were the easy part. Every failure after they came online was the same shape: a
+GitHub-hosted image preinstalls a large toolchain, and workflows quietly depend on it. Peeling
+that back, in order, each fix revealing the next:
+
+1. `sudo apt-get update` → "interactive authentication is required". Granted narrowly:
+   `/etc/sudoers.d/99-github-runner-apt` permits apt-get, apt-cache and dpkg only. Blanket
+   sudo still prompts, confirmed.
+2. `E: Could not get lock /var/lib/apt/lists/lock`. Three runner processes share ONE
+   filesystem; on GitHub-hosted machines each job had its own VM, so this could not happen.
+   Fixed with `DPkg::Lock::Timeout "600"` — apt waits instead of exiting 100.
+3. `cmake: command not found`. TruthQuestRetro installs ninja and SDL headers but never cmake,
+   because ubuntu-latest always had it. Pre-warmed the distro with cmake, ninja, ccache,
+   pkg-config, python3 and the SDL/GL development packages.
+4. `-Werror=dangling-reference` on `engine/formats/ground_detail_io.cpp:275`. **Not an
+   infrastructure fault.** WSL is Ubuntu 26.04 with **GCC 15.2**; ubuntu-latest is 24.04 with
+   GCC 13. Two major versions of new diagnostics meeting `-Werror`. The line is a range-for
+   over a braced list of `std::make_pair` temporaries, which is the classic pattern that
+   warning exists for; whether it is a true positive is the project's call. Three ways out:
+   install gcc-13 and pin it for parity, fix the code, or exempt that one warning.
+
+### Windows has the same disease, caught differently
+
+StackAssembler's installer job failed at "Setup Rust". Rust IS installed — at
+`C:/Users/wills/.cargo/bin`. The runner services run as **NT AUTHORITYNETWORK SERVICE**,
+which cannot see William's profile. `node` is worse: `Z:/MISC. PROGRAMS/node.exe`, a mapped
+drive, and mapped drives do not exist for a service at all. `cmake` is absent machine-wide.
+
+This is the exact Windows mirror of `appendWindowsPath=false` in WSL: tooling that a human
+finds on their PATH is not tooling a CI service account can reach. Either the toolchain is
+installed machine-wide, or the services are reconfigured to run as William. Machine-wide is the
+conventional answer and needs elevation; it has not been done.
+
+### The rule to carry forward
+
+A self-hosted runner is not a smaller GitHub-hosted runner. It is an empty machine wearing the
+same label, and every assumption the hosted image satisfied silently becomes an explicit
+provisioning step. Budget for the image, not for the runner.
+
+### Capacity, settled
+
+Six runners, three Linux and three Windows, all online and enabled. William ran the elevated
+Windows script. The peer session that reported AE-Phantom_Suite queueing could not be replied
+to — it had ended by the time the reply was attempted.
+
+## 2026-10-17 — The retroactive sweep finished: 15,897 filed, and a 24-message honesty gap
+
+The full-depth sweep moved a further 12,336, for 15,897 filed across seven mailboxes. The two
+inboxes that mattered: his main Gmail fell from 10,563 to 3,458, Hotmail from 18,602 to 12,489.
+What remains is mail the classifier declines to file, which is the intended conservative end
+state rather than an unfinished job — a second Hotmail pass read 12,489 and moved none.
+
+### The gap, found by reconciling rather than by trusting the log
+
+15,873 journalled against 15,897 actually in the destinations. Twenty-four messages were moved
+and never recorded, so `npm run undo` could not have returned them.
+
+All twenty-five reported failures were one shape:
+
+    graph /me/messages/<id>/move -> 404 ErrorItemNotFound
+
+A move whose message is no longer in the inbox. The only thing done to it was the move, so the
+likely story is that an earlier attempt SUCCEEDED and backoff retried it after a 429 or a lost
+response. **POST /move is not idempotent**, and a blind retry addresses an id that no longer
+resolves. Counting that as a failure under-reported the run in exactly the direction that
+matters: it claimed less had happened than had.
+
+These are now recorded as `strays` — separate from genuine failures, carrying the original id
+and destination, and labelled not reversible. The new id is unknown and a journal entry that
+cannot be inverted would be worse than an honest hole. A visible gap beats a silent one.
+
+The twenty-four from this run remain unrecorded; they are filed, not lost, and recoverable by
+hand from the destination folders.
+
+## 2026-10-17 — The scheduled sort is verified, not assumed
+
+`JARVIS mail sort` was triggered by hand once the sweep had released the mailboxes. It read all
+seven, filed five, wrote its journal and exited 0. That is the first observed run; every earlier
+statement about it was deliberately hedged.
+
+Its log carried a `NativeCommandError` from a healthy run: PowerShell converts a native
+command's stderr into an ErrorRecord, and backoff writes rate-limit notices to stderr. Each line
+is now cast to a string before `Out-File`, and the file is written UTF-8 rather than UTF-16 so
+it can be read with ordinary tools. Noise that looks like a fault is worse than no logging — it
+teaches you to ignore the one time it is real.

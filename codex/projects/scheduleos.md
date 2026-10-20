@@ -63,6 +63,20 @@ catch attention at a glance.
 - Phase 6 (first week build with William: timezone fix, Reclaim login, one real shift fed in)
   pending — see `codex/projects/skynetos.md` "Next" for the concrete one-action-each queue.
 
+- **2026-10-17, first CC-SECRETARY run (William present).** Reclaim MCP authenticated; its tools are
+  live (`get_schedule`, `add_event`, `update_event`, `reschedule_event`, task and habit-adjacent tools) —
+  `private/schedule/reclaim/mcp-tools.md` still needs the full list pasted. Calendars now read
+  `America/Denver`, so the timezone fix landed. Added the 10/18 shift on William's word (9:30 AM–2 PM,
+  sport/opponent/role TBD, not on the October crew list) plus its six-event prep chain, built to the
+  installed 10/17 convention rather than `notification-copy.md`: titles read
+  `📺 MTPBS: <role> – <sport> vs <opponent>` and the shift reminder is 60 min, not 0. Logged to
+  `schedule/changes.log.jsonl`; row added to `schedule/pbs-shifts.json` (8 rows).
+- **Open, 2026-10-17:** Reclaim re-planned 10/18 around the shift and put `🎬 CHANNEL 60` at
+  22:45–23:45, across the hard 23:00 boundary, with `🍽 LUNCH 45` at 16:45 and Walk, Meditate, Movie
+  and the comic read dropped from the day. Nothing moved; awaiting William. The Sunday rituals
+  (`💰 MONEY SUNDAY` 18:00, `📅 WEEK BUILD` 18:45, `💻 UPDATE SYSTEMS` 13:00) do not exist on the
+  calendar yet.
+
 ## Blockers
 
 - How the PBS schedule arrives: unknown. Asked in Phase 2.

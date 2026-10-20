@@ -96,7 +96,7 @@
       "kind": "agent.prompt-to-node",
       "name": "PROMPT → NODE",
       "pos": {
-        "x": 125,
+        "x": 120,
         "y": 85
       },
       "footprint": {
@@ -657,8 +657,8 @@
       "kind": "link.url",
       "name": "DIRTY PLUSH (HUD)",
       "pos": {
-        "x": 59,
-        "y": 75
+        "x": 58,
+        "y": 70
       },
       "designator": "J2",
       "provisional": true,
@@ -727,8 +727,8 @@
       "kind": "file.document",
       "name": "PANIC",
       "pos": {
-        "x": 79,
-        "y": 87
+        "x": 80,
+        "y": 88
       },
       "designator": "F2",
       "provisional": true,
@@ -749,15 +749,15 @@
       "kind": "decor.part",
       "name": "PART",
       "pos": {
-        "x": 129,
-        "y": 72
+        "x": 128,
+        "y": 71
       },
       "part": "panel",
       "showName": false,
       "showDesignator": false,
       "provisional": true,
       "footprint": {
-        "w": 7,
+        "w": 8,
         "h": 8
       },
       "frame": "fingers",
@@ -770,8 +770,8 @@
       "kind": "file.document",
       "name": "DIRTY PLUSH",
       "pos": {
-        "x": 69,
-        "y": 87
+        "x": 63,
+        "y": 84
       },
       "designator": "F3",
       "provisional": true,
@@ -788,11 +788,31 @@
       "plateBorder": "ok"
     },
     {
+      "id": "f_sock_in_my_drawer",
+      "kind": "file.document",
+      "name": "A SOCK IN MY DRAWER",
+      "pos": {
+        "x": 71,
+        "y": 86
+      },
+      "designator": "F8",
+      "path": "Z:/DOWNLOADS/A Sock in my Drawer by William Fischer.docx",
+      "openWith": "office",
+      "showLogo": false,
+      "priority": 2,
+      "showDesignator": false,
+      "footprint": {
+        "w": 5,
+        "h": 8
+      },
+      "plateBorder": "ok"
+    },
+    {
       "id": "s_research",
       "kind": "store.explorer",
       "name": "RESEARCH",
       "pos": {
-        "x": 58,
+        "x": 56,
         "y": 93
       },
       "designator": "S2",
@@ -813,8 +833,8 @@
       "kind": "store.repo",
       "name": "DIRTY PLUSH REPO",
       "pos": {
-        "x": 58,
-        "y": 86
+        "x": 57,
+        "y": 82
       },
       "designator": "S3",
       "path": "C:/dev/DirtyPlush",
@@ -1136,8 +1156,8 @@
       "kind": "store.repo",
       "name": "wfp-site-ops",
       "pos": {
-        "x": 155,
-        "y": 63
+        "x": 143,
+        "y": 68
       },
       "designator": "S4",
       "path": "C:/dev/wfp-site-ops"
@@ -1314,8 +1334,8 @@
       "engraving": "FINANCEOS",
       "boardFile": "financeos/room.board.json",
       "pos": {
-        "x": 121,
-        "y": 92
+        "x": 156,
+        "y": 61
       },
       "footprint": {
         "w": 9,
@@ -1341,8 +1361,8 @@
       "engraving": "SCHEDULEOS",
       "boardFile": "scheduleos/room.board.json",
       "pos": {
-        "x": 135,
-        "y": 92
+        "x": 142,
+        "y": 86
       },
       "footprint": {
         "w": 9,
@@ -1366,12 +1386,12 @@
       "kind": "panel.calendar",
       "name": "THIS WEEK",
       "pos": {
-        "x": 147,
-        "y": 93
+        "x": 138,
+        "y": 101
       },
       "footprint": {
-        "w": 12,
-        "h": 8
+        "w": 22,
+        "h": 12
       },
       "tags": [
         "schedule",
@@ -1424,16 +1444,142 @@
       "notes": "JARVIS on TruthQuestRetro: the C++20 engine and the Forge editor. Added 2026-09-26 beside GameOS. Sessions in that repo follow its own CLAUDE.md ritual (roadmap milestone, effort tag, TODO-NEXT)."
     },
     {
-      "id": "s_file_explorer",
-      "kind": "store.explorer",
-      "name": "FILE EXPLORER",
+      "id": "bg_backdrop_7",
+      "kind": "decor.image",
+      "name": "BACKDROP",
       "pos": {
-        "x": 40,
-        "y": 71
+        "x": 136,
+        "y": 83
       },
-      "designator": "S5",
+      "showName": false,
+      "showDesignator": false,
       "provisional": true,
-      "path": "C:/dev"
+      "image": "%SKYNET%/assets/sprites/time-calendar-background-abstract-image-pages-dates-116683190.jpg",
+      "footprint": {
+        "w": 26,
+        "h": 32
+      }
+    },
+    {
+      "id": "g_after_effects",
+      "kind": "group.zone",
+      "name": "AFTER EFFECTS",
+      "pos": {
+        "x": 144,
+        "y": 30
+      },
+      "footprint": {
+        "w": 24,
+        "h": 23
+      }
+    },
+    {
+      "id": "d7_phantomos",
+      "designator": "D7",
+      "kind": "drive.room",
+      "name": "Phantom",
+      "engraving": "PHANTOMOS",
+      "boardFile": "phantomos/room.board.json",
+      "pos": {
+        "x": 146,
+        "y": 33
+      },
+      "footprint": {
+        "w": 9,
+        "h": 13
+      },
+      "tags": [
+        "after-effects",
+        "phantom",
+        "plugins"
+      ],
+      "image": "%SKYNET%/assets/sprites/OpenInternalHDD-e1446741961980.jpg",
+      "size": 22,
+      "showDesignator": false,
+      "frame": "socket",
+      "priority": 4,
+      "notes": "PhantomOS: the AE Phantom Suite monorepo (C:/dev/AE-Phantom_Suite), its ops board, launch prompts, research digest and plugin folders. Added 2026-10-20. No logo yet; pick one in the editor."
+    },
+    {
+      "id": "u_phantom_director",
+      "designator": "U8",
+      "kind": "agent.code",
+      "name": "PHANTOM DIRECTOR",
+      "pos": {
+        "x": 158,
+        "y": 36
+      },
+      "footprint": {
+        "w": 8,
+        "h": 7
+      },
+      "cwd": "C:/dev/AE-Phantom_Suite",
+      "launch": "popout",
+      "resume": true,
+      "persona": "%SKYNET%/codex/personas/persona.md",
+      "codexRef": "codex/projects/ae-phantom-suite.md",
+      "prelaunch": [
+        "claude",
+        "git-fetch",
+        "git-status",
+        "npm-install"
+      ],
+      "briefing": "every",
+      "readOnLaunch": [
+        "CLAUDE.md",
+        "ops/AGENT_ORG.md",
+        "ops/BOARD.md",
+        "ops/DIRECTOR_HANDOFF.md"
+      ],
+      "initialPrompt": "You are the Phantom Suite Director: lead After Effects plugin engineer and project director for Goob Entertainment Co. You have jurisdiction over every plugin's creative direction, feature scope, quality bar and production readiness, and you manage one engineer session per plugin through directives and code review. You own shared/, tools/, installer/, .claude/ and ops/. You do not build plugin features yourself. Read in order: CLAUDE.md (imports AGENTS.md), ops/AGENT_ORG.md, .claude/agents/director.md, ops/BOARD.md, ops/DIRECTOR_HANDOFF.md (top entry), every ADR in docs/decisions/, research/DIGEST.md, ops/requests/. Run npm install and npm run check and report the result. Then give me a TL;DR: what is ready, what is blocked, every Owner decision needed with your recommendation, and which sessions to launch next with their commands from ops/LAUNCH.md. Ask me before anything irreversible (publishing, deleting, force-pushing, changing prices or IDs). End with the handoff skill.",
+      "mcpServers": [
+        "skynet"
+      ],
+      "tags": [
+        "after-effects",
+        "phantom",
+        "plugins",
+        "director"
+      ],
+      "frame": "castellated",
+      "priority": 5,
+      "showDesignator": false,
+      "pulseGlow": true,
+      "pulseColor": "ok",
+      "chase": true,
+      "chaseColor": "signal",
+      "chaseSpeed": 75,
+      "notes": "The Suite Director for AE-Phantom_Suite, launched with the Director block of ops/LAUNCH.md. Engineers (one per plugin) are launched from a terminal as worktrees: claude -w <slug> --name <slug>. Added 2026-10-20 beside PhantomOS."
+    },
+    {
+      "id": "g_new_cluster_7",
+      "kind": "group.zone",
+      "name": "ScheduleOS",
+      "pos": {
+        "x": 135,
+        "y": 82
+      },
+      "footprint": {
+        "w": 28,
+        "h": 34
+      }
+    },
+    {
+      "id": "bg_backdrop_8",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 154,
+        "y": 58
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/usa-currency-dollar-pattern-background-design_1017-63101.jpg",
+      "footprint": {
+        "w": 13,
+        "h": 18
+      }
     }
   ],
   "edges": [
@@ -1996,15 +2142,19 @@
         ],
         [
           109,
-          82
+          65
         ],
         [
-          117,
-          82
+          121,
+          65
         ],
         [
-          117,
-          99
+          155,
+          65
+        ],
+        [
+          155,
+          68
         ]
       ],
       "fromAnchor": {
@@ -2022,7 +2172,29 @@
       "to": "d6_scheduleos",
       "kind": "supervises",
       "width": 3,
-      "relation": "scheduleos"
+      "relation": "scheduleos",
+      "waypoints": [
+        [
+          109,
+          63
+        ],
+        [
+          109,
+          81
+        ],
+        [
+          147,
+          81
+        ]
+      ],
+      "fromAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "toAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "e_tqr_gameos",
@@ -2038,6 +2210,42 @@
       "to": "u_jarvis_tqr",
       "kind": "supervises",
       "width": 2
+    },
+    {
+      "id": "e_sock_storyos",
+      "from": "f_sock_in_my_drawer",
+      "to": "d3_storyos",
+      "kind": "reads",
+      "color": "signal"
+    },
+    {
+      "id": "e_phantomos",
+      "from": "u1_jarvis",
+      "to": "d7_phantomos",
+      "kind": "supervises",
+      "width": 3,
+      "relation": "phantomos"
+    },
+    {
+      "id": "e_phantom_director_room",
+      "from": "u_phantom_director",
+      "to": "d7_phantomos",
+      "kind": "syncs",
+      "width": 2,
+      "relation": "phantomos"
+    },
+    {
+      "id": "e_phantom_director_supervises",
+      "from": "u1_jarvis",
+      "to": "u_phantom_director",
+      "kind": "supervises",
+      "width": 2
+    },
+    {
+      "id": "e29",
+      "from": "d6_scheduleos",
+      "to": "k_calendar",
+      "kind": "reads"
     }
   ],
   "look": {

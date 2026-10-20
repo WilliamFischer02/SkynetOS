@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-10-04T15:03:09.743Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-10-20T19:53:33.999Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -73,6 +73,9 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/magictrainer.md` — MTG deck visualizer/trainer, Tauri 2 + React. v1.0.0 BUILT AND
   TAGGED 2026-09-25, ready to ship to William. WRITTEN 2026-10-01: a real repo found with zero
   prior codex/board presence.
+- `projects/ae-phantom-suite.md` — After Effects CEP plugin suite, multi-agent studio (Director +
+  per-plugin engineers + researcher), two daily Claude routines already running. ACTIVE. WRITTEN
+  2026-10-17: a real, large repo found with zero prior codex/board presence.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -96,6 +99,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 ## Projects — Streaming
 - `projects/streaming.md` — Streamer.bot, OBS, the stream-tools relay; Discord, Twitch bio, VOD pipeline queued. WRITTEN 2026-09-30.
 
+## Projects — BroadcastOS (William's Montana PBS graphics-op tooling)
+- `projects/statpopperlive.md` — Stat Pop Board: live stat-pop suggestions read from StatBroadcast's
+  page for MSU volleyball broadcasts. ACTIVE, v0.3.0 shipped 2026-10-17. WRITTEN 2026-10-17: a real,
+  deployed repo found with zero prior codex/board presence.
+
 ## Projects — SkynetOS itself
 - `projects/skynetos.md` — This program. See the repo's docs/ for the spec; this file tracks state only.
 
@@ -109,7 +117,123 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
   `handoffs/financeos.md` and `handoffs/scheduleos.md` after Phase 7.
 ````
 
-## 2. Mail for the Face (59 unread, newest first)
+## 2. Mail for the Face (65 unread, newest first)
+
+### SCHED-NUDGE 2026-10-17 21:30: LOG IT missing, proposal written, no calendar write
+
+`2026-10-18T03-30-54-000--sched-nudge-2026-10-17-log-it-missing-proposal-written.md`, from cc-secretary, sent 2026-10-18T03:30:54Z
+
+````markdown
+The evening nudge ran unattended. Read of 10/17–10/18 through Reclaim's MCP (tools present, authenticated).
+
+- **No `💰 LOG IT` event exists for today.** The standing event has not been enabled; that is William's one-time step at the week build. Not created, per the brief.
+- Tomorrow's first block is the 10/18 chain: shower 8:35 → PBS 9:30–2:00. So the line it should carry is `💰 LOG IT · tmrw: shower 8:35 → PBS`, written to `schedule/proposals.md` (file created; it did not exist).
+- One line appended to `schedule/changes.log.jsonl`: `nudge-check`, `ok: false`.
+- Seen, not touched: Reclaim placed tonight's `🍽 DINNER 60` at 23:00–23:45, after the 22:45 decompress. His own Hours rule now, so no proposal; mentioned so the week build can decide.
+
+Nothing committed, nothing deleted. Both schedule files are gitignored; `handoff.md` carries the same note.
+````
+
+### Away session: 8 item(s)
+
+`2026-10-17T23-12-23-365--away-session-8-item-s.md`, from hands, sent 2026-10-17T23:12:23.365Z
+
+````markdown
+Away session, finished on its own. 8 item(s):
+
+- held back by the away bounds: Bash
+- roadmap updated: SkynetOS/codex/projects/ae-phantom-suite.md
+- roadmap updated: SkynetOS/codex/projects/statpopperlive.md
+- edited SkynetOS/codex/index.md
+- edited SkynetOS/codex/index.md
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- journal written: SkynetOS/codex/journal/away-2026-10-17-1709.md
+- mailed the mailbox: Away pass 2026-10-17 1709: two uncatalogued repos found (AE-Phantom_Suite, StatPopperLIVE)
+
+Its last word:
+
+Away pass complete. Summary:
+
+- This pass fired on a real trigger (handoff.md changed) rather than a timer, confirming the scheduling advice from the 2026-10-16/10-03 notes.
+- Found two uncatalogued, actively-worked repos: **AE-Phantom_Suite** (a paid After Effects plugin suite already run by its own multi-agent director/engineer studio) and **StatPopperLIVE** (William's live stat-pop tool for his Montana PBS broadcast job, v0.3.0 shipped today).
+- Wrote codex entries for both, updated the index (new BroadcastOS category for StatPopperLIVE), and added a roadmap note.
+- No phantoms proposed — root board is still 4/4, unticked since mid-September.
+- Journal and mail sent: `codex/journal/away-2026-10-17-1709.md`. William's decisions needed: AE-Phantom_Suite's AE run list + 11 owner decisions, running StatPopperLIVE live tonight + Vercel Git-link, and freeing up root's phantom slate.
+````
+
+### Away pass 2026-10-17 1709: two uncatalogued repos found (AE-Phantom_Suite, StatPopperLIVE)
+
+`2026-10-17T23-12-19-037--away-pass-2026-10-17-1709-two-uncatalogued-repos.md`, from hands, sent 2026-10-17T23:12:19.037Z
+
+````markdown
+108 min idle, PLAN level. No mail on to-hands. This pass fired because SkynetOS/handoff.md had changed since 2026-10-16 (mail self-sorts now, CI on William's own hardware) — one of the named re-sweep triggers.
+
+Found two real, active repos with zero prior codex/board presence:
+- AE-Phantom_Suite: paid After Effects plugin suite, already run by its own multi-agent studio (Director + per-plugin engineers + researcher, two daily Claude routines merging PRs). 14 PRs merged the day of this pass. Written up: codex/projects/ae-phantom-suite.md.
+- StatPopperLIVE ("Stat Pop Board"): William's tool for his Montana PBS volleyball broadcast job, reads StatBroadcast's page and suggests on-air stat pops. v0.3.0 live today at stat-pop-board.vercel.app. Written up: codex/projects/statpopperlive.md.
+
+Both added to codex/index.md (AE-Phantom_Suite under GoobOS, StatPopperLIVE under a new BroadcastOS category). Roadmap note added at docs/06-ROADMAP.md. No phantoms proposed — root is still 4/4, unticked since 2026-09-16/25.
+
+Needs William: AE-Phantom_Suite's ~2h AE run list + 11 owner decisions in its own ops/BOARD.md; StatPopperLIVE run live at tonight's match + Vercel Git-link; and freeing up root's phantom slate so these (and MagicTrainer, still unshipped) have somewhere to land.
+
+Full detail: codex/journal/away-2026-10-17-1709.md.
+````
+
+### apply.ps1 proven, three bugs, Sock on the board, six tasks switched on, mail redesigned
+
+`2026-10-16T23-21-00-000--apply-ps1-proven-three-bugs-sock-on-the-board-s.md`, from hands, sent 2026-10-16T23:21:00.000Z
+
+````markdown
+William present, evening session. He cleared the Word recovery pane and saved, which unblocked the last link in the Word line editor.
+
+apply.ps1 is proven against a live Word document on a throwaway copy: 2 edits in as 4 tracked revisions, 1 anchored comment, 0 skipped, timestamped backup first, TrackRevisions restored, markup toggle verified both directions. The first attempt failed and was worth more than the one that passed — it exposed three bugs, all fixed: the disk reader undercounted the manuscript by 35 paragraphs (a self-closing empty-paragraph tag eaten by the opener branch of its regex), export.ps1's count guard refused every real document so the live-Word read path had never once been used, and apply.ps1 could attach a comment to the wrong paragraph when its anchor was missing. The "find must match exactly once in that paragraph" rule is what kept a numbering bug that large harmless.
+
+Board: f_sock_in_my_drawer (F8) added to root under WRITING & PUBLICATION, reads edge to STORYOS, bound to the real file. Written to board JSON directly because SkynetOS was closed — no undo entry, no snapshot; validate:board, board:overlap and verify all green after.
+
+Scheduler: five tasks had never run once because they were disabled, and a sixth carried an action type the runtime refuses outright, failing weekly since 2026-09-28. William asked for all six. Verified by running planDispatch over all nine tasks on all seven boards: nine dispatch, zero refuse. Two caveats stand — the scheduler only ticks while SkynetOS is open and the app is closed, and the StoryOS manuscript nodes still point at REPLACE_ME paths.
+
+Mail: the 2026-09-23 hub design is superseded. Two APIs over one taxonomy, and the agent may now file mail rather than only label it — two rows of the rules table widened, the rest unchanged and still binding. C:/dev/jarvis-mail holds both OAuth layers; nothing is authenticated and nothing has touched a live account. Secrets go under private/, gitignored.
+
+He also asked about scheduled work "redirected to running CI tests locally on my laptop". Searched every repo under C:/dev: twelve workflows, all on GitHub-hosted runners, no self-hosted runner service, no actions-runner install, no Windows scheduled task, and the only git hook on this machine bakes FACE-BOOT.md and deliberately runs no tests. The laptop is not on the tailnet, so if that configuration exists it is on the laptop and not visible from here. Told him so rather than invent a cause.
+
+Verify green: 154 files, 2,387 tests. Nothing committed.
+
+Needs William: the two mail app registrations (his consent, not mine to ask for), SkynetOS left open so the scheduler can tick, and the first real editor pass over Dirty Plush.
+````
+
+### Away session: 5 item(s)
+
+`2026-10-16T23-13-15-480--away-session-5-item-s.md`, from hands, sent 2026-10-16T23:13:15.480Z
+
+````markdown
+Away session, finished on its own. 5 item(s):
+
+- held back by the away bounds: Bash
+- held back by the away bounds: Bash
+- journal written: SkynetOS/codex/journal/away-2026-10-16-1710.md
+- roadmap updated: SkynetOS/docs/06-ROADMAP.md
+- mailed the mailbox: Away pass 2026-10-16 1710: zero drift, repeating the stop-the-timer suggestion
+
+Its last word:
+
+Away pass done. No mail, no board drift in 13 days — every phantom slate matched 2026-10-03 exactly, FinanceOS/ScheduleOS are still blocked on your own actions, and MagicTrainer's v1.0.0 is still built and unshipped with no root slot open. No new phantoms proposed — there was nothing new to bind to reality.
+
+Wrote `codex/journal/away-2026-10-16-1710.md`, added a note to `docs/06-ROADMAP.md`, and mailed the Face. Main point for you: this is the second away pass to find the identical picture as the prior one, now 13 days apart — worth deciding whether to stop scheduling these on a timer and only trigger them on mail, a phantom tick/dismiss, or a handoff change. The standing asks are unchanged: tick/dismiss one of root's four phantoms to free a slot for MagicTrainer, and FinanceOS/ScheduleOS still need your hands (SimpleFIN, Reclaim confirmation, habits.json).
+````
+
+### Away pass 2026-10-16 1710: zero drift, repeating the stop-the-timer suggestion
+
+`2026-10-16T23-13-09-940--away-pass-2026-10-16-1710-zero-drift-repeating-t.md`, from hands, sent 2026-10-16T23:13:09.940Z
+
+````markdown
+30-min idle away pass, PLAN level. No mail on to-hands. Checked all seven boards' phantom slates against the 2026-10-03 note — byte-identical, same proposedAt timestamps, thirteen days with zero drift. financeos.md/scheduleos.md unchanged since 2026-09-25/30, both blocked on William's own actions. MagicTrainer's HANDOFF.md still 2026-09-25: v1.0.0 built and tagged, still unshipped, still no root slot for ph_magictrainer. Swept C:/dev for uncatalogued repos (the pattern that found MagicTrainer and goobtropolis-configs before) — nothing new.
+
+No phantom proposed this pass: nothing had genuine new capacity or a new fact without board presence. Wrote codex/journal/away-2026-10-16-1710.md and a new 06-ROADMAP.md note.
+
+Flagging again, more strongly this time: this is the second pass to land on the exact same picture as the pass before it, now thirteen real days apart instead of minutes. The standing suggestion since 2026-10-03 — don't schedule another PLAN sweep until mail lands on to-hands, a phantom is ticked/dismissed, or a handoff changes — should actually be acted on now, not just repeated.
+
+What needs William's decision (same three groups as every pass since September): root's four unticked repo-coverage phantoms (tick/dismiss any to free a slot for MagicTrainer's), FinanceOS's one open slot plus SimpleFIN/Phase 4, and ScheduleOS's three open Next items.
+````
 
 ### Away session: 3 item(s)
 
@@ -177,112 +301,7 @@ Third same-day PLAN pass, zero drift from the 08:35/08:37 checks: no mail on `to
 Proposing again (third time today): throttle away-mode PLAN passes to wait for new mail, a ticked/dismissed phantom, or a changed handoff rather than firing on a fixed interval — three identical passes in one day is spent usage with no new signal. Open decisions for William: the standing root/financeos phantoms, and whether MagicTrainer's finished-but-unshipped build should bump one of them off root's full slate.
 ````
 
-### Away pass 10:35 — third identical no-op today, standing recs unchanged
-
-`2026-10-03T16-36-49-162--away-pass-10-35-third-identical-no-op-today-stan.md`, from hands, sent 2026-10-03T16:36:49.162Z
-
-````markdown
-No mail on to-hands. Bash denied again. Every phantom slate matches both earlier passes today exactly: root 4/4 (ph_bitrunners, ph_stackassembler, ph_story_universe_map, ph_jarvis_voice), financeos 3/4 (ph_rent_run, ph_rent_run_research, ph_aggregator_options), scheduleos 0/4, minecraftos 3/4 (ph_latest_log, ph_crash_reports, ph_goobtropolis_configs), gameos/storyos/deductionos 4/4. No new phantoms proposed, no codex edits beyond this note and the roadmap entry.
-
-Proposing (third time today): throttle away-mode PLAN passes — the next one should wait for mail on to-hands, a phantom ticked/dismissed, or a changed handoff, not a fixed interval. Three same-day passes with zero drift is spent usage.
-
-Needs William's decision: the standing root/financeos phantoms (unticked since 09-16/25/26), and whether to bump a root phantom for MagicTrainer v1.0.0 (built, tagged, unshipped, still no board slot).
-
-Full detail: codex/journal/away-2026-10-03-1035.md
-````
-
-### Away session: 4 item(s)
-
-`2026-10-03T14-38-07-765--away-session-4-item-s.md`, from hands, sent 2026-10-03T14:38:07.765Z
-
-````markdown
-Away session, finished on its own. 4 item(s):
-
-- held back by the away bounds: Bash
-- roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- journal written: SkynetOS/codex/journal/away-2026-10-03-0835.md
-- mailed the mailbox: Away pass 0835 — no drift, second identical pass today
-
-Its last word:
-
-Done. Found no drift since this morning's 08:37 pass — same phantom slates across all seven boards, and a full re-sweep of `C:/dev` turned up zero uncatalogued repos for the first time ever (every prior pass found at least one). Logged the confirmation in `docs/06-ROADMAP.md` and `codex/journal/away-2026-10-03-0835.md`, and mailed a summary to the Face.
-
-Nothing new needs William's decision beyond the standing queue: MagicTrainer v1.0.0 ready to ship but no root phantom slot for it, ScheduleOS's habits.json/timezone/first-look items, FinanceOS still waiting on his real numbers, and the stale root/financeos phantoms. Suggested skipping the next away sweep until mail, a phantom, or a handoff actually moves — this one mostly confirmed the last.
-````
-
-### Away pass 0835 — no drift, second identical pass today
-
-`2026-10-03T14-38-02-221--away-pass-0835-no-drift-second-identical-pass-to.md`, from hands, sent 2026-10-03T14:38:02.221Z
-
-````markdown
-81-minute away pass, PLAN level. No mail on to-hands. All seven boards' phantom slates matched the 08:37 pass from earlier this morning exactly (root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 3/4, gameos/storyos/deductionos 4/4) — zero drift in twenty minutes. Re-ran the coverage-gap sweep over C:/dev (README.md/CLAUDE.md/package.json) that has found a real miss on every prior pass; this time nothing new. Checked scheduleos's open habits.json task against the room board directly: it already has a node (F3), so nothing there needs a phantom — it's data-entry work for a Hands session. No phantom proposed. Wrote the confirmation into docs/06-ROADMAP.md and codex/journal/away-2026-10-03-0835.md.
-
-Standing items still needing your decision, unchanged: MagicTrainer v1.0.0 ready to ship but root is 4/4 phantoms with no slot for it; ScheduleOS habits.json rewrite + Reclaim timezone confirm + your first look at panel.calendar; FinanceOS blocked on your ledger numbers and the Prolific/DataAnnotation emails; the four root and three financeos phantoms sitting unticked since 2026-09-16–26.
-
-Suggest skipping the next PLAN-level away pass until mail lands, a phantom moves, or a handoff changes — two no-drift passes in half an hour is spent usage.
-````
-
-### Away session: 6 item(s)
-
-`2026-10-03T08-38-28-450--away-session-6-item-s.md`, from hands, sent 2026-10-03T08:38:28.450Z
-
-````markdown
-Away session, finished on its own. 6 item(s):
-
-- roadmap updated: SkynetOS/codex/projects/goobtropolis.md
-- edited SkynetOS/codex/index.md
-- recommended a node: Goobtropolis configs (minecraftos)
-- roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- journal written: SkynetOS/codex/journal/away-2026-10-03-0235.md
-- mailed the mailbox: Away pass 2026-10-03 02:35 — Goobtropolis gap closed, one phantom proposed
-
-Its last word:
-
-Done. Away-pass summary:
-
-- No mail, no phantom capacity changed anywhere since the 2026-10-01 pass — skipped re-sweeping the blocked boards per standing advice.
-- Found a real gap: `codex/index.md` had cited `projects/goobtropolis.md` since before 2026-09-12, but it never existed. Wrote it — Goobtropolis is a Bloom.host SMP with no local repo, just an exported config folder (`C:/dev/goobtropolis-configs`) that had zero board or codex presence.
-- Proposed one phantom (`ph_goobtropolis_configs`) on the `minecraftos` board (2/4 slots were open), wired to the existing `p1_goobtropolis` node.
-- Flagged for you, not touched: `p1_goobtropolis` still points at a `GoobtropolisTest` checkout that doesn't exist on this machine (known since 2026-09-11); MagicTrainer (v1.0.0, unshipped) still has no root-board slot.
-- Journal and mail sent: `codex/journal/away-2026-10-03-0235.md`.
-````
-
-### Away pass 2026-10-03 02:35 — Goobtropolis gap closed, one phantom proposed
-
-`2026-10-03T08-38-22-803--away-pass-2026-10-03-02-35-goobtropolis-gap-clos.md`, from hands, sent 2026-10-03T08:38:22.803Z
-
-````markdown
-No mail on to-hands; every phantom slate matched 2026-10-01 exactly (root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 2/4, gameos/storyos/deductionos 4/4) — no re-sweep of the blocked boards, per standing advice.
-
-Real find: codex/index.md has cited codex/projects/goobtropolis.md since before 2026-09-12; it never existed. Wrote it — Goobtropolis is a Bloom.host-hosted SMP with no local repo, only an exported config folder (C:/dev/goobtropolis-configs, found via a plain ls, zero prior board/codex presence). Updated index.md's line to match.
-
-Proposed one phantom: ph_goobtropolis_configs on minecraftos (2/4 slots were open), wired reads to the existing p1_goobtropolis node.
-
-Flagged, not touched: p1_goobtropolis still points at C:/dev/GoobtropolisTest, which doesn't exist on this machine (known since 2026-09-11). MagicTrainer (v1.0.0, unshipped) still has no root-board capacity — root is still 4/4.
-
-Full detail: codex/journal/away-2026-10-03-0235.md and the new dated note in docs/06-ROADMAP.md.
-````
-
-### Away session: 6 item(s)
-
-`2026-10-01T19-35-54-980--away-session-6-item-s.md`, from hands, sent 2026-10-01T19:35:54.980Z
-
-````markdown
-Away session, finished on its own. 6 item(s):
-
-- held back by the away bounds: Bash
-- roadmap updated: SkynetOS/codex/projects/magictrainer.md
-- edited SkynetOS/codex/index.md
-- roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- journal written: SkynetOS/codex/journal/away-2026-10-01-1333.md
-- mailed the mailbox: Away pass 2026-10-01 13:33: MagicTrainer v1.0.0 found, ready to ship
-
-Its last word:
-
-Found MagicTrainer: a complete, tagged v1.0.0 MTG deck trainer app built 2026-09-25 with zero codex or board presence — installer's been sitting unshipped for six days. Wrote it up in `codex/projects/magictrainer.md`, indexed it, logged a roadmap note, and mailed the Face. No phantom proposed (root's 4/4 cap) — flagged for William to decide whether it bumps one of the four standing ones. Everything else (ScheduleOS, FinanceOS, root) matched the 2026-09-30 picture, no drift. Journal's at `codex/journal/away-2026-10-01-1333.md`.
-````
-
-49 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
+55 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
 
 ## 3. Board truth
 
@@ -290,11 +309,12 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
-| SkynetOS Mainboard (`root`) | `board/root.board.json` | 71 | 37 | 0 | 22 |
+| SkynetOS Mainboard (`root`) | `board/root.board.json` | 77 | 42 | 0 | 23 |
 | DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 28 | 8 | 8 | 1 |
 | FinanceOS (`financeos`) | `board/financeos/room.board.json` | 27 | 4 | 4 | 4 |
 | GameOS (`gameos`) | `board/gameos/room.board.json` | 32 | 10 | 8 | 1 |
 | MinecraftOS (`minecraftos`) | `board/minecraftos/room.board.json` | 80 | 24 | 6 | 3 |
+| PhantomOS (`phantomos`) | `board/phantomos/room.board.json` | 17 | 4 | 0 | 0 |
 | ScheduleOS (`scheduleos`) | `board/scheduleos/room.board.json` | 32 | 11 | 1 | 4 |
 | StoryOS (`storyos`) | `board/storyos/room.board.json` | 25 | 7 | 7 | 0 |
 
@@ -335,7 +355,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `storyos` / S2 Dirty Plush (shared) (`s2_plush_cloud`, store.cloud): **INVALID** `https://drive.google.com/drive/folders/REPLACE_ME`
 - `storyos` / F3 Series bible (`f3_bible`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md`
 
-### Provisional nodes (35)
+### Provisional nodes (36)
 
 Placed on the board but not yet confirmed as bound to anything real.
 
@@ -360,7 +380,8 @@ Placed on the board but not yet confirmed as bound to anything real.
 - `root` / BACKDROP (`bg_backdrop_5`, decor.image)
 - `root` / BACKDROP (`bg_backdrop_6`, decor.image)
 - `root` / U6 THE AUDITOR (`u_drive_audit`, agent.audit)
-- `root` / S5 FILE EXPLORER (`s_file_explorer`, store.explorer)
+- `root` / BACKDROP (`bg_backdrop_7`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_8`, decor.image)
 - `deductionos` / D1 Mind Palace (`d1_palace`, drive.room)
 - `financeos` / J1 BANK (`j1_bank`, link.url)
 - `financeos` / J2 CREDIT CARD (`j2_credit`, link.url)
@@ -379,7 +400,70 @@ Placed on the board but not yet confirmed as bound to anything real.
 
 Compressed from `handoff.md`, which is linked from the repo root.
 
-**Latest (2026-10-03, MORNING MAINTENANCE, unattended):** the panel polls (usage, finance,
+**Scheduled run (2026-10-17 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/17–10/18
+through Reclaim (tools present, authenticated). No `💰 LOG IT` event exists for today: the standing
+event has not been enabled at a week build yet. Not created, per the brief. Tomorrow's first block is
+the 10/18 chain (shower 8:35 → PBS 9:30–2:00), so the line it should carry is
+`💰 LOG IT · tmrw: shower 8:35 → PBS`; written to `schedule/proposals.md` (file created) and one
+`nudge-check` line appended to `schedule/changes.log.jsonl` (`ok: false`). Both files are gitignored.
+Seen, not touched: Reclaim placed tonight's `🍽 DINNER 60` at 23:00–23:45. Mailbox note in
+`codex/mailbox/to-face/`. Nothing committed, nothing deleted. The block below is Prime's session
+from earlier today and still stands.
+
+**Latest (2026-10-17, U3 JARVIS-PRIME, William present): mail sorts itself; CI runs on his own
+hardware.**
+
+**Mail.** The five destinations exist in all seven mailboxes (35 created, none failed) and
+**3,535 messages have been filed** — verified by counting the mailboxes, not by trusting the run
+output: 3,535 journalled, 3,535 in the destinations. Every one is reversible with
+`npm run undo`; nothing is ever deleted. A retroactive full-depth sweep is running. The sort
+repeats by itself at 03:00 and 15:00 under the task `JARVIS mail sort`.
+
+An earlier version of this block said no message had been written to. That was true when it was
+written and is now the opposite of true, which is the whole reason this file gets rewritten.
+
+Four real faults were found and fixed in the process: Gmail quota 403s (both transports now
+share `backoff.mjs`), every Microsoft move 404ing on a missing `/me` prefix, `pool()`
+swallowing those 598 failures so the run read "0 moved" beside a five-line plan, and a sweep that
+re-read the newest 400 each pass and so reported success while 18,000 older messages were never
+looked at. The journal is now flushed after each account rather than once at the end.
+
+**CI.** Organization `Goob-Entertainment-Co`, five billed repos transferred, two runners online
+on the desktop — Windows service and WSL systemd. A FormatPhantom run was re-triggered and went
+green on `william-desktop-wsl` in about sixty seconds, billing nothing. That is proven, not
+assumed.
+
+The notable mistake: I documented the WSL autostart task as running at startup under SYSTEM.
+WSL refuses — `WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED` — because distributions are per-user. It now
+runs as William at logon, so CI returns when he logs in rather than at the boot screen. Script
+and README corrected.
+
+**Open, and needing William:**
+1. Seven workflow files across four repos are rewritten and **uncommitted**. Until pushed, only
+   FormatPhantom runs self-hosted. `CI_RUNS_ON_WINDOWS` is still pinned to GitHub-hosted on
+   purpose: the Windows runner is online but has never executed a job.
+2. The Google OAuth client must be moved to **Production**. In Testing, refresh tokens expire
+   after seven days and every Gmail account will drop out of the 03:00 schedule weekly, with a
+   quiet `invalid_grant` as the only symptom.
+3. The laptop has no runner yet, and is not on the tailnet, so its two commands are his.
+
+Nothing committed.
+
+**Latest (2026-10-16 evening, U3 JARVIS-PRIME, William present):** `apply.ps1` is proven — the
+Word line editor in `C:/dev/jarvis-editor` now writes tracked changes and anchored comments into a
+live document, with a timestamped backup first and the markup toggle verified both ways. Proving it
+found three bugs, all fixed: `docx.mjs` undercounted the manuscript by 35 paragraphs (self-closing
+`<w:p/>` eaten by the opener branch), `export.ps1` refused every real document so the live-Word read
+path had never once been used, and `apply.ps1` could staple a comment to the wrong paragraph. Also:
+`f_sock_in_my_drawer` (F8) added to the root board under WRITING & PUBLICATION with a `reads` edge
+to STORYOS; six scheduled tasks that could never have run were switched on and one unsupported
+action type fixed, verified by running `planDispatch` over all nine tasks — nine dispatch, zero
+refuse; and the email agent was redesigned to two APIs over one taxonomy with `C:/dev/jarvis-mail`
+holding both OAuth layers, **unauthenticated**, waiting on William's two app registrations.
+Verify green: 154 files, 2,387 tests. Details under "2026-10-16 evening" in `docs/DECISIONS.md`.
+Nothing committed.
+
+**Last session (2026-10-03, MORNING MAINTENANCE, unattended):** the panel polls (usage, finance,
 schedule, remote) stop while the window is minimised or hidden, through a hook that had been written
 and never used; the usage meter says why when its read fails; the explorer's junction test reports
 SKIPPED instead of passing on nothing; and `which()` has its first test (roadmap 18). Verify green:
@@ -468,6 +552,8 @@ camera. Details under "Voice, two hands and THE MATRIX — 2026-09-12".
 
 Next, in order:
 
+1. The two mail consoles
+2. Open SkynetOS and leave it open
 1. Restart SkynetOS and check today's work on screen
 2. Prove standing orders end to end with the Face's first real brief
 3. A board selector

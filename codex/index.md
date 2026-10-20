@@ -58,6 +58,9 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/magictrainer.md` — MTG deck visualizer/trainer, Tauri 2 + React. v1.0.0 BUILT AND
   TAGGED 2026-09-25, ready to ship to William. WRITTEN 2026-10-01: a real repo found with zero
   prior codex/board presence.
+- `projects/ae-phantom-suite.md` — After Effects CEP plugin suite, multi-agent studio (Director +
+  per-plugin engineers + researcher), two daily Claude routines already running. ACTIVE. WRITTEN
+  2026-10-17: a real, large repo found with zero prior codex/board presence.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -80,6 +83,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 
 ## Projects — Streaming
 - `projects/streaming.md` — Streamer.bot, OBS, the stream-tools relay; Discord, Twitch bio, VOD pipeline queued. WRITTEN 2026-09-30.
+
+## Projects — BroadcastOS (William's Montana PBS graphics-op tooling)
+- `projects/statpopperlive.md` — Stat Pop Board: live stat-pop suggestions read from StatBroadcast's
+  page for MSU volleyball broadcasts. ACTIVE, v0.3.0 shipped 2026-10-17. WRITTEN 2026-10-17: a real,
+  deployed repo found with zero prior codex/board presence.
 
 ## Projects — SkynetOS itself
 - `projects/skynetos.md` — This program. See the repo's docs/ for the spec; this file tracks state only.

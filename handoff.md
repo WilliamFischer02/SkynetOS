@@ -2,7 +2,70 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
-**Latest (2026-10-03, MORNING MAINTENANCE, unattended):** the panel polls (usage, finance,
+**Scheduled run (2026-10-17 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/17–10/18
+through Reclaim (tools present, authenticated). No `💰 LOG IT` event exists for today: the standing
+event has not been enabled at a week build yet. Not created, per the brief. Tomorrow's first block is
+the 10/18 chain (shower 8:35 → PBS 9:30–2:00), so the line it should carry is
+`💰 LOG IT · tmrw: shower 8:35 → PBS`; written to `schedule/proposals.md` (file created) and one
+`nudge-check` line appended to `schedule/changes.log.jsonl` (`ok: false`). Both files are gitignored.
+Seen, not touched: Reclaim placed tonight's `🍽 DINNER 60` at 23:00–23:45. Mailbox note in
+`codex/mailbox/to-face/`. Nothing committed, nothing deleted. The block below is Prime's session
+from earlier today and still stands.
+
+**Latest (2026-10-17, U3 JARVIS-PRIME, William present): mail sorts itself; CI runs on his own
+hardware.**
+
+**Mail.** The five destinations exist in all seven mailboxes (35 created, none failed) and
+**3,535 messages have been filed** — verified by counting the mailboxes, not by trusting the run
+output: 3,535 journalled, 3,535 in the destinations. Every one is reversible with
+`npm run undo`; nothing is ever deleted. A retroactive full-depth sweep is running. The sort
+repeats by itself at 03:00 and 15:00 under the task `JARVIS mail sort`.
+
+An earlier version of this block said no message had been written to. That was true when it was
+written and is now the opposite of true, which is the whole reason this file gets rewritten.
+
+Four real faults were found and fixed in the process: Gmail quota 403s (both transports now
+share `backoff.mjs`), every Microsoft move 404ing on a missing `/me` prefix, `pool()`
+swallowing those 598 failures so the run read "0 moved" beside a five-line plan, and a sweep that
+re-read the newest 400 each pass and so reported success while 18,000 older messages were never
+looked at. The journal is now flushed after each account rather than once at the end.
+
+**CI.** Organization `Goob-Entertainment-Co`, five billed repos transferred, two runners online
+on the desktop — Windows service and WSL systemd. A FormatPhantom run was re-triggered and went
+green on `william-desktop-wsl` in about sixty seconds, billing nothing. That is proven, not
+assumed.
+
+The notable mistake: I documented the WSL autostart task as running at startup under SYSTEM.
+WSL refuses — `WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED` — because distributions are per-user. It now
+runs as William at logon, so CI returns when he logs in rather than at the boot screen. Script
+and README corrected.
+
+**Open, and needing William:**
+1. Seven workflow files across four repos are rewritten and **uncommitted**. Until pushed, only
+   FormatPhantom runs self-hosted. `CI_RUNS_ON_WINDOWS` is still pinned to GitHub-hosted on
+   purpose: the Windows runner is online but has never executed a job.
+2. The Google OAuth client must be moved to **Production**. In Testing, refresh tokens expire
+   after seven days and every Gmail account will drop out of the 03:00 schedule weekly, with a
+   quiet `invalid_grant` as the only symptom.
+3. The laptop has no runner yet, and is not on the tailnet, so its two commands are his.
+
+Nothing committed.
+
+**Latest (2026-10-16 evening, U3 JARVIS-PRIME, William present):** `apply.ps1` is proven — the
+Word line editor in `C:/dev/jarvis-editor` now writes tracked changes and anchored comments into a
+live document, with a timestamped backup first and the markup toggle verified both ways. Proving it
+found three bugs, all fixed: `docx.mjs` undercounted the manuscript by 35 paragraphs (self-closing
+`<w:p/>` eaten by the opener branch), `export.ps1` refused every real document so the live-Word read
+path had never once been used, and `apply.ps1` could staple a comment to the wrong paragraph. Also:
+`f_sock_in_my_drawer` (F8) added to the root board under WRITING & PUBLICATION with a `reads` edge
+to STORYOS; six scheduled tasks that could never have run were switched on and one unsupported
+action type fixed, verified by running `planDispatch` over all nine tasks — nine dispatch, zero
+refuse; and the email agent was redesigned to two APIs over one taxonomy with `C:/dev/jarvis-mail`
+holding both OAuth layers, **unauthenticated**, waiting on William's two app registrations.
+Verify green: 154 files, 2,387 tests. Details under "2026-10-16 evening" in `docs/DECISIONS.md`.
+Nothing committed.
+
+**Last session (2026-10-03, MORNING MAINTENANCE, unattended):** the panel polls (usage, finance,
 schedule, remote) stop while the window is minimised or hidden, through a hook that had been written
 and never used; the usage meter says why when its read fails; the explorer's junction test reports
 SKIPPED instead of passing on nothing; and `which()` has its first test (roadmap 18). Verify green:
@@ -1323,6 +1386,21 @@ heredoc with a quoted delimiter, or `String.fromCharCode(92)`.
 ---
 
 ## What is next
+
+**0 (2026-10-16 evening). Two things only William can do.**
+1. **The two mail consoles.** `C:/dev/jarvis-mail/README.md` §"Two consoles, once each": an Entra
+   app registration with *Allow public client flows* ON, and a Google Cloud Desktop OAuth client
+   with the Gmail API enabled. Paste both into `SkynetOS/private/mail/credentials.json`, then
+   `npm run connect:ms`, `npm run connect:google`, `npm run whoami`. `whoami` answers the one open
+   question: whether a consumer Outlook.com account accepts `messageRules` through Graph.
+2. **Open SkynetOS and leave it open.** The scheduler only ticks while the app runs; `runs` in
+   `scheduler-state.json` shows two ticks in two days, and `t_morning_maintenance` last recorded
+   CANCELLED on 2026-10-15. Six tasks were just enabled and none can fire with the app closed.
+
+   Then, on the editor: open the manuscript in Word and run `npm run once` in `C:/dev/jarvis-editor`
+   for the first real pass over Dirty Plush. Known wart: the StoryOS manuscript nodes still point at
+   `C:/Users/REPLACE_ME/...`, so the newly-enabled weekly wordcount will report over broken nodes
+   until `ph_panic_rough_draft` / `ph_dirty_plush_novel` are ticked.
 
 **0. Voice, two hands and THE MATRIX, live (2026-09-12).** Restart SkynetOS first: most of this is
 main-process. Nothing opens a microphone or a camera until you press its switch.

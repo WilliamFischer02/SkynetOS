@@ -244,7 +244,7 @@
         "h": 1
       },
       "schedule": "0 18 * * 0",
-      "enabled": false,
+      "enabled": true,
       "action": {
         "type": "agent.run"
       },
@@ -268,7 +268,7 @@
         "h": 1
       },
       "schedule": "0 9 * * 1",
-      "enabled": false,
+      "enabled": true,
       "action": {
         "type": "notify",
         "message": "Monday. Run npm run finance:report and read the alerts: bills due this week are listed there."

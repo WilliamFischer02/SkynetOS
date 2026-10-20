@@ -444,7 +444,7 @@
         "h": 1
       },
       "schedule": "45 6 * * *",
-      "enabled": false,
+      "enabled": true,
       "action": {
         "type": "agent.run"
       },
@@ -468,7 +468,7 @@
         "h": 1
       },
       "schedule": "30 21 * * *",
-      "enabled": false,
+      "enabled": true,
       "action": {
         "type": "agent.run"
       },
@@ -492,7 +492,7 @@
         "h": 1
       },
       "schedule": "45 18 * * 0",
-      "enabled": false,
+      "enabled": true,
       "action": {
         "type": "agent.run"
       },
