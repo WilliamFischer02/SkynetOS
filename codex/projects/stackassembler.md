@@ -1,6 +1,6 @@
 ---
-updated: 2026-09-11
-status: ACTIVE — pre-alpha, no playable game yet. NOT previously in the codex index (found during an away-mode survey; JARVIS had no board visibility into this repo before today).
+updated: 2026-10-26
+status: RETIRED 2026-10-26 — William: "Stack assembler is gone, I no longer want to develop it." Repo no longer on disk (neither C:/dev nor Z:/dev); github.com/Goob-Entertainment-Co/StackAssembler still exists, unarchived, last push 2026-10-17. Everything below is history. Was: ACTIVE — pre-alpha, no playable game yet. NOT previously in the codex index (found during an away-mode survey; JARVIS had no board visibility into this repo before today).
 purpose: What JARVIS needs to know about StackAssembler to route sessions and track state.
 ---
 

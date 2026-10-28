@@ -1615,6 +1615,29 @@
           "kind": "reads"
         }
       ]
+    },
+    {
+      "id": "ph_dollygrip",
+      "kind": "store.repo",
+      "name": "DollyGrip",
+      "description": "Real, speced sibling repo to MCCamOp found this pass: an offline production-camera mod (rig, keyframes, moves, frame-locked PNG export) for 26.2. SPEC.md and CLAUDE.md both complete, a core package with a passing test, a built 0.1.0 jar — but no board presence and build milestone unconfirmed. Fills the room's one open phantom slot.",
+      "pos": {
+        "x": 110,
+        "y": 102
+      },
+      "proposedBy": "U3 JARVIS-PRIME (away)",
+      "proposedAt": "2026-10-20T21:40:02.310Z",
+      "fields": {
+        "path": "C:/dev/DollyGrip",
+        "openWith": "explorer",
+        "codexRef": "codex/projects/dollygrip.md"
+      },
+      "connect": [
+        {
+          "to": "s7_repo_mccamop",
+          "kind": "reads"
+        }
+      ]
     }
   ]
 }

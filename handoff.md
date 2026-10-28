@@ -2,15 +2,110 @@
 
 Rewritten at the end of every session. This is what the next agent reads first, after `CLAUDE.md`.
 
-**Scheduled run (2026-10-17 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/17–10/18
-through Reclaim (tools present, authenticated). No `💰 LOG IT` event exists for today: the standing
-event has not been enabled at a week build yet. Not created, per the brief. Tomorrow's first block is
-the 10/18 chain (shower 8:35 → PBS 9:30–2:00), so the line it should carry is
-`💰 LOG IT · tmrw: shower 8:35 → PBS`; written to `schedule/proposals.md` (file created) and one
-`nudge-check` line appended to `schedule/changes.log.jsonl` (`ok: false`). Both files are gitignored.
-Seen, not touched: Reclaim placed tonight's `🍽 DINNER 60` at 23:00–23:45. Mailbox note in
-`codex/mailbox/to-face/`. Nothing committed, nothing deleted. The block below is Prime's session
-from earlier today and still stands.
+**Scheduled run (2026-10-26 08:00 slot, U3 JARVIS-PRIME, T2 MORNING MAINTENANCE, William away;
+caught up 13:20 MDT).** `npm run verify` was RED on arrival and had been since 2026-10-20:
+`test/board-types.test.ts` pinned seven room boards and William's commit `53da08b` added the eighth,
+`board/phantomos/room.board.json` (D7 on root). The board validates; only the pin was stale. Updated
+the pin to eight rooms naming `phantomos`. Verify green after: 154 files, 2,393 tests. Per the brief,
+a red verify is the day's only job, so no survey, no other improvement and no roadmap step. Why it
+sat red: the away passes cannot run Bash and the other scheduled runs do not verify; this task last
+fired 2026-10-03. Details under "Morning maintenance 2026-10-26" below. Mailbox note in
+`codex/mailbox/to-face/`. Nothing committed. The 10/25 20:00 block below stands.
+
+**Scheduled run (2026-10-25 20:00 slot, U3 JARVIS-PRIME, T1 WEEKLY WORDCOUNT on StoryOS, William
+away; ran 2026-10-26 11:22 MDT).** First firing to reach a session: the node's notes say it failed every
+week since 2026-09-28 as `jarvis.headless`. All three StoryOS document nodes (F1, F2, F3) still
+carry `C:/Users/REPLACE_ME/...` paths and resolve to nothing, so the files the room's own unticked
+phantoms name were counted: `PANIC_NovelRoughDraft.docx` 5,307 words (last modified 2025-06-23) and
+`Dirty Plush - Novel 063026.docx` 8,988 words (2026-10-01 11:32). Neither was written to during the
+week, so both deltas are 0; no earlier ledger existed, so these are the baseline. No file found for
+the series bible. Wrote `codex/journal/wordcount.md`, a new running ledger with the method at the
+top and one section appended per week. No board edit, no Word process, no network. One next action
+for William: tick `ph_panic_rough_draft` and `ph_dirty_plush_novel` on StoryOS so F1 and F2 bind
+to the real files. Mailbox note in `codex/mailbox/to-face/`. Nothing committed. The 10/25 18:45
+block below stands.
+
+**Then, same session, William present (2026-10-26 11:30 MDT):** CI checked on request: all six
+self-hosted runners online and backed by live services (3 Windows services Running, 3 WSL systemd
+units active), real jobs through all of them this morning; the 10/17 line "the Windows runner has
+never executed a job" is stale (85/50/54 jobs). StackAssembler Release had one failed run on
+10/17, moot since: **William retired StackAssembler** ("gone, I no longer want to develop it").
+Marked RETIRED in `codex/projects/stackassembler.md` and `codex/index.md`, dated the boundary line
+in `magictrainer.md`, wrote Prime's memory `stackassembler-retired.md`, withdrew `ph_stackassembler`
+from `board/root.board.json` by direct edit because SkynetOS was closed (validate green, root now
+3/4 phantoms, **no snapshot, Ctrl+Z will not undo it, git will**). GitHub repo left up and
+unarchived: his click. Reasoning in docs/DECISIONS.md 2026-10-26.
+
+**Scheduled run (2026-10-25 18:45, U1 CC-SECRETARY, T3 SCHED-WEEK, William away).** First firing of
+the Sunday week-build draft. Reclaim tools present and authenticated; read 10/25–11/07 through Reclaim (137
+events on `[MAIN]`) and 10/25–11/08 on `[MAIN]`, `Work – Shifts` and `Work – Prep Blocks` through the
+Google Calendar connector. No calendar write, no Reclaim write. Wrote the week draft at the top of
+`schedule/proposals.md`: anchors Mon 10/26–Sun 11/01 are the four recurring casts and nothing else; the
+PROPOSED chain section is empty because no shift after today exists on any calendar and the October crew
+list is exhausted; the hour budget is 71.0 h (streams 15, income 3, hobbies 15.5, meals 12.25, MOVIE 11,
+EDIT 3, SKYNET 3), under the 85 h ceiling so §3 trims nothing; the five §6 questions carry last week's
+answers from the calendar (two shifts 10/24–10/25, Tue/Thu/Fri/Sat casts, no off days, no appointments,
+READ/EDIT/UPDATE SYSTEMS past 23:00 to never-again). The earlier proposal entries were kept beneath the
+draft rather than overwritten: they are open proposals, not a prior draft, and the brief says delete
+nothing. Still absent from the calendar: OFF DAY, MONEY SUNDAY, WEEK BUILD, LOG IT, any EARN block.
+**Landmine still live:** `schedule/pbs-shifts.json` holds only a Discord webhook URL (fourth scheduled run
+to find it); untouched. Mailbox note in `codex/mailbox/to-face/`. Nothing committed. The 10/25 18:00 block
+below stands.
+
+**Scheduled run (2026-10-25 18:00, U1 CC-FINANCE, T1 WEEKLY FINANCE REVIEW, William away).** First
+firing of the Sunday review. `npm run finance:report` returned NO LEDGER YET (exit 2):
+`private/finance/ledger.json` has never been created, `report.json` is all zeros with one `no-data`
+alert, and `imports/` is empty. Position, debt order, outflows and plan therefore cannot be stated and
+nothing was invented. Wrote `private/finance/reviews/2026-10-25.md` (new folder, gitignored) saying
+that, with an inventory of what the folder does hold (template, `subscriptions.json` from 2026-09-25
+with 19 items and two debts, `institutions.md`). `plan.md` not created, per the brief. One next action
+for William: copy `ledger.template.json` to `ledger.json` and fill `accounts[]` from the bank and card
+apps, about 20 minutes, then rerun the report; until then every Sunday run writes the same one-line
+review. No bank site, no mail, no network. Mailbox note in `codex/mailbox/to-face/`. Nothing committed.
+The 10/24 block below stands.
+
+**Scheduled run (2026-10-24 06:45, U1 CC-SECRETARY, SCHED-BUILD, William away).** First run of the
+morning card. Reclaim tools present and authenticated; read 10/24–10/25 through Reclaim and all three
+Google calendars, plus 10/11–10/23 through Reclaim for the streak line. No calendar write. Wrote
+`schedule/today.md` (card: KEYSTONE `🔴 LIVE 10–1` 10:00, since no EARN block exists; ANCHOR `📺 PBS ·
+VB vs Idaho St` 17:00, shower 16:05; STREAK `EARN —` (no ledger) `· Reading 13+ days` (a tick on every
+day in the 13-day window)). EARN pick by the rule: no `active` source, so the next onboarding task
+`w3-pick`, title `💵 EARN 1h · pick your 3 legs · pause the rest`; nothing to rename because the
+rebuilt 16-habit set has no EARN habit. Ran `npm run schedule:week`: it regenerated `week.html`,
+`calendar.json` (0 blocks) and then `today.md`, which this run overwrote afterwards with the real card.
+Seven proposal lines appended to `schedule/proposals.md`: READ 23:00 tonight and EDIT/UPDATE SYSTEMS past
+23:00 tomorrow (quiet-rule violations, not moved), Sunday rituals still absent, meals bunched before the
+shift, and the shifts file. **Landmine still live:** `schedule/pbs-shifts.json` holds only a Discord
+webhook URL, which is why the week view and both calendar panes are empty while the live calendar has
+two shifts and twelve chain events this weekend; untouched, William to restore from the change log and
+rotate the webhook. `private/schedule/events.json` has never been written. Mailbox note in
+`codex/mailbox/to-face/`. Nothing committed. The 10/23 block below stands.
+
+
+**Scheduled run (2026-10-23 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/23–10/24
+through Reclaim (tools present, authenticated); one read, no writes. No `💰 LOG IT` event exists for
+today: the standing event has still not been enabled at a week build (third run in a row: 10/17, 10/21,
+10/23). Not created, per the brief. Tomorrow 10/24 is the Idaho St volleyball shift (PBS 17:00–22:00,
+chain head SHOWER 16:05), so the line it should carry is `💰 LOG IT · tmrw: shower 4:05 → PBS`; appended
+to `schedule/proposals.md`, with one `nudge-check` line in `schedule/changes.log.jsonl` (`ok: false`).
+Seen, not touched: `🔴 LIVE 8–11 · night cast` 20:00–23:00 sits across tonight's 21:30 slot; Reclaim has
+`📖 READ 30` at 23:00–23:30 tomorrow after DECOMPRESS. **Landmine still live:** `schedule/pbs-shifts.json`
+still holds only a Discord webhook URL, no shift rows; untouched, William to restore from the change log
+and rotate the webhook. Mailbox note in `codex/mailbox/to-face/`. Nothing committed. The 10/21 block
+below stands.
+
+**Scheduled run (2026-10-21 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/21–10/22
+through Reclaim (tools present, authenticated); two reads, no writes. No `💰 LOG IT` event exists for
+today: the standing event has still not been enabled at a week build. Not created, per the brief.
+Tomorrow's first block is `🎛 T-45 STREAM PREP` 09:15 (Thursday morning cast), not before 08:00 and no
+chain, so the line it should carry is the plain `💰 LOG IT · earned today? 2 taps`; appended to
+`schedule/proposals.md`, with one `nudge-check` line in `schedule/changes.log.jsonl` (`ok: false`).
+The 10/17 run found the same thing with the chain-head title. Seen, not touched: `🎞 MOVIE`
+19:45–21:45 sits across the 21:30 slot tonight. **Landmine:** `schedule/pbs-shifts.json` has been
+overwritten and now holds only a Discord webhook URL; the 8 shift rows from 10/17 are gone. Gitignored,
+so no git history; every shift is still recoverable from the change log by event id. Nothing deleted,
+William to restore the rows and rotate the webhook. Mailbox note in `codex/mailbox/to-face/`. Nothing
+committed. The block below is Prime's session from 10/17 and still stands.
 
 **Latest (2026-10-17, U3 JARVIS-PRIME, William present): mail sorts itself; CI runs on his own
 hardware.**
@@ -151,6 +246,39 @@ docs/DECISIONS.md. Nothing committed; William has not asked. Nothing has been se
 **Session before (2026-09-12, voice and THE MATRIX):** voice control end to end, two raised hands
 place the cursor, a Windows 3.1 arrow, THE MATRIX (`G`). Nothing tried with a microphone or on
 camera. Details under "Voice, two hands and THE MATRIX — 2026-09-12".
+
+## Morning maintenance 2026-10-26
+
+The MORNING MAINTENANCE task, fired as a catch-up for the 08:00 slot (first verify at 13:20 MDT).
+Unattended, per `codex/briefs/morning-maintenance.md`. Nothing committed, nothing deleted, no board
+file touched, no dependency added, no mail on `to-hands`, no `codex/face-brief.md` on disk. Stopped
+at the brief's first bound: verify was not green, so fixing it was the only job.
+
+The working tree already held 37 modified or untracked paths from earlier sessions. This run
+touched only: `test/board-types.test.ts`, `docs/DECISIONS.md`, this file, and one `to-face` note.
+
+**Verify on arrival: RED.** 153 files passed, 1 failed, 2,392 of 2,393 tests. The failure:
+`test/board-types.test.ts` "found the seven rooms" expected 7 `.board.json` files under `board/`
+and found 8.
+
+**Change, uncommitted:**
+
+1. **The room-count pin now names eight rooms.** `test/board-types.test.ts:74`: the eighth board is
+   `board/phantomos/room.board.json`, the AE Phantom Suite room, committed by William on 2026-10-20
+   (`53da08b`, "Latest board updates") and wired from root as `d7_phantomos` with two edges. It
+   passes `npm run validate:board`. The test is renamed "found the eight rooms", expects 8, and the
+   id list gains `phantomos`; a comment says why. Not loosened: a ninth room still fails it.
+   Verify: green, 154 files, 2,393 tests.
+
+**Why nobody saw it for six days:** every away-mode PLAN pass since 2026-10-20 reports Bash denied,
+so none ran verify; the wordcount, finance and schedule runs are briefed not to touch the code; and
+this task had not fired since 2026-10-03. Recorded in docs/DECISIONS.md "2026-10-26 — Morning
+maintenance".
+
+**Not done, per the brief:** the survey, the up-to-three improvements, and the one roadmap step.
+Roadmap "Known issues" 22 and 23 from 2026-10-03 are still the smallest open items for the next run.
+
+**For William:** a test only; nothing to see on screen. Ctrl+Z has nothing to undo; no board edit.
 
 ## Morning maintenance 2026-10-03
 

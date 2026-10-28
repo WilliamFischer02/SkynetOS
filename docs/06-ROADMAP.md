@@ -4,6 +4,188 @@ Each milestone ends with something you can actually open and use. No milestone i
 
 ---
 
+### 2026-10-26 note (away-mode pass, PLAN level; sixth confirmation of zero board drift since 2026-10-20, but real off-board progress found)
+
+No mail on `to-hands`. `board_list` unchanged (same eight boards). `history` empty. Every phantom
+slate byte-identical to the 2026-10-25 picture: `root` 4/4, `financeos` 3/4, `scheduleos` 0/4,
+`minecraftos` 4/4, `phantomos`/`gameos`/`storyos`/`deductionos` as before. Bash denied this pass
+again; reads used `Read`/`Glob`/MCP tools. `SkynetOS/handoff.md`'s newest block (the 2026-10-25
+18:45 SCHED-WEEK run) was already folded into the 2026-10-25 note above — nothing new there.
+
+**Real progress found off the board, in three repos the roadmap had marked unverified, closed this
+pass:**
+
+- **DollyGrip** — `docs/TESTING.md`, `docs/DECISIONS.md` and `docs/VERIFIED_API.md` now exist
+  (none were found on 2026-10-20). M0 is confirmed done (an agent run on 2026-10-20 passed 5 of 6
+  manual checks; the sixth, Mod Menu by eye, is explicitly left for a human). M1 is not yet
+  confirmed — three of the four `docs/DECISIONS.md` entries are 26.2-API groundwork recorded as
+  "applies from M1," not evidence M1 itself is built. `codex/projects/dollygrip.md` rewritten with
+  a concrete M1 Next item.
+- **LociBook** — `CHANGELOG.md` now exists (did not on 2026-09-11) and shows a real, actively
+  iterated build through **v0.3.0**: free 16-angle rotation, a page-flutter animation, a
+  block-entity renderer, and an Axiom compatibility fix on top of 0.2.0's full reader/settings/
+  authorship feature set. This is a substantially built mod, not the "unverified" state the codex
+  had carried for six weeks. `codex/projects/locibook.md` rewritten; still no CLAUDE.md/handoff.md,
+  so there is no session-to-session build record, named as the one real gap left.
+- **WochIt** — confirmed real and substantial, not just a scaffold: `host/` has ~29 TypeScript
+  modules covering every feature its `README.md` claims (VLC bridge, JIT HLS transcoding, a
+  server-authoritative WebSocket room, Tailscale publishing, a GIF proxy), `web/` has ~35
+  components (chat, reactions, quality/subtitles menus, a full host console). `README.md`'s own
+  "Status: under construction" line undersells it. `codex/projects/wochit.md` rewritten.
+
+**Standing blocker, now five repos deep:** `root`'s 4/4 phantom ceiling (`ph_bitrunners`,
+`ph_stackassembler`, `ph_story_universe_map`, `ph_jarvis_voice`, unticked since 2026-09-16/25) now
+blocks board presence for BitRunners, StackAssembler, Story Universe Map, AboveThem, and now WochIt
+too — the fifth active repo with confirmed state and nowhere to put a node. Flagged for William
+again, same as 2026-10-23/21: free a root slot, or stand up a GoobOS/LifeOS-style room so these
+stop competing for the same four coverage slots.
+
+**2026-10-26, William present:** StackAssembler is retired on his word ("gone, I no longer want to
+develop it"); its repo is off the disk. `ph_stackassembler` withdrawn from root by direct JSON edit
+(app closed, validate green), so root is now **3/4** and the standing ask above is answered by one
+slot. The list of repos waiting for board presence drops to BitRunners, Story Universe Map,
+AboveThem and WochIt. See docs/DECISIONS.md, same date.
+
+**Standing advice unchanged:** this is the sixth pass in a row to find zero board drift (mail,
+`board_list`, `history` all quiet), but the second in a row to find real value by re-reading repos
+the codex had marked "unverified" rather than re-checking the board itself — worth making that the
+default shape of a quiet away-mode pass: sweep the codex's own "unverified"/"inferred" flags against
+the repos they describe, not just the board.
+
+### 2026-10-25 note (away-mode pass, PLAN level; two days after the 2026-10-23 note below)
+
+No mail on `to-hands`. `board_list` unchanged (same eight boards). `history` empty. Every phantom
+slate byte-identical to the 2026-10-23 picture: `root` 4/4, `financeos` 3/4, `scheduleos` 0/4,
+`minecraftos` 4/4, `phantomos`/`gameos`/`storyos`/`deductionos` as before. Bash denied this pass;
+reads used `Read`/`Glob`/MCP tools. **Zero board drift — the fourth confirmation in a row since
+2026-10-20.** AboveThem's own `docs/handoff.md` is still at session 5 (2026-10-22); no new session.
+
+**Real drift found off the board, in `SkynetOS/handoff.md` itself, not yet in the project files:**
+two scheduled runs fired while William was away and both landed facts that belonged in
+`codex/projects/financeos.md` and `scheduleos.md` but weren't there yet — written in now:
+
+- **FinanceOS's first Sunday review ran today (2026-10-25 18:00, T1).** `npm run finance:report`
+  came back NO LEDGER YET: `private/finance/ledger.json` has never been created, so the review can
+  only write a one-line no-data result every week until it exists. This was already the top M11
+  item since 2026-09-23; today's run is the first real confirmation it's still the single blocker.
+  Added to `financeos.md` Blockers + a new one-item Next section.
+- **ScheduleOS's `schedule/pbs-shifts.json` landmine has now recurred four times** (2026-10-17,
+  10-21, 10-23, and the 10-24 06:45 SCHED-BUILD run): the file keeps getting overwritten down to
+  just a Discord webhook URL, losing its shift rows, which is why the week view and calendar panes
+  read empty against a live Reclaim calendar that still has real shifts. Every loss is recoverable
+  from `schedule/changes.log.jsonl` by event id — nothing is actually gone — but nobody's fixed the
+  webhook yet. Added to `scheduleos.md` Blockers + a new top Next item. Also noted there: no EARN
+  habit exists, so the daily card keeps defaulting to an onboarding placeholder line instead of a
+  real earn-tracking one.
+
+**Not touched, flagged instead:** `codex/projects/skynetos.md` (SkynetOS's own project file, as
+opposed to this roadmap) is still dated 2026-09-27 and describes a "Next" queue that predates the
+mail-sort/CI work (2026-10-17) and everything after it — its own frontmatter already says it's
+lagging. docs/06-ROADMAP.md above this note is current and is the one to trust; `skynetos.md` wants
+a real rewrite pass, not a one-line patch, so it's named here rather than half-fixed.
+
+**Standing advice unchanged:** no new signal arrived through mail, phantoms, or `board_list` this
+pass — only through a handoff file that hadn't been read into its project files yet. Worth widening
+the standing check once more: an away-mode pass should skim `SkynetOS/handoff.md` itself for new
+scheduled-run blocks, not just the per-project handoffs, since that's where William-away automation
+writes first.
+
+### 2026-10-23 note (away-mode pass, PLAN level; two days after the 2026-10-21 note below)
+
+No mail on `to-hands`. `board_list` unchanged (same eight boards). `history` empty — no edits to
+undo since the last pass.
+
+**Real drift found and closed:** `AboveThem` had moved from session 3 (2026-10-21 evening, the state
+`codex/projects/abovethem.md` still described) to **session 5** (2026-10-22 overnight) — a seven-agent
+parallel build across chat NLU, the suspicion engine, UI, maps, research, and Rust, merged to `main`
+and pushed. Tests went from 53 Vitest/28 Rust to 585 Vitest/52 Rust+1 ignored. Per its own handoff,
+**none of session 5 has been seen in a live game yet.** Project file rewritten to match. Full detail:
+`codex/journal/away-2026-10-23-1709.md`.
+
+**No new phantoms.** Coverage-gap sweep of `C:/dev` found nothing uncatalogued. Phantom slates:
+`root` 4/4 (unchanged since 2026-09-16/25), `financeos` 3/4 (unchanged since 2026-09-26),
+`scheduleos`/`phantomos` both 0/4 but already judged by prior passes as having nothing that deserves
+a slot, `minecraftos` 4/4 (DollyGrip filled the last slot 2026-10-20, confirmed not new).
+
+**Standing item, now sharper:** `root`'s 4/4 ceiling blocks board presence for four real, active
+repos — BitRunners, StackAssembler, Story Universe Map, and now AboveThem too (its own session-5
+work has no board node to hang off). Flagged for William again: free a root slot or stand up the
+GoobOS room.
+
+### 2026-10-21 note (away-mode pass, PLAN level; one day after the 2026-10-20 note below)
+
+No mail on `to-hands`. `board_list` unchanged (still the same eight boards `phantomos` brought to
+2026-10-20). Bash was denied this pass too; reads used `Read`/`Glob`/MCP tools.
+
+**One more real, previously-uncatalogued repo found**, same pattern as the three found yesterday:
+**`AboveThem`** (`C:/dev/AboveThem`) — a Tauri 2 Among Us companion app (overlay, Crewmate
+deduction engine, Impostor lie ledger, chat OCR translation), Goob Entertainment Co. Phases 0–3
+core-live, session 3 dated **today** (2026-10-21 evening) per its own `docs/handoff.md` — this is
+an actively-worked repo, not a dormant one. `root` is still 4/4, same four phantoms unticked since
+2026-09-16/25 (`ph_bitrunners`, `ph_stackassembler`, `ph_story_universe_map`, `ph_jarvis_voice`) —
+no phantom proposed, same judgment call as FormatPhantom/WochIt before it. Written up:
+`codex/projects/abovethem.md`.
+
+Notably, AboveThem is a fourth repo (after BitRunners, StackAssembler, Story Universe Map) waiting
+on the GoobOS room that has never been built — `root`'s 4/4 ceiling is now blocking visibility into
+four separate active repos, not three. Worth flagging to William directly: either free a root slot
+or stand up the GoobOS room.
+
+Not re-swept beyond this: `financeos`/`scheduleos`/`minecraftos`/`gameos`/`storyos`/`deductionos`
+phantom counts not re-checked this pass — the 2026-10-20 note confirmed them and nothing suggested
+drift there specifically; the coverage-gap sweep that found AboveThem was general, not room-scoped.
+
+### 2026-10-20 note (away-mode pass, PLAN level; the first real drift since the 2026-10-17 note below, confirming its own prediction)
+
+Bash denied this pass (don't-ask mode); every read used `Read`/`Glob`/MCP tools instead. No mail on
+`to-hands`. The 2026-10-17 note said the next pass should wait for mail, a phantom tick/dismiss, or a
+changed handoff file — none of those fired, but `board_list` itself changed: an eighth board,
+**`phantomos`**, now exists alongside the usual seven. That is exactly the kind of signal the
+2026-10-17 note was watching for, just arriving through the board instead of a handoff file.
+
+`phantomos` turned out to be the AE-Phantom_Suite room, now fully built (header, suite note, director
+note, S1 repo, S2 plugins explorer, J1 GitHub link, F1–F7 docs, S3/S4 folders) with **zero open
+phantoms** — so `codex/projects/ae-phantom-suite.md` needed only a one-line update, not a rewrite.
+
+**Three more real, previously-uncatalogued repos found** under `C:/dev` this pass (same pattern
+`codex/index.md`'s own header warns about, now its sixth occurrence):
+
+- **`DollyGrip`** (`C:/dev/DollyGrip`) — a real, fully speced Fabric 26.2 mod, MCCamOp's sibling: an
+  offline production camera (rig, keyframes, parametric moves, frame-locked PNG export). `SPEC.md`
+  and `CLAUDE.md` both complete, a `core/` package with a passing JUnit test, a built
+  `dollygrip-0.1.0+mc26.2.jar`. No `docs/DECISIONS.md`/`TESTING.md` found, so the actual milestone
+  reached (SPEC.md §12) is unconfirmed. `minecraftos` had exactly one open phantom slot (3/4:
+  `ph_latest_log`, `ph_crash_reports`, `ph_goobtropolis_configs`) — used it: proposed `ph_dollygrip`
+  (store.repo, wired `reads` to the existing MCCamOp repo node). Written up:
+  `codex/projects/dollygrip.md`.
+- **`FormatPhantom`** (`C:/dev/FormatPhantom`) — a real, live SaaS: a 45-tool privacy-first browser
+  file-converter at formatphantom.com, Cloudflare Pages + Supabase + Lemon Squeezy billing, its own
+  scheduled agent fleet and 70+ dated daily-scan reports back to 2026-05. Its own
+  `reports/2026-10-10-state-of-project.md` (a prior lead-dev session's reboot audit) found `main`
+  frozen 49 days with 37 unmerged report-only PRs, a visitor-reachable HIGH CVE in `pdfjs-dist` open
+  ~8 weeks, and AdSense still rejecting the site for "low value content" pending a content push
+  already queued in its own backlog. **No phantom proposed** — `root` is still 4/4 (the same four
+  phantoms unticked since 2026-09-16/25), same judgment call MagicTrainer's entry made before it:
+  flagged for William's decision whether this bumps one of the three coverage-only root phantoms.
+  Written up: `codex/projects/formatphantom.md`.
+- **`WochIt`** (`C:/dev/WochIt`) — a pnpm monorepo (`host/`, `shared/`, root) confirming the
+  watch-together app already described in standing memory as of 2026-10-18 evening; no top-level
+  README/handoff/CLAUDE.md was found this pass to verify current state against memory, so the write-up
+  flags that detail as inferred rather than re-confirmed. No phantom proposed — `root` still 4/4, and
+  state isn't solid enough yet to recommend a specific node. Written up: `codex/projects/wochit.md`.
+
+Also checked and found uninteresting for a codex entry: `ci-runners` (infra scripts, matches the
+2026-10-17 note's mention of CI now running on William's own hardware — not a project, infra for
+SkynetOS/every repo's CI), `jarvis-editor` and `jarvis-mail` (SkynetOS's own tooling, not separately
+tracked), `obsidian-dev-vault` (the dev harness for `story-universe-map`, already noted as such by that
+project's existing phantom).
+
+**Confirms the 2026-10-17 standing advice rather than overturning it:** three real days passed with
+no mail and no phantom action, and the next real signal came through `board_list` drift, not a timer.
+Suggest widening that advice slightly: future away-mode passes should check `board_list` for new
+rooms, not just mail and handoff files, since a new room (built outside SkynetOS, as `phantomos` was)
+is as real a signal as a changed handoff.
+
 ### 2026-10-17 note (away-mode pass, PLAN level; breaks the zero-drift streak the 2026-10-16 note below describes)
 
 No mail on `to-hands`. This is the pass the 2026-10-16 note said should wait for: `SkynetOS/handoff.md`

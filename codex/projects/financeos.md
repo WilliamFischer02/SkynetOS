@@ -46,3 +46,15 @@ a shell string, docs/07).
   2026-09-26 (away pass); the prior "unknown, asked at the hardship call" line was stale.
 - Ross Dress for Less ended (2026-09-25): PBS is the only base income.
 - Whether SimpleFIN covers his institutions: verify in Phase 4; log in `aggregator-options.md`.
+- **`private/finance/ledger.json` has never been created.** First firing of the Sunday review task
+  (T1, 2026-10-25 18:00, William away) ran `npm run finance:report` and got NO LEDGER YET (exit 2):
+  `report.json` is all zeros with one `no-data` alert; `imports/` is empty. Wrote
+  `private/finance/reviews/2026-10-25.md` saying so (gitignored). Until this is filled, every Sunday
+  review writes the same one-line no-data result — per SkynetOS `handoff.md` 2026-10-25 block.
+
+## Next
+
+1. **William: copy `ledger.template.json` to `ledger.json` and fill `accounts[]`** from the bank and
+   card apps (~20 min), then rerun `npm run finance:report`. Blocks every weekly review from saying
+   anything real. Repeated unticked since M11 named it 2026-09-23; now confirmed still open by a real
+   scheduled run on 2026-10-25.

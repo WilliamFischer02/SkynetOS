@@ -71,9 +71,11 @@ describe('types.ts matches board.schema.json', () => {
 });
 
 describe('seeded board data', () => {
-  it('found the seven rooms', () => {
-    expect(boardFiles.length).toBe(7);
-    expect(boards.map((b) => b.id).sort()).toEqual(['deductionos', 'financeos', 'gameos', 'minecraftos', 'root', 'scheduleos', 'storyos']);
+  it('found the eight rooms', () => {
+    // root plus seven rooms. phantomos (D7, the AE Phantom Suite room) was added 2026-10-20; this
+    // pin was still at seven, so verify stayed red for six days before the 2026-10-26 maintenance run.
+    expect(boardFiles.length).toBe(8);
+    expect(boards.map((b) => b.id).sort()).toEqual(['deductionos', 'financeos', 'gameos', 'minecraftos', 'phantomos', 'root', 'scheduleos', 'storyos']);
   });
 
   it('uses only declared node kinds', () => {

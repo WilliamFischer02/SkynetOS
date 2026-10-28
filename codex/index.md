@@ -49,10 +49,13 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/locibook.md` — Placeable writable mind-palace books, Fabric 26.2. ACTIVE, build state unverified (no CLAUDE.md/handoff.md).
 - `projects/just1nudge.md` — Off-grid block/item nudging via display entities. ACTIVE, v0.2.0.
 - `projects/mccamop.md` — Client-side cinematic camera hotkey mod. ACTIVE, v1 shipped.
+- `projects/dollygrip.md` — MCCamOp's sibling: offline production-camera mod, frame-locked export.
+  ACTIVE, build milestone unverified. WRITTEN 2026-10-20: real repo found with zero prior codex/board
+  presence; phantom proposed on minecraftos's one open slot.
 
 ## Projects — GoobOS (non-Minecraft Goob Entertainment Co. projects)
 - `projects/bitrunners.md` — ASCII multiplayer web MMO, live prod deploys. ACTIVE, PR unmerged since 2026-07-12.
-- `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. ACTIVE, pre-alpha.
+- `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. RETIRED 2026-10-26 on William's word; repo gone from disk, GitHub repo still up. Do not route sessions to it.
 - `projects/wfp-site-ops.md` — Webflow site ops for goobscott-productions.com. ACTIVE.
 - `projects/story-universe-map.md` — Obsidian plugin: fictional-universe relationship map. ACTIVE.
 - `projects/magictrainer.md` — MTG deck visualizer/trainer, Tauri 2 + React. v1.0.0 BUILT AND
@@ -60,7 +63,15 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
   prior codex/board presence.
 - `projects/ae-phantom-suite.md` — After Effects CEP plugin suite, multi-agent studio (Director +
   per-plugin engineers + researcher), two daily Claude routines already running. ACTIVE. WRITTEN
-  2026-10-17: a real, large repo found with zero prior codex/board presence.
+  2026-10-17: a real, large repo found with zero prior codex/board presence. Now has its own room,
+  `phantomos`, found built 2026-10-20 with zero open phantoms.
+- `projects/formatphantom.md` — Privacy-first browser file-conversion SaaS, 45 tools, its own
+  scheduled agent fleet. ACTIVE, mid-reboot after a 49-day frozen `main`. WRITTEN 2026-10-20: a real,
+  large, long-running repo found with zero prior codex/board presence; no root phantom slot open.
+- `projects/abovethem.md` — Among Us companion app: overlay, Crewmate/Impostor reasoning, chat
+  translation, screen capture + OCR only. ACTIVE, Phases 0–3 core live, session 3 (2026-10-21).
+  WRITTEN 2026-10-21: a real repo found with zero prior codex/board presence; no root phantom slot
+  open.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -80,6 +91,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/rent-run.md` — Income recovery: 216-option research, the Rent Run artifact, the ledger. ACTIVE.
 - `projects/financeos.md` — FinanceOS room (built 2026-09-23): live balances (SimpleFIN), INCOME LAUNCHER, CC-FINANCE. ACTIVE — launcher and feed pending (Phases 3–4).
 - `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room built, timezone fixed, Reclaim authenticated, real PBS shifts and prep chains live on the calendar (2026-09-30); habits.json rewrite from his real set still open.
+
+## Projects — Personal tooling
+- `projects/wochit.md` — Watch-together app for William + girlfriend (iPhone), host/shared/client
+  pnpm monorepo. ACTIVE per standing memory, state unverified this pass. WRITTEN 2026-10-20: real
+  repo found with zero prior codex/board presence; no root phantom slot open.
 
 ## Projects — Streaming
 - `projects/streaming.md` — Streamer.bot, OBS, the stream-tools relay; Discord, Twitch bio, VOD pipeline queued. WRITTEN 2026-09-30.

@@ -1469,7 +1469,7 @@
         "y": 30
       },
       "footprint": {
-        "w": 24,
+        "w": 26,
         "h": 23
       }
     },
@@ -1481,8 +1481,8 @@
       "engraving": "PHANTOMOS",
       "boardFile": "phantomos/room.board.json",
       "pos": {
-        "x": 146,
-        "y": 33
+        "x": 147,
+        "y": 37
       },
       "footprint": {
         "w": 9,
@@ -1506,8 +1506,8 @@
       "kind": "agent.code",
       "name": "PHANTOM DIRECTOR",
       "pos": {
-        "x": 158,
-        "y": 36
+        "x": 159,
+        "y": 34
       },
       "footprint": {
         "w": 8,
@@ -1579,6 +1579,23 @@
       "footprint": {
         "w": 13,
         "h": 18
+      }
+    },
+    {
+      "id": "bg_backdrop_9",
+      "kind": "decor.image",
+      "name": "BACKDROP",
+      "pos": {
+        "x": 145,
+        "y": 31
+      },
+      "showName": false,
+      "showDesignator": false,
+      "provisional": true,
+      "image": "%SKYNET%/assets/sprites/vibrant-red-and-yellow-light-beams-free-video.jpg",
+      "footprint": {
+        "w": 24,
+        "h": 21
       }
     }
   ],
@@ -2269,22 +2286,6 @@
       "fields": {
         "path": "C:/dev/BitRunners",
         "remote": "https://github.com/WilliamFischer02/BitRunners",
-        "openWith": "terminal"
-      }
-    },
-    {
-      "id": "ph_stackassembler",
-      "kind": "store.repo",
-      "name": "StackAssembler",
-      "description": "Single-player MTG desktop simulator, three-agent studio, pre-alpha. Same GoobOS coverage gap as BitRunners — no room exists to hold it, so this gives it a real node on root instead.",
-      "pos": {
-        "x": 165,
-        "y": 75
-      },
-      "proposedBy": "U3 JARVIS-PRIME (away)",
-      "proposedAt": "2026-09-16T03:08:23.178Z",
-      "fields": {
-        "path": "C:/dev/StackAssembler",
         "openWith": "terminal"
       }
     },

@@ -5571,3 +5571,64 @@ command's stderr into an ErrorRecord, and backoff writes rate-limit notices to s
 is now cast to a string before `Out-File`, and the file is written UTF-8 rather than UTF-16 so
 it can be read with ordinary tools. Noise that looks like a fault is worse than no logging — it
 teaches you to ignore the one time it is real.
+
+## 2026-10-23 — The WSL runners need a watchdog, not a logon task
+
+The 17 October "Start WSL CI runner" task started Ubuntu once at logon and never looked again.
+After `wsl --shutdown` on the 20th (the drive move) the three Linux runners sat offline until a
+terminal happened to open: FormatPhantom run 39635079790 queued 4 h 22 min on the 21st, and the
+run after it was cancelled while waiting. GitHub's "no runner picked this up" notifications were
+that, not failures; the red runs on the same days were real test failures on `main`.
+
+`C:\dev\ci-runners\register-keepalive-task.ps1` now registers **"CI runners keepalive"**: a
+per-user task, no elevation, one minute after logon and every 5 minutes after. It starts the
+distro and any stopped `actions.runner.*` unit through `wsl --exec` (a `--` command line is
+re-joined by the login shell and breaks on a for-loop — found the first run), holds the distro
+open with a hidden `sleep infinity` tagged `wsl-ci-keepalive`, and logs one line to
+`%LOCALAPPDATA%\ci-runners\keepalive.log`. Verified 18:04: `units: active active active |
+holder: ok | windows services: 3 running`, all six runners online at GitHub.
+
+Unchanged and worth repeating: WSL cannot run as SYSTEM, so CI exists only after William logs
+in. A 14:23 holder process launched by the scheduler shows the 17 October task still fires at
+logon even though an unelevated shell cannot list it; the two coexist harmlessly.
+
+## 2026-10-26 — Morning maintenance: verify was red for six days and nobody noticed
+
+The MORNING MAINTENANCE run (08:00 slot, caught up at 13:20 MDT, unattended) found
+`npm run verify` red on arrival: `test/board-types.test.ts` "found the seven rooms" expected 7
+board files and 8 exist. The eighth is `board/phantomos/room.board.json`, the AE Phantom Suite
+room, committed by William on 2026-10-20 (`53da08b`) and wired from root as D7. It validates
+against the schema; only the test's pinned list was stale.
+
+**Decision:** update the pin to eight rooms with `phantomos` in the list, and rename the test.
+Not loosened: the test still names every room and still fails on a ninth. Verify green after:
+154 files, 2,393 tests.
+
+**Why it sat red for six days:** the away-mode PLAN passes (2026-10-20 through 10-26) may not
+run Bash, so none of them ran verify, and the three scheduled runs since (wordcount, finance,
+schedule) are briefed to leave the code alone. The morning task is the only standing run that
+verifies, and it had not fired since 2026-10-03. Per `codex/briefs/morning-maintenance.md` § 1, a
+red verify is the whole of the day's work, so nothing else was touched.
+
+## 2026-10-26 — StackAssembler retired on William's word
+
+William, in session: "Stack assembler is gone, I no longer want to develop it, update device wide
+memory banks which may care." The repo is already off the disk (neither `C:/dev` nor `Z:/dev`);
+`github.com/Goob-Entertainment-Co/StackAssembler` still exists, unarchived, last push 2026-10-17.
+
+**Decision:** mark, never delete. `codex/projects/stackassembler.md` keeps its whole history under
+a RETIRED status line; `codex/index.md` says RETIRED and "do not route sessions to it";
+`codex/projects/magictrainer.md`'s "that's StackAssembler's lane" boundary is dated; Prime's own
+memory bank gained `stackassembler-retired.md`. The root phantom `ph_stackassembler` (Prime's own
+proposal of 2026-09-16, path now unresolvable) was withdrawn, which frees one of root's four
+phantom slots, the standing ask of every away pass since 2026-10-20.
+
+**How the phantom went:** SkynetOS was not running, so `phantom_withdraw` could not reach the
+bus. The entry was removed from `board/root.board.json` directly, with `npm run validate:board`
+green afterwards (78 nodes, 42 traces, 3 phantoms). No snapshot was taken and Ctrl+Z will not
+undo it; `git checkout board/root.board.json` will. Direct JSON edits stay the exception for the
+case where the app is closed and the change is the removal of the agent's own suggestion.
+
+**Not done:** archiving the GitHub repo, which is outward-facing and his click; touching the six
+other codex files that mention StackAssembler only as a past example in the "GoobOS repos with no
+room" lists, which are dated remarks and still true of their dates.

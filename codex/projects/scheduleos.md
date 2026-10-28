@@ -81,6 +81,17 @@ catch attention at a glance.
 
 - How the PBS schedule arrives: unknown. Asked in Phase 2.
 - Ross: ended (William, 2026-09-25). The `Work (WorkJam)` calendar is to be hidden or removed by him, and no WorkJam workflow survives.
+- **`schedule/pbs-shifts.json` keeps losing its shift rows.** First seen 2026-10-21 (SCHED-NUDGE):
+  the file had been overwritten to hold only a Discord webhook URL, the 8 shift rows from 10-17
+  gone. Seen again, untouched, on 2026-10-23 and in the 2026-10-24 06:45 SCHED-BUILD run (third time
+  in a row) — this is why the week view and both calendar panes read empty while the live Reclaim
+  calendar still has real shifts and prep chains. Gitignored, so no git history, but every shift is
+  recoverable from `schedule/changes.log.jsonl` by event id. William's hands: restore the rows and
+  rotate the webhook — per SkynetOS `handoff.md` 2026-10-21/23/24 blocks.
+- **No EARN habit exists yet**, so the SCHED-BUILD/SCHED-NUDGE routines keep defaulting to an
+  onboarding placeholder (`💰 LOG IT` / the `w3-pick` task) instead of a real earn-tracking line.
+  Ties into item 1 below (`habits.json` rewrite) and to William's DataAnnotation/Prolific
+  applications once either is accepted.
 
 ## 2026-09-30 — the first real schedule (U3, William present)
 
@@ -114,6 +125,9 @@ catch attention at a glance.
 
 ## Next
 
+0. **Restore `schedule/pbs-shifts.json`'s shift rows** from `schedule/changes.log.jsonl` and rotate
+   the Discord webhook (William's hands) — the recurring landmine above, now hit on four separate
+   scheduled runs (10-17, 10-21, 10-23, 10-24) with no fix yet.
 1. **Rewrite `private/schedule/reclaim/habits.json`** from William's real 16-habit set (WRITE, ALBUM,
    EDIT, BUILD, SKYNET, CHANNEL, READ book, READ Comic, MOVIE, WALK, EXERCISE, MEDITATE, LUNCH,
    DINNER, PAY CARD, UPDATE SYSTEMS) and his own Personal/Working hours — the file still holds the

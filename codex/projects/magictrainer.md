@@ -9,8 +9,8 @@ owner-node: none yet (no board presence anywhere)
 **Identity.** A Windows desktop app (Tauri 2 + React 19 + TS) that reads William's real MTG
 collection/decks, detects the strategies and combos inside them, and animates the winning line as
 card trajectories across a game board against scripted opponent tracks — a visualizer/trainer, not
-a rules engine or simulator (that's StackAssembler's lane; the boundary is explicit in
-`docs/PROJECT_BRIEF.md`). Owner: William Fischer, Goob Entertainment Co. Repo: `C:/dev/MagicTrainer`
+a rules engine or simulator (that was StackAssembler's lane until William retired it on 2026-10-26;
+the boundary is still explicit in `docs/PROJECT_BRIEF.md`). Owner: William Fischer, Goob Entertainment Co. Repo: `C:/dev/MagicTrainer`
 (github.com/WilliamFischer02/MagicTrainer). Started 2026-09-24.
 
 **Found this pass.** Not in `codex/index.md` or `codex/projects/` before now — a real,

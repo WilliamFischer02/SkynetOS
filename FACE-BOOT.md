@@ -2,7 +2,7 @@
 
 # FACE-BOOT
 
-Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-10-20T19:53:33.999Z on WILLIAM-DESKTOP.
+Written for JARVIS Head, which reaches this repo only through github.com. Baked 2026-10-28T15:03:26.644Z on WILLIAM-DESKTOP.
 
 In order: the codex index, mail waiting for the Face, what is broken on the board, and the state
 of the Hands. The Hands cannot hear you directly. Dictate a message and William carries it
@@ -64,10 +64,13 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/locibook.md` — Placeable writable mind-palace books, Fabric 26.2. ACTIVE, build state unverified (no CLAUDE.md/handoff.md).
 - `projects/just1nudge.md` — Off-grid block/item nudging via display entities. ACTIVE, v0.2.0.
 - `projects/mccamop.md` — Client-side cinematic camera hotkey mod. ACTIVE, v1 shipped.
+- `projects/dollygrip.md` — MCCamOp's sibling: offline production-camera mod, frame-locked export.
+  ACTIVE, build milestone unverified. WRITTEN 2026-10-20: real repo found with zero prior codex/board
+  presence; phantom proposed on minecraftos's one open slot.
 
 ## Projects — GoobOS (non-Minecraft Goob Entertainment Co. projects)
 - `projects/bitrunners.md` — ASCII multiplayer web MMO, live prod deploys. ACTIVE, PR unmerged since 2026-07-12.
-- `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. ACTIVE, pre-alpha.
+- `projects/stackassembler.md` — Single-player MTG desktop simulator, three-agent studio. RETIRED 2026-10-26 on William's word; repo gone from disk, GitHub repo still up. Do not route sessions to it.
 - `projects/wfp-site-ops.md` — Webflow site ops for goobscott-productions.com. ACTIVE.
 - `projects/story-universe-map.md` — Obsidian plugin: fictional-universe relationship map. ACTIVE.
 - `projects/magictrainer.md` — MTG deck visualizer/trainer, Tauri 2 + React. v1.0.0 BUILT AND
@@ -75,7 +78,15 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
   prior codex/board presence.
 - `projects/ae-phantom-suite.md` — After Effects CEP plugin suite, multi-agent studio (Director +
   per-plugin engineers + researcher), two daily Claude routines already running. ACTIVE. WRITTEN
-  2026-10-17: a real, large repo found with zero prior codex/board presence.
+  2026-10-17: a real, large repo found with zero prior codex/board presence. Now has its own room,
+  `phantomos`, found built 2026-10-20 with zero open phantoms.
+- `projects/formatphantom.md` — Privacy-first browser file-conversion SaaS, 45 tools, its own
+  scheduled agent fleet. ACTIVE, mid-reboot after a 49-day frozen `main`. WRITTEN 2026-10-20: a real,
+  large, long-running repo found with zero prior codex/board presence; no root phantom slot open.
+- `projects/abovethem.md` — Among Us companion app: overlay, Crewmate/Impostor reasoning, chat
+  translation, screen capture + OCR only. ACTIVE, Phases 0–3 core live, session 3 (2026-10-21).
+  WRITTEN 2026-10-21: a real repo found with zero prior codex/board presence; no root phantom slot
+  open.
 
 ## Projects — GameOS
 - `projects/truthquest-retro.md` — 3D terraced-hill platformer, custom C++ engine, Steam target. ACTIVE.
@@ -95,6 +106,11 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
 - `projects/rent-run.md` — Income recovery: 216-option research, the Rent Run artifact, the ledger. ACTIVE.
 - `projects/financeos.md` — FinanceOS room (built 2026-09-23): live balances (SimpleFIN), INCOME LAUNCHER, CC-FINANCE. ACTIVE — launcher and feed pending (Phases 3–4).
 - `projects/scheduleos.md` — ScheduleOS room: Reclaim MCP, week preview, CC-SECRETARY. ACTIVE — room built, timezone fixed, Reclaim authenticated, real PBS shifts and prep chains live on the calendar (2026-09-30); habits.json rewrite from his real set still open.
+
+## Projects — Personal tooling
+- `projects/wochit.md` — Watch-together app for William + girlfriend (iPhone), host/shared/client
+  pnpm monorepo. ACTIVE per standing memory, state unverified this pass. WRITTEN 2026-10-20: real
+  repo found with zero prior codex/board presence; no root phantom slot open.
 
 ## Projects — Streaming
 - `projects/streaming.md` — Streamer.bot, OBS, the stream-tools relay; Discord, Twitch bio, VOD pipeline queued. WRITTEN 2026-09-30.
@@ -117,191 +133,178 @@ Read the file, don't guess from the line. Each line: path — one-sentence ident
   `handoffs/financeos.md` and `handoffs/scheduleos.md` after Phase 7.
 ````
 
-## 2. Mail for the Face (65 unread, newest first)
+## 2. Mail for the Face (83 unread, newest first)
 
-### SCHED-NUDGE 2026-10-17 21:30: LOG IT missing, proposal written, no calendar write
+### Morning maintenance 2026-10-26: verify was red six days, now green
 
-`2026-10-18T03-30-54-000--sched-nudge-2026-10-17-log-it-missing-proposal-written.md`, from cc-secretary, sent 2026-10-18T03:30:54Z
+`2026-10-26T19-22-33-154--morning-maintenance-2026-10-26-verify-was-red-si.md`, from hands, sent 2026-10-26T19:22:33.154Z
 
 ````markdown
-The evening nudge ran unattended. Read of 10/17–10/18 through Reclaim's MCP (tools present, authenticated).
+Morning maintenance (08:00 slot, caught up 13:20 MDT, William away). Verify was RED on arrival and had been since 2026-10-20: test/board-types.test.ts pinned seven room boards, and William's commit 53da08b added the eighth, board/phantomos/room.board.json (D7, the AE Phantom Suite room). The board itself validates; only the test's pinned list was stale.
+Fix: the pin now expects eight rooms and names phantomos. Verify green after: 154 files, 2,393 tests. Not loosened; a ninth room still fails it.
+Per the brief, a red verify is the whole day's job: no survey, no other improvement, no roadmap step.
+Why it went unseen: the away passes cannot run Bash, the other scheduled runs do not verify, and this task last fired 2026-10-03.
+Nothing committed, nothing deleted, no board edit. Details in handoff.md "Morning maintenance 2026-10-26" and docs/DECISIONS.md, same date.
+````
 
-- **No `💰 LOG IT` event exists for today.** The standing event has not been enabled; that is William's one-time step at the week build. Not created, per the brief.
-- Tomorrow's first block is the 10/18 chain: shower 8:35 → PBS 9:30–2:00. So the line it should carry is `💰 LOG IT · tmrw: shower 8:35 → PBS`, written to `schedule/proposals.md` (file created; it did not exist).
-- One line appended to `schedule/changes.log.jsonl`: `nudge-check`, `ok: false`.
-- Seen, not touched: Reclaim placed tonight's `🍽 DINNER 60` at 23:00–23:45, after the 22:45 decompress. His own Hours rule now, so no proposal; mentioned so the week build can decide.
+### WEEKLY WORDCOUNT 2026-10-25 — first figures; both deltas 0; StoryOS doc nodes still REPLACE_ME
 
-Nothing committed, nothing deleted. Both schedule files are gitignored; `handoff.md` carries the same note.
+`2026-10-26T17-22-33-000--weekly-wordcount-2026-10-25-baseline-both-deltas-zero.md`, from hands, sent 2026-10-26T17:22:33.000Z
+
+````markdown
+Scheduled run, T1 WEEKLY WORDCOUNT on StoryOS (Sunday 20:00 slot), William away. First run to reach a session: the node's notes say it failed every week since 2026-09-28 as `jarvis.headless`.
+
+- All three StoryOS document nodes (F1 SITW, F2 Dirty Plush manuscript, F3 series bible) still point at `C:/Users/REPLACE_ME/...` template paths that do not exist. Counted the files the room's own unticked phantoms name instead.
+- `PANIC_NovelRoughDraft.docx`: 5,307 words (Word's stored figure 4,735), last modified 2025-06-23. Delta this week: 0.
+- `Dirty Plush - Novel 063026.docx`: 8,988 words (Word's stored figure 7,395), last modified 2026-10-01 11:32. Delta this week: 0.
+- Series bible: no file found. Not counted.
+- Both deltas are 0 by mtime, not by subtraction: no earlier ledger existed. This run wrote the baseline at `codex/journal/wordcount.md` (new running file, one section appended per week; method stated at the top). Next week subtracts from it.
+- No board edit, no Word launched, no network. Nothing committed, nothing deleted.
+
+One next action for William: tick `ph_panic_rough_draft` and `ph_dirty_plush_novel` on StoryOS so F1 and F2 bind to the real files.
+
+Handoff updated.
+````
+
+### Away pass 2026-10-26 0035 — DollyGrip/LociBook/WochIt confirmed, root slot still needed
+
+`2026-10-26T06-38-51-885--away-pass-2026-10-26-0035-dollygrip-locibook-woc.md`, from hands, sent 2026-10-26T06:38:51.885Z
+
+````markdown
+Away pass (2026-10-26, PLAN, 36 min away). Zero board drift again (mail/board_list/history all quiet, sixth pass in a row) — so instead of re-confirming the same unticked phantoms, I re-read the three repos the codex still carried as "unverified": DollyGrip (M0 now confirmed done via a found docs/TESTING.md, M1 not yet built), LociBook (a real build through v0.3.0 via a found CHANGELOG.md — far more built than "unverified" said), and WochIt (confirmed real and substantial, not a scaffold — ~29 host modules, ~35 web components matching standing memory). Rewrote all three codex/projects/*.md files and added a 06-ROADMAP.md note. No phantoms proposed — no room had capacity matching a new finding. Standing ask for William, now covering a fifth repo: root's 4/4 phantom ceiling (BitRunners/StackAssembler/Story Universe Map/AboveThem/WochIt) needs a slot freed or a GoobOS/LifeOS room. Also: LociBook's ph_locibook/ph_cc_locibook phantoms on deductionos are now backed by a confirmed build, worth a second look. FinanceOS/ScheduleOS blockers unchanged since 2026-10-25. Full detail: codex/journal/away-2026-10-26-0035.md. Nothing committed, no board edits.
+````
+
+### T3 SCHED-WEEK 2026-10-25 — draft written, no November shifts, 71 h week
+
+`2026-10-26T00-47-48-000--sched-week-2026-10-25-draft-written-no-november-shifts.md`, from cc-secretary, sent 2026-10-26T00:47:48.000Z
+
+````markdown
+Scheduled run, 18:45 Mountain, William away. Reclaim tools present and authenticated; read 10/25–11/07 through Reclaim and 10/25–11/08 on all three Google calendars. No calendar write, no Reclaim write.
+
+- Wrote the week draft at the top of `schedule/proposals.md`: anchors per day (four casts, nothing else, Mon 10/26–Sun 11/01), a PROPOSED chain section that is empty because no November shift exists anywhere, the hour budget (71.0 h, under 85, no trim), and the five §6 questions with last week's answers from the calendar.
+- The earlier proposal entries (10/17, 10/21, 10/23, 10/24 unattended runs) were kept beneath the draft, not overwritten: they are open proposals awaiting William, not a prior draft, and the brief says delete nothing.
+- The October crew list ran out today. The 14-day window holds no shift, no OFF DAY, no MONEY SUNDAY, no WEEK BUILD, no LOG IT, no EARN block.
+- Still live: `schedule/pbs-shifts.json` holds only the Discord webhook URL (fourth scheduled run). Untouched. Every chain is recoverable from the change log.
+- One next action, sized: paste the November crew list into the 18:45 session, about 5 minutes; then the four writes listed in §5 of the draft go in on his go.
+
+Nothing committed. Handoff updated.
 ````
 
 ### Away session: 8 item(s)
 
-`2026-10-17T23-12-23-365--away-session-8-item-s.md`, from hands, sent 2026-10-17T23:12:23.365Z
+`2026-10-26T00-38-33-949--away-session-8-item-s.md`, from hands, sent 2026-10-26T00:38:33.949Z
 
 ````markdown
 Away session, finished on its own. 8 item(s):
 
 - held back by the away bounds: Bash
-- roadmap updated: SkynetOS/codex/projects/ae-phantom-suite.md
-- roadmap updated: SkynetOS/codex/projects/statpopperlive.md
-- edited SkynetOS/codex/index.md
-- edited SkynetOS/codex/index.md
+- roadmap updated: SkynetOS/codex/projects/financeos.md
+- roadmap updated: SkynetOS/codex/projects/scheduleos.md
+- roadmap updated: SkynetOS/codex/projects/scheduleos.md
+- roadmap updated: SkynetOS/codex/projects/scheduleos.md
 - roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- journal written: SkynetOS/codex/journal/away-2026-10-17-1709.md
-- mailed the mailbox: Away pass 2026-10-17 1709: two uncatalogued repos found (AE-Phantom_Suite, StatPopperLIVE)
+- journal written: SkynetOS/codex/journal/away-2026-10-25-1835.md
+- mailed the mailbox: Away pass 2026-10-25 1835: zero board drift, two handoff facts written into codex
 
 Its last word:
 
-Away pass complete. Summary:
+Done. Summary of the away pass:
 
-- This pass fired on a real trigger (handoff.md changed) rather than a timer, confirming the scheduling advice from the 2026-10-16/10-03 notes.
-- Found two uncatalogued, actively-worked repos: **AE-Phantom_Suite** (a paid After Effects plugin suite already run by its own multi-agent director/engineer studio) and **StatPopperLIVE** (William's live stat-pop tool for his Montana PBS broadcast job, v0.3.0 shipped today).
-- Wrote codex entries for both, updated the index (new BroadcastOS category for StatPopperLIVE), and added a roadmap note.
-- No phantoms proposed — root board is still 4/4, unticked since mid-September.
-- Journal and mail sent: `codex/journal/away-2026-10-17-1709.md`. William's decisions needed: AE-Phantom_Suite's AE run list + 11 owner decisions, running StatPopperLIVE live tonight + Vercel Git-link, and freeing up root's phantom slate.
+- Zero board drift — mail, `board_list`, and every board's phantom slate matched the 2026-10-23 picture exactly (4th confirmation since 2026-10-20). No uncatalogued repos found.
+- Real find was buried in `SkynetOS/handoff.md`, not the board: two scheduled runs fired while you were away and their facts hadn't made it into the codex yet. Written into `codex/projects/financeos.md` and `scheduleos.md`:
+  - FinanceOS's first Sunday review ran today, found no `ledger.json` — still your 20-min action to fill it.
+  - ScheduleOS's `pbs-shifts.json` has been wiped to just a webhook URL four scheduled runs in a row (10-17/21/23/24); nothing's actually lost (recoverable from the change log), but it needs restoring and the webhook rotated. No EARN habit exists either.
+- Flagged, not fixed: `codex/projects/skynetos.md` is dated 2026-09-27 and badly stale — needs a real rewrite pass.
+- No phantoms proposed; nothing outranked the standing ones (root's 4/4 ceiling still blocks BitRunners/StackAssembler/Story Universe Map/AboveThem).
+
+Journal: `SkynetOS/codex/journal/away-2026-10-25-1835.md`. Mail sent to `to-face`.
 ````
 
-### Away pass 2026-10-17 1709: two uncatalogued repos found (AE-Phantom_Suite, StatPopperLIVE)
+### Away pass 2026-10-25 1835: zero board drift, two handoff facts written into codex
 
-`2026-10-17T23-12-19-037--away-pass-2026-10-17-1709-two-uncatalogued-repos.md`, from hands, sent 2026-10-17T23:12:19.037Z
+`2026-10-26T00-38-26-917--away-pass-2026-10-25-1835-zero-board-drift-two-h.md`, from hands, sent 2026-10-26T00:38:26.917Z
 
 ````markdown
-108 min idle, PLAN level. No mail on to-hands. This pass fired because SkynetOS/handoff.md had changed since 2026-10-16 (mail self-sorts now, CI on William's own hardware) — one of the named re-sweep triggers.
+No mail, no board drift (4th confirmation since 2026-10-20) — root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 4/4, others unchanged. No uncatalogued repos found.
 
-Found two real, active repos with zero prior codex/board presence:
-- AE-Phantom_Suite: paid After Effects plugin suite, already run by its own multi-agent studio (Director + per-plugin engineers + researcher, two daily Claude routines merging PRs). 14 PRs merged the day of this pass. Written up: codex/projects/ae-phantom-suite.md.
-- StatPopperLIVE ("Stat Pop Board"): William's tool for his Montana PBS volleyball broadcast job, reads StatBroadcast's page and suggests on-air stat pops. v0.3.0 live today at stat-pop-board.vercel.app. Written up: codex/projects/statpopperlive.md.
+Real find was in SkynetOS/handoff.md itself, not on the board: two scheduled runs fired while William was away and their facts hadn't reached the codex project files yet. Written in now:
+- FinanceOS's first Sunday review (2026-10-25 18:00) ran and found no ledger.json — report is all zeros, nothing invented. His 20-min action: copy ledger.template.json, fill accounts[], rerun the report.
+- ScheduleOS's pbs-shifts.json has been overwritten to just a webhook URL four runs running (10-17/21/23/24), losing shift rows each time (recoverable from changes.log.jsonl, nothing actually lost). No EARN habit exists either. His action: restore the rows, rotate the webhook.
 
-Both added to codex/index.md (AE-Phantom_Suite under GoobOS, StatPopperLIVE under a new BroadcastOS category). Roadmap note added at docs/06-ROADMAP.md. No phantoms proposed — root is still 4/4, unticked since 2026-09-16/25.
+Both now live in codex/projects/financeos.md and scheduleos.md (Blockers + Next). Also flagged: codex/projects/skynetos.md is dated 2026-09-27 and badly lagging the roadmap — wants a real rewrite pass, not a patch.
 
-Needs William: AE-Phantom_Suite's ~2h AE run list + 11 owner decisions in its own ops/BOARD.md; StatPopperLIVE run live at tonight's match + Vercel Git-link; and freeing up root's phantom slate so these (and MagicTrainer, still unshipped) have somewhere to land.
-
-Full detail: codex/journal/away-2026-10-17-1709.md.
+No phantoms proposed — nothing outranked the standing ones. Full detail: codex/journal/away-2026-10-25-1835.md.
 ````
 
-### apply.ps1 proven, three bugs, Sock on the board, six tasks switched on, mail redesigned
+### T1 WEEKLY FINANCE REVIEW 2026-10-25 — NO LEDGER YET
 
-`2026-10-16T23-21-00-000--apply-ps1-proven-three-bugs-sock-on-the-board-s.md`, from hands, sent 2026-10-16T23:21:00.000Z
+`2026-10-26T00-00-40-000--sched-finance-2026-10-25-no-ledger-yet.md`, from cc-finance, sent 2026-10-26T00:00:40.000Z
 
 ````markdown
-William present, evening session. He cleared the Word recovery pane and saved, which unblocked the last link in the Word line editor.
+Scheduled run, 18:00 Mountain, William away. No bank site, no mail, no network; read only `private/finance/`.
 
-apply.ps1 is proven against a live Word document on a throwaway copy: 2 edits in as 4 tracked revisions, 1 anchored comment, 0 skipped, timestamped backup first, TrackRevisions restored, markup toggle verified both directions. The first attempt failed and was worth more than the one that passed — it exposed three bugs, all fixed: the disk reader undercounted the manuscript by 35 paragraphs (a self-closing empty-paragraph tag eaten by the opener branch of its regex), export.ps1's count guard refused every real document so the live-Word read path had never once been used, and apply.ps1 could attach a comment to the wrong paragraph when its anchor was missing. The "find must match exactly once in that paragraph" rule is what kept a numbering bug that large harmless.
+- `npm run finance:report` returned NO LEDGER YET (exit 2). `private/finance/ledger.json` does not exist; `report.json` is all zeros with one `no-data` alert. Position, debts, outflows and the plan cannot be stated. Nothing invented.
+- Wrote `private/finance/reviews/2026-10-25.md` (new folder) saying exactly that, plus an inventory of what the folder does hold: the template, `subscriptions.json` (19 items from 2026-09-25, two marked debt), `institutions.md`, an empty `imports/`.
+- `plan.md` not created; the brief only lets it change on a debt-order change or an overdue bill.
+- One next action, sized: copy the template to `ledger.json` and fill `accounts[]` from the bank and card apps, about 20 minutes, then rerun the report. Until then every Sunday run will write the same one-line review.
 
-Board: f_sock_in_my_drawer (F8) added to root under WRITING & PUBLICATION, reads edge to STORYOS, bound to the real file. Written to board JSON directly because SkynetOS was closed — no undo entry, no snapshot; validate:board, board:overlap and verify all green after.
-
-Scheduler: five tasks had never run once because they were disabled, and a sixth carried an action type the runtime refuses outright, failing weekly since 2026-09-28. William asked for all six. Verified by running planDispatch over all nine tasks on all seven boards: nine dispatch, zero refuse. Two caveats stand — the scheduler only ticks while SkynetOS is open and the app is closed, and the StoryOS manuscript nodes still point at REPLACE_ME paths.
-
-Mail: the 2026-09-23 hub design is superseded. Two APIs over one taxonomy, and the agent may now file mail rather than only label it — two rows of the rules table widened, the rest unchanged and still binding. C:/dev/jarvis-mail holds both OAuth layers; nothing is authenticated and nothing has touched a live account. Secrets go under private/, gitignored.
-
-He also asked about scheduled work "redirected to running CI tests locally on my laptop". Searched every repo under C:/dev: twelve workflows, all on GitHub-hosted runners, no self-hosted runner service, no actions-runner install, no Windows scheduled task, and the only git hook on this machine bakes FACE-BOOT.md and deliberately runs no tests. The laptop is not on the tailnet, so if that configuration exists it is on the laptop and not visible from here. Told him so rather than invent a cause.
-
-Verify green: 154 files, 2,387 tests. Nothing committed.
-
-Needs William: the two mail app registrations (his consent, not mine to ask for), SkynetOS left open so the scheduler can tick, and the first real editor pass over Dirty Plush.
+Nothing committed. Handoff updated.
 ````
 
-### Away session: 5 item(s)
+### SCHED-BUILD 2026-10-24 — first morning card written, no EARN block to rename, shifts file still a webhook
 
-`2026-10-16T23-13-15-480--away-session-5-item-s.md`, from hands, sent 2026-10-16T23:13:15.480Z
+`2026-10-24T12-48-09-158--sched-build-2026-10-24-first-morning-card-writte.md`, from hands, sent 2026-10-24T12:48:09.158Z
 
 ````markdown
-Away session, finished on its own. 5 item(s):
+Scheduled run, 06:45 Mountain, William away. Reclaim tools present and authenticated; four reads (Reclaim 10/24–10/25, the three Google calendars, Reclaim 10/11–10/23 for streaks), no writes.
+
+- `schedule/today.md` written: KEYSTONE 10:00 `🔴 LIVE 10–1 · morning cast · title set?` · ANCHOR 17:00 `📺 PBS · VB vs Idaho St · shower 16:05` · STREAK `EARN — · Reading 13+ days`. The keystone is the stream because no EARN or BUILD block exists today; the book habit has a tick on every day of the 13-day window.
+- EARN pick by the rule: nothing in `selections.json` is `active` (Prolific and both DA tiers are `applied`, waiting on email), so the pick is the next onboarding task, `w3-pick`: `💵 EARN 1h · pick your 3 legs · pause the rest`. There is no EARN habit in the rebuilt 16-habit set, so there was nothing to rename. No ledger exists, so the EARN streak is `—`.
+- `npm run schedule:week` ran: 0 shifts, 0 events, seven empty days. `week.html` and `calendar.json` regenerated empty; its `today.md` was overwritten with the real card afterwards.
+- Seven lines appended to `schedule/proposals.md`, none written to a calendar: `📖 READ 30` at 23:00 tonight after DECOMPRESS; `📝 EDIT 90` 21:45–23:15 and `💻 UPDATE SYSTEMS` 23:30 tomorrow; no `💰 MONEY SUNDAY` or `📅 WEEK BUILD` on 10/25 (WRITE and LUNCH sit in the slot); meals bunched before today's 17:00 call and back-to-back after tomorrow's 10:00–16:00 shift.
+- Still open from 10/21: `schedule/pbs-shifts.json` holds only the Discord webhook URL. That one file is why both calendar panes and the week view are empty while the live calendar has two shifts and twelve chain events this weekend. Not touched; restore the rows from the change log and rotate the webhook. `private/schedule/events.json` has never been written, so the week view has no second source either.
+
+Nothing committed. Handoff updated.
+````
+
+### Away session: 6 item(s)
+
+`2026-10-24T09-26-52-226--away-session-6-item-s.md`, from hands, sent 2026-10-24T09:26:52.226Z
+
+````markdown
+Away session, finished on its own. 6 item(s):
 
 - held back by the away bounds: Bash
-- held back by the away bounds: Bash
-- journal written: SkynetOS/codex/journal/away-2026-10-16-1710.md
 - roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- mailed the mailbox: Away pass 2026-10-16 1710: zero drift, repeating the stop-the-timer suggestion
+- held back by the away bounds: Edit
+- journal written: SkynetOS/codex/journal/away-2026-10-24-0324.md
+- held back by the away bounds: Write
+- mailed the mailbox: Away pass 2026-10-24 — zero drift, journal write blocked
 
 Its last word:
 
-Away pass done. No mail, no board drift in 13 days — every phantom slate matched 2026-10-03 exactly, FinanceOS/ScheduleOS are still blocked on your own actions, and MagicTrainer's v1.0.0 is still built and unshipped with no root slot open. No new phantoms proposed — there was nothing new to bind to reality.
+Away pass done. Survey found zero drift: no mail, boards/phantoms identical to the 2026-10-23 picture, AboveThem's handoff still session 5, no new repos under C:/dev. Nothing warranted a new phantom proposal — the fourth consecutive pass confirming the same state, so I didn't re-grind all 19 project files.
 
-Wrote `codex/journal/away-2026-10-16-1710.md`, added a note to `docs/06-ROADMAP.md`, and mailed the Face. Main point for you: this is the second away pass to find the identical picture as the prior one, now 13 days apart — worth deciding whether to stop scheduling these on a timer and only trigger them on mail, a phantom tick/dismiss, or a handoff change. The standing asks are unchanged: tick/dismiss one of root's four phantoms to free a slot for MagicTrainer, and FinanceOS/ScheduleOS still need your hands (SimpleFIN, Reclaim confirmation, habits.json).
+Couldn't write the roadmap note or journal file this pass — Edit and Write were both denied outright ("don't ask mode"), not just scoped outside `codex/`/`docs/06-ROADMAP.md`. Sent the full summary via `mailbox_send` to `to-head` instead, including a flag that write tools need checking for future away sessions.
+
+Standing item unchanged: `root` board's 4/4 ceiling still blocks BitRunners, StackAssembler, Story Universe Map, and AboveThem from board presence — needs your call on freeing a slot or standing up a GoobOS room.
 ````
 
-### Away pass 2026-10-16 1710: zero drift, repeating the stop-the-timer suggestion
+### Away pass 2026-10-24 — zero drift, journal write blocked
 
-`2026-10-16T23-13-09-940--away-pass-2026-10-16-1710-zero-drift-repeating-t.md`, from hands, sent 2026-10-16T23:13:09.940Z
+`2026-10-24T09-26-46-780--away-pass-2026-10-24-zero-drift-journal-write-bl.md`, from hands, sent 2026-10-24T09:26:46.780Z
 
 ````markdown
-30-min idle away pass, PLAN level. No mail on to-hands. Checked all seven boards' phantom slates against the 2026-10-03 note — byte-identical, same proposedAt timestamps, thirteen days with zero drift. financeos.md/scheduleos.md unchanged since 2026-09-25/30, both blocked on William's own actions. MagicTrainer's HANDOFF.md still 2026-09-25: v1.0.0 built and tagged, still unshipped, still no root slot for ph_magictrainer. Swept C:/dev for uncatalogued repos (the pattern that found MagicTrainer and goobtropolis-configs before) — nothing new.
+Survey: no mail on to-hands, board_list unchanged (8 boards), history empty. Phantom slates byte-identical to the 2026-10-23 picture: root 4/4, financeos 3/4, scheduleos 0/4, phantomos 0/4, minecraftos 4/4. Re-checked AboveThem's docs/handoff.md directly — still session 5 (2026-10-22 overnight, 585 Vitest/52+1 Rust), same as 2026-10-23's write-up, no further drift. A CLAUDE.md glob across C:/dev found only repos already in codex/index.md — no new coverage gap.
 
-No phantom proposed this pass: nothing had genuine new capacity or a new fact without board presence. Wrote codex/journal/away-2026-10-16-1710.md and a new 06-ROADMAP.md note.
+Nothing proposed: no board had both open capacity and an undeserving-yet fact to fill it. This is the fourth consecutive away pass landing on the same picture — repeating the standing advice: next pass should wait for mail, a phantom tick/dismiss, or a changed handoff file, not a timer.
 
-Flagging again, more strongly this time: this is the second pass to land on the exact same picture as the pass before it, now thirteen real days apart instead of minutes. The standing suggestion since 2026-10-03 — don't schedule another PLAN sweep until mail lands on to-hands, a phantom is ticked/dismissed, or a handoff changes — should actually be acted on now, not just repeated.
+Still open, unchanged: root's 4/4 ceiling blocks board presence for BitRunners, StackAssembler, Story Universe Map, and AboveThem. Needs William: free a root slot or stand up the GoobOS room.
 
-What needs William's decision (same three groups as every pass since September): root's four unticked repo-coverage phantoms (tick/dismiss any to free a slot for MagicTrainer's), FinanceOS's one open slot plus SimpleFIN/Phase 4, and ScheduleOS's three open Next items.
+BLOCKER this pass: both Edit and Write tools were denied outright ("don't ask mode"), not just scoped outside codex/docs bounds — I could not write the 2026-10-24 roadmap note or the away-2026-10-24-0324.md journal file as directed. Someone should check why file-write tools are disabled for this away session; until then, away-mode passes can survey and recommend phantoms but cannot leave a written record.
 ````
 
-### Away session: 3 item(s)
-
-`2026-10-04T03-53-34-055--away-session-3-item-s.md`, from hands, sent 2026-10-04T03:53:34.055Z
-
-````markdown
-Away session, finished on its own. 3 item(s):
-
-- held back by the away bounds: Bash
-- journal written: SkynetOS/codex/journal/away-2026-10-03-2152.md
-- mailed the mailbox: Away pass 2026-10-03 21:52 — no change, fourth same-day confirmation
-
-Its last word:
-
-Confirmed by the file path that "to-head" is the Face's mailbox. Done.
-
-Checked mail and all seven boards' phantom slates — nothing changed since 10:35 (fourth identical pass today, Bash still denied). Wrote `codex/journal/away-2026-10-03-2152.md` and mailed the Face the same summary; no phantoms proposed since nothing new outranks the standing ones. For William: root's phantom slate has been 4/4 since 2026-09-16/25 and is blocking `ph_magictrainer` (MagicTrainer v1.0.0, finished and shippable) from getting a slot — ticking or dismissing one of the four standing root phantoms would free it. Recommend no further PLAN-level away passes until mail arrives, a phantom is actioned, or a handoff file actually changes.
-````
-
-### Away pass 2026-10-03 21:52 — no change, fourth same-day confirmation
-
-`2026-10-04T03-53-28-615--away-pass-2026-10-03-21-52-no-change-fourth-same.md`, from hands, sent 2026-10-04T03:53:28.615Z
-
-````markdown
-Checked mailbox(to-hands, empty) and every board's phantom slate; Bash denied again. Picture is identical to the 10:35 pass: root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 3/4, gameos/storyos/deductionos 4/4. No phantom proposed, no codex edit beyond the journal entry (codex/journal/away-2026-10-03-2152.md).
-
-For William's decision: tick/dismiss a standing phantom to free capacity — root has been 4/4 since 2026-09-16/25 and ph_magictrainer (a finished, shippable v1.0.0) is waiting on a slot. FinanceOS Phase 2 and ScheduleOS's remaining Next items are his hands, not agent work.
-
-Repeating the standing suggestion a fourth time today: this is the fourth PLAN pass with zero drift. Hold off the next one until mail lands on to-hands, a phantom is ticked/dismissed, or a handoff file changes — otherwise it's spent usage for nothing new.
-````
-
-### Morning maintenance 2026-10-03: panel polls sleep when hidden, the usage meter reports a failed read, which() tested
-
-`2026-10-04T01-28-18-903--morning-maintenance-2026-10-03-panel-polls-sleep.md`, from hands, sent 2026-10-04T01:28:18.903Z
-
-````markdown
-Morning maintenance ran unattended for the 08:00 slot (the machine's clock read 19:20 MDT at the first verify). Verify green before and after every change: 152 files / 2,375 tests to 154 / 2,387. Nothing committed, nothing deleted, no board file touched.
-
-- `useVisibleInterval` was written on 2026-09-26 and used by nothing. The usage (20 s), finance and schedule (30 s) and remote (4 s) polls now stop while the window is minimised or hidden and catch up when it is shown. Its behaviour is a plain function with a test (roadmap 20). Unseen on screen.
-- The usage meter now says why when its read rejects, instead of showing no meter and no word (roadmap 21). No test: renderer. Unseen on screen.
-- The explorer's junction-escape test reports SKIPPED when the junction cannot be made, instead of passing on nothing (roadmap 24). It runs for real on this PC.
-- Roadmap step, "Known issues" 18: `clearWhichCache` has the test its comment promised, and `which()` has its first test. Eleven of the twelve exports remain William's call.
-- Found, left alone: four more timers that run hidden, App.tsx:206 first (roadmap 22); reads with no failure path in CalendarBlock, AwayScreen and FableCores (roadmap 23).
-- Three away PLAN passes ran today with an identical picture, each asking for the next to wait on a change. That schedule is William's to set.
-
-Details: handoff.md "Morning maintenance 2026-10-03", docs/DECISIONS.md same date. No mail was waiting on to-hands and no face-brief.md exists.
-````
-
-### Away session: 4 item(s)
-
-`2026-10-03T16-36-54-705--away-session-4-item-s.md`, from hands, sent 2026-10-03T16:36:54.705Z
-
-````markdown
-Away session, finished on its own. 4 item(s):
-
-- held back by the away bounds: Bash
-- journal written: SkynetOS/codex/journal/away-2026-10-03-1035.md
-- roadmap updated: SkynetOS/docs/06-ROADMAP.md
-- mailed the mailbox: Away pass 10:35 — third identical no-op today, standing recs unchanged
-
-Its last word:
-
-Third same-day PLAN pass, zero drift from the 08:35/08:37 checks: no mail on `to-hands`, every phantom slate identical (root 4/4, financeos 3/4, scheduleos 0/4, minecraftos 3/4, gameos/storyos/deductionos 4/4). No new phantoms, no codex gaps found. Wrote the journal and roadmap note, and sent the summary to the Face.
-
-Proposing again (third time today): throttle away-mode PLAN passes to wait for new mail, a ticked/dismissed phantom, or a changed handoff rather than firing on a fixed interval — three identical passes in one day is spent usage with no new signal. Open decisions for William: the standing root/financeos phantoms, and whether MagicTrainer's finished-but-unshipped build should bump one of them off root's full slate.
-````
-
-55 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
+73 older message(s) not shown. They stay in `codex/mailbox/to-face/` until William archives them from the panel.
 
 ## 3. Board truth
 
@@ -309,7 +312,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 
 | Board | File | Nodes | Traces | Unresolved | Provisional |
 |---|---|---:|---:|---:|---:|
-| SkynetOS Mainboard (`root`) | `board/root.board.json` | 77 | 42 | 0 | 23 |
+| SkynetOS Mainboard (`root`) | `board/root.board.json` | 78 | 42 | 0 | 24 |
 | DeductionOS (`deductionos`) | `board/deductionos/room.board.json` | 28 | 8 | 8 | 1 |
 | FinanceOS (`financeos`) | `board/financeos/room.board.json` | 27 | 4 | 4 | 4 |
 | GameOS (`gameos`) | `board/gameos/room.board.json` | 32 | 10 | 8 | 1 |
@@ -355,7 +358,7 @@ Resolved against the disk of WILLIAM-DESKTOP at bake time. Another machine may d
 - `storyos` / S2 Dirty Plush (shared) (`s2_plush_cloud`, store.cloud): **INVALID** `https://drive.google.com/drive/folders/REPLACE_ME`
 - `storyos` / F3 Series bible (`f3_bible`, file.document): **INVALID** `C:/Users/REPLACE_ME/Documents/Novels/DirtyPlush-bible.md`
 
-### Provisional nodes (36)
+### Provisional nodes (37)
 
 Placed on the board but not yet confirmed as bound to anything real.
 
@@ -382,6 +385,7 @@ Placed on the board but not yet confirmed as bound to anything real.
 - `root` / U6 THE AUDITOR (`u_drive_audit`, agent.audit)
 - `root` / BACKDROP (`bg_backdrop_7`, decor.image)
 - `root` / BACKDROP (`bg_backdrop_8`, decor.image)
+- `root` / BACKDROP (`bg_backdrop_9`, decor.image)
 - `deductionos` / D1 Mind Palace (`d1_palace`, drive.room)
 - `financeos` / J1 BANK (`j1_bank`, link.url)
 - `financeos` / J2 CREDIT CARD (`j2_credit`, link.url)
@@ -400,15 +404,109 @@ Placed on the board but not yet confirmed as bound to anything real.
 
 Compressed from `handoff.md`, which is linked from the repo root.
 
-**Scheduled run (2026-10-17 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/17–10/18
-through Reclaim (tools present, authenticated). No `💰 LOG IT` event exists for today: the standing
-event has not been enabled at a week build yet. Not created, per the brief. Tomorrow's first block is
-the 10/18 chain (shower 8:35 → PBS 9:30–2:00), so the line it should carry is
-`💰 LOG IT · tmrw: shower 8:35 → PBS`; written to `schedule/proposals.md` (file created) and one
-`nudge-check` line appended to `schedule/changes.log.jsonl` (`ok: false`). Both files are gitignored.
-Seen, not touched: Reclaim placed tonight's `🍽 DINNER 60` at 23:00–23:45. Mailbox note in
-`codex/mailbox/to-face/`. Nothing committed, nothing deleted. The block below is Prime's session
-from earlier today and still stands.
+**Scheduled run (2026-10-26 08:00 slot, U3 JARVIS-PRIME, T2 MORNING MAINTENANCE, William away;
+caught up 13:20 MDT).** `npm run verify` was RED on arrival and had been since 2026-10-20:
+`test/board-types.test.ts` pinned seven room boards and William's commit `53da08b` added the eighth,
+`board/phantomos/room.board.json` (D7 on root). The board validates; only the pin was stale. Updated
+the pin to eight rooms naming `phantomos`. Verify green after: 154 files, 2,393 tests. Per the brief,
+a red verify is the day's only job, so no survey, no other improvement and no roadmap step. Why it
+sat red: the away passes cannot run Bash and the other scheduled runs do not verify; this task last
+fired 2026-10-03. Details under "Morning maintenance 2026-10-26" below. Mailbox note in
+`codex/mailbox/to-face/`. Nothing committed. The 10/25 20:00 block below stands.
+
+**Scheduled run (2026-10-25 20:00 slot, U3 JARVIS-PRIME, T1 WEEKLY WORDCOUNT on StoryOS, William
+away; ran 2026-10-26 11:22 MDT).** First firing to reach a session: the node's notes say it failed every
+week since 2026-09-28 as `jarvis.headless`. All three StoryOS document nodes (F1, F2, F3) still
+carry `C:/Users/REPLACE_ME/...` paths and resolve to nothing, so the files the room's own unticked
+phantoms name were counted: `PANIC_NovelRoughDraft.docx` 5,307 words (last modified 2025-06-23) and
+`Dirty Plush - Novel 063026.docx` 8,988 words (2026-10-01 11:32). Neither was written to during the
+week, so both deltas are 0; no earlier ledger existed, so these are the baseline. No file found for
+the series bible. Wrote `codex/journal/wordcount.md`, a new running ledger with the method at the
+top and one section appended per week. No board edit, no Word process, no network. One next action
+for William: tick `ph_panic_rough_draft` and `ph_dirty_plush_novel` on StoryOS so F1 and F2 bind
+to the real files. Mailbox note in `codex/mailbox/to-face/`. Nothing committed. The 10/25 18:45
+block below stands.
+
+**Then, same session, William present (2026-10-26 11:30 MDT):** CI checked on request: all six
+self-hosted runners online and backed by live services (3 Windows services Running, 3 WSL systemd
+units active), real jobs through all of them this morning; the 10/17 line "the Windows runner has
+never executed a job" is stale (85/50/54 jobs). StackAssembler Release had one failed run on
+10/17, moot since: **William retired StackAssembler** ("gone, I no longer want to develop it").
+Marked RETIRED in `codex/projects/stackassembler.md` and `codex/index.md`, dated the boundary line
+in `magictrainer.md`, wrote Prime's memory `stackassembler-retired.md`, withdrew `ph_stackassembler`
+from `board/root.board.json` by direct edit because SkynetOS was closed (validate green, root now
+3/4 phantoms, **no snapshot, Ctrl+Z will not undo it, git will**). GitHub repo left up and
+unarchived: his click. Reasoning in docs/DECISIONS.md 2026-10-26.
+
+**Scheduled run (2026-10-25 18:45, U1 CC-SECRETARY, T3 SCHED-WEEK, William away).** First firing of
+the Sunday week-build draft. Reclaim tools present and authenticated; read 10/25–11/07 through Reclaim (137
+events on `[MAIN]`) and 10/25–11/08 on `[MAIN]`, `Work – Shifts` and `Work – Prep Blocks` through the
+Google Calendar connector. No calendar write, no Reclaim write. Wrote the week draft at the top of
+`schedule/proposals.md`: anchors Mon 10/26–Sun 11/01 are the four recurring casts and nothing else; the
+PROPOSED chain section is empty because no shift after today exists on any calendar and the October crew
+list is exhausted; the hour budget is 71.0 h (streams 15, income 3, hobbies 15.5, meals 12.25, MOVIE 11,
+EDIT 3, SKYNET 3), under the 85 h ceiling so §3 trims nothing; the five §6 questions carry last week's
+answers from the calendar (two shifts 10/24–10/25, Tue/Thu/Fri/Sat casts, no off days, no appointments,
+READ/EDIT/UPDATE SYSTEMS past 23:00 to never-again). The earlier proposal entries were kept beneath the
+draft rather than overwritten: they are open proposals, not a prior draft, and the brief says delete
+nothing. Still absent from the calendar: OFF DAY, MONEY SUNDAY, WEEK BUILD, LOG IT, any EARN block.
+**Landmine still live:** `schedule/pbs-shifts.json` holds only a Discord webhook URL (fourth scheduled run
+to find it); untouched. Mailbox note in `codex/mailbox/to-face/`. Nothing committed. The 10/25 18:00 block
+below stands.
+
+**Scheduled run (2026-10-25 18:00, U1 CC-FINANCE, T1 WEEKLY FINANCE REVIEW, William away).** First
+firing of the Sunday review. `npm run finance:report` returned NO LEDGER YET (exit 2):
+`private/finance/ledger.json` has never been created, `report.json` is all zeros with one `no-data`
+alert, and `imports/` is empty. Position, debt order, outflows and plan therefore cannot be stated and
+nothing was invented. Wrote `private/finance/reviews/2026-10-25.md` (new folder, gitignored) saying
+that, with an inventory of what the folder does hold (template, `subscriptions.json` from 2026-09-25
+with 19 items and two debts, `institutions.md`). `plan.md` not created, per the brief. One next action
+for William: copy `ledger.template.json` to `ledger.json` and fill `accounts[]` from the bank and card
+apps, about 20 minutes, then rerun the report; until then every Sunday run writes the same one-line
+review. No bank site, no mail, no network. Mailbox note in `codex/mailbox/to-face/`. Nothing committed.
+The 10/24 block below stands.
+
+**Scheduled run (2026-10-24 06:45, U1 CC-SECRETARY, SCHED-BUILD, William away).** First run of the
+morning card. Reclaim tools present and authenticated; read 10/24–10/25 through Reclaim and all three
+Google calendars, plus 10/11–10/23 through Reclaim for the streak line. No calendar write. Wrote
+`schedule/today.md` (card: KEYSTONE `🔴 LIVE 10–1` 10:00, since no EARN block exists; ANCHOR `📺 PBS ·
+VB vs Idaho St` 17:00, shower 16:05; STREAK `EARN —` (no ledger) `· Reading 13+ days` (a tick on every
+day in the 13-day window)). EARN pick by the rule: no `active` source, so the next onboarding task
+`w3-pick`, title `💵 EARN 1h · pick your 3 legs · pause the rest`; nothing to rename because the
+rebuilt 16-habit set has no EARN habit. Ran `npm run schedule:week`: it regenerated `week.html`,
+`calendar.json` (0 blocks) and then `today.md`, which this run overwrote afterwards with the real card.
+Seven proposal lines appended to `schedule/proposals.md`: READ 23:00 tonight and EDIT/UPDATE SYSTEMS past
+23:00 tomorrow (quiet-rule violations, not moved), Sunday rituals still absent, meals bunched before the
+shift, and the shifts file. **Landmine still live:** `schedule/pbs-shifts.json` holds only a Discord
+webhook URL, which is why the week view and both calendar panes are empty while the live calendar has
+two shifts and twelve chain events this weekend; untouched, William to restore from the change log and
+rotate the webhook. `private/schedule/events.json` has never been written. Mailbox note in
+`codex/mailbox/to-face/`. Nothing committed. The 10/23 block below stands.
+
+**Scheduled run (2026-10-23 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/23–10/24
+through Reclaim (tools present, authenticated); one read, no writes. No `💰 LOG IT` event exists for
+today: the standing event has still not been enabled at a week build (third run in a row: 10/17, 10/21,
+10/23). Not created, per the brief. Tomorrow 10/24 is the Idaho St volleyball shift (PBS 17:00–22:00,
+chain head SHOWER 16:05), so the line it should carry is `💰 LOG IT · tmrw: shower 4:05 → PBS`; appended
+to `schedule/proposals.md`, with one `nudge-check` line in `schedule/changes.log.jsonl` (`ok: false`).
+Seen, not touched: `🔴 LIVE 8–11 · night cast` 20:00–23:00 sits across tonight's 21:30 slot; Reclaim has
+`📖 READ 30` at 23:00–23:30 tomorrow after DECOMPRESS. **Landmine still live:** `schedule/pbs-shifts.json`
+still holds only a Discord webhook URL, no shift rows; untouched, William to restore from the change log
+and rotate the webhook. Mailbox note in `codex/mailbox/to-face/`. Nothing committed. The 10/21 block
+below stands.
+
+**Scheduled run (2026-10-21 21:30, U1 CC-SECRETARY, SCHED-NUDGE, William away).** Read 10/21–10/22
+through Reclaim (tools present, authenticated); two reads, no writes. No `💰 LOG IT` event exists for
+today: the standing event has still not been enabled at a week build. Not created, per the brief.
+Tomorrow's first block is `🎛 T-45 STREAM PREP` 09:15 (Thursday morning cast), not before 08:00 and no
+chain, so the line it should carry is the plain `💰 LOG IT · earned today? 2 taps`; appended to
+`schedule/proposals.md`, with one `nudge-check` line in `schedule/changes.log.jsonl` (`ok: false`).
+The 10/17 run found the same thing with the chain-head title. Seen, not touched: `🎞 MOVIE`
+19:45–21:45 sits across the 21:30 slot tonight. **Landmine:** `schedule/pbs-shifts.json` has been
+overwritten and now holds only a Discord webhook URL; the 8 shift rows from 10/17 are gone. Gitignored,
+so no git history; every shift is still recoverable from the change log by event id. Nothing deleted,
+William to restore the rows and rotate the webhook. Mailbox note in `codex/mailbox/to-face/`. Nothing
+committed. The block below is Prime's session from 10/17 and still stands.
 
 **Latest (2026-10-17, U3 JARVIS-PRIME, William present): mail sorts itself; CI runs on his own
 hardware.**
